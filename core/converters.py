@@ -15,7 +15,7 @@ class BaseConverter:
             A string describing the atoms object
 
         atoms.info[ATOMS_LABELS_FIELD]:
-            A list of strings. Empty list if no labels
+            A set of strings. Empty set if no labels
     """
 
     def load(self, file_path, name_field, elements, default_name=''):
@@ -47,10 +47,11 @@ class EXYZConverter(BaseConverter):
                 else:
                     raise RuntimeError(
                         f"Field {name_field} not in atoms.info for index "\
-                            f"{ai}"
+                            f"{len(images)}. Set `name_field=None` "\
+                                "to use `default_name`."
                     )
 
-            atoms.info[ATOMS_LABELS_FIELD] = []
+            atoms.info[ATOMS_LABELS_FIELD] = set()
 
         return images
     
@@ -178,8 +179,9 @@ class CFGConverter(BaseConverter):
                     for feat, lst in features.items():
                         atoms.info[feat] = ' '.join(lst)
 
+                    # Parse name, if it exists
                     if name_field is None:
-                        atoms.info[ATOMS_NAME_FIELD] = f"{default_name}_{ai}"
+                        atoms.info[ATOMS_NAME_FIELD] = f"{default_name}_{len(images)}"
                     else:
                         if name_field in atoms.info:
                             name = atoms.info[name_field]
@@ -188,9 +190,10 @@ class CFGConverter(BaseConverter):
                         else:
                             raise RuntimeError(
                                 f"Field {name_field} not in atoms.info for index "\
-                                    f"{len(images)}"
+                                    f"{len(images)}. Set `name_field=None` "\
+                                        "to use `default_name`."
                             )
 
-                    atoms.info[ATOMS_LABELS_FIELD] = []
+                    atoms.info[ATOMS_LABELS_FIELD] = set()
 
                     images.append(atoms)

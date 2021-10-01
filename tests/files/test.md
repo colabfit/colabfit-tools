@@ -35,9 +35,13 @@ This is an example dataset
 
 # Property sets
 
-|Regex|Software|Description|File|
+|Regex|Description|Files|
 |---|---|----|----|
-|`.*`|VASP|PBE-GGA|[INCAR](dummy_file.INCAR)
+|`.*`|Energies and forces computed with VASP using certain settings|[INCAR](dummy_file.INCAR)|
+
+# Property labels
+|Regex|Software|Labels|
+|`.*`|VASP|PBE, GGA|
 
 # Configuration sets
 
