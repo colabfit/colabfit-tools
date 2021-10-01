@@ -2,14 +2,61 @@ import re
 import itertools
 from html.parser import HTMLParser
 
-from core import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
+from core import ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
 from core.configuration_sets import ConfigurationSet
 from core.converters import CFGConverter, EXYZConverter
+from core.observable import Observable
+
+class WatcherList(list, Observable):
+    """
+    A helper class for propagating changes up to configuration and
+    property sets. Whenever an object that is in the WatcherList calls
+    `notify()`, the Watcher list also calls `notify()`.
+
+    TODO: this seems like a bit of overkill. This will make it so that the DS
+    and CS re-aggregate information a TON of times. Seems like it would be
+    easier to just accept that a user might force a dataset to be out of date,
+    and to provide a resync() function that calls everything necessary.
+    """
+
+    _observers = []
+    _list = []
+
+    def attach(self, observer):
+        self._observers.append(observer)
+
+    def detach(self, observer):
+        self._observers.remove(observer)
+
+    def update(self):
+        self.notify()
+
+    def notify(self):
+        for observer in self._observers:
+            observer.update()
+
+    def append(self, v):
+        v.attach(self)
+
+        self._list.append(v)
+        self.notify()
+
+    def remove(self, v):
+        v.attach(self)
+
+        self._list.append(v)
+        self.notify()
+
+    def __delitem__(self, i):
+        self._list[i].detach(self)
+
+        del self._list[i]
+        self.notify()
 
 
 class Dataset:
 
-    """
+    f"""
     Attributes:
         name (str):
             Name of the dataset
@@ -26,8 +73,15 @@ class Dataset:
         elements (list):
             A list of strings of element types
 
-        configurations (list):
-            A list of ase.Atoms objects
+        configurations (WatcherList):
+            A list of Configuration objects that watches for changes in its
+            elements. Its elements are guaranteed to have the following fields:
+                `Configuration.atoms.info[{ATOMS_ID_FIELD}]` (ObjectId)
+                `Configuration.atoms.info[{ATOMS_NAME_FIELD}]` (str)
+                `Configuration.atoms.info[{ATOMS_LABELS_FIELD}]` (str)
+
+        properties (WatcherList):
+            A list of Property objects that watches for changes in its elements.
 
         file_path (str):
             Path to the file or folder containing the data
@@ -63,19 +117,28 @@ class Dataset:
             the calculations settings; 'file' is an optional path to an example
             template file that was used to run the calculation.
 
-        TODO: don't need property_settings; a PropertySet will store this info.
+        co_label_regexes (dict):
+            A dictionary where the key is a string that will be compiled with
+            `re.compile()`, and the value is a list of string labels
+
+        cs_regexes (dict):
+            A dictionary where the key is a string that will be compiled with
+            `re.compile()`, and the value is the description of the
+            configuration set.
 
     """
 
     def __init__(
         self,
-        name=None,
+        name,
         authors=None,
         links=None,
         description=None,
         configurations=None,
+        properties=None,
         name_field=None,
-        configuration_sets=None,
+        co_label_regexes=None,
+        cs_regexes=None,
         ):
 
         self.name           = name
@@ -84,26 +147,47 @@ class Dataset:
         self.description    = description
         self.name_field     = name_field
 
+
         if authors is None: self.authors = []
         if links is None: self.links = []
-        if configurations is None: self._configurations = []
-        if configuration_sets is None: self.configuration_sets = []
 
-        # TODO: a Dataset shouldn't store things like file_path and file_format.
-        # it should just be passed the CO/CS/PR/PS objects
+        if configurations is None: self._configurations = WatcherList()
+        if properties is None: self._properties = WatcherList()
 
+        if co_label_regexes is None: self._co_label_regexes = {}
+        if cs_regexes is None:
+            self._cs_regexes = {'default': 'Default configuration set'}
 
     @property
     def configurations(self):
         return self._configurations
 
+
     @configurations.setter
     def configurations(self, configurations):
-        self.elements = sorted(list(set(itertools.chain.from_iterable(
-            a.get_chemical_symbols() for a in configurations
-        ))))
+        self._configurations = WatcherList(configurations)
 
-        self._configurations = configurations
+
+    @property
+    def co_label_regexes(self):
+        return self._co_label_regexes
+
+    @co_label_regexes.setter
+    def co_label_regexes(self, regex_dict):
+        """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
+        self._co_label_regexes = regex_dict
+        self.refresh_config_labels()
+
+
+    @property
+    def cs_regexes(self):
+        return self._cs_regexes
+
+    @cs_regexes.setter
+    def cs_regexes(self, regex_dict):
+        """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
+        self._cs_regexes = regex_dict
+        self.refresh_config_sets()
 
 
     @classmethod
@@ -122,79 +206,178 @@ class Dataset:
             authors=parser.data['Authors'],
             links=parser.data['Links'],
             description=parser.data['Description'][0],
-            # file_path=data_info['File'],
-            # file_format=data_info['Format'],
         )
 
         # Load configurations
         if data_info['Name field'] == 'None':
             data_info['Name field'] = None
 
-        if data_info['Format'] in ['xyz', 'extxyz']:
+        dataset.configurations = dataset.load_configurations(
+            file_path=data_info['File'],
+            file_format=data_info['Format'],
+            name_field=data_info['Name field'],
+            elements=elements,
+            default_name=parser.data['Name'],
+        )
+
+        # Extract labels and trigger label refresh for configurations
+        dataset.co_label_regexes = {
+            key: desc for key, desc in parser.data['Configuration labels']
+        }
+
+        # Extract configuration sets and trigger CS refresh
+        dataset.cs_regexes = {
+            key: desc for key, desc in parser.data['Configuration sets']
+        }
+
+        print(Dataset)
+
+
+    def load_configurations(
+        self,
+        file_path,
+        file_format,
+        name_field,
+        elements,
+        default_name='',
+        ):
+        """
+        Loads configurations as a list of ase.Atoms objects.
+
+        Args:
+            file_path (str):
+                Path to the file or folder containing the data
+
+            name_field (str):
+                Key name to use to access `ase.Atoms.info[<name_field>]` to
+                obtain the name of a configuration one the atoms have been
+                loaded from the data file. Note that if
+                `file_format == 'folder'`, `name_field` will be set to 'name'.
+
+            elements (list):
+                A list of strings of element types
+
+            default_name (list):
+                Default name to be used if `name_field==None`.
+        """
+
+        if file_format in ['xyz', 'extxyz']:
             converter = EXYZConverter()
-            dataset.configurations = converter.load(
-                data_info['File'],
-                name_field=data_info['Name field'],
-                elements=elements,
-                default_name=parser.data['Name'],
-            )
-        elif data_info['Format'] == 'cfg':
+        elif file_format == 'cfg':
             converter = CFGConverter()
-            dataset.configurations = converter.load(
-                data_info['File'],
-                name_field=data_info['Name field'],
-                elements=elements,
-                default_name=parser.data['Name'],
+
+        return converter.load(
+            file_path,
+            name_field=name_field,
+            elements=elements,
+            default_name=default_name
+        )
+
+    def refresh_config_labels(self):
+        """
+        Re-applies labels to the `ase.Atoms.info[ATOMS_LABELS_FIELD]` list.
+        Note that this overwrites any existing labels on the configurations.
+        """
+
+        if self.configurations is None:
+            raise RuntimeError(
+                "Dataset.configurations is None; must load configurations first"
             )
 
         # Apply configuration labels
-        for co_regex, co_labels in parser.data['Configuration labels'][1:]:
-            regex = re.compile(co_regex)
-            labels = [_.strip() for _ in co_labels.split(',')]
+        for conf in self.configurations:
+            # Remove old labels
+            conf.atoms.info[ATOMS_LABELS_FIELD] = set()
 
-            for atoms in dataset.configurations:
+            for co_regex, co_labels in self.co_label_regexes.items():
+                regex = re.compile(co_regex)
+
+                if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
+                    old_set =  conf.atoms.info[ATOMS_LABELS_FIELD]
+
+                    conf.update_labels(old_set.union(co_labels))
+
+
+    def refresh_property_labels(self):
+        """
+        Re-applies labels to the `property[PROP_LABELS_FIELD]` list.
+        Note that this overwrites any existing labels on the configurations.
+        """
+
+        if self.configurations is None:
+            raise RuntimeError(
+                "Dataset.properties is None; must load configurations first"
+            )
+
+        # Apply configuration labels
+        for atoms in self.configurations:
+            # Remove old labels
+            atoms.info[ATOMS_LABELS_FIELD] = set()
+
+            for co_regex, co_labels in self.co_label_regexes.items():
+                regex = re.compile(co_regex)
+
                 if regex.search(atoms.info[ATOMS_NAME_FIELD]):
-                    atoms.info[ATOMS_LABELS_FIELD] = labels
+                    old_set =  atoms.info[ATOMS_LABELS_FIELD]
+                    atoms.info[ATOMS_LABELS_FIELD] = old_set.union(co_labels)
+
+
+    def refresh_config_sets(self):
+        """
+        Re-constructs the configuration sets.
+        """
+
+        self.configuration_sets = WatcherList()
 
         # Build configuration sets
         default_cs_description = None
-        unassigned_configurations = list(range(len(dataset.configurations)))
-        for cs_regex, cs_desc in parser.data['Configuration sets'][1:]:
+        assigned_configurations = []
+        for cs_regex, cs_desc in self.cs_regexes.items():
             if cs_regex.lower() == 'default':
                 default_cs_description = cs_desc
                 continue
 
             regex = re.compile(cs_regex)
             cs_configs = []
-            for ai, atoms in enumerate(dataset.configurations):
+            for ai, atoms in enumerate(self.configurations):
                 if regex.search(atoms.info[ATOMS_NAME_FIELD]):
                     cs_configs.append(atoms)
-                    del unassigned_configurations[ai]
+                    atoms.attach(cs_configs)
 
-            dataset.configuration_sets.append(ConfigurationSet(
+                    assigned_configurations.append(ai)
+
+            self.configuration_sets.append(ConfigurationSet(
                 configurations=cs_configs,
                 description=cs_desc
             ))
 
-        if default_cs_description is None:
-            raise RuntimeError(
-                "Must specify 'default' (or 'Default') configuration set"
-            )
+        unassigned_configurations = [
+            ii for ii in range(len(self.configurations))
+            if ii not in assigned_configurations
+        ]
 
         if unassigned_configurations:
-            dataset.configuration_sets.append(ConfigurationSet(
+
+            if default_cs_description is None:
+                raise RuntimeError(
+                    "Must specify 'default' (or 'Default') configuration set"
+                )
+
+            self.configuration_sets.append(ConfigurationSet(
                 configurations=[
-                    dataset.configurations[ii]
+                    self.configurations[ii]
                     for ii in unassigned_configurations
                 ],
                 description=default_cs_description
             ))
 
-        print(Dataset)
-
 
     def convert_units(self, units):
         """Converts the dataset units to the provided type (e.g., 'OpenKIM'"""
+        pass
+
+
+    def aggregate(self):
         pass
 
 
@@ -208,6 +391,7 @@ class DatasetParser(HTMLParser):
         'Data',
         'Properties',
         'Property sets',
+        'Property labels',
         'Configuration sets',
         'Configuration labels',
     ]
@@ -251,7 +435,7 @@ class DatasetParser(HTMLParser):
                 # Begin reading new block
                 if data not in self.KNOWN_HEADERS:
                     raise RuntimeError(
-                        f"Header '{self._data[0]}' not in {self.KNOWN_HEADERS}"
+                        f"Header '{data}' not in {self.KNOWN_HEADERS}"
                     )
                 self._header = data
                 self.data[self._header] = []
