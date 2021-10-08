@@ -1,6 +1,5 @@
 import itertools
 import numpy as np
-from bson import ObjectId
 
 import kim_edn
 from kim_property.instance import check_property_instances
@@ -18,10 +17,9 @@ available_kim_properties = get_properties()
 
 from core import EFS_PROPERTY_NAME, ATOMS_ID_FIELD, ATOMS_NAME_FIELD
 from core import UNITS, OPENKIM_PROPERTY_UNITS
-from core.observable import Observable
 
 
-class Property(Observable):
+class Property:
     """
     A Property is used to store the results of some kind of calculation or
     experiment, and should be mapped to an OpenKIM Property Definition. Best
@@ -114,13 +112,10 @@ class Property(Observable):
 
         self.configurations = configurations
 
-        # Add Property as observer of linked configurations
-        for c in self.configurations:
-            c.attach(self)
-
         # Add settings
         if settings is None:
             settings = []
+
         self.settings = settings
 
 
@@ -159,14 +154,27 @@ class Property(Observable):
 
         if 'forces' in conf.atoms.arrays:
             edn['unrelaxed-potential-forces'] = {
-                'source-value': conf.atoms.arrays['forces'],
+                'source-value': conf.atoms.arrays['forces'].tolist(),
                 'source-unit': units['forces'] if 'forces' in units
                     else units['unrelaxed-potential-forces']
             }
 
         if 'stress' in conf.atoms.info:
+            stress = conf.atoms.info['stress']
+            if stress.shape == (3, 3):
+                stress = [
+                    stress[0, 0],
+                    stress[1, 1],
+                    stress[2, 2],
+                    stress[1, 2],
+                    stress[0, 2],
+                    stress[0, 1],
+                ]
+            else:
+                stress = stress.tolist()
+
             edn['unrelaxed-cauchy-stress'] = {
-                'source-value': conf.atoms.info['stress'],
+                'source-value': stress,
                 'source-unit': units['stress'] if 'stress' in units
                     else units['unrelaxed-cauchy-stress']
             }
@@ -178,24 +186,6 @@ class Property(Observable):
             settings=settings,
             edn=edn
         )
-
-
-    def attach(self, observer):
-        self._observers.append(observer)
-
-
-    def detach(self, observer):
-        self._observers.remove(observer)
-
-
-    def notify(self):
-        for observer in self._observers:
-            observer.update(self)
-
-
-    def update_atoms(self, atoms):
-        self.atoms = atoms
-        self.notify()
 
 
     def __str__(self):
@@ -256,7 +246,7 @@ def convert_units(edn, original_units):
             sp.split('/') for sp in units.split('*')
         ]))
 
-        val = edn[key]['source-value']
+        val = np.array(edn[key]['source-value'])
 
         val *= UNITS[split_units[0]]
 
@@ -272,6 +262,6 @@ def convert_units(edn, original_units):
                 )
 
         edn[key] = {
-            'source-value': val,
+            'source-value': val.tolist(),
             'source-unit': OPENKIM_PROPERTY_UNITS['pressure']
         }
