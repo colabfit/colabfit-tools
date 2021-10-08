@@ -2,10 +2,9 @@ import itertools
 import numpy as np
 
 from core import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
-from core.observable import Observable
 
 
-class ConfigurationSet(Observable):
+class ConfigurationSet:
     """
     Attributes:
 
@@ -38,31 +37,10 @@ class ConfigurationSet(Observable):
 
     """
 
-    _observers = []
-
     def __init__(self, configurations, description):
         self.configurations = configurations
 
-        for conf in configurations:
-            conf.attach(self)
-
         self.description    = description
-
-
-    def attach(self, observer):
-        self._observers.append(observer)
-
-    def detach(self, observer):
-        self._observers.remove(observer)
-
-    def update(self):
-        self.aggregate()
-        self.notify()
-
-    def notify(self):
-        for observer in self._observers:
-            observer.notify()
-
 
     @property
     def configurations(self):

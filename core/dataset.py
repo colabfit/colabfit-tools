@@ -5,58 +5,10 @@ from html.parser import HTMLParser
 from core import ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
 from core.configuration_sets import ConfigurationSet
 from core.converters import CFGConverter, EXYZConverter
-from core.observable import Observable
 from core.property import Property
 from core.property_settings import PropertySettings
 
-# class WatcherList(list, Observable):
-#     """
-#     A helper class for propagating changes up to configuration and
-#     property sets. Whenever an object that is in the WatcherList calls
-#     `notify()`, the Watcher list also calls `notify()`.
-
-#     TODO: this seems like a bit of overkill. This will make it so that the DS
-#     and CS re-aggregate information a TON of times. Seems like it would be
-#     easier to just accept that a user might force a dataset to be out of date,
-#     and to provide a resync() function that calls everything necessary.
-#     """
-
-#     _observers = []
-#     _list = []
-
-#     def attach(self, observer):
-#         self._observers.append(observer)
-
-#     def detach(self, observer):
-#         self._observers.remove(observer)
-
-#     def update(self):
-#         self.notify()
-
-#     def notify(self):
-#         for observer in self._observers:
-#             observer.update()
-
-#     def append(self, v):
-#         v.attach(self)
-
-#         self._list.append(v)
-#         self.notify()
-
-#     def remove(self, v):
-#         v.attach(self)
-
-#         self._list.append(v)
-#         self.notify()
-
-#     def __delitem__(self, i):
-#         self._list[i].detach(self)
-
-#         del self._list[i]
-#         self.notify()
-
-
-class Dataset(Observable):
+class Dataset:
 
     f"""
     Attributes:
@@ -124,6 +76,7 @@ class Dataset(Observable):
         name_field=None,
         co_label_regexes=None,
         cs_regexes=None,
+        ps_regexes=None,
         ):
 
         self.name           = name
@@ -145,21 +98,14 @@ class Dataset(Observable):
         if co_label_regexes is None: co_label_regexes = {}
         if cs_regexes is None:
             cs_regexes = {'default': 'Default configuration set'}
+        if ps_regexes is None: ps_regexes = {}
 
         self.co_label_regexes   = co_label_regexes
         self.cs_regexes         = cs_regexes
+        self.ps_regexes         = ps_regexes
 
         self.resync()
 
-
-    # @property
-    # def configurations(self):
-    #     return self._configurations
-
-
-    # @configurations.setter
-    # def configurations(self, configurations):
-    #     self._configurations = WatcherList(configurations)
 
     def resync(self):
         self.refresh_config_labels()
@@ -245,25 +191,7 @@ class Dataset(Observable):
         units = {}
         for prop in parser.data['Properties'][1:]:
             units[prop[0]] = prop[2]
-
-
-        efs_names = {
-            'energy', 'forces', 'stress',
-            'unrelaxed-potential-energy',
-            'unrelaxed-potential-forces',
-            'unrelaxed-cauchy-stress',
-            }
-
-        efs = set(units.keys()).issubset(efs_names)
-
-        if not efs:
-            raise NotImplementedError(
-                "Loading from HTML for datasets that contain properties "\
-                    "other than 'energy', 'force', 'stress' is not implemented."
-            )
-
-        for ci, conf in enumerate(dataset.configurations):
-            dataset.data.append(Property.EFS(conf, units, instance_id=ci+1))
+        dataset.load_data(units)
 
         # Extract property settings
         ps_regexes = {}
@@ -283,46 +211,38 @@ class Dataset(Observable):
 
         print(Dataset)
 
+    def rename_property(self, old_name, new_name):
+        """Renames old_name field to new_name in atoms.info and atoms.arrays"""
 
-    def load_configurations(
-        self,
-        file_path,
-        file_format,
-        name_field,
-        elements,
-        default_name='',
-        ):
-        """
-        Loads configurations as a list of ase.Atoms objects.
+        for conf in self.configurations:
+            if old_name in conf.atoms.info:
+                conf.atoms.info[new_name] = conf.atoms.info[old_name]
+                del conf.atoms.info[old_name]
 
-        Args:
-            file_path (str):
-                Path to the file or folder containing the data
+            if old_name in conf.atoms.arrays:
+                conf.atoms.arrays[new_name] = conf.atoms.arrays[old_name]
+                del conf.atoms.arrays[old_name]
 
-            name_field (str):
-                Key name to use to access `ase.Atoms.info[<name_field>]` to
-                obtain the name of a configuration one the atoms have been
-                loaded from the data file. Note that if
-                `file_format == 'folder'`, `name_field` will be set to 'name'.
 
-            elements (list):
-                A list of strings of element types
+    def load_data(self, properties):
 
-            default_name (list):
-                Default name to be used if `name_field==None`.
-        """
+        efs_names = {
+            'energy', 'forces', 'stress', 'virial',
+            'unrelaxed-potential-energy',
+            'unrelaxed-potential-forces',
+            'unrelaxed-cauchy-stress',
+            }
 
-        if file_format in ['xyz', 'extxyz']:
-            converter = EXYZConverter()
-        elif file_format == 'cfg':
-            converter = CFGConverter()
+        efs = set(properties.keys()).issubset(efs_names)
 
-        return converter.load(
-            file_path,
-            name_field=name_field,
-            elements=elements,
-            default_name=default_name
-        )
+        if not efs:
+            raise NotImplementedError(
+                "Loading from HTML for datasets that contain properties "\
+                    "other than 'energy', 'force', 'stress' is not implemented."
+            )
+
+        for ci, conf in enumerate(self.configurations):
+            self.data.append(Property.EFS(conf, properties, instance_id=ci+1))
 
 
     def refresh_config_labels(self):
@@ -341,13 +261,13 @@ class Dataset(Observable):
             # Remove old labels
             conf.atoms.info[ATOMS_LABELS_FIELD] = set()
 
-            for co_regex, co_labels in self.co_label_regexes.items():
+            for co_regex, labels in self.co_label_regexes.items():
                 regex = re.compile(co_regex)
 
                 if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
                     old_set =  conf.atoms.info[ATOMS_LABELS_FIELD]
 
-                    conf.update_labels(old_set.union(co_labels))
+                    conf.atoms.info[ATOMS_LABELS_FIELD] = old_set.union(labels)
 
 
     def refresh_property_settings(self):
@@ -398,8 +318,7 @@ class Dataset(Observable):
             cs_configs = []
             for ai, conf in enumerate(self.configurations):
                 if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
-                    cs_configs.append(conf.atoms)
-                    conf.atoms.attach(cs_configs)
+                    cs_configs.append(conf)
 
                     assigned_configurations.append(ai)
 
@@ -434,24 +353,55 @@ class Dataset(Observable):
         pass
 
 
-    def aggregate(self):
-        pass
+    def __str__(self):
+        return "Dataset(name='{}', authors={}, description='{}')".format(
+            self.name,
+            self.authors,
+            self.description,
+        )
+
+    def __repr__(self):
+        return str(self)
 
 
-    def attach(self, observer):
-        self._observers.append(observer)
+def load_configurations(
+    file_path,
+    file_format,
+    name_field,
+    elements,
+    default_name='',
+    ):
+    """
+    Loads configurations as a list of ase.Atoms objects.
 
+    Args:
+        file_path (str):
+            Path to the file or folder containing the data
 
-    def detach(self, observer):
-        self._observers.remove(observer)
+        name_field (str):
+            Key name to use to access `ase.Atoms.info[<name_field>]` to
+            obtain the name of a configuration one the atoms have been
+            loaded from the data file. Note that if
+            `file_format == 'folder'`, `name_field` will be set to 'name'.
 
+        elements (list):
+            A list of strings of element types
 
-    def notify(self):
-        for observer in self._observers:
-            observer.update(self)
+        default_name (list):
+            Default name to be used if `name_field==None`.
+    """
 
-    def update(self, observed):
-        pass
+    if file_format in ['xyz', 'extxyz']:
+        converter = EXYZConverter()
+    elif file_format == 'cfg':
+        converter = CFGConverter()
+
+    return converter.load(
+        file_path,
+        name_field=name_field,
+        elements=elements,
+        default_name=default_name
+    )
 
 
 class DatasetParser(HTMLParser):
