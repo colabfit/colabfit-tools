@@ -79,12 +79,12 @@ class ConfigurationSet(Observable):
         self.n_configurations =  len(self.configurations)
 
         self.labels = sorted(list(set(itertools.chain.from_iterable([
-            atoms.info[ATOMS_LABELS_FIELD] for atoms in self.configurations
+            conf.atoms.info[ATOMS_LABELS_FIELD] for conf in self.configurations
         ]))))
 
         atoms_elements = [
-            sorted(list(set(atoms.get_chemical_symbols())))
-            for atoms in self.configurations
+            sorted(list(set(conf.atoms.get_chemical_symbols())))
+            for conf in self.configurations
         ]
 
         self.chemical_systems = sorted(list(set([
@@ -99,15 +99,15 @@ class ConfigurationSet(Observable):
         elements_ratios = np.zeros((len(self.configurations), len(self.elements)))
         labels_counts = np.zeros((len(self.labels)))
 
-        for i, atoms in enumerate(self.configurations):
+        for i, conf in enumerate(self.configurations):
 
-            natoms = len(atoms)
+            natoms = len(conf.atoms)
 
-            for e in set(atoms.get_chemical_symbols()):
-                er = atoms.get_chemical_symbols().count(e)
+            for e in set(conf.atoms.get_chemical_symbols()):
+                er = conf.atoms.get_chemical_symbols().count(e)
                 elements_ratios[i, self.elements.index(e)] = er
 
-            for l in atoms.info[ATOMS_LABELS_FIELD]:
+            for l in conf.atoms.info[ATOMS_LABELS_FIELD]:
                 labels_counts[self.labels.index(l)] += 1
 
             self.nsites += natoms
