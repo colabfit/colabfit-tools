@@ -38,9 +38,8 @@ class ConfigurationSet:
     """
 
     def __init__(self, configurations, description):
-        self.configurations = configurations
-
         self.description    = description
+        self.configurations = configurations
 
     @property
     def configurations(self):
@@ -55,6 +54,9 @@ class ConfigurationSet:
     def aggregate(self):
 
         self.n_configurations =  len(self.configurations)
+
+        # for conf in self.configurations[:3]:
+        #     print(self.description, conf.atoms.info[ATOMS_LABELS_FIELD])
 
         self.labels = sorted(list(set(itertools.chain.from_iterable([
             conf.atoms.info[ATOMS_LABELS_FIELD] for conf in self.configurations

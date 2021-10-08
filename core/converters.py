@@ -54,10 +54,7 @@ class EXYZConverter(BaseConverter):
 
             atoms.info[ATOMS_LABELS_FIELD] = set()
 
-        return [
-            Configuration(atoms, atoms.info[ATOMS_NAME_FIELD])
-            for atoms in images
-        ]
+        return [Configuration(atoms) for atoms in images]
 
 
 class CFGConverter(BaseConverter):
@@ -203,8 +200,4 @@ class CFGConverter(BaseConverter):
 
                     images.append(atoms)
 
-        return [
-            Configuration(atoms, atoms.info[ATOMS_NAME_FIELD])
-            for atoms in images
-        ]
-
+        return [Configuration(atoms) for atoms in images]

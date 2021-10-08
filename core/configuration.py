@@ -13,9 +13,9 @@ class Configuration(Atoms):
     AND zero to many Property objects.
     """
 
-    def __init__(self, atoms, name, labels=None):
+    def __init__(self, atoms, labels=None):
         atoms.info[ATOMS_ID_FIELD] = ObjectId()
-        atoms.info[ATOMS_NAME_FIELD] = str(name)
+        atoms.info[ATOMS_NAME_FIELD] = str(atoms.info[ATOMS_NAME_FIELD])
 
         if labels is None:
             labels = set()

@@ -130,3 +130,6 @@ dmypy.json
 
 # local data repository
 /data
+
+# vim
+.swp
