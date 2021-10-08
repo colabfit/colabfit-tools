@@ -29,8 +29,9 @@ This is an example dataset
 
 |Name|Field|Units|
 |---|---|---|
-|energy|info.energy|eV|
-|forces|arrays.forces|eV/Ang|
+|energy|energy|eV|
+|forces|forces|eV/Ang|
+|stress|virial|kilobar|
 
 # Property settings
 

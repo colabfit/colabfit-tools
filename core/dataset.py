@@ -8,6 +8,8 @@ from core.converters import CFGConverter, EXYZConverter
 from core.property import Property
 from core.property_settings import PropertySettings
 
+# rzm: aggregate info up to a dataset
+
 class Dataset:
 
     f"""
@@ -100,9 +102,10 @@ class Dataset:
             cs_regexes = {'default': 'Default configuration set'}
         if ps_regexes is None: ps_regexes = {}
 
-        self.co_label_regexes   = co_label_regexes
         self.cs_regexes         = cs_regexes
         self.ps_regexes         = ps_regexes
+
+        self.co_label_regexes   = co_label_regexes
 
         self.resync()
 
@@ -120,8 +123,14 @@ class Dataset:
     @co_label_regexes.setter
     def co_label_regexes(self, regex_dict):
         """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
+
+        for key, v in regex_dict.items():
+            if isinstance(v, str):
+                regex_dict[key] = [v]
+
         self._co_label_regexes = regex_dict
         self.refresh_config_labels()
+        self.refresh_config_sets()
 
 
     @property
@@ -131,6 +140,9 @@ class Dataset:
     @cs_regexes.setter
     def cs_regexes(self, regex_dict):
         """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
+        if len(regex_dict) == 0:
+            regex_dict = {'default': 'Default configuration set'}
+
         self._cs_regexes = regex_dict
         self.refresh_config_sets()
 
@@ -168,7 +180,7 @@ class Dataset:
         if data_info['Name field'] == 'None':
             data_info['Name field'] = None
 
-        dataset.configurations = dataset.load_configurations(
+        dataset.configurations = load_configurations(
             file_path=data_info['File'][1],
             file_format=data_info['Format'],
             name_field=data_info['Name field'],
@@ -187,10 +199,15 @@ class Dataset:
             key: desc for key, desc in parser.data['Configuration sets'][1:]
         }
 
+        # Map property fields to supplied names
+        for row in parser.data['Properties'][1:]:
+            dataset.rename_property(row[1], row[0])
+
         # Extract computed properties
         units = {}
         for prop in parser.data['Properties'][1:]:
             units[prop[0]] = prop[2]
+
         dataset.load_data(units)
 
         # Extract property settings
@@ -209,10 +226,20 @@ class Dataset:
 
         dataset.ps_regexes = ps_regexes
 
-        print(Dataset)
+
+    def add_configurations(self, configurations):
+        n = len(self.configurations)
+        for ci, conf in enumerate(configurations):
+            if ATOMS_NAME_FIELD not in conf.atoms.info:
+                conf.atoms.info[ATOMS_NAME_FIELD] = str(n+ci)
+
+        self.configurations += configurations
+
 
     def rename_property(self, old_name, new_name):
         """Renames old_name field to new_name in atoms.info and atoms.arrays"""
+
+        if old_name == new_name: return
 
         for conf in self.configurations:
             if old_name in conf.atoms.info:
@@ -269,7 +296,6 @@ class Dataset:
 
                     conf.atoms.info[ATOMS_LABELS_FIELD] = old_set.union(labels)
 
-
     def refresh_property_settings(self):
         """
         Refresh property pointers to PSOs by matching on their linked co names
@@ -317,6 +343,7 @@ class Dataset:
             regex = re.compile(cs_regex)
             cs_configs = []
             for ai, conf in enumerate(self.configurations):
+
                 if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
                     cs_configs.append(conf)
 
