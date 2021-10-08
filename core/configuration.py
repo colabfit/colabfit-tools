@@ -10,9 +10,8 @@ class Configuration(Atoms, Observable):
     A Configuration is used to store an `ase.Atoms` object and to propagate
     certain changes to any observers who are watching the Configuration.
 
-    A Configuraion will only be observed by either a Property or a
-    ConfigurationSet
-
+    A Configuraion will be observed by zero to many ConfigurationSet objects
+    AND zero to many Property objects.
     """
 
     _observers = []
@@ -51,7 +50,27 @@ class Configuration(Atoms, Observable):
         self.atoms.info[ATOMS_ID_FIELD] = new_id
         self.notify()
 
-    
+
     def update_labels(self, new_labels):
         self.atoms.info[ATOMS_LABELS_FIELD] = set(new_labels)
         self.notify()
+
+
+    def colabfit_format(self):
+        """
+        Formats the attached Atoms object to be in proper ColabFit format:
+            - shift to origin
+            - rotate to LAMMPS-compliant orientation
+            - sort atoms by X, Y, then Z positions
+        """
+        raise NotImplementedError()
+
+    def __str__(self):
+        return "Configuration(name='{}', atoms={})".format(
+            self.atoms.info[ATOMS_NAME_FIELD],
+            self.atoms
+        )
+
+
+    def __repr__(self):
+        return str(self)

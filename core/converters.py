@@ -3,6 +3,7 @@ from ase import Atoms
 from ase.io import read
 
 from core import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
+from core.configuration import Configuration
 
 
 class BaseConverter:
@@ -53,8 +54,12 @@ class EXYZConverter(BaseConverter):
 
             atoms.info[ATOMS_LABELS_FIELD] = set()
 
-        return images
-    
+        return [
+            Configuration(atoms, atoms.info[ATOMS_NAME_FIELD])
+            for atoms in images
+        ]
+
+
 class CFGConverter(BaseConverter):
     def _load(self, file_path, name_field, elements, default_name):
 
@@ -149,7 +154,7 @@ class CFGConverter(BaseConverter):
                     feat_name   = split[1]
                     feat_val    = split[2]
 
-                    # Uses list 
+                    # Uses list
                     if feat_name not in features:
                         features[feat_name] = [feat_val]
                     else:
@@ -197,3 +202,9 @@ class CFGConverter(BaseConverter):
                     atoms.info[ATOMS_LABELS_FIELD] = set()
 
                     images.append(atoms)
+
+        return [
+            Configuration(atoms, atoms.info[ATOMS_NAME_FIELD])
+            for atoms in images
+        ]
+

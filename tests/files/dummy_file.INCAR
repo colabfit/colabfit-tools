@@ -1,0 +1,23 @@
+SYSTEM = Rhodium surface calculation
+
+# start parameters for this Run (automatic defaults are finem, hence not often required)
+  ISTART =      0    #  job   : 0-new  1- orbitals from WAVECAR
+  ICHARG =      2    #  charge: 1-file 2-atom 10-const
+
+# electronic optimization
+  ENCUT  = 300.00 eV # defaults from POTCAR, but wise to include
+  ALGO  =     Normal # alorithm for electron optimization, can be also FAST or ALL
+  NELM   =     60    # of ELM steps, sometimes default is too small
+  EDIFF  =   1E-06   # stopping-criterion for ELM
+# broadening and DOS related values; this works almost always
+  SIGMA  =    0.05;  ISMEAR =  0 # broad. in eV, -4-tet -1-fermi 0-gaus
+
+# ionic relaxation
+  EDIFFG =  -1E-02   # stopping-criterion for IOM (all forces smaller 1E-2)
+  NSW    =       20  # number of steps for IOM
+  IBRION = 2         # CG for ions, often 1 (RMM-DISS) is faster
+  POTIM  =    .5     # step for ionic-motion (for MD in fs)
+# performance optimization
+  KPAR   =    4      # make 4 groups, each group working on one set of k-points
+  NCORE  =    4      # one orbital handled by 4 cores
+  LREAL  =    A      # real space projection; slightly less accurate but faster

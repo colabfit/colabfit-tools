@@ -21,7 +21,7 @@ This is an example dataset
 |||
 |---|---|
 |Elements|In, P|
-|File|tests/files/dummy_file.extxyz|
+|File|[dummy_file.extxyz](tests/files/dummy_file.extxyz)|
 |Format|xyz|
 |Name field|name|
 
@@ -31,17 +31,12 @@ This is an example dataset
 |---|---|---|
 |energy|info.energy|eV|
 |forces|arrays.forces|eV/Ang|
-|stress|info.virial|bar|
 
-# Property sets
+# Property settings
 
-|Regex|Description|Files|
+|Regex|Method|Description|Files|
 |---|---|----|----|
-|`.*`|Energies and forces computed with VASP using certain settings|[INCAR](dummy_file.INCAR)|
-
-# Property labels
-|Regex|Software|Labels|
-|`.*`|VASP|PBE, GGA|
+|`.*`|VASP|Energies, forces, and stresses computed with VASP using certain settings|[INCAR](tests/files/dummy_file.INCAR)|
 
 # Configuration sets
 
