@@ -137,7 +137,7 @@ class Property:
 
     @classmethod
     def EFS(
-        cls, conf, property_fields, settings=None, instance_id=1,
+        cls, conf, property_map, settings=None, instance_id=1,
         convert_units=False
         ):
         """
@@ -146,11 +146,11 @@ class Property:
 
         Assumes that the properties, if provided, are stored in the following
         ways:
-            energy: `conf.atoms.info[property_fields['energy']]`
-            forces: `conf.atoms.arrays[property_fields['forces']]`
-            stress: `conf.atoms.info[property_fields['stress']]`
+            energy: `conf.atoms.info[property_map['energy']]`
+            forces: `conf.atoms.arrays[property_map['forces']]`
+            stress: `conf.atoms.info[property_map['stress']]`
 
-        Note: `property_fields` can use the following aliases:
+        Note: `property_map` can use the following aliases:
             - 'energy' instead of 'unrelaxed-potential-energy'
             - 'forces' instead of 'unrelaxed-potential-forces'
             - 'stress' instead of 'unrelaxed-cauchy-stress'
@@ -162,48 +162,46 @@ class Property:
 
         update_edn_with_conf(edn, conf)
 
-        property_fields = dict(property_fields)
-
         units = {}
 
         if 'energy' in conf.atoms.info:
 
-            if 'energy' in property_fields:
+            if 'energy' in property_map:
                 key = 'energy'
             else:
                 key = 'unrelaxed-potential-energy'
 
-            units['unrelaxed-potential-energy'] = property_fields[key][1]
+            units['unrelaxed-potential-energy'] = property_map[key]['units']
 
             edn['unrelaxed-potential-energy'] = {
-                'source-value': conf.atoms.info[property_fields[key][0]],
+                'source-value': conf.atoms.info[property_map[key]['field']],
                 'source-unit': units['unrelaxed-potential-energy']
             }
 
         if 'forces' in conf.atoms.arrays:
 
-            if 'forces' in property_fields:
+            if 'forces' in property_map:
                 key = 'forces'
             else:
                 key = 'unrelaxed-potential-forces'
 
-            units['unrelaxed-potential-forces'] = property_fields[key][1]
+            units['unrelaxed-potential-forces'] = property_map[key]['units']
 
             edn['unrelaxed-potential-forces'] = {
-                'source-value': conf.atoms.arrays[property_fields[key][0]].tolist(),
-                'source-unit': property_fields[key][1]
+                'source-value': conf.atoms.arrays[property_map[key]['field']].tolist(),
+                'source-unit': property_map[key]['units']
             }
 
         if 'stress' in conf.atoms.info:
 
-            if 'stress' in property_fields:
+            if 'stress' in property_map:
                 key = 'stress'
             else:
                 key = 'unrelaxed-cauchy-stress'
 
-            units['unrelaxed-cauchy-stress'] = property_fields[key][1]
+            units['unrelaxed-cauchy-stress'] = property_map[key]['units']
 
-            stress = conf.atoms.info[property_fields[key][0]]
+            stress = conf.atoms.info[property_map[key]['field']]
             if stress.shape == (3, 3):
                 stress = [
                     stress[0, 0],
@@ -218,7 +216,7 @@ class Property:
 
             edn['unrelaxed-cauchy-stress'] = {
                 'source-value': stress,
-                'source-unit': property_fields[key][1]
+                'source-unit': property_map[key]['units']
             }
 
         return cls(
