@@ -1,6 +1,5 @@
 import re
-import itertools
-import numpy as np
+import markdown
 from ase.io import write
 from html.parser import HTMLParser
 
@@ -65,6 +64,7 @@ class Dataset:
         configurations=None,
         data=None,
         name_field=None,
+        property_map=None,
         co_label_regexes=None,
         cs_regexes=None,
         ps_regexes=None,
@@ -87,6 +87,9 @@ class Dataset:
         self.configurations     = configurations
         self.data               = data
 
+        if property_map is None: property_map = {}
+        self.property_map = property_map
+
         if co_label_regexes is None: co_label_regexes = {}
         if cs_regexes is None:
             cs_regexes = {'default': 'Default configuration set'}
@@ -105,6 +108,32 @@ class Dataset:
         self.refresh_config_sets()
         self.refresh_property_settings()
         self.aggregate_metadata()
+
+
+    @property
+    def property_map(self):
+        return self._property_map
+
+    @property_map.setter
+    def property_map(self, property_map):
+        clean_map = {}
+        for key in property_map:
+            for key2 in ['field', 'units']:
+                if key2 not in property_map[key]:
+                    raise RuntimeError(
+                        'Missing "{}" in property_map["{}"]'.format(key2, key)
+                    )
+
+            if key == 'energy':
+                clean_map['unrelaxed-potential-energy'] = property_map['energy']
+
+            if key == 'forces':
+                clean_map['unrelaxed-potential-forces'] = property_map['forces']
+
+            if key == 'stress':
+                clean_map['unrelaxed-cauchy-stress'] = property_map['stress']
+
+        self._property_map = clean_map
 
 
     @property
@@ -229,7 +258,7 @@ class Dataset:
     data_path, data_path,
     data_format,
     self.name_field,
-    '\n'.join('|{}|{}|{}|'.format(k, k, v) for k,v in self.units.items()),
+    '\n'.join('|{}|{}|{}|'.format(k, v['field'], v['units']) for k,v in self.property_map.items()),
     '\n'.join('|`{}`|{}|{}|{}|'.format(regex.replace('|', '\|'), pso.method, pso.description, ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for regex, pso in self.ps_regexes.items()),
     '\n'.join('|`{}`|{}|'.format(regex.replace('|', '\|'), desc) for regex, desc in self.cs_regexes.items()),
     '\n'.join('|`{}`|{}'.format(regex.replace('|', '\|'), ', '.join(labels)) for regex, labels in self.co_label_regexes.items()),
@@ -251,7 +280,10 @@ class Dataset:
 
 
     @classmethod
-    def from_markdown(cls, html):
+    def from_markdown(cls, html_file_path):
+        with open(html_file_path, 'r') as f:
+            html = markdown.markdown(f.read(), extensions=['tables'])
+
         # Parse information from markdown file
         parser = DatasetParser()
         parser.feed(html)
@@ -343,7 +375,11 @@ class Dataset:
                 del conf.atoms.arrays[old_name]
 
 
-    def load_data(self, properties, convert_units=False):
+    def load_data(self, convert_units=False):
+        if self.property_map is None:
+            raise RuntimeError(
+                'Must set `Dataset.property_map1 first'
+            )
 
         efs_names = {
             'energy', 'forces', 'stress', 'virial',
@@ -352,7 +388,7 @@ class Dataset:
             'unrelaxed-cauchy-stress',
             }
 
-        efs = set(properties.keys()).issubset(efs_names)
+        efs = set(self.property_map.keys()).issubset(efs_names)
 
         if not efs:
             raise NotImplementedError(
@@ -360,29 +396,39 @@ class Dataset:
                     "other than 'energy', 'force', 'stress' is not implemented."
             )
 
+        map_copy = {}
+        for key in self.property_map:
+            map_copy[key] = {}
+            for key2 in self.property_map[key]:
+                map_copy[key][key2] = self.property_map[key][key2]
+
         for ci, conf in enumerate(self.configurations):
             self.data.append(Property.EFS(
-                conf, properties, instance_id=ci+1, convert_units=convert_units
+                conf, map_copy, instance_id=ci+1,
+                convert_units=convert_units
             ))
 
     def refresh_units(self):
-        self.units = {}
+        units = {}
 
         for data in self.data:
             if isinstance(data, Dataset):
                 raise NotImplementedError("Nested datasets not supported yet.")
 
             for key, val in data.units.items():
-                if key not in self.units:
-                    self.units[key] = val
+                if key not in units:
+                    units[key] = val
                 else:
-                    if val != self.units[key]:
+                    if val != units[key]:
                         raise RuntimeError(
                             "Conflicting units found for property "\
                                 "'{}': '{}' and '{}'".format(
-                                    key, val, self.units[key]
+                                    key, val, units[key]
                                 )
                         )
+
+        for key, val in units.items():
+            self.property_map[key]['units'] = val
 
 
     def clear_config_labels(self):
@@ -627,7 +673,7 @@ class Dataset:
             '\n\t'.join(self.authors),
             self.description,
             '\n\t'.join(self.methods),
-            '\n\t'.join('{}: {}'.format(u, v) for u,v in self.units.items()),
+            '\n\t'.join('{}: {}'.format(k, self.property_map[k]['units']) for k in self.property_map),
             self.n_configurations,
             self.n_sites,
             '\n\t'.join('{}\t({:.1f}% of sites)'.format(e, er*100) for e, er in zip(self.elements, self.elements_ratios)),
