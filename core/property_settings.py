@@ -44,10 +44,12 @@ class PropertySettings:
 
 
     def __str__(self):
-        return "PropertySettings(method='{}', description='{}')".format(
-            self.method,
-            self.description,
-        )
+        return "PropertySettings(method='{}', description='{}', "\
+            "labels={})".format(
+                self.method,
+                self.description,
+                self.labels,
+            )
 
 
     def __repr__(self):

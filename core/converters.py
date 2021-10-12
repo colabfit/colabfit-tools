@@ -19,13 +19,25 @@ class BaseConverter:
             A set of strings. Empty set if no labels
     """
 
-    def load(self, file_path, name_field, elements, default_name=''):
+    def load(
+        self,
+        file_path,
+        name_field,
+        elements,
+        default_name='',
+        labels_field=None
+        ):
         """Dummy wrapper to enforce input fields"""
-        return self._load(file_path, name_field, elements, default_name)
+        return self._load(
+            file_path, name_field, elements, default_name, labels_field
+        )
 
 
 class EXYZConverter(BaseConverter):
-    def _load(self, file_path, name_field, elements, default_name):
+    def _load(
+        self, file_path, name_field, elements, default_name, labels_field
+        ):
+
         elements = set(elements)
 
         images = read(file_path, slice(0, None), format='extxyz')
@@ -52,13 +64,20 @@ class EXYZConverter(BaseConverter):
                                 "to use `default_name`."
                     )
 
-            atoms.info[ATOMS_LABELS_FIELD] = set()
+            if labels_field is None:
+                atoms.info[ATOMS_LABELS_FIELD] = set()
+            else:
+                atoms.info[ATOMS_LABELS_FIELD] = set(
+                    [_.strip() for _ in atoms.info[labels_field].split(',')]
+                )
 
         return [Configuration(atoms) for atoms in images]
 
 
 class CFGConverter(BaseConverter):
-    def _load(self, file_path, name_field, elements, default_name):
+    def _load(
+        self, file_path, name_field, elements, default_name, labels_field
+        ):
 
         images = []
         with open(file_path) as cfg_file:
@@ -196,7 +215,12 @@ class CFGConverter(BaseConverter):
                                         "to use `default_name`."
                             )
 
-                    atoms.info[ATOMS_LABELS_FIELD] = set()
+                    if labels_field is None:
+                        atoms.info[ATOMS_LABELS_FIELD] = set()
+                    else:
+                        atoms.info[ATOMS_LABELS_FIELD] = set(
+                            [_.strip() for _ in atoms.info[labels_field].split(',')]
+                        )
 
                     images.append(atoms)
 

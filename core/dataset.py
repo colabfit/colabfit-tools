@@ -1,5 +1,7 @@
 import re
 import itertools
+import numpy as np
+from ase.io import write
 from html.parser import HTMLParser
 
 from core import ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
@@ -7,8 +9,6 @@ from core.configuration_sets import ConfigurationSet
 from core.converters import CFGConverter, EXYZConverter
 from core.property import Property
 from core.property_settings import PropertySettings
-
-# rzm: aggregate info up to a dataset
 
 class Dataset:
 
@@ -26,9 +26,6 @@ class Dataset:
         description (str):
             A description of the datast
 
-        elements (list):
-            A list of strings of element types
-
         configurations (list):
             A list of Configuration objects. Each element is guaranteed to have
             the following fields:
@@ -42,17 +39,9 @@ class Dataset:
         configuration_sets (list):
             List of ConfigurationSet objects defining groups of configurations
 
-        property_info (list):
-            A list of named tuples with the structure (name, field, units).
-            'name' is the human-readable name of the property; 'field' is a
-            string like 'info.energy' or 'arrays.forces' that can be parsed to
-            access the property in either the `ase.Atoms.info` dictionary or
-            `ase.Atoms.arrays`; 'units' is a string describing the units in ASE
-            format (e.g. 'eV/Ang').
-
         property_settings (list):
-            A list of ProprtySetting objects collected by taking the union of
-            the settings linked to by all entries in `properties`.
+            A list of ProprtySetting objects collected by taking the settings
+            linked to by all entries in `properties`.
 
         co_label_regexes (dict):
             A dictionary where the key is a string that will be compiled with
@@ -87,6 +76,7 @@ class Dataset:
         self.description    = description
         self.name_field     = name_field
 
+        self.is_parent_dataset = False
 
         if authors is None: self.authors = []
         if links is None: self.links = []
@@ -114,6 +104,7 @@ class Dataset:
         self.refresh_config_labels()
         self.refresh_config_sets()
         self.refresh_property_settings()
+        self.aggregate_metadata()
 
 
     @property
@@ -154,8 +145,109 @@ class Dataset:
     @ps_regexes.setter
     def ps_regexes(self, regex_dict):
         """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
+        for k, v in regex_dict.items():
+            if not isinstance(v, PropertySettings):
+                raise RuntimeError(
+                    '`ps_regexes` keys must be PropertySettings objects'
+                )
+
         self._ps_regexes = regex_dict
         self.refresh_property_settings()
+
+
+    def to_markdown(self, html_path, data_path, data_format='xyz'):
+        """
+
+        Args:
+            html_path (str):
+                Name of file to save markdown to
+
+            data_path (str):
+                Name of file to save configuration and properties to
+
+            data_format (str):
+                Format to use for data file. Default is 'xyz'
+        """
+        self.resync()
+
+        template = \
+"""
+# Name
+
+{}
+
+# Authors
+
+{}
+
+# Links
+
+{}
+
+# Description
+
+{}
+
+# Data
+
+|||
+|---|---|
+|Elements|{}|
+|File|[{}]({})|
+|Format|{}|
+|Name field|{}|
+
+# Properties
+
+|Name|Field|Units|
+|---|---|---|
+{}
+
+# Property settings
+
+|Regex|Method|Description|Files|
+|---|---|---|---|
+{}
+
+# Configuration sets
+
+|Regex|Description|
+|---|---|
+{}
+
+# Configuration labels
+
+|Regex|Labels|
+|---|---|
+{}
+""".format(
+    self.name,
+    '\n\n'.join(self.authors),
+    '\n\n'.join(self.links),
+    self.description,
+    ', '.join(self.elements),
+    data_path, data_path,
+    data_format,
+    self.name_field,
+    '\n'.join('|{}|{}|{}|'.format(k, k, v) for k,v in self.units.items()),
+    '\n'.join('|`{}`|{}|{}|{}|'.format(regex.replace('|', '\|'), pso.method, pso.description, ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for regex, pso in self.ps_regexes.items()),
+    '\n'.join('|`{}`|{}|'.format(regex.replace('|', '\|'), desc) for regex, desc in self.cs_regexes.items()),
+    '\n'.join('|`{}`|{}'.format(regex.replace('|', '\|'), ', '.join(labels)) for regex, labels in self.co_label_regexes.items()),
+)
+
+        with open(html_path, 'w') as html:
+            html.write(template)
+
+        if self.is_parent_dataset:
+            raise NotImplementedError(
+                'to_html() for nested Datasets has not been implemented yet'
+            )
+
+        write(
+            data_path,
+            [conf.atoms for conf in self.configurations],
+            format=data_format
+        )
 
 
     @classmethod
@@ -251,7 +343,7 @@ class Dataset:
                 del conf.atoms.arrays[old_name]
 
 
-    def load_data(self, properties):
+    def load_data(self, properties, convert_units=False):
 
         efs_names = {
             'energy', 'forces', 'stress', 'virial',
@@ -269,7 +361,33 @@ class Dataset:
             )
 
         for ci, conf in enumerate(self.configurations):
-            self.data.append(Property.EFS(conf, properties, instance_id=ci+1))
+            self.data.append(Property.EFS(
+                conf, properties, instance_id=ci+1, convert_units=convert_units
+            ))
+
+    def refresh_units(self):
+        self.units = {}
+
+        for data in self.data:
+            if isinstance(data, Dataset):
+                raise NotImplementedError("Nested datasets not supported yet.")
+
+            for key, val in data.units.items():
+                if key not in self.units:
+                    self.units[key] = val
+                else:
+                    if val != self.units[key]:
+                        raise RuntimeError(
+                            "Conflicting units found for property "\
+                                "'{}': '{}' and '{}'".format(
+                                    key, val, self.units[key]
+                                )
+                        )
+
+
+    def clear_config_labels(self):
+        for conf in self.configurations:
+            conf.atoms.info[ATOMS_LABELS_FIELD] = set()
 
 
     def refresh_config_labels(self):
@@ -285,8 +403,8 @@ class Dataset:
 
         # Apply configuration labels
         for conf in self.configurations:
-            # Remove old labels
-            conf.atoms.info[ATOMS_LABELS_FIELD] = set()
+            # # Remove old labels
+            # conf.atoms.info[ATOMS_LABELS_FIELD] = set()
 
             for co_regex, labels in self.co_label_regexes.items():
                 regex = re.compile(co_regex)
@@ -306,23 +424,29 @@ class Dataset:
                 "Dataset.data is None; must load data first"
             )
 
-        # Reset Property PSO pointers
-        for prop in self.data:
+        self.property_settings = list(self.ps_regexes.values())
 
-            if isinstance(prop, Dataset):
-                raise RuntimeError(
-                    'PropertySettings should not be used with nested datasets'
-                )
+        # Reset Property PSO pointers
+        for data in self.data:
+
+            if isinstance(data, Dataset):
+                self.property_settings += data.property_settings
+                continue
 
             # Remove old pointers
-            prop.settings = []
+            data.settings = None
 
             for ps_regex, pso in self.ps_regexes.items():
                 regex = re.compile(ps_regex)
 
-                for conf in prop.configurations:
+                for conf in data.configurations:
                     if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
-                        prop.settings.append(pso)
+                        if data.settings is not None:
+                            raise RuntimeError(
+                                'Properties may only be linked to one PSO'
+                            )
+
+                        data.settings = pso
 
 
     def refresh_config_sets(self):
@@ -375,20 +499,145 @@ class Dataset:
             ))
 
 
+    def aggregate_metadata(self):
+
+        self.refresh_units()
+
+        elements = {}
+        self.chemical_systems = []
+        self.property_types = []
+
+        self.n_configurations = 0
+        self.n_sites = 0
+        co_labels = {}
+
+        for cs in self.configuration_sets:
+            self.n_configurations += cs.n_configurations
+
+            self.elements += cs.elements
+            for el, er in zip(cs.elements, cs.elements_ratios):
+                if el not in elements:
+                    elements[el] = er*cs.n_sites
+                else:
+                    elements[el] += er*cs.n_sites
+
+            for l, lc in zip(cs.labels, cs.labels_counts):
+                if l not in co_labels:
+                    co_labels[l] = lc
+                else:
+                    co_labels[l] += lc
+
+            self.chemical_systems += cs.chemical_systems
+            self.n_sites += cs.n_sites
+
+        self.elements = sorted(list(elements.keys()))
+        self.elements_ratios = [
+            elements[el]/self.n_sites for el in self.elements
+        ]
+
+        self.chemical_systems = sorted(list(set(self.chemical_systems)))
+
+        self.co_labels = sorted(list(co_labels.keys()))
+        self.co_labels_counts = [int(co_labels[l]) for l in self.co_labels]
+
+        self.is_parent_dataset = False
+        for data in self.data:
+            if isinstance(data, Dataset):
+                self.is_parent_dataset = True
+            else:
+                if self.is_parent_dataset:
+                    raise RuntimeError(
+                        'Dataset cannot contain Datasets and Properties at '\
+                            'the same time.'
+                    )
+
+        self.methods = []
+        self.property_types = []
+        self.n_properties = 0
+        prop_counts = {}
+        pso_labels = {}
+
+        for data in self.data:
+            if self.is_parent_dataset:
+                self.methods += data.methods
+                self.property_types += data.property_types
+                self.n_properties += data.n_properties
+
+                for pname, pc in zip(data.property_types, data.property_counts):
+                    if pname not in prop_counts:
+                        prop_counts[pname] = pc
+                    else:
+                        prop_counts[pname] += pc
+
+                for l, lc in zip(data.pso_labels, data.pso_labels_counts):
+                    if l not in pso_labels:
+                        pso_labels[l] = lc
+                    else:
+                        pso_labels[l] += lc
+            else:
+                self.property_types.append(data.edn['property-id'])
+                self.n_properties += 1
+
+                if data.edn['property-id'] not in prop_counts:
+                    prop_counts[data.edn['property-id']] = 1
+                else:
+                    prop_counts[data.edn['property-id']] += 1
+
+                if data.settings is not None:
+                    for l in data.settings.labels:
+                        if l not in pso_labels:
+                            pso_labels[l] = 1
+                        else:
+                            pso_labels[l] += 1
+
+        self.methods = list(set(pso.method for pso in self.property_settings))
+
+        self.property_types = list(prop_counts.keys())
+        self.property_counts = [
+            int(prop_counts[pname]) for pname in self.property_types
+        ]
+
+        self.pso_labels = sorted(list(pso_labels.keys()))
+        self.pso_labels_counts = [int(pso_labels[l]) for l in self.pso_labels]
+
+
     def convert_units(self, units):
         """Converts the dataset units to the provided type (e.g., 'OpenKIM'"""
         pass
 
 
     def __str__(self):
-        return "Dataset(name='{}', authors={}, description='{}')".format(
-            self.name,
-            self.authors,
-            self.description,
-        )
+        template = """Dataset
+    Name:\n\t{}\n
+    Authors:\n\t{}\n
+    Description:\n\t{}\n
+    Methods:\n\t{}\n
+    Units:\n\t{}\n
+    Number of configurations:\n\t{}\n
+    Number of sites:\n\t{}\n
+    Elements:\n\t{}\n
+    Chemical systems:\n\t{}\n
+    Properties:\n\t{}\n\t{}\n
+    Property settings labels:\n\t{}\n
+    Configuration labels:\n\t{}\n
+    Configuration sets:\n\t{}"""
 
-    def __repr__(self):
-        return str(self)
+        return template.format(
+            self.name,
+            '\n\t'.join(self.authors),
+            self.description,
+            '\n\t'.join(self.methods),
+            '\n\t'.join('{}: {}'.format(u, v) for u,v in self.units.items()),
+            self.n_configurations,
+            self.n_sites,
+            '\n\t'.join('{}\t({:.1f}% of sites)'.format(e, er*100) for e, er in zip(self.elements, self.elements_ratios)),
+            '\n\t'.join(self.chemical_systems),
+            'Total: {}'.format(self.n_properties),
+            '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.property_types, self.property_counts)),
+            '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.pso_labels, self.pso_labels_counts)),
+            '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.co_labels, self.co_labels_counts)),
+            '\n\t'.join('{}: {}'.format(i, cs.description) for i, cs in enumerate(self.configuration_sets)),
+        )
 
 
 def load_configurations(
@@ -397,6 +646,7 @@ def load_configurations(
     name_field,
     elements,
     default_name='',
+    labels_field=None,
     ):
     """
     Loads configurations as a list of ase.Atoms objects.
@@ -416,6 +666,11 @@ def load_configurations(
 
         default_name (list):
             Default name to be used if `name_field==None`.
+
+        labels_field (str):
+            Key name to use to access `ase.Atoms.info[<labels_field>]` to
+            obtain the labels that should be applied to the configuration. This
+            field should contain a comma-separated list of strings
     """
 
     if file_format in ['xyz', 'extxyz']:
@@ -427,7 +682,8 @@ def load_configurations(
         file_path,
         name_field=name_field,
         elements=elements,
-        default_name=default_name
+        default_name=default_name,
+        labels_field=labels_field,
     )
 
 

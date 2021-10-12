@@ -52,6 +52,7 @@ class Property:
         settings=None,
         edn=None,
         instance_id=1,
+        convert_units=False
         ):
         """
         Args:
@@ -74,11 +75,16 @@ class Property:
                 and anything preceded by a '*'. It will be divided by anything
                 preceded by a '/'.
 
-            settings (list):
-                A list of `colabfit.PropertySettings` objects
+            settings (PropertySettings):
+                A `colabfit.PropertySettings` objects specifying how to compute
+                the property.
 
             instance_id (int):
                 A positive non-zero integer
+
+            convert_units (bool):
+                If True, converts units to those expected by ColabFit. Default
+                is False
         """
 
         if edn is None:
@@ -103,7 +109,20 @@ class Property:
             fp_path=available_kim_properties
         )
 
-        convert_units(self.edn, units)
+        units_cleaned = {}
+        for key, val in units.items():
+            if key == 'energy':
+                key = 'unrelaxed-potential-energy'
+            elif key == 'forces':
+                key = 'unrelaxed-potential-forces'
+            elif key == 'stress':
+                key = 'unrelaxed-cauchy-stress'
+
+            units_cleaned[key] = val
+
+        self.units = units_cleaned
+        if convert_units:
+            self.convert_units(units_cleaned)
 
         if len(configurations) < 1:
             raise RuntimeError(
@@ -113,25 +132,25 @@ class Property:
         self.configurations = configurations
 
         # Add settings
-        if settings is None:
-            settings = []
-
         self.settings = settings
 
 
     @classmethod
-    def EFS(cls, conf, units, settings=None, instance_id=1):
+    def EFS(
+        cls, conf, property_fields, settings=None, instance_id=1,
+        convert_units=False
+        ):
         """
         Constructs a property for storing energy/forces/stress data of an
         `colabfit.Configuration` object.
 
         Assumes that the properties, if provided, are stored in the following
         ways:
-            energy: `conf.atoms.info['energy']`
-            forces: `conf.atoms.arrays['forces']`
-            stress: `conf.atoms.info['stress']`
+            energy: `conf.atoms.info[property_fields['energy']]`
+            forces: `conf.atoms.arrays[property_fields['forces']]`
+            stress: `conf.atoms.info[property_fields['stress']]`
 
-        Note: `units` can use the following aliases:
+        Note: `property_fields` can use the following aliases:
             - 'energy' instead of 'unrelaxed-potential-energy'
             - 'forces' instead of 'unrelaxed-potential-forces'
             - 'stress' instead of 'unrelaxed-cauchy-stress'
@@ -143,24 +162,48 @@ class Property:
 
         update_edn_with_conf(edn, conf)
 
-        units = dict(units)
+        property_fields = dict(property_fields)
+
+        units = {}
 
         if 'energy' in conf.atoms.info:
+
+            if 'energy' in property_fields:
+                key = 'energy'
+            else:
+                key = 'unrelaxed-potential-energy'
+
+            units['unrelaxed-potential-energy'] = property_fields[key][1]
+
             edn['unrelaxed-potential-energy'] = {
-                'source-value': conf.atoms.info['energy'],
-                'source-unit': units['energy'] if 'energy' in units
-                    else units['unrelaxed-potential-energy']
+                'source-value': conf.atoms.info[property_fields[key][0]],
+                'source-unit': units['unrelaxed-potential-energy']
             }
 
         if 'forces' in conf.atoms.arrays:
+
+            if 'forces' in property_fields:
+                key = 'forces'
+            else:
+                key = 'unrelaxed-potential-forces'
+
+            units['unrelaxed-potential-forces'] = property_fields[key][1]
+
             edn['unrelaxed-potential-forces'] = {
-                'source-value': conf.atoms.arrays['forces'].tolist(),
-                'source-unit': units['forces'] if 'forces' in units
-                    else units['unrelaxed-potential-forces']
+                'source-value': conf.atoms.arrays[property_fields[key][0]].tolist(),
+                'source-unit': property_fields[key][1]
             }
 
         if 'stress' in conf.atoms.info:
-            stress = conf.atoms.info['stress']
+
+            if 'stress' in property_fields:
+                key = 'stress'
+            else:
+                key = 'unrelaxed-cauchy-stress'
+
+            units['unrelaxed-cauchy-stress'] = property_fields[key][1]
+
+            stress = conf.atoms.info[property_fields[key][0]]
             if stress.shape == (3, 3):
                 stress = [
                     stress[0, 0],
@@ -175,8 +218,7 @@ class Property:
 
             edn['unrelaxed-cauchy-stress'] = {
                 'source-value': stress,
-                'source-unit': units['stress'] if 'stress' in units
-                    else units['unrelaxed-cauchy-stress']
+                'source-unit': property_fields[key][1]
             }
 
         return cls(
@@ -184,8 +226,48 @@ class Property:
             configurations=[conf],
             units=units,
             settings=settings,
-            edn=edn
+            edn=edn,
+            convert_units=convert_units,
         )
+
+    def convert_units(self, original_units):
+        """
+        For each key in `original_units`, convert `edn[key]` from
+        `original_units[key]` to the expected ColabFit-compliant units.
+        """
+
+        # Avoid change in place
+        original_units = dict(original_units)
+
+        for key, units in original_units.items():
+            if key not in self.units:
+                continue
+
+            split_units = list(itertools.chain.from_iterable([
+                sp.split('/') for sp in units.split('*')
+            ]))
+
+            val = np.array(self.edn[key]['source-value'])
+
+            val *= UNITS[split_units[0]]
+
+            for u in split_units[1:]:
+                if units[units.find(u)-1] == '*':
+                    val *= UNITS[u]
+                elif units[units.find(u)-1] == '/':
+                    val /= UNITS[u]
+                else:
+                    raise RuntimeError(
+                        "There may be something wrong with the units: "\
+                            "{}".format(u)
+                    )
+
+            self.edn[key] = {
+                'source-value': val.tolist(),
+                'source-unit': OPENKIM_PROPERTY_UNITS[key]
+            }
+
+            self.units[key] = self.edn[key]['source-unit']
 
 
     def __str__(self):
@@ -227,41 +309,3 @@ def update_edn_with_conf(edn, conf):
         'source-unit': 'angstrom'
     }
 
-
-def convert_units(edn, original_units):
-    """
-    For each key in `original_units`, convert `edn[key]` from
-    `original_units[key]` to the expected ColabFit-compliant units.
-    """
-
-    for key, units in original_units.items():
-        if key == 'energy':
-            key = 'unrelaxed-potential-energy'
-        elif key == 'forces':
-            key = 'unrelaxed-potential-forces'
-        elif key == 'stress':
-            key = 'unrelaxed-cauchy-stress'
-
-        split_units = list(itertools.chain.from_iterable([
-            sp.split('/') for sp in units.split('*')
-        ]))
-
-        val = np.array(edn[key]['source-value'])
-
-        val *= UNITS[split_units[0]]
-
-        for u in split_units[1:]:
-            if units[units.find(u)-1] == '*':
-                val *= UNITS[u]
-            elif units[units.find(u)-1] == '/':
-                val /= UNITS[u]
-            else:
-                raise RuntimeError(
-                    "There may be something wrong with the units: "\
-                        "{}".format(u)
-                )
-
-        edn[key] = {
-            'source-value': val.tolist(),
-            'source-unit': OPENKIM_PROPERTY_UNITS['pressure']
-        }
