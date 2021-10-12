@@ -32,7 +32,7 @@ class ConfigurationSet:
         chemical_systems (list):
             A list of strings of chemical systems present in the collection
 
-        nsites (int):
+        n_sites (int):
             The total number of atoms in the collection
 
     """
@@ -75,7 +75,7 @@ class ConfigurationSet:
             atoms_elements
         ))))
 
-        self.nsites = 0
+        self.n_sites = 0
         elements_ratios = np.zeros((len(self.configurations), len(self.elements)))
         labels_counts = np.zeros((len(self.labels)))
 
@@ -90,10 +90,11 @@ class ConfigurationSet:
             for l in conf.atoms.info[ATOMS_LABELS_FIELD]:
                 labels_counts[self.labels.index(l)] += 1
 
-            self.nsites += natoms
+            self.n_sites += natoms
 
         self.elements_ratios = np.sum(elements_ratios, axis=0)
-        self.elements_ratios /= self.nsites
+        self.elements_ratios /= self.n_sites
+        self.elements_ratios = self.elements_ratios.tolist()
 
         self.labels_counts = labels_counts
 
@@ -101,7 +102,7 @@ class ConfigurationSet:
     def __str__(self):
         return 'ConfigurationSet('\
             'labels={}, elements={}, '\
-                'elements_ratios={}, chemical_systems={}, nsites={},'\
+                'elements_ratios={}, chemical_systems={}, n_sites={},'\
                     ' n_configurations={}, description="{}")'.format(
                         {l: c for l,c in zip(
                             self.labels,
@@ -110,7 +111,7 @@ class ConfigurationSet:
                         self.elements,
                         self.elements_ratios,
                         self.chemical_systems,
-                        self.nsites,
+                        self.n_sites,
                         self.n_configurations,
                         self.description
                     )

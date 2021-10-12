@@ -9,7 +9,7 @@ class Configuration(Atoms):
     A Configuration is used to store an `ase.Atoms` object and to propagate
     certain changes to any observers who are watching the Configuration.
 
-    A Configuraion will be observed by zero to many ConfigurationSet objects
+    A Configuration will be observed by zero to many ConfigurationSet objects
     AND zero to many Property objects.
     """
 

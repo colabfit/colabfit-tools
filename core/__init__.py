@@ -13,8 +13,8 @@ if 'pascal' not in UNITS:
     UNITS['pascal'] = 1e-9  # pascal to GPa
 
 OPENKIM_PROPERTY_UNITS = {
-    'energy': 'eV',
-    'forces': 'eV/angstrom',
-    'pressure': 'GPa',
+    'unrelaxed-potential-energy': 'eV',
+    'unrelaxed-potential-forces': 'eV/angstrom',
+    'unrelaxed-cauchy-stress': 'GPa',
 }
 
