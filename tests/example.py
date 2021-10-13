@@ -105,13 +105,6 @@ ds2.configurations = load_configurations(
 # Rename a property name to a known name
 ds2.rename_property('virial', 'stress')
 
-properties = {
-    # ColabFit name: (ASE field name, units)
-    'energy': ('energy', 'eV'),
-    'forces': ('force', 'eV/Ang'),
-    'stress': ('stress', 'kilobar'),
-}
-
 ds2.property_map = {
     # ColabFit name: {'field': ASE field name, 'units': str}
     'energy': {'field': 'energy', 'units': 'eV'},
@@ -186,8 +179,6 @@ ds2.ps_regexes = {
 # Resync to make sure metadata is updated everywhere necessary
 ds2.resync()
 
-print(ds2)
-
 ds2.to_markdown('tests/files/dummy_written2.md', 'tests/files/dummy_written2.extxyz', 'xyz')
 
 # nested_ds = Dataset('nested-ds')
@@ -196,5 +187,8 @@ ds2.to_markdown('tests/files/dummy_written2.md', 'tests/files/dummy_written2.ext
 
 # print(nested_ds)
 
-# ds1 = Dataset.from_markdown('tests/files/dummy_written1.md')
-# ds2 = Dataset.from_markdown('tests/files/dummy_written2.md')
+ds1 = Dataset.from_markdown('tests/files/dummy_written1.md')
+ds2 = Dataset.from_markdown('tests/files/dummy_written2.md')
+
+print(ds1)
+print(ds2)

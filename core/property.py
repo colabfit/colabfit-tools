@@ -1,3 +1,4 @@
+import warnings
 import itertools
 import numpy as np
 
@@ -164,60 +165,46 @@ class Property:
 
         units = {}
 
-        if 'energy' in conf.atoms.info:
+        for key, val in property_map.items():
+            if (val['field'] not in conf.atoms.info) and (val['field'] not in conf.atoms.arrays):
+                field_not_found_message = 'Key "{}" not found in atoms.info '\
+                    'or atoms.arrays. Available keys are: {}'.format(
+                        val['field'],
+                        list(conf.atoms.info.keys())
+                        + list(conf.atoms.arrays.keys())
+                    )
+                warnings.warn(field_not_found_message)
 
-            if 'energy' in property_map:
-                key = 'energy'
-            else:
-                key = 'unrelaxed-potential-energy'
+                continue
 
-            units['unrelaxed-potential-energy'] = property_map[key]['units']
+            if (key == 'energy') or (key == 'unrelaxed-potential-energy'):
+                edn['unrelaxed-potential-energy'] = {
+                    'source-value': conf.atoms.info[val['field']],
+                    'source-unit': val['units'],
+                }
+            if (key == 'forces') or (key == 'unrelaxed-potential-forces'):
+                edn['unrelaxed-potential-forces'] = {
+                    'source-value': conf.atoms.arrays[val['field']].tolist(),
+                    'source-unit': val['units']
+                }
+            if (key == 'stress') or (key == 'unrelaxed-cauchy-stress'):
+                stress = conf.atoms.info[val['field']]
+                if stress.shape == (3, 3):
+                    stress = [
+                        stress[0, 0],
+                        stress[1, 1],
+                        stress[2, 2],
+                        stress[1, 2],
+                        stress[0, 2],
+                        stress[0, 1],
+                    ]
+                else:
+                    stress = stress.tolist()
 
-            edn['unrelaxed-potential-energy'] = {
-                'source-value': conf.atoms.info[property_map[key]['field']],
-                'source-unit': units['unrelaxed-potential-energy']
-            }
-
-        if 'forces' in conf.atoms.arrays:
-
-            if 'forces' in property_map:
-                key = 'forces'
-            else:
-                key = 'unrelaxed-potential-forces'
-
-            units['unrelaxed-potential-forces'] = property_map[key]['units']
-
-            edn['unrelaxed-potential-forces'] = {
-                'source-value': conf.atoms.arrays[property_map[key]['field']].tolist(),
-                'source-unit': property_map[key]['units']
-            }
-
-        if 'stress' in conf.atoms.info:
-
-            if 'stress' in property_map:
-                key = 'stress'
-            else:
-                key = 'unrelaxed-cauchy-stress'
-
-            units['unrelaxed-cauchy-stress'] = property_map[key]['units']
-
-            stress = conf.atoms.info[property_map[key]['field']]
-            if stress.shape == (3, 3):
-                stress = [
-                    stress[0, 0],
-                    stress[1, 1],
-                    stress[2, 2],
-                    stress[1, 2],
-                    stress[0, 2],
-                    stress[0, 1],
-                ]
-            else:
-                stress = stress.tolist()
-
-            edn['unrelaxed-cauchy-stress'] = {
-                'source-value': stress,
-                'source-unit': property_map[key]['units']
-            }
+                edn['unrelaxed-cauchy-stress'] = {
+                    'source-value': stress,
+                    'source-unit': val['units']
+                }
 
         return cls(
             name=EFS_PROPERTY_NAME,
@@ -227,6 +214,7 @@ class Property:
             edn=edn,
             convert_units=convert_units,
         )
+
 
     def convert_units(self, original_units):
         """
