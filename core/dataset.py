@@ -116,24 +116,31 @@ class Dataset:
 
     @property_map.setter
     def property_map(self, property_map):
-        clean_map = {}
+        # clean_map = {}
         for key in property_map:
+            # clean_map[key] = {}
             for key2 in ['field', 'units']:
                 if key2 not in property_map[key]:
                     raise RuntimeError(
                         'Missing "{}" in property_map["{}"]'.format(key2, key)
                     )
 
-            if key == 'energy':
-                clean_map['unrelaxed-potential-energy'] = property_map['energy']
+                # clean_map[key][key2] = property_map[key][key2]
 
-            if key == 'forces':
-                clean_map['unrelaxed-potential-forces'] = property_map['forces']
+            # if key == 'energy':
+            #     clean_map['unrelaxed-potential-energy'] = property_map['energy']
+            #     del clean_map['energy']
 
-            if key == 'stress':
-                clean_map['unrelaxed-cauchy-stress'] = property_map['stress']
+            # if key == 'forces':
+            #     clean_map['unrelaxed-potential-forces'] = property_map['forces']
+            #     del clean_map['forces']
 
-        self._property_map = clean_map
+            # if key == 'stress':
+            #     clean_map['unrelaxed-cauchy-stress'] = property_map['stress']
+            #     del clean_map['stress']
+
+        # self._property_map = clean_map
+        self._property_map = property_map
 
 
     @property
@@ -272,10 +279,15 @@ class Dataset:
                 'to_html() for nested Datasets has not been implemented yet'
             )
 
+        print('atoms.info:', self.configurations[0].atoms.info.keys())
+
+        if data_format == 'xyz':
+            data_format = 'extxyz'
+
         write(
             data_path,
             [conf.atoms for conf in self.configurations],
-            format=data_format
+            format=data_format,
         )
 
 
@@ -328,11 +340,16 @@ class Dataset:
             dataset.rename_property(row[1], row[0])
 
         # Extract computed properties
-        units = {}
+        property_map = {}
         for prop in parser.data['Properties'][1:]:
-            units[prop[0]] = prop[2]
+            property_map[prop[0]] = {
+                'field': prop[1],
+                'units': prop[2],
+            }
 
-        dataset.load_data(units)
+        dataset.property_map = property_map
+
+        dataset.load_data()
 
         # Extract property settings
         ps_regexes = {}
@@ -349,6 +366,10 @@ class Dataset:
             )
 
         dataset.ps_regexes = ps_regexes
+
+        dataset.resync()
+
+        return dataset
 
 
     def add_configurations(self, configurations):
@@ -376,9 +397,9 @@ class Dataset:
 
 
     def load_data(self, convert_units=False):
-        if self.property_map is None:
+        if len(self.property_map) == 0:
             raise RuntimeError(
-                'Must set `Dataset.property_map1 first'
+                'Must set `Dataset.property_map first'
             )
 
         efs_names = {
