@@ -1,5 +1,6 @@
 import re
 import markdown
+import itertools
 from ase.io import write
 from html.parser import HTMLParser
 
@@ -63,7 +64,6 @@ class Dataset:
         description=None,
         configurations=None,
         data=None,
-        name_field=None,
         property_map=None,
         co_label_regexes=None,
         cs_regexes=None,
@@ -74,7 +74,6 @@ class Dataset:
         self.authors        = authors
         self.links          = links
         self.description    = description
-        self.name_field     = name_field
 
         self.is_parent_dataset = False
 
@@ -104,6 +103,18 @@ class Dataset:
 
 
     def resync(self):
+
+        self.is_parent_dataset = False
+        for data in self.data:
+            if isinstance(data, Dataset):
+                self.is_parent_dataset = True
+            else:
+                if self.is_parent_dataset:
+                    raise RuntimeError(
+                        'Dataset cannot contain Datasets and Properties at '\
+                            'the same time.'
+                    )
+
         self.refresh_config_labels()
         self.refresh_config_sets()
         self.refresh_property_settings()
@@ -191,7 +202,7 @@ class Dataset:
         self.refresh_property_settings()
 
 
-    def to_markdown(self, html_path, data_path, data_format='xyz'):
+    def to_markdown(self, html_path, data_path, data_format='xyz', name_field=ATOMS_NAME_FIELD):
         """
 
         Args:
@@ -203,6 +214,11 @@ class Dataset:
 
             data_format (str):
                 Format to use for data file. Default is 'xyz'
+
+            name_field (str):
+                The name of the field that should be used to generate
+                configuration names
+
         """
         self.resync()
 
@@ -241,8 +257,8 @@ class Dataset:
 
 # Property settings
 
-|Regex|Method|Description|Files|
-|---|---|---|---|
+|Regex|Method|Description|Labels|Files|
+|---|---|---|---|---|
 {}
 
 # Configuration sets
@@ -264,11 +280,11 @@ class Dataset:
     ', '.join(self.elements),
     data_path, data_path,
     data_format,
-    self.name_field,
-    '\n'.join('|{}|{}|{}|'.format(k, v['field'], v['units']) for k,v in self.property_map.items()),
-    '\n'.join('|`{}`|{}|{}|{}|'.format(regex.replace('|', '\|'), pso.method, pso.description, ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for regex, pso in self.ps_regexes.items()),
-    '\n'.join('|`{}`|{}|'.format(regex.replace('|', '\|'), desc) for regex, desc in self.cs_regexes.items()),
-    '\n'.join('|`{}`|{}'.format(regex.replace('|', '\|'), ', '.join(labels)) for regex, labels in self.co_label_regexes.items()),
+    name_field,
+    '\n'.join('| {} | {} | {} |'.format(k, v['field'], v['units']) for k,v in self.property_map.items()),
+    '\n'.join('| `{}` | {} | {} | {} | {} |'.format(regex.replace('|', '\|'), pso.method, pso.description, ', '.join(pso.labels), ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for regex, pso in self.ps_regexes.items()),
+    '\n'.join('| `{}` | {} |'.format(regex.replace('|', '\|'), desc) for regex, desc in self.cs_regexes.items()),
+    '\n'.join('| `{}` | {} '.format(regex.replace('|', '\|'), ', '.join(labels)) for regex, labels in self.co_label_regexes.items()),
 )
 
         with open(html_path, 'w') as html:
@@ -278,8 +294,6 @@ class Dataset:
             raise NotImplementedError(
                 'to_html() for nested Datasets has not been implemented yet'
             )
-
-        print('atoms.info:', self.configurations[0].atoms.info.keys())
 
         if data_format == 'xyz':
             data_format = 'extxyz'
@@ -326,13 +340,15 @@ class Dataset:
 
         # Extract labels and trigger label refresh for configurations
         dataset.co_label_regexes = {
-            key: [_.strip() for _ in desc.split(',')]
-            for key, desc in parser.data['Configuration labels'][1:]
+            key.replace('\|', '|'):
+                [_.strip() for _ in desc.split(',')]
+                for key, desc in parser.data['Configuration labels'][1:]
         }
 
         # Extract configuration sets and trigger CS refresh
         dataset.cs_regexes = {
-            key: desc for key, desc in parser.data['Configuration sets'][1:]
+            key.replace('\|', '|'):
+                desc for key, desc in parser.data['Configuration sets'][1:]
         }
 
         # Map property fields to supplied names
@@ -355,13 +371,15 @@ class Dataset:
         ps_regexes = {}
         for row in parser.data['Property settings'][1:]:
             files = []
-            for fname in row[3:]:
-                with open(fname[1], 'r') as f:
-                    files.append('\n'.join([_.strip() for _ in f.readlines()]))
+            if len(row) > 4:
+                for fname in row[4:]:
+                    with open(fname[1], 'r') as f:
+                        files.append('\n'.join([_.strip() for _ in f.readlines()]))
 
             ps_regexes[row[0]] = PropertySettings(
                 method=row[1],
                 description=row[2],
+                labels=[_.strip() for _ in row[3].split(',')],
                 files=files,
             )
 
@@ -429,27 +447,27 @@ class Dataset:
                 convert_units=convert_units
             ))
 
-    def refresh_units(self):
-        units = {}
+    def refresh_property_map(self):
+        property_map = {}
 
         for data in self.data:
-            if isinstance(data, Dataset):
-                raise NotImplementedError("Nested datasets not supported yet.")
+            # if isinstance(data, Dataset):
+            #     raise NotImplementedError("Nested datasets not supported yet.")
 
-            for key, val in data.units.items():
-                if key not in units:
-                    units[key] = val
+            for key, val in data.property_map.items():
+                if key not in property_map:
+                    property_map[key] = dict(val)
                 else:
-                    if val != units[key]:
+                    if val['units'] != property_map[key]['units']:
                         raise RuntimeError(
                             "Conflicting units found for property "\
                                 "'{}': '{}' and '{}'".format(
-                                    key, val, units[key]
+                                    key, val['units'],
+                                    property_map[key]['units']
                                 )
                         )
 
-        for key, val in units.items():
-            self.property_map[key]['units'] = val
+        self.property_map = property_map
 
 
     def clear_config_labels(self):
@@ -469,12 +487,12 @@ class Dataset:
             )
 
         # Apply configuration labels
-        for conf in self.configurations:
-            # # Remove old labels
-            # conf.atoms.info[ATOMS_LABELS_FIELD] = set()
+        for co_regex, labels in self.co_label_regexes.items():
+            regex = re.compile(co_regex)
 
-            for co_regex, labels in self.co_label_regexes.items():
-                regex = re.compile(co_regex)
+            for conf in self.configurations:
+                # # Remove old labels
+                # conf.atoms.info[ATOMS_LABELS_FIELD] = set()
 
                 if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
                     old_set =  conf.atoms.info[ATOMS_LABELS_FIELD]
@@ -514,6 +532,10 @@ class Dataset:
                             )
 
                         data.settings = pso
+
+        if self.is_parent_dataset:
+            for data in self.data:
+                self.property_settings += data.property_settings
 
 
     def refresh_config_sets(self):
@@ -565,10 +587,19 @@ class Dataset:
                 description=default_cs_description
             ))
 
+        if self.is_parent_dataset:
+            for data in self.data:
+                self.configuration_sets += data.configuration_sets
+
+
+    def attach_dataset(self, dataset):
+        self.data.append(dataset)
+        self.configurations += dataset.configurations
+
 
     def aggregate_metadata(self):
 
-        self.refresh_units()
+        self.refresh_property_map()
 
         elements = {}
         self.chemical_systems = []
@@ -578,24 +609,43 @@ class Dataset:
         self.n_sites = 0
         co_labels = {}
 
-        for cs in self.configuration_sets:
-            self.n_configurations += cs.n_configurations
+        if self.is_parent_dataset:
+            for ds in self.data:
+                self.n_configurations += ds.n_configurations
 
-            self.elements += cs.elements
-            for el, er in zip(cs.elements, cs.elements_ratios):
-                if el not in elements:
-                    elements[el] = er*cs.n_sites
-                else:
-                    elements[el] += er*cs.n_sites
+                for el, er in zip(ds.elements, ds.elements_ratios):
+                    if el not in elements:
+                        elements[el] = er*ds.n_sites
+                    else:
+                        elements[el] += er*ds.n_sites
 
-            for l, lc in zip(cs.labels, cs.labels_counts):
-                if l not in co_labels:
-                    co_labels[l] = lc
-                else:
-                    co_labels[l] += lc
+                for l, lc in zip(ds.co_labels, ds.co_labels_counts):
+                    if l not in co_labels:
+                        co_labels[l] = lc
+                    else:
+                        co_labels[l] += lc
 
-            self.chemical_systems += cs.chemical_systems
-            self.n_sites += cs.n_sites
+                self.chemical_systems += ds.chemical_systems
+                self.n_sites += ds.n_sites
+
+        else:
+            for cs in self.configuration_sets:
+                self.n_configurations += cs.n_configurations
+
+                for el, er in zip(cs.elements, cs.elements_ratios):
+                    if el not in elements:
+                        elements[el] = er*cs.n_sites
+                    else:
+                        elements[el] += er*cs.n_sites
+
+                for l, lc in zip(cs.labels, cs.labels_counts):
+                    if l not in co_labels:
+                        co_labels[l] = lc
+                    else:
+                        co_labels[l] += lc
+
+                self.chemical_systems += cs.chemical_systems
+                self.n_sites += cs.n_sites
 
         self.elements = sorted(list(elements.keys()))
         self.elements_ratios = [
@@ -606,17 +656,6 @@ class Dataset:
 
         self.co_labels = sorted(list(co_labels.keys()))
         self.co_labels_counts = [int(co_labels[l]) for l in self.co_labels]
-
-        self.is_parent_dataset = False
-        for data in self.data:
-            if isinstance(data, Dataset):
-                self.is_parent_dataset = True
-            else:
-                if self.is_parent_dataset:
-                    raise RuntimeError(
-                        'Dataset cannot contain Datasets and Properties at '\
-                            'the same time.'
-                    )
 
         self.methods = []
         self.property_types = []
@@ -805,7 +844,7 @@ class DatasetParser(HTMLParser):
             self._loading_row = False
 
     def handle_data(self, data):
-        data = data.strip()
+        data = data.rstrip('\n')
 
         if data:
             if self._t == 'h1':

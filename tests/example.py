@@ -72,7 +72,7 @@ ds1.ps_regexes = {
             method='VASP',
             description='energies/forces/stresses',
             files=None,
-            labels=['PBE-GGA'],
+            labels=['PBE', 'GGA'],
         )
 }
 
@@ -81,7 +81,11 @@ ds1.resync()
 
 print(ds1)
 
-ds1.to_markdown('tests/files/dummy_written1.md', 'tests/files/dummy_written1.extxyz', 'xyz')
+ds1.to_markdown(
+    'tests/files/dummy_written1.md',
+    'tests/files/dummy_written1.extxyz',
+    'xyz'
+)
 
 # Create a skeleton Dataset
 ds2 = Dataset('MoNbTaVW_PRB2021')
@@ -172,7 +176,7 @@ ds2.ps_regexes = {
             method='VASP',
             description='energies/forces/stresses',
             files=None,
-            labels=['PBE-GGA'],
+            labels=['PBE', 'GGA'],
         )
 }
 
@@ -181,14 +185,17 @@ ds2.resync()
 
 ds2.to_markdown('tests/files/dummy_written2.md', 'tests/files/dummy_written2.extxyz', 'xyz')
 
-# nested_ds = Dataset('nested-ds')
-# nested_ds.data.append(ds)
-# nested_ds.resync()
-
-# print(nested_ds)
-
 ds1 = Dataset.from_markdown('tests/files/dummy_written1.md')
 ds2 = Dataset.from_markdown('tests/files/dummy_written2.md')
 
-print(ds1)
-print(ds2)
+# print(ds1)
+# print(ds2)
+
+nested_ds = Dataset('nested-ds')
+
+nested_ds.attach_dataset(ds1)
+nested_ds.attach_dataset(ds2)
+
+nested_ds.resync()
+
+print(nested_ds)

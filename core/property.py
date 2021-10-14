@@ -16,7 +16,7 @@ KIM_PROPERTIES, PROPERTY_NAME_ERTY_ID, \
 
 available_kim_properties = get_properties()
 
-from core import EFS_PROPERTY_NAME, ATOMS_ID_FIELD, ATOMS_NAME_FIELD
+from core import EFS_PROPERTY_NAME
 from core import UNITS, OPENKIM_PROPERTY_UNITS
 
 
@@ -49,7 +49,7 @@ class Property:
         self,
         name,
         configurations,
-        units,
+        property_map,
         settings=None,
         edn=None,
         instance_id=1,
@@ -63,10 +63,15 @@ class Property:
             conf (Configuration):
                 A ColabFit Configuration object
 
-            units (dict):
+            property_map (dict):
                 key = a string that can be used as a key like `self.edn[key]`
-                value = A string matching one of the units names in ase.units
-                    (https://wiki.fysik.dtu.dk/ase/ase/units.html)
+                value = A sub-dictionary with the following structure:
+                    {
+                        'field': A field name used to access atoms.info
+                            or atoms.arrays
+                        'units': A string matching one of the units names in
+                            ase.units (https://wiki.fysik.dtu.dk/ase/ase/units.html)
+                    }
 
                 These units will be used to convert the given units to eV,
                 Angstrom, a.m.u., Kelvin, ...
@@ -110,20 +115,22 @@ class Property:
             fp_path=available_kim_properties
         )
 
-        units_cleaned = {}
-        for key, val in units.items():
-            if key == 'energy':
-                key = 'unrelaxed-potential-energy'
-            elif key == 'forces':
-                key = 'unrelaxed-potential-forces'
-            elif key == 'stress':
-                key = 'unrelaxed-cauchy-stress'
+        # units_cleaned = {}
+        # for key, val in property_map.items():
+        #     if key == 'energy':
+        #         key = 'unrelaxed-potential-energy'
+        #     elif key == 'forces':
+        #         key = 'unrelaxed-potential-forces'
+        #     elif key == 'stress':
+        #         key = 'unrelaxed-cauchy-stress'
 
-            units_cleaned[key] = val
+        #     units_cleaned[key] = {}
+        #     units_cleaned[key] = val
 
-        self.units = units_cleaned
+        self.property_map = property_map
+
         if convert_units:
-            self.convert_units(units_cleaned)
+            self.convert_units()
 
         if len(configurations) < 1:
             raise RuntimeError(
@@ -163,7 +170,7 @@ class Property:
 
         update_edn_with_conf(edn, conf)
 
-        units = {}
+        # print('in EFS', property_map)
 
         for key, val in property_map.items():
             if (val['field'] not in conf.atoms.info) and (val['field'] not in conf.atoms.arrays):
@@ -206,28 +213,26 @@ class Property:
                     'source-unit': val['units']
                 }
 
+        # print(edn.keys())
+
         return cls(
             name=EFS_PROPERTY_NAME,
             configurations=[conf],
-            units=units,
+            property_map=property_map,
             settings=settings,
             edn=edn,
             convert_units=convert_units,
         )
 
 
-    def convert_units(self, original_units):
+    def convert_units(self):
         """
         For each key in `original_units`, convert `edn[key]` from
         `original_units[key]` to the expected ColabFit-compliant units.
         """
 
-        # Avoid change in place
-        original_units = dict(original_units)
-
-        for key, units in original_units.items():
-            if key not in self.units:
-                continue
+        for key, val in self.property_map.items():
+            units = val['units']
 
             split_units = list(itertools.chain.from_iterable([
                 sp.split('/') for sp in units.split('*')
@@ -253,7 +258,7 @@ class Property:
                 'source-unit': OPENKIM_PROPERTY_UNITS[key]
             }
 
-            self.units[key] = self.edn[key]['source-unit']
+            self.property_map[key]['units'] = self.edn[key]['source-unit']
 
 
     def __str__(self):
