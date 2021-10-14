@@ -1,3 +1,4 @@
+import os
 import re
 import markdown
 import itertools
@@ -202,14 +203,20 @@ class Dataset:
         self.refresh_property_settings()
 
 
-    def to_markdown(self, html_path, data_path, data_format='xyz', name_field=ATOMS_NAME_FIELD):
+    def to_markdown(self, base_folder, html_file_name, data_file_name, data_format, name_field=ATOMS_NAME_FIELD):
         """
+        Saves a Dataset and writes a properly formatted markdown file. In the
+        case of a Dataset that has child Dataset objects, each child Dataset
+        is written to a separate sub-folder.
 
         Args:
-            html_path (str):
+            base_folder (str):
+                Top-level folder in which to save the markdown and data files
+
+            html_file_name (str):
                 Name of file to save markdown to
 
-            data_path (str):
+            data_file_name (str):
                 Name of file to save configuration and properties to
 
             data_format (str):
@@ -272,37 +279,52 @@ class Dataset:
 |Regex|Labels|
 |---|---|
 {}
-""".format(
-    self.name,
-    '\n\n'.join(self.authors),
-    '\n\n'.join(self.links),
-    self.description,
-    ', '.join(self.elements),
-    data_path, data_path,
-    data_format,
-    name_field,
-    '\n'.join('| {} | {} | {} |'.format(k, v['field'], v['units']) for k,v in self.property_map.items()),
-    '\n'.join('| `{}` | {} | {} | {} | {} |'.format(regex.replace('|', '\|'), pso.method, pso.description, ', '.join(pso.labels), ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for regex, pso in self.ps_regexes.items()),
-    '\n'.join('| `{}` | {} |'.format(regex.replace('|', '\|'), desc) for regex, desc in self.cs_regexes.items()),
-    '\n'.join('| `{}` | {} '.format(regex.replace('|', '\|'), ', '.join(labels)) for regex, labels in self.co_label_regexes.items()),
-)
+"""
 
-        with open(html_path, 'w') as html:
-            html.write(template)
+        if not os.path.isdir(base_folder):
+            os.mkdir(base_folder)
 
         if self.is_parent_dataset:
-            raise NotImplementedError(
-                'to_html() for nested Datasets has not been implemented yet'
+            for data in self.data:
+                subdir = os.path.join(base_folder, data.name)
+
+                if not os.path.isdir(subdir):
+                    os.mkdir(subdir)
+
+                data.to_markdown(
+                    subdir, html_file_name, data_file_name, data_format
+                )
+
+        else:
+            html_file_name = os.path.join(base_folder, html_file_name)
+            data_file_name = os.path.join(base_folder, data_file_name)
+
+            with open(html_file_name, 'w') as html:
+                html.write(
+                    template.format(
+                        self.name,
+                        '\n\n'.join(self.authors),
+                        '\n\n'.join(self.links),
+                        self.description,
+                        ', '.join(self.elements),
+                        data_file_name, data_file_name,
+                        data_format,
+                        name_field,
+                        '\n'.join('| {} | {} | {} |'.format(k, v['field'], v['units']) for k,v in self.property_map.items()),
+                        '\n'.join('| `{}` | {} | {} | {} | {} |'.format(regex.replace('|', '\|'), pso.method, pso.description, ', '.join(pso.labels), ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for regex, pso in self.ps_regexes.items()),
+                        '\n'.join('| `{}` | {} |'.format(regex.replace('|', '\|'), desc) for regex, desc in self.cs_regexes.items()),
+                        '\n'.join('| `{}` | {} '.format(regex.replace('|', '\|'), ', '.join(labels)) for regex, labels in self.co_label_regexes.items()),
+                    )
+                )
+
+            if data_format == 'xyz':
+                data_format = 'extxyz'
+
+            write(
+                data_file_name,
+                [conf.atoms for conf in self.configurations],
+                format=data_format,
             )
-
-        if data_format == 'xyz':
-            data_format = 'extxyz'
-
-        write(
-            data_path,
-            [conf.atoms for conf in self.configurations],
-            format=data_format,
-        )
 
 
     @classmethod
