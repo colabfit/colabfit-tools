@@ -51,11 +51,12 @@ class EXYZConverter(BaseConverter):
                 )
 
             if name_field is None:
-                atoms.info[ATOMS_NAME_FIELD] = f"{default_name}_{ai}"
+                if ATOMS_NAME_FIELD not in atoms.info:
+                    atoms.info[ATOMS_NAME_FIELD] = f"{default_name}_{ai}"
             else:
                 if name_field in atoms.info:
                     name = atoms.info[name_field]
-                    del atoms.info[name_field]
+                    # del atoms.info[name_field]
                     atoms.info[ATOMS_NAME_FIELD] = name
                 else:
                     raise RuntimeError(
@@ -206,7 +207,7 @@ class CFGConverter(BaseConverter):
                     else:
                         if name_field in atoms.info:
                             name = atoms.info[name_field]
-                            del atoms.info[name_field]
+                            # del atoms.info[name_field]
                             atoms.info[ATOMS_NAME_FIELD] = name
                         else:
                             raise RuntimeError(
