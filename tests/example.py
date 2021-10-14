@@ -82,8 +82,9 @@ ds1.resync()
 print(ds1)
 
 ds1.to_markdown(
-    'tests/files/dummy_written1.md',
-    'tests/files/dummy_written1.extxyz',
+    'tests/files',
+    'dummy_written1.md',
+    'dummy_written1.extxyz',
     'xyz'
 )
 
@@ -183,7 +184,12 @@ ds2.ps_regexes = {
 # Resync to make sure metadata is updated everywhere necessary
 ds2.resync()
 
-ds2.to_markdown('tests/files/dummy_written2.md', 'tests/files/dummy_written2.extxyz', 'xyz')
+ds2.to_markdown(
+    'tests/files/',
+    'dummy_written2.md',
+    'dummy_written2.extxyz',
+    'xyz'
+)
 
 ds1 = Dataset.from_markdown('tests/files/dummy_written1.md')
 ds2 = Dataset.from_markdown('tests/files/dummy_written2.md')
@@ -199,3 +205,9 @@ nested_ds.attach_dataset(ds2)
 nested_ds.resync()
 
 print(nested_ds)
+
+nested_ds.to_markdown(
+    'tests/files/',
+    'dummy_nested.md',
+    'dummy_nested.extxyz',
+    'xyz')
