@@ -6,8 +6,9 @@ from core import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
 from core.configuration import Configuration
 from core.dataset import Dataset
 
-class TestMDConstructor(unittest.TestCase):
+class TestDatasetConstruction(unittest.TestCase):
     def test_from_html(self):
+        # Just makes sure from_markdown doesn't throw an error
         dataset = Dataset.from_markdown('tests/files/test.md')
 
     def test_config_setter(self):
@@ -190,3 +191,6 @@ class TestMDConstructor(unittest.TestCase):
                     self.assertSetEqual(
                         {'5_to_9', 'new_label'}, conf.atoms.info[ATOMS_LABELS_FIELD]
                     )
+
+class TestDatasetManipulation(unittest.TestCase):
+    pass
