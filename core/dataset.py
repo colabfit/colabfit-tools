@@ -66,7 +66,7 @@ class Dataset:
 
     def __init__(
         self,
-        name,
+        name='',
         authors=None,
         links=None,
         description=None,
@@ -800,7 +800,8 @@ class Dataset:
     def filter(self, filter_type, filter_fxn):
         """
         A helper function for filtering on a Dataset. A filter is specified by
-        providing  a `filter_type` and a `filter_fxn`.
+        providing  a `filter_type` and a `filter_fxn`. In the case of a parent
+        dataset, the filter is applied to each of the children individually.
 
         Examples:
 
@@ -845,17 +846,29 @@ class Dataset:
                 and `ps_regexes`.
         """
 
+        if self.is_parent_dataset:
+            # TODO: this is completely untested
+
+            parent = Dataset('filtered')
+
+            for ds in self.data:
+                parent.attach_dataset(ds.filter(filter_type, filter_fxn))
+
+            ds.property_map = self.property_map
+            ds.cs_regexes = self.cs_regexes
+            ds.co_label_regexes = self.co_label_regexes
+            ds.ps_regexes = self.ps_regexes
+
+            parent.resync()
+
+            return parent
+
         ds = Dataset('filtered')
 
         data = []
         configurations = set()
 
         if filter_type == 'data':
-            if self.is_parent_dataset:
-                raise NotImplementedError(
-                    "Filtering on parent datasets has not been implemented yet"
-                )
-
             # Append any matching data entries, and their linked configurations
 
             for d in self.data:
