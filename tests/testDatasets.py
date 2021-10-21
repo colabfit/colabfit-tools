@@ -210,14 +210,14 @@ class TestSetOperations(unittest.TestCase):
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset1.load_data()
+        dataset1.parse_data()
 
         dataset2 = Dataset('test1')
         dataset2.configurations = [Configuration(at) for at in images1[:3]]
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset2.load_data()
+        dataset2.parse_data()
 
         self.assertFalse(dataset1.issubset(dataset2))
         self.assertTrue(dataset2.issubset(dataset1))
@@ -238,14 +238,14 @@ class TestSetOperations(unittest.TestCase):
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset1.load_data()
+        dataset1.parse_data()
 
         dataset2 = Dataset('test1')
         dataset2.configurations = [Configuration(at) for at in images1[:3]]
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset2.load_data()
+        dataset2.parse_data()
 
         self.assertFalse(dataset2.issuperset(dataset1))
         self.assertTrue(dataset1.issuperset(dataset2))
@@ -266,7 +266,7 @@ class TestSetOperations(unittest.TestCase):
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset1.load_data()
+        dataset1.parse_data()
 
         dataset2 = Dataset('test1')
 
@@ -282,7 +282,7 @@ class TestSetOperations(unittest.TestCase):
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset2.load_data()
+        dataset2.parse_data()
 
         self.assertFalse(dataset1.issubset(dataset2))
         self.assertFalse(dataset2.issubset(dataset1))
@@ -303,7 +303,7 @@ class TestSetOperations(unittest.TestCase):
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset1.load_data()
+        dataset1.parse_data()
 
         dataset2 = Dataset('test1')
 
@@ -319,7 +319,7 @@ class TestSetOperations(unittest.TestCase):
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset2.load_data()
+        dataset2.parse_data()
 
         parent = Dataset('parent')
         parent.attach_dataset(dataset1)
@@ -353,7 +353,7 @@ class TestSetOperations(unittest.TestCase):
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset1.load_data()
+        dataset1.parse_data()
 
         dataset2 = Dataset('test1')
 
@@ -369,7 +369,7 @@ class TestSetOperations(unittest.TestCase):
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset2.load_data()
+        dataset2.parse_data()
 
         parent1 = Dataset('parent')
         parent1.attach_dataset(dataset1)
@@ -397,7 +397,7 @@ class TestSetOperations(unittest.TestCase):
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset1.load_data()
+        dataset1.parse_data()
 
         dataset2 = Dataset('test1')
 
@@ -413,7 +413,7 @@ class TestSetOperations(unittest.TestCase):
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
-        dataset2.load_data()
+        dataset2.parse_data()
 
         self.assertEqual(dataset1, dataset1)
         self.assertNotEqual(dataset1, dataset2)
@@ -446,7 +446,7 @@ class TestFilter(unittest.TestCase):
 
         self.assertEqual(len(filtered.configurations), 4)
 
-        dataset.load_data()
+        dataset.parse_data()
 
         regex = re.compile('test[0-3]')
         filtered = dataset.filter(
@@ -483,7 +483,7 @@ class TestFilter(unittest.TestCase):
 
         dataset.configurations = [Configuration(at) for at in images]
 
-        dataset.load_data()
+        dataset.parse_data()
 
         regex = re.compile('test[0-2]')
         filtered1 = dataset.filter(
@@ -529,7 +529,7 @@ class TestFilter(unittest.TestCase):
 
         dataset.configurations = [Configuration(at) for at in images]
 
-        dataset.load_data()
+        dataset.parse_data()
 
         filtered = dataset.filter(
             'data',
@@ -556,7 +556,7 @@ class TestFilter(unittest.TestCase):
 
         dataset.configurations = [Configuration(at) for at in images]
 
-        dataset.load_data()
+        dataset.parse_data()
 
         filtered1 = dataset.filter(
             'data',

@@ -1,6 +1,6 @@
 import sys
 sys.path.append('.')
-from core.dataset import Dataset, load_configurations
+from core.dataset import Dataset, load_data
 from core.property_settings import PropertySettings
 
 # Create a skeleton Dataset
@@ -19,7 +19,7 @@ ds1.description  = \
     'result from radiation damage cascades.'
 
 # Add configurations, with their linked data if it exists
-ds1.configurations = load_configurations(
+ds1.configurations = load_data(
     file_path='/home/josh/colabfit/data/FitSNAP/InP_JPCA2020.extxyz',
     file_format='xyz',
     name_field='name',
@@ -38,7 +38,7 @@ ds1.property_map = {
 }
 
 # Extract the properties from the configurations and loads them to Dataset.data
-ds1.load_data(convert_units=False)
+ds1.parse_data(convert_units=False)
 
 # Build configuration sets by setting the cs_regexes dictionary
 ds1.cs_regexes = {
@@ -129,7 +129,7 @@ ds2.description  = \
     'MoNbTaVW.'
 
 # Add configurations, with their linked data if it exists
-ds2.configurations = load_configurations(
+ds2.configurations = load_data(
     file_path='/home/josh/colabfit/data/acclab_helsinki/MoNbTaVW_cleaned.xyz',
     file_format='xyz',
     name_field='name',
@@ -148,7 +148,7 @@ ds2.property_map = {
 }
 
 # Extract the properties from the configurations
-ds2.load_data(convert_units=False)
+ds2.parse_data(convert_units=False)
 
 # Build configuration sets by setting the cs_regexes dictionary
 ds2.cs_regexes = {
