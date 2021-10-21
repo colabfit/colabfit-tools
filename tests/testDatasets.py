@@ -1,5 +1,6 @@
-import markdown
+import re
 import unittest
+import numpy as np
 from ase import Atoms
 
 from core import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
@@ -178,7 +179,7 @@ class TestDatasetConstruction(unittest.TestCase):
                     )
 
         # And also removed properly
-        dataset.co_label_regexes.pop('[0-4]')
+        dataset.delete_config_label_regex('[0-4]')
         dataset.resync()
 
         for cs in dataset.configuration_sets:
@@ -192,5 +193,273 @@ class TestDatasetConstruction(unittest.TestCase):
                         {'5_to_9', 'new_label'}, conf.atoms.info[ATOMS_LABELS_FIELD]
                     )
 
-class TestDatasetManipulation(unittest.TestCase):
-    pass
+class TestSetOperations(unittest.TestCase):
+
+    def test_subset_is_subset(self):
+        dataset1 = Dataset('test1')
+
+        images1 = []
+        for i in range(5):
+            images1.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images1[-1].info[ATOMS_NAME_FIELD] = dataset1.name + str(i)
+            images1[-1].info[ATOMS_LABELS_FIELD] = dataset1.name + '_label_'+ str(i)
+
+            images1[-1].info['energy'] = float(i)
+
+        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset1.load_data()
+
+        dataset2 = Dataset('test1')
+        dataset2.configurations = [Configuration(at) for at in images1[:3]]
+        dataset2.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset2.load_data()
+
+        self.assertFalse(dataset1.issubset(dataset2))
+        self.assertTrue(dataset2.issubset(dataset1))
+
+
+    def test_superset_is_subset(self):
+        dataset1 = Dataset('test1')
+
+        images1 = []
+        for i in range(5):
+            images1.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images1[-1].info[ATOMS_NAME_FIELD] = dataset1.name + str(i)
+            images1[-1].info[ATOMS_LABELS_FIELD] = dataset1.name + '_label_'+ str(i)
+
+            images1[-1].info['energy'] = float(i)
+
+        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset1.load_data()
+
+        dataset2 = Dataset('test1')
+        dataset2.configurations = [Configuration(at) for at in images1[:3]]
+        dataset2.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset2.load_data()
+
+        self.assertFalse(dataset2.issuperset(dataset1))
+        self.assertTrue(dataset1.issuperset(dataset2))
+
+
+    def test_disjoint(self):
+        dataset1 = Dataset('test1')
+
+        images1 = []
+        for i in range(5):
+            images1.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images1[-1].info[ATOMS_NAME_FIELD] = dataset1.name + str(i)
+            images1[-1].info[ATOMS_LABELS_FIELD] = dataset1.name + '_label_'+ str(i)
+
+            images1[-1].info['energy'] = float(i)
+
+        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset1.load_data()
+
+        dataset2 = Dataset('test1')
+
+        images2 = []
+        for i in range(5):
+            images2.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images2[-1].info[ATOMS_NAME_FIELD] = dataset2.name + str(i)
+            images2[-1].info[ATOMS_LABELS_FIELD] = dataset2.name + '_label_'+ str(i)
+
+            images2[-1].info['energy'] = float(i) + 20
+
+        dataset2.configurations = [Configuration(at) for at in images2]
+        dataset2.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset2.load_data()
+
+        self.assertFalse(dataset1.issubset(dataset2))
+        self.assertFalse(dataset2.issubset(dataset1))
+
+
+    def test_parent_child(self):
+        dataset1 = Dataset('test1')
+
+        images1 = []
+        for i in range(5):
+            images1.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images1[-1].info[ATOMS_NAME_FIELD] = dataset1.name + str(i)
+            images1[-1].info[ATOMS_LABELS_FIELD] = dataset1.name + '_label_'+ str(i)
+
+            images1[-1].info['energy'] = float(i)
+
+        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset1.load_data()
+
+        dataset2 = Dataset('test1')
+
+        images2 = []
+        for i in range(5):
+            images2.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images2[-1].info[ATOMS_NAME_FIELD] = dataset2.name + str(i)
+            images2[-1].info[ATOMS_LABELS_FIELD] = dataset2.name + '_label_'+ str(i)
+
+            images2[-1].info['energy'] = float(i) + 20
+
+        dataset2.configurations = [Configuration(at) for at in images2]
+        dataset2.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset2.load_data()
+
+        parent = Dataset('parent')
+        parent.attach_dataset(dataset1)
+
+        self.assertTrue(dataset1.issubset(parent))
+        self.assertTrue(parent.issubset(dataset1))
+
+        self.assertFalse(dataset2.issubset(parent))
+        self.assertFalse(parent.issubset(dataset2))
+
+        parent.attach_dataset(dataset2)
+
+        self.assertTrue(dataset1.issubset(parent))
+        self.assertTrue(dataset2.issubset(parent))
+        self.assertFalse(parent.issubset(dataset1))
+        self.assertFalse(parent.issubset(dataset2))
+
+
+    def test_parent_parent(self):
+        dataset1 = Dataset('test1')
+
+        images1 = []
+        for i in range(5):
+            images1.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images1[-1].info[ATOMS_NAME_FIELD] = dataset1.name + str(i)
+            images1[-1].info[ATOMS_LABELS_FIELD] = dataset1.name + '_label_'+ str(i)
+
+            images1[-1].info['energy'] = float(i)
+
+        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset1.load_data()
+
+        dataset2 = Dataset('test1')
+
+        images2 = []
+        for i in range(5):
+            images2.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images2[-1].info[ATOMS_NAME_FIELD] = dataset2.name + str(i)
+            images2[-1].info[ATOMS_LABELS_FIELD] = dataset2.name + '_label_'+ str(i)
+
+            images2[-1].info['energy'] = float(i) + 20
+
+        dataset2.configurations = [Configuration(at) for at in images2]
+        dataset2.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset2.load_data()
+
+        parent1 = Dataset('parent')
+        parent1.attach_dataset(dataset1)
+
+        parent2 = Dataset('parent')
+        parent2.attach_dataset(dataset1)
+        parent2.attach_dataset(dataset2)
+
+        self.assertTrue(parent1.issubset(parent2))
+        self.assertFalse(parent2.issubset(parent1))
+
+
+    def test_equality(self):
+        dataset1 = Dataset('test1')
+
+        images1 = []
+        for i in range(5):
+            images1.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images1[-1].info[ATOMS_NAME_FIELD] = dataset1.name + str(i)
+            images1[-1].info[ATOMS_LABELS_FIELD] = dataset1.name + '_label_'+ str(i)
+
+            images1[-1].info['energy'] = float(i)
+
+        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset1.load_data()
+
+        dataset2 = Dataset('test1')
+
+        images2 = []
+        for i in range(5):
+            images2.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images2[-1].info[ATOMS_NAME_FIELD] = dataset2.name + str(i)
+            images2[-1].info[ATOMS_LABELS_FIELD] = dataset2.name + '_label_'+ str(i)
+
+            images2[-1].info['energy'] = float(i) + 20
+
+        dataset2.configurations = [Configuration(at) for at in images2]
+        dataset2.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+        dataset2.load_data()
+
+        self.assertEqual(dataset1, dataset1)
+        self.assertNotEqual(dataset1, dataset2)
+
+
+class TestFilter(unittest.TestCase):
+    def test_filter_on_co_names(self):
+        dataset = Dataset('test')
+
+        images = []
+        for i in range(5):
+            images.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images[-1].info[ATOMS_NAME_FIELD] = dataset.name + str(i)
+            images[-1].info[ATOMS_LABELS_FIELD] = dataset.name + '_label_'+ str(i)
+
+            images[-1].info['energy'] = float(i)
+
+        dataset.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+
+        dataset.configurations = [Configuration(at) for at in images]
+
+        regex = re.compile('test[0-3]')
+        filtered = dataset.filter(
+            'configurations',
+            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+        )
+
+        self.assertEqual(len(filtered.configurations), 4)
+
+        dataset.load_data()
+
+        regex = re.compile('test[0-3]')
+        filtered = dataset.filter(
+            'configurations',
+            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+        )
+
+        self.assertEqual(len(filtered.configurations), 4)
+        self.assertEqual(len(filtered.data), 4)
+
+        regex = re.compile('.*')
+        filtered = dataset.filter(
+            'configurations',
+            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+        )
+
+        self.assertEqual(dataset, filtered)

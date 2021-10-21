@@ -55,6 +55,13 @@ class Dataset:
             `re.compile()`, and the value is the description of the
             configuration set. Note that whenever this dictionary is
             re-assigned, `configuration_sets` is re-constructed.
+
+        ps_regexes (dict):
+            A dictionary where the key is a string that will be compiled with
+            `re.compile()`, and the value is a PropertySettings object.
+            configuration set. Note that whenever this dictionary is
+            re-assigned, `property_settings` is re-constructed and property
+            links to PropertySettings objects are re-assigned.
     """
 
     def __init__(
@@ -102,9 +109,7 @@ class Dataset:
 
         self.resync()
 
-
-    def resync(self):
-
+    def check_if_is_parent_dataset(self):
         self.is_parent_dataset = False
         for data in self.data:
             if isinstance(data, Dataset):
@@ -116,6 +121,10 @@ class Dataset:
                             'the same time.'
                     )
 
+
+    def resync(self):
+
+        self.check_if_is_parent_dataset()
         self.refresh_config_labels()
         self.refresh_config_sets()
         self.refresh_property_settings()
@@ -283,6 +292,8 @@ class Dataset:
 
         if not os.path.isdir(base_folder):
             os.mkdir(base_folder)
+
+        self.check_if_is_parent_dataset()
 
         if self.is_parent_dataset:
             for data in self.data:
@@ -495,6 +506,14 @@ class Dataset:
     def clear_config_labels(self):
         for conf in self.configurations:
             conf.atoms.info[ATOMS_LABELS_FIELD] = set()
+
+    def delete_config_label_regex(self, regex):
+        label_set = self.co_label_regexes.pop(regex)
+
+        regex = re.compile(regex)
+        for conf in self.configurations:
+            if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
+                conf.atoms.info[ATOMS_LABELS_FIELD] -= label_set
 
 
     def refresh_config_labels(self):
@@ -732,6 +751,141 @@ class Dataset:
     def convert_units(self, units):
         """Converts the dataset units to the provided type (e.g., 'OpenKIM'"""
         pass
+
+
+    def issubset(self, other):
+
+        if len(self.data) == 0:
+            raise RuntimeError(
+                "Must load data before performing set operations"
+            )
+
+        if len(other.data) == 0:
+            raise RuntimeError(
+                "Must load data before performing set operations"
+            )
+
+        self.check_if_is_parent_dataset()
+        other.check_if_is_parent_dataset()
+
+        if self.is_parent_dataset:
+            super_data1 = set(itertools.chain.from_iterable([
+                ds.data for ds in self.data
+            ]))
+        else:
+            super_data1 = set(self.data)
+
+        if other.is_parent_dataset:
+            super_data2 = set(itertools.chain.from_iterable([
+                ds.data for ds in other.data
+            ]))
+        else:
+            super_data2 = set(other.data)
+
+        return super_data1.issubset(super_data2)
+
+
+    def issuperset(self, other):
+        return other.issubset(self)
+
+
+    def __eq__(self, other):
+        return self.issubset(other) and other.issubset(self)
+
+
+    def __ne__(self, other):
+        return not self == other
+
+
+    def filter(self, filter_type, filter_fxn):
+        """
+        A helper function for filtering on a Dataset. A filter is specified by
+        providing  a `filter_type` and a `filter_fxn`.
+
+        Examples:
+
+        ```
+        # Filter based on configuration name
+        regex = re.compile('example_name.*')
+
+        filtered_dataset = dataset.filter(
+            'configurations',
+            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+        )
+
+        # Filter based on maximum force component
+        import numpy as np
+
+        filtered_dataset = dataset.filter(
+            'data',
+            lambda p: np.max(p.edn['unrelaxed-potential-forces']) < 1.0
+        )
+        ```
+
+        Args:
+            filter_type (str):
+                One of 'configurations' or 'data'.
+
+                If `filter_type == 'configurations'`:
+                    Filters on configurations, and returns a dataset with only
+                    the configurations and their linked properties.
+
+                If `filter_type == 'data'`:
+                    Filters on properties, and returns a dataset with only the
+                    properties and their linked configurations.
+
+            filter_fxn (callable):
+                A callable function to use as `filter(filter_fxn)`.
+
+        Returns:
+            dataset (Dataset):
+                A Dataset object constructed by applying the specified filter,
+                extracting any objects linked to the filtered object, then
+                copying over `property_map`, `co_label_regexes`, `cs_regexes`,
+                and `ps_regexes`.
+        """
+
+        ds = Dataset('filtered')
+
+        data = []
+        configurations = set()
+
+        if filter_type == 'data':
+            if self.is_parent_dataset:
+                raise NotImplementedError(
+                    "Filtering on parent datasets has not been implemented yet"
+                )
+
+            # Append any matching data entries, and their linked configurations
+
+            for d in self.data:
+                if filter_fxn(d):
+                    data.append(d)
+                    for c in d.configurations:
+                        configurations.add(c)
+
+        elif filter_type == 'configurations':
+            # Append any matching configurations, and their linked data
+            if len(self.data) == 0:
+                configurations = filter(filter_fxn, self.configurations)
+            else:
+                for d in self.data:
+                    for c in d.configurations:
+                        if filter_fxn(c):
+                            data.append(d)
+                            configurations.add(c)
+
+        ds.data = data
+        ds.configurations = list(configurations)
+
+        ds.property_map = self.property_map
+        ds.cs_regexes = self.cs_regexes
+        ds.co_label_regexes = self.co_label_regexes
+        ds.ps_regexes = self.ps_regexes
+
+        ds.resync()
+
+        return ds
 
 
     def __str__(self):
