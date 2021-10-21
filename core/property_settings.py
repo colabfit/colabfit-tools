@@ -43,6 +43,16 @@ class PropertySettings:
         pass
 
 
+    def __eq__(self, other):
+        """Equality check just compares the calculation method"""
+        if self.method != other.method:
+            return False
+
+
+    def __neq__(self, other):
+        return not self.__eq__(other)
+
+
     def __str__(self):
         return "PropertySettings(method='{}', description='{}', "\
             "labels={})".format(

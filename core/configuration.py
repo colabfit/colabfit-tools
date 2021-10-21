@@ -1,3 +1,4 @@
+import numpy as np
 from ase import Atoms
 from bson import ObjectId
 
@@ -32,6 +33,29 @@ class Configuration(Atoms):
             - sort atoms by X, Y, then Z positions
         """
         raise NotImplementedError()
+
+    def __eq__(self, other):
+        """
+        Uses `ase.Atoms.__eq__` for comparison checking. This compares
+        positions, atomic numbers, lattice vectors, and PBCs.
+        """
+
+        return self.atoms == other.atoms
+
+
+    def __hash__(self):
+        return hash((
+            len(self.atoms),
+            hash(self.atoms.arrays['positions'].data.tobytes()),
+            hash(self.atoms.arrays['numbers'].data.tobytes()),
+            hash(np.array(self.atoms.cell).data.tobytes()),
+            hash(np.array(self.atoms.pbc).data.tobytes()),
+        ))
+
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 
     def __str__(self):
         return "Configuration(name='{}', atoms={})".format(

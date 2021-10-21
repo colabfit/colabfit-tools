@@ -1,3 +1,4 @@
+import json
 import warnings
 import itertools
 import numpy as np
@@ -18,6 +19,18 @@ available_kim_properties = get_properties()
 
 from core import EFS_PROPERTY_NAME
 from core import UNITS, OPENKIM_PROPERTY_UNITS
+
+# These are fields that are related to the geometry of the atomic structure, and
+# should be checked in the Configuration object, not here.
+ignored_fields = [
+    'a',
+    'species',
+    'unrelaxed-configuration-positions',
+    'unrelaxed-periodic-cell-vector-1',
+    'unrelaxed-periodic-cell-vector-2',
+    'unrelaxed-periodic-cell-vector-3',
+]
+
 
 
 class Property:
@@ -259,6 +272,50 @@ class Property:
             }
 
             self.property_map[key]['units'] = self.edn[key]['source-unit']
+
+
+    def __hash__(self):
+        return hash((
+            hash(self.settings),
+            tuple([hash(c) for c in self.configurations]),
+            json.dumps(self.edn)
+        ))
+
+
+    def __eq__(self, other):
+        """
+        Returns False if any of the following conditions are true:
+
+        - Properties point to settings with different calculation methods
+        - Properties point to different configurations
+        - OpenKIM EDN fields differ in any way
+        """
+
+        if self.settings is not None:
+            if other.settings is None:
+                return False
+
+            if self.settings != other.settings:
+                return False
+
+        if set(self.configurations) != set(other.configurations):
+            return False
+
+        for my_field, my_val in self.edn.items():
+            # Check if the field exists
+            if my_field not in other.edn:
+                return False
+
+            # Compare value if it's not a field that should be ignored
+            if my_field not in ignored_fields:
+                if my_val != other.edn[my_field]:
+                    return False
+
+        return True
+
+
+    def __neq__(self, other):
+        return not self.__eq__(other)
 
 
     def __str__(self):
