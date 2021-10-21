@@ -363,7 +363,7 @@ class Dataset:
         if data_info['Name field'] == 'None':
             data_info['Name field'] = None
 
-        dataset.configurations = load_configurations(
+        dataset.configurations = load_data(
             file_path=data_info['File'][1],
             file_format=data_info['Format'],
             name_field=data_info['Name field'],
@@ -398,7 +398,7 @@ class Dataset:
 
         dataset.property_map = property_map
 
-        dataset.load_data()
+        dataset.parse_data()
 
         # Extract property settings
         ps_regexes = {}
@@ -447,7 +447,7 @@ class Dataset:
                 del conf.atoms.arrays[old_name]
 
 
-    def load_data(self, convert_units=False):
+    def parse_data(self, convert_units=False):
         if len(self.property_map) == 0:
             raise RuntimeError(
                 'Must set `Dataset.property_map first'
@@ -935,7 +935,7 @@ class Dataset:
         )
 
 
-def load_configurations(
+def load_data(
     file_path,
     file_format,
     name_field,
