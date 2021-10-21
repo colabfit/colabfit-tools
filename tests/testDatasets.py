@@ -420,6 +420,7 @@ class TestSetOperations(unittest.TestCase):
 
 
 class TestFilter(unittest.TestCase):
+
     def test_filter_on_co_names(self):
         dataset = Dataset('test')
 
@@ -463,3 +464,128 @@ class TestFilter(unittest.TestCase):
         )
 
         self.assertEqual(dataset, filtered)
+
+
+    def test_filter_parent_on_co_names(self):
+        dataset = Dataset('test')
+
+        images = []
+        for i in range(5):
+            images.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images[-1].info[ATOMS_NAME_FIELD] = dataset.name + str(i)
+            images[-1].info[ATOMS_LABELS_FIELD] = dataset.name + '_label_'+ str(i)
+
+            images[-1].info['energy'] = float(i)
+
+        dataset.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+
+        dataset.configurations = [Configuration(at) for at in images]
+
+        dataset.load_data()
+
+        regex = re.compile('test[0-2]')
+        filtered1 = dataset.filter(
+            'configurations',
+            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+        )
+
+        regex = re.compile('test[3-4]')
+        filtered2 = dataset.filter(
+            'configurations',
+            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+        )
+
+        parent = Dataset('parent')
+        parent.attach_dataset(filtered1)
+        parent.attach_dataset(filtered2)
+        parent.resync()
+
+        regex = re.compile('test[2-3]')
+        parent2 = parent.filter(
+            'configurations',
+            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+        )
+
+        self.assertEqual(parent2.data[0].configurations[0].atoms.info[ATOMS_NAME_FIELD], 'test2')
+        self.assertEqual(parent2.data[1].configurations[0].atoms.info[ATOMS_NAME_FIELD], 'test3')
+
+
+    def test_filter_on_data(self):
+        dataset = Dataset('test')
+
+        images = []
+        for i in range(5):
+            images.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images[-1].info[ATOMS_NAME_FIELD] = dataset.name + str(i)
+            images[-1].info[ATOMS_LABELS_FIELD] = dataset.name + '_label_'+ str(i)
+
+            images[-1].info['energy'] = float(i)
+
+        dataset.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+
+        dataset.configurations = [Configuration(at) for at in images]
+
+        dataset.load_data()
+
+        filtered = dataset.filter(
+            'data',
+            lambda d: d.edn['unrelaxed-potential-energy']['source-value'] < 3.0
+        )
+
+        self.assertEqual(len(filtered.configurations), 3)
+
+
+    def test_filter_parent_on_data(self):
+        dataset = Dataset('test')
+
+        images = []
+        for i in range(5):
+            images.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images[-1].info[ATOMS_NAME_FIELD] = dataset.name + str(i)
+            images[-1].info[ATOMS_LABELS_FIELD] = dataset.name + '_label_'+ str(i)
+
+            images[-1].info['energy'] = float(i)
+
+        dataset.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+
+        dataset.configurations = [Configuration(at) for at in images]
+
+        dataset.load_data()
+
+        filtered1 = dataset.filter(
+            'data',
+            lambda d:
+                0 <= d.edn['unrelaxed-potential-energy']['source-value'] <= 2
+        )
+
+        filtered2 = dataset.filter(
+            'data',
+            lambda d:
+                3 <= d.edn['unrelaxed-potential-energy']['source-value'] <= 4
+        )
+
+
+        parent = Dataset('parent')
+        parent.attach_dataset(filtered1)
+        parent.attach_dataset(filtered2)
+        parent.resync()
+
+        parent2 = parent.filter(
+            'data',
+            lambda d:
+                2 <= d.edn['unrelaxed-potential-energy']['source-value'] <= 3
+        )
+
+
+        self.assertEqual(parent2.data[0].configurations[0].atoms.info[ATOMS_NAME_FIELD], 'test2')
+        self.assertEqual(parent2.data[1].configurations[0].atoms.info[ATOMS_NAME_FIELD], 'test3')
+
+
+    def test_triple_layer_parent(self):
+        pass
