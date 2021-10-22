@@ -193,6 +193,7 @@ class TestDatasetConstruction(unittest.TestCase):
                         {'5_to_9', 'new_label'}, conf.atoms.info[ATOMS_LABELS_FIELD]
                     )
 
+
 class TestSetOperations(unittest.TestCase):
 
     def test_subset_is_subset(self):
@@ -587,5 +588,60 @@ class TestFilter(unittest.TestCase):
         self.assertEqual(parent2.data[1].configurations[0].atoms.info[ATOMS_NAME_FIELD], 'test3')
 
 
-    def test_triple_layer_parent(self):
-        pass
+    def test_multi_layer_parent(self):
+        dataset = Dataset('test')
+
+        images = []
+        for i in range(30):
+            images.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images[-1].info[ATOMS_NAME_FIELD] = dataset.name + str(i)
+            images[-1].info[ATOMS_LABELS_FIELD] = dataset.name + '_label_'+ str(i)
+
+            images[-1].info['energy'] = float(i)
+
+        dataset.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'}
+        }
+
+        dataset.configurations = [Configuration(at) for at in images]
+
+        dataset.parse_data()
+
+        child1 = dataset.filter(
+            'data',
+            lambda d:
+                0 <= d.edn['unrelaxed-potential-energy']['source-value'] < 10
+        )
+
+        child2 = dataset.filter(
+            'data',
+            lambda d:
+                0 <= d.edn['unrelaxed-potential-energy']['source-value'] < 10
+        )
+
+        child3 = dataset.filter(
+            'data',
+            lambda d:
+                0 <= d.edn['unrelaxed-potential-energy']['source-value'] < 10
+        )
+
+        subparent = Dataset('subparent')
+        subparent.attach_dataset(child1)
+        subparent.attach_dataset(child2)
+        subparent.resync()
+
+        parent = Dataset('parent')
+        parent.attach_dataset(subparent)
+        parent.attach_dataset(child3)
+        parent.resync()
+
+        self.assertEqual(len(parent.configurations), 30)
+
+        subset = parent.filter(
+            'data',
+            lambda d:
+                d.edn['unrelaxed-potential-energy']['source-value'] % 5 == 0
+        )
+
+        self.assertEquals(len(subset.data[0].configurations), 4)
+        self.assertEquals(len(subset.data[1].configurations), 2)
