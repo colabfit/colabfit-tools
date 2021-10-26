@@ -200,14 +200,25 @@ class Property:
 
             if val['field'] in conf.atoms.info:
                 data = conf.atoms.info[val['field']]
+
+                if key in transformations:
+                    data = transformations[key](
+                        data, conf
+                    )
+
+                conf.atoms.info[val['field']] = data
             elif val['field'] in conf.atoms.arrays:
                 data = conf.atoms.arrays[val['field']]
+
+                if key in transformations:
+                    data = transformations[key](
+                        data, conf
+                    )
+
+                conf.atoms.arrays[val['field']] = data
             else:
                 # Key not found on configurations. Don't throw error.
                 pass
-
-            if key in transformations:
-                data = transformations[key](data, conf)
 
             if isinstance(data, np.ndarray):
                 data = data.tolist()
@@ -223,6 +234,18 @@ class Property:
                     'source-unit': val['units']
                 }
             if (key == 'stress') or (key == 'unrelaxed-cauchy-stress'):
+                data = np.array(data)
+                if np.prod(data.shape) == 9:
+                    data = data.reshape((3, 3))
+                    data = np.array([
+                        data[0, 0],
+                        data[1, 1],
+                        data[2, 2],
+                        data[1, 2],
+                        data[0, 2],
+                        data[0, 1],
+                    ]).tolist()
+
                 edn['unrelaxed-cauchy-stress'] = {
                     'source-value': data,
                     'source-unit': val['units']
@@ -299,6 +322,7 @@ class Property:
                 return False
 
         if set(self.configurations) != set(other.configurations):
+            self.configurations[0] == other.configurations[0]
             return False
 
         for my_field, my_val in self.edn.items():

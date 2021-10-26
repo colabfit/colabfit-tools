@@ -1,5 +1,6 @@
 import os
 import re
+import inspect
 import markdown
 import itertools
 from ase.io import write
@@ -10,6 +11,12 @@ from core.configuration_sets import ConfigurationSet
 from core.converters import CFGConverter, EXYZConverter
 from core.property import Property
 from core.property_settings import PropertySettings
+
+import core.transformations
+_available_tforms = dict(
+    inspect.getmembers(core.transformations, inspect.isclass)
+)
+
 
 class Dataset:
 
@@ -36,6 +43,11 @@ class Dataset:
 
         data (list):
             A list of Property objects OR a list of Dataset objects.
+
+        transformations (dict):
+            A dictionary where the kye is the name of a property field, and the
+            value is a Transformation object. Used to apply transformations to
+            raw data when `parse_data()` is called.
 
         configuration_sets (list):
             List of ConfigurationSet objects defining groups of configurations
@@ -72,6 +84,7 @@ class Dataset:
         description=None,
         configurations=None,
         data=None,
+        transformations=None,
         property_map=None,
         co_label_regexes=None,
         cs_regexes=None,
@@ -93,6 +106,8 @@ class Dataset:
 
         self.configurations     = configurations
         self.data               = data
+
+        if transformations is None: self.transformations = {}
 
         if property_map is None: property_map = {}
         self.property_map = property_map
@@ -146,21 +161,6 @@ class Dataset:
                         'Missing "{}" in property_map["{}"]'.format(key2, key)
                     )
 
-                # clean_map[key][key2] = property_map[key][key2]
-
-            # if key == 'energy':
-            #     clean_map['unrelaxed-potential-energy'] = property_map['energy']
-            #     del clean_map['energy']
-
-            # if key == 'forces':
-            #     clean_map['unrelaxed-potential-forces'] = property_map['forces']
-            #     del clean_map['forces']
-
-            # if key == 'stress':
-            #     clean_map['unrelaxed-cauchy-stress'] = property_map['stress']
-            #     del clean_map['stress']
-
-        # self._property_map = clean_map
         self._property_map = property_map
 
 
@@ -212,7 +212,14 @@ class Dataset:
         self.refresh_property_settings()
 
 
-    def to_markdown(self, base_folder, html_file_name, data_file_name, data_format, name_field=ATOMS_NAME_FIELD):
+    def to_markdown(
+        self,
+        base_folder,
+        html_file_name,
+        data_file_name,
+        data_format,
+        name_field=ATOMS_NAME_FIELD,
+        ):
         """
         Saves a Dataset and writes a properly formatted markdown file. In the
         case of a Dataset that has child Dataset objects, each child Dataset
@@ -234,7 +241,6 @@ class Dataset:
             name_field (str):
                 The name of the field that should be used to generate
                 configuration names
-
         """
         self.resync()
 
@@ -256,18 +262,20 @@ class Dataset:
 
 {}
 
-# Data
+# Information
 
 |||
 |---|---|
 |Elements|{}|
+|# of structures|{}|
+|# of atoms|{}|
 |File|[{}]({})|
 |Format|{}|
 |Name field|{}|
 
 # Properties
 
-|Name|Field|Units|
+|Name|Field|Units
 |---|---|---|
 {}
 
@@ -318,6 +326,8 @@ class Dataset:
                         '\n\n'.join(self.links),
                         self.description,
                         ', '.join(self.elements),
+                        len(self.configurations),
+                        self.n_sites,
                         data_file_name, data_file_name,
                         data_format,
                         name_field,
@@ -340,8 +350,13 @@ class Dataset:
 
     @classmethod
     def from_markdown(
-        cls, html_file_path, transformations=None, convert_units=False
+        cls, html_file_path, convert_units=False
         ):
+        """
+        Loads a Dataset from a markdown file. Note that this function requires
+        that that any necessary transformations of the raw data have already
+        been applied (aside from unit conversions).
+        """
         with open(html_file_path, 'r') as f:
             html = markdown.markdown(f.read(), extensions=['tables'])
 
@@ -350,7 +365,7 @@ class Dataset:
         parser.feed(html)
         parser.data['Name'] = parser.data['Name'][0]
 
-        data_info = dict([l for l in parser.data['Data'] if len(l)])
+        data_info = dict([l for l in parser.data['Information'] if len(l)])
         elements = [_.strip() for _ in data_info['Elements'].split(',')]
 
         # Build skeleton Dataset
@@ -386,9 +401,9 @@ class Dataset:
                 desc for key, desc in parser.data['Configuration sets'][1:]
         }
 
-        # Map property fields to supplied names
-        for row in parser.data['Properties'][1:]:
-            dataset.rename_property(row[1], row[0])
+        # # Map property fields to supplied names
+        # for row in parser.data['Properties'][1:]:
+        #     dataset.rename_property(row[1], row[0])
 
         # Extract computed properties
         property_map = {}
@@ -398,12 +413,20 @@ class Dataset:
                 'units': prop[2],
             }
 
+        transformations = {}
+        # # Extract transformations
+        # for prop in parser.data['Properties'][1:]:
+        #     if prop[3] in _available_tforms:
+        #         transformations[prop[0]] = _available_tforms[prop[3]]
+        #     else:
+        #         raise RuntimeError(
+        #             "Invalid transformation specified: {}".format(prop[3])
+        #         )
+
+        dataset.transformations = transformations
         dataset.property_map = property_map
 
-        dataset.parse_data(
-            convert_units=convert_units,
-            transformations=transformations
-        )
+        dataset.parse_data(convert_units=convert_units,)
 
         # Extract property settings
         ps_regexes = {}
@@ -452,7 +475,7 @@ class Dataset:
                 del conf.atoms.arrays[old_name]
 
 
-    def parse_data(self, transformations=None, convert_units=False):
+    def parse_data(self, convert_units=False):
         if len(self.property_map) == 0:
             raise RuntimeError(
                 'Must set `Dataset.property_map first'
@@ -482,7 +505,7 @@ class Dataset:
         for ci, conf in enumerate(self.configurations):
             self.data.append(Property.EFS(
                 conf, map_copy, instance_id=ci+1,
-                transformations=transformations,
+                transformations=self.transformations,
                 convert_units=convert_units
             ))
 
@@ -825,7 +848,7 @@ class Dataset:
 
         filtered_dataset = dataset.filter(
             'data',
-            lambda p: np.max(p.edn['unrelaxed-potential-forces']) < 1.0
+            lambda p: np.max(p.edn['unrelaxed-potential-forces']['source-value']) < 1.0
         )
         ```
 
@@ -995,7 +1018,7 @@ class DatasetParser(HTMLParser):
         'Authors',
         'Links',
         'Description',
-        'Data',
+        'Information',
         'Properties',
         'Property settings',
         'Property labels',
