@@ -43,10 +43,16 @@ class PropertySettings:
         pass
 
 
+    def __hash__(self,):
+        return hash(self.method)
+
+
     def __eq__(self, other):
         """Equality check just compares the calculation method"""
         if self.method != other.method:
             return False
+
+        return True
 
 
     def __neq__(self, other):

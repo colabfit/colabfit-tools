@@ -15,27 +15,33 @@ class BaseTransform:
         return self._tform(data, configuration)
 
 
-class SubtractReference(BaseTransform):
-    """Subtracts a reference energy off of the raw energy"""
-    def __init__(self, ref_eng):
-        super(SubtractReference, self).__init__(lambda x, c: x - ref_eng)
+class AddDivide(BaseTransform):
+    """Adds a scalar to the data, then divides by a scalar"""
+    def __init__(self, add, div):
+        super(AddDivide, self).__init__(lambda x, c: (x+add)/div)
+
+    def __str__(self):
+        return 'AddDivide'
 
 
-class ExtractCauchyStress(BaseTransform):
-    """Extracts the 6-component vector from a full 3x3 stress matrix"""
-    def __init__(self):
-        def extract(data, configuration=None):
-            data = np.array(data)
-            return np.array([
-                data[0, 0],
-                data[1, 1],
-                data[2, 2],
-                data[1, 2],
-                data[0, 2],
-                data[0, 1],
-            ]).tolist()
+# class ExtractCauchyStress(BaseTransform):
+#     """Extracts the 6-component vector from a full 3x3 stress matrix"""
+#     def __init__(self):
+#         def extract(data, configuration=None):
+#             data = np.array(data)
+#             return np.array([
+#                 data[0, 0],
+#                 data[1, 1],
+#                 data[2, 2],
+#                 data[1, 2],
+#                 data[0, 2],
+#                 data[0, 1],
+#             ])
 
-        super(ExtractCauchyStress, self).__init__(extract)
+#         super(ExtractCauchyStress, self).__init__(extract)
+
+#     def __str__(self):
+#         return 'ExtractCauchyStress'
 
 
 class ReshapeForces(BaseTransform):
@@ -48,6 +54,9 @@ class ReshapeForces(BaseTransform):
             return data.reshape((n, 3))
 
         super(ReshapeForces, self).__init__(reshape)
+
+    def __str__(self):
+        return 'ReshapeForces'
 
 
 class Sequential(BaseTransform):
