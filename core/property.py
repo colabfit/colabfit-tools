@@ -207,7 +207,7 @@ class Property:
                 pass
 
             if key in transformations:
-                data = transformations[key](data)
+                data = transformations[key](data, conf)
 
             if isinstance(data, np.ndarray):
                 data = data.tolist()

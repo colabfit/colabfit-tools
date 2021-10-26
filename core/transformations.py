@@ -11,20 +11,20 @@ class BaseTransform:
     def __init__(self, tform):
         self._tform = tform
 
-    def __call__(self, data):
-        return self._tform(data)
+    def __call__(self, data, configuration=None):
+        return self._tform(data, configuration)
 
 
 class SubtractReference(BaseTransform):
     """Subtracts a reference energy off of the raw energy"""
     def __init__(self, ref_eng):
-        super(SubtractReference, self).__init__(lambda x: x - ref_eng)
+        super(SubtractReference, self).__init__(lambda x, c: x - ref_eng)
 
 
 class ExtractCauchyStress(BaseTransform):
     """Extracts the 6-component vector from a full 3x3 stress matrix"""
     def __init__(self):
-        def extract(data):
+        def extract(data, configuration=None):
             data = np.array(data)
             return np.array([
                 data[0, 0],
@@ -41,7 +41,7 @@ class ExtractCauchyStress(BaseTransform):
 class ReshapeForces(BaseTransform):
     """Reshapes forces into an (N, 3) matrix"""
     def __init__(self):
-        def reshape(data):
+        def reshape(data, configuration=None):
             data = np.array(data)
             n = np.prod(data.shape)//3
 
@@ -52,9 +52,9 @@ class ReshapeForces(BaseTransform):
 
 class Sequential(BaseTransform):
     def __init__(self, *args):
-        def wrapper(data):
+        def wrapper(data, configuration=None):
             for f in args:
-                data = f(data)
+                data = f(data, configuration)
             return data
 
         super(Sequential, self).__init__(wrapper)
