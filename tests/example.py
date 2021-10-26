@@ -2,6 +2,10 @@ import sys
 sys.path.append('.')
 from core.dataset import Dataset, load_data
 from core.property_settings import PropertySettings
+from core.transformations import ExtractCauchyStress
+
+# Define transformations to use when parsing data
+T = {'stress': ExtractCauchyStress()}
 
 # Create a skeleton Dataset
 ds1 = Dataset('InP_JPCA2020')
@@ -38,7 +42,10 @@ ds1.property_map = {
 }
 
 # Extract the properties from the configurations and loads them to Dataset.data
-ds1.parse_data(convert_units=False)
+ds1.parse_data(
+    transformations=T,
+    convert_units=False
+)
 
 # Build configuration sets by setting the cs_regexes dictionary
 ds1.cs_regexes = {
@@ -148,7 +155,10 @@ ds2.property_map = {
 }
 
 # Extract the properties from the configurations
-ds2.parse_data(convert_units=False)
+ds2.parse_data(
+    transformations=T,
+    convert_units=False
+)
 
 # Build configuration sets by setting the cs_regexes dictionary
 ds2.cs_regexes = {
@@ -283,8 +293,8 @@ ds2.to_markdown(
     'xyz'
 )
 
-ds1 = Dataset.from_markdown('tests/files/dummy_written1.md')
-ds2 = Dataset.from_markdown('tests/files/dummy_written2.md')
+ds1 = Dataset.from_markdown('tests/files/dummy_written1.md', transformations=T)
+ds2 = Dataset.from_markdown('tests/files/dummy_written2.md', transformations=T)
 
 # print(ds1)
 # print(ds2)

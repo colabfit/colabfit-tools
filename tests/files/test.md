@@ -21,7 +21,7 @@ This is an example dataset
 |||
 |---|---|
 |Elements|In, P|
-|File|[dummy_file.extxyz](tests/files/dummy_file.extxyz)|
+|File|[test_file.extxyz](tests/files/test_file.extxyz)|
 |Format|xyz|
 |Name field|name|
 
@@ -37,7 +37,7 @@ This is an example dataset
 
 |Regex|Method|Description|Labels|Files|
 |---|---|----|----|
-|`.*`|VASP|Energies, forces, and stresses computed with VASP using certain settings| PBE, GGA |[INCAR](tests/files/dummy_file.INCAR)|
+|`.*`|VASP|Energies, forces, and stresses computed with VASP using certain settings| PBE, GGA |[INCAR](tests/files/test_file.INCAR)|
 
 # Configuration sets
 
