@@ -159,7 +159,7 @@ class Property:
     @classmethod
     def EFS(
         cls, conf, property_map, settings=None, instance_id=1,
-        convert_units=False
+        transformations=None, convert_units=False
         ):
         """
         Constructs a property for storing energy/forces/stress data of an
@@ -177,13 +177,14 @@ class Property:
             - 'stress' instead of 'unrelaxed-cauchy-stress'
         """
 
+        if transformations is None:
+            transformations = {}
+
         edn = kim_edn.loads(kim_property_create(
             instance_id=instance_id, property_name=EFS_PROPERTY_NAME
         ))[0]
 
         update_edn_with_conf(edn, conf)
-
-        # print('in EFS', property_map)
 
         for key, val in property_map.items():
             if (val['field'] not in conf.atoms.info) and (val['field'] not in conf.atoms.arrays):
@@ -197,36 +198,35 @@ class Property:
 
                 continue
 
+            if val['field'] in conf.atoms.info:
+                data = conf.atoms.info[val['field']]
+            elif val['field'] in conf.atoms.arrays:
+                data = conf.atoms.arrays[val['field']]
+            else:
+                # Key not found on configurations. Don't throw error.
+                pass
+
+            if key in transformations:
+                data = transformations[key](data)
+
+            if isinstance(data, np.ndarray):
+                data = data.tolist()
+
             if (key == 'energy') or (key == 'unrelaxed-potential-energy'):
                 edn['unrelaxed-potential-energy'] = {
-                    'source-value': conf.atoms.info[val['field']],
+                    'source-value': data,
                     'source-unit': val['units'],
                 }
             if (key == 'forces') or (key == 'unrelaxed-potential-forces'):
                 edn['unrelaxed-potential-forces'] = {
-                    'source-value': conf.atoms.arrays[val['field']].tolist(),
+                    'source-value': data,
                     'source-unit': val['units']
                 }
             if (key == 'stress') or (key == 'unrelaxed-cauchy-stress'):
-                stress = conf.atoms.info[val['field']]
-                if stress.shape == (3, 3):
-                    stress = [
-                        stress[0, 0],
-                        stress[1, 1],
-                        stress[2, 2],
-                        stress[1, 2],
-                        stress[0, 2],
-                        stress[0, 1],
-                    ]
-                else:
-                    stress = stress.tolist()
-
                 edn['unrelaxed-cauchy-stress'] = {
-                    'source-value': stress,
+                    'source-value': data,
                     'source-unit': val['units']
                 }
-
-        # print(edn.keys())
 
         return cls(
             name=EFS_PROPERTY_NAME,

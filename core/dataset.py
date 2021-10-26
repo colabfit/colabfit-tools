@@ -339,7 +339,9 @@ class Dataset:
 
 
     @classmethod
-    def from_markdown(cls, html_file_path):
+    def from_markdown(
+        cls, html_file_path, transformations=None, convert_units=False
+        ):
         with open(html_file_path, 'r') as f:
             html = markdown.markdown(f.read(), extensions=['tables'])
 
@@ -398,7 +400,10 @@ class Dataset:
 
         dataset.property_map = property_map
 
-        dataset.parse_data()
+        dataset.parse_data(
+            convert_units=convert_units,
+            transformations=transformations
+        )
 
         # Extract property settings
         ps_regexes = {}
@@ -447,7 +452,7 @@ class Dataset:
                 del conf.atoms.arrays[old_name]
 
 
-    def parse_data(self, convert_units=False):
+    def parse_data(self, transformations=None, convert_units=False):
         if len(self.property_map) == 0:
             raise RuntimeError(
                 'Must set `Dataset.property_map first'
@@ -477,6 +482,7 @@ class Dataset:
         for ci, conf in enumerate(self.configurations):
             self.data.append(Property.EFS(
                 conf, map_copy, instance_id=ci+1,
+                transformations=transformations,
                 convert_units=convert_units
             ))
 
