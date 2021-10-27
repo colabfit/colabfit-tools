@@ -4,6 +4,7 @@ import inspect
 import markdown
 import itertools
 from ase.io import write
+from bson import ObjectId
 from html.parser import HTMLParser
 
 from core import ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
@@ -341,11 +342,32 @@ class Dataset:
             if data_format == 'xyz':
                 data_format = 'extxyz'
 
+            images = []
+            for conf in self.configurations:
+                conf.atoms.info[ATOMS_LABELS_FIELD] = ' '.join(
+                    conf.atoms.info[ATOMS_LABELS_FIELD]
+                )
+
+                conf.atoms.info[ATOMS_ID_FIELD] = str(
+                    conf.atoms.info[ATOMS_ID_FIELD]
+                )
+
+                images.append(conf.atoms)
+
             write(
                 data_file_name,
-                [conf.atoms for conf in self.configurations],
+                images=images,
                 format=data_format,
             )
+
+            for conf in self.configurations:
+                conf.atoms.info[ATOMS_LABELS_FIELD] = set(
+                    conf.atoms.info[ATOMS_LABELS_FIELD].split(' ')
+                )
+
+                conf.atoms.info[ATOMS_ID_FIELD] = ObjectId(
+                    conf.atoms.info[ATOMS_ID_FIELD]
+                )
 
 
     @classmethod
