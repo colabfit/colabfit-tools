@@ -2,6 +2,7 @@ import os
 import re
 import inspect
 import markdown
+import warnings
 import itertools
 from ase.io import write
 from bson import ObjectId
@@ -581,15 +582,24 @@ class Dataset:
         # Apply configuration labels
         for co_regex, labels in self.co_label_regexes.items():
             regex = re.compile(co_regex)
+            used = False
 
             for conf in self.configurations:
                 # # Remove old labels
                 # conf.atoms.info[ATOMS_LABELS_FIELD] = set()
 
                 if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
+                    used = True
                     old_set =  conf.atoms.info[ATOMS_LABELS_FIELD]
 
                     conf.atoms.info[ATOMS_LABELS_FIELD] = old_set.union(labels)
+
+            if not used:
+                no_labels = 'Labels regex "{}" did not match any '\
+                    'configurations.'.format(regex)
+
+                warnings.warn(no_labels)
+
 
     def refresh_property_settings(self):
         """
@@ -602,6 +612,8 @@ class Dataset:
             )
 
         self.property_settings = list(self.ps_regexes.values())
+
+        used = {ps_regex: False for ps_regex in self.ps_regexes}
 
         # Reset Property PSO pointers
         for data in self.data:
@@ -618,12 +630,22 @@ class Dataset:
 
                 for conf in data.configurations:
                     if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
+                        used[ps_regex] = True
+
                         if data.settings is not None:
                             raise RuntimeError(
                                 'Properties may only be linked to one PSO'
                             )
 
                         data.settings = pso
+
+        for regex, u in used.items():
+            if not u:
+                no_ps = 'PS regex "{}" did not match any '\
+                    'configurations.'.format(re.compile(regex))
+
+                warnings.warn(no_ps)
+
 
         if self.is_parent_dataset:
             for data in self.data:
@@ -658,6 +680,12 @@ class Dataset:
                 configurations=cs_configs,
                 description=cs_desc
             ))
+
+            if len(cs_configs) == 0:
+                empty_cs = 'CS regex "{}" did not match any '\
+                    'configurations.'.format(regex)
+
+                warnings.warn(empty_cs)
 
         unassigned_configurations = [
             ii for ii in range(len(self.configurations))
