@@ -12,7 +12,7 @@ class PropertySettings:
             A human-readable description of the settings.
 
         files (list):
-            A list of strings, where each entry is the text of a file that may
+            A list of strings, where each entry is the path to a file that may
             be useful for computing one or more of the properties.
 
         labels (list):

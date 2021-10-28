@@ -1,23 +1,26 @@
 import os
 import re
+import shutil
 import inspect
 import markdown
 import warnings
+import traceback
 import itertools
+from tqdm import tqdm
 from ase.io import write
 from bson import ObjectId
 from html.parser import HTMLParser
 
-from core import ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
+from core import ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, OPENKIM_PROPERTY_UNITS
 from core.configuration_sets import ConfigurationSet
-from core.converters import CFGConverter, EXYZConverter
+from core.converters import CFGConverter, EXYZConverter, FolderConverter
 from core.property import Property
 from core.property_settings import PropertySettings
 
-import core.transformations
-_available_tforms = dict(
-    inspect.getmembers(core.transformations, inspect.isclass)
-)
+# import core.transformations
+# _available_tforms = dict(
+#     inspect.getmembers(core.transformations, inspect.isclass)
+# )
 
 
 class Dataset:
@@ -139,31 +142,31 @@ class Dataset:
                     )
 
 
-    def resync(self):
+    def resync(self, verbose=False):
 
         self.check_if_is_parent_dataset()
-        self.refresh_config_labels()
-        self.refresh_config_sets()
-        self.refresh_property_settings()
-        self.aggregate_metadata()
+        self.refresh_config_labels(verbose)
+        self.refresh_config_sets(verbose)
+        self.refresh_property_settings(verbose)
+        self.aggregate_metadata(verbose)
 
 
-    @property
-    def property_map(self):
-        return self._property_map
+    # @property
+    # def property_map(self):
+    #     return self._property_map
 
-    @property_map.setter
-    def property_map(self, property_map):
-        # clean_map = {}
-        for key in property_map:
-            # clean_map[key] = {}
-            for key2 in ['field', 'units']:
-                if key2 not in property_map[key]:
-                    raise RuntimeError(
-                        'Missing "{}" in property_map["{}"]'.format(key2, key)
-                    )
+    # @property_map.setter
+    # def property_map(self, property_map):
+    #     # clean_map = {}
+    #     for key in property_map:
+    #         # clean_map[key] = {}
+    #         for key2 in ['field', 'units']:
+    #             if key2 not in property_map[key]:
+    #                 raise RuntimeError(
+    #                     'Missing "{}" in property_map["{}"]'.format(key2, key)
+    #                 )
 
-        self._property_map = property_map
+    #     self._property_map = property_map
 
 
     @property
@@ -180,7 +183,6 @@ class Dataset:
 
         self._co_label_regexes = regex_dict
         self.refresh_config_labels()
-        self.refresh_config_sets()
 
 
     @property
@@ -264,13 +266,19 @@ class Dataset:
 
 {}
 
-# Information
+# Summary
+|||
+|---|---|
+|Chemical systems|{}|
+|Element ratios|{}|
+|# of configurations|{}|
+|# of atoms|{}|
+
+# Data
 
 |||
 |---|---|
 |Elements|{}|
-|# of structures|{}|
-|# of atoms|{}|
 |File|[{}]({})|
 |Format|{}|
 |Name field|{}|
@@ -289,14 +297,14 @@ class Dataset:
 
 # Configuration sets
 
-|Regex|Description|
-|---|---|
+|Regex|Description|# of structures| # of atoms|
+|---|---|---|---|
 {}
 
 # Configuration labels
 
-|Regex|Labels|
-|---|---|
+|Regex|Labels|Counts|
+|---|---|---|
 {}
 """
 
@@ -318,8 +326,8 @@ class Dataset:
 
         else:
             html_file_name = os.path.join(base_folder, html_file_name)
-            data_file_name = os.path.join(base_folder, data_file_name)
 
+            # Write the markdown file
             with open(html_file_name, 'w') as html:
                 html.write(
                     template.format(
@@ -327,22 +335,44 @@ class Dataset:
                         '\n\n'.join(self.authors),
                         '\n\n'.join(self.links),
                         self.description,
-                        ', '.join(self.elements),
+                        ', '.join(self.chemical_systems),
+                        ', '.join(['{} ({:.1f}%)'.format(e, er*100) for e, er in zip(self.elements, self.elements_ratios)]),
                         len(self.configurations),
                         self.n_sites,
+                        ', '.join(self.elements),
                         data_file_name, data_file_name,
                         data_format,
                         name_field,
                         '\n'.join('| {} | {} | {} |'.format(k, v['field'], v['units']) for k,v in self.property_map.items()),
                         '\n'.join('| `{}` | {} | {} | {} | {} |'.format(regex.replace('|', '\|'), pso.method, pso.description, ', '.join(pso.labels), ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for regex, pso in self.ps_regexes.items()),
-                        '\n'.join('| `{}` | {} |'.format(regex.replace('|', '\|'), desc) for regex, desc in self.cs_regexes.items()),
-                        '\n'.join('| `{}` | {} '.format(regex.replace('|', '\|'), ', '.join(labels)) for regex, labels in self.co_label_regexes.items()),
+                        '\n'.join('| `{}` | {} | {} | {} |'.format(regex.replace('|', '\|'), desc, cs.n_configurations, cs.n_sites) for cs, (regex, desc) in zip(self.configuration_sets, self.cs_regexes.items())),
+                        '\n'.join('| `{}` | {} | {} |'.format(regex.replace('|', '\|'), ', '.join(labels), ', '.join([str(self.co_labels_counts[self.co_labels.index(l)]) for l in labels])) for regex, labels in self.co_label_regexes.items()),
                     )
                 )
+
+            data_file_name = os.path.join(base_folder, data_file_name)
+
+            # Copy any PSO files
+            all_file_names = []
+            for pso in self.property_settings:
+                for fi, f in enumerate(pso.files):
+                    new_name = os.path.join(base_folder, os.path.split(f)[-1])
+                    shutil.copyfile(f, new_name)
+
+                    if new_name in all_file_names:
+                        raise RuntimeError(
+                            "PSO file name {} is used more than once."\
+                            "Use unique file names to avoid errors".format(f)
+                        )
+
+                    all_file_names.append(new_name)
+                    pso.files[fi] = new_name
+
 
             if data_format == 'xyz':
                 data_format = 'extxyz'
 
+            # Store the labels as a string, since sets arent' hashable
             images = []
             for conf in self.configurations:
                 conf.atoms.info[ATOMS_LABELS_FIELD] = ' '.join(
@@ -355,12 +385,17 @@ class Dataset:
 
                 images.append(conf.atoms)
 
+            # Write to the data file.
+            # TODO: this should use converter.write()
+
+
             write(
                 data_file_name,
                 images=images,
                 format=data_format,
             )
 
+            # Make sure the labels on the Dataset are still sets
             for conf in self.configurations:
                 conf.atoms.info[ATOMS_LABELS_FIELD] = set(
                     conf.atoms.info[ATOMS_LABELS_FIELD].split(' ')
@@ -380,6 +415,8 @@ class Dataset:
         that that any necessary transformations of the raw data have already
         been applied (aside from unit conversions).
         """
+        base_path = os.path.split(html_file_path)[0]
+
         with open(html_file_path, 'r') as f:
             html = markdown.markdown(f.read(), extensions=['tables'])
 
@@ -388,7 +425,7 @@ class Dataset:
         parser.feed(html)
         parser.data['Name'] = parser.data['Name'][0]
 
-        data_info = dict([l for l in parser.data['Information'] if len(l)])
+        data_info = dict([l for l in parser.data['Data'] if len(l)])
         elements = [_.strip() for _ in data_info['Elements'].split(',')]
 
         # Build skeleton Dataset
@@ -404,7 +441,7 @@ class Dataset:
             data_info['Name field'] = None
 
         dataset.configurations = load_data(
-            file_path=data_info['File'][1],
+            file_path=os.path.join(base_path, data_info['File'][1]),
             file_format=data_info['Format'],
             name_field=data_info['Name field'],
             elements=elements,
@@ -413,15 +450,15 @@ class Dataset:
 
         # Extract labels and trigger label refresh for configurations
         dataset.co_label_regexes = {
-            key.replace('\|', '|'):
-                [_.strip() for _ in desc.split(',')]
-                for key, desc in parser.data['Configuration labels'][1:]
+            l[0].replace('\|', '|'):
+                [_.strip() for _ in l[1].split(',')]
+                for l in parser.data['Configuration labels'][1:]
         }
 
         # Extract configuration sets and trigger CS refresh
         dataset.cs_regexes = {
-            key.replace('\|', '|'):
-                desc for key, desc in parser.data['Configuration sets'][1:]
+            l[0].replace('\|', '|'):
+                l[1]for l in parser.data['Configuration sets'][1:]
         }
 
         # # Map property fields to supplied names
@@ -463,7 +500,7 @@ class Dataset:
             ps_regexes[row[0]] = PropertySettings(
                 method=row[1],
                 description=row[2],
-                labels=[_.strip() for _ in row[3].split(',')],
+                labels=[_.strip() for _ in row[3].split(',')] if len(row)>3 else [],
                 files=files,
             )
 
@@ -498,7 +535,7 @@ class Dataset:
                 del conf.atoms.arrays[old_name]
 
 
-    def parse_data(self, convert_units=False):
+    def parse_data(self, convert_units=False, verbose=False):
         if len(self.property_map) == 0:
             raise RuntimeError(
                 'Must set `Dataset.property_map first'
@@ -525,17 +562,38 @@ class Dataset:
             for key2 in self.property_map[key]:
                 map_copy[key][key2] = self.property_map[key][key2]
 
-        for ci, conf in enumerate(self.configurations):
-            self.data.append(Property.EFS(
-                conf, map_copy, instance_id=ci+1,
-                transformations=self.transformations,
-                convert_units=convert_units
-            ))
+        for ci, conf in enumerate(tqdm(
+            self.configurations,
+            desc='Parsing data',
+            disable=not verbose
+            )):
 
-    def refresh_property_map(self):
+            try:
+                self.data.append(Property.EFS(
+                    conf, map_copy, instance_id=ci+1,
+                    transformations=self.transformations,
+                    convert_units=convert_units
+                ))
+            except Exception as e:
+                raise RuntimeError(
+                    'Caught exception while parsing data entry {}: {}\n{}'.format(
+                        ci, e, conf.atoms.info
+                    )
+                )
+
+        if convert_units:
+            for key in self.property_map:
+                self.property_map[key]['units'] = OPENKIM_PROPERTY_UNITS[key]
+
+
+    def refresh_property_map(self, verbose=False):
         property_map = {}
 
-        for data in self.data:
+        for data in tqdm(
+            self.data,
+            desc='Refreshing properties',
+            disable=not verbose
+            ):
             # if isinstance(data, Dataset):
             #     raise NotImplementedError("Nested datasets not supported yet.")
 
@@ -568,7 +626,7 @@ class Dataset:
                 conf.atoms.info[ATOMS_LABELS_FIELD] -= label_set
 
 
-    def refresh_config_labels(self):
+    def refresh_config_labels(self, verbose=False):
         """
         Re-applies labels to the `ase.Atoms.info[ATOMS_LABELS_FIELD]` list.
         Note that this overwrites any existing labels on the configurations.
@@ -580,7 +638,11 @@ class Dataset:
             )
 
         # Apply configuration labels
-        for co_regex, labels in self.co_label_regexes.items():
+        for co_regex, labels in tqdm(
+            self.co_label_regexes.items(),
+            desc='Refreshing configuration labels',
+            disable=not verbose
+            ):
             regex = re.compile(co_regex)
             used = False
 
@@ -601,7 +663,7 @@ class Dataset:
                 warnings.warn(no_labels)
 
 
-    def refresh_property_settings(self):
+    def refresh_property_settings(self, verbose=False):
         """
         Refresh property pointers to PSOs by matching on their linked co names
         """
@@ -616,7 +678,11 @@ class Dataset:
         used = {ps_regex: False for ps_regex in self.ps_regexes}
 
         # Reset Property PSO pointers
-        for data in self.data:
+        for data in tqdm(
+            self.data,
+            desc='Refreshing property settings',
+            disable=not verbose
+            ):
 
             if isinstance(data, Dataset):
                 self.property_settings += data.property_settings
@@ -652,7 +718,7 @@ class Dataset:
                 self.property_settings += data.property_settings
 
 
-    def refresh_config_sets(self):
+    def refresh_config_sets(self, verbose=False):
         """
         Re-constructs the configuration sets.
         """
@@ -662,7 +728,11 @@ class Dataset:
         # Build configuration sets
         default_cs_description = None
         assigned_configurations = []
-        for cs_regex, cs_desc in self.cs_regexes.items():
+        for cs_regex, cs_desc in tqdm(
+            self.cs_regexes.items(),
+            desc='Refreshing configuration sets',
+            disable=not verbose
+            ):
             if cs_regex.lower() == 'default':
                 default_cs_description = cs_desc
                 continue
@@ -706,6 +776,13 @@ class Dataset:
                 ],
                 description=default_cs_description
             ))
+        else:
+            no_default_configs = 'No configurations were added to the default '\
+                'CS. "default" was removed from the regexes.'
+            warnings.warn(no_default_configs)
+
+            if 'default' in self.cs_regexes:
+                del self.cs_regexes['default']
 
         if self.is_parent_dataset:
             for data in self.data:
@@ -717,7 +794,7 @@ class Dataset:
         self.configurations += dataset.configurations
 
 
-    def aggregate_metadata(self):
+    def aggregate_metadata(self, verbose=False):
 
         self.refresh_property_map()
 
@@ -783,7 +860,9 @@ class Dataset:
         prop_counts = {}
         pso_labels = {}
 
-        for data in self.data:
+        for data in tqdm(
+            self.data, desc='Aggregating metadata', disable=not verbose
+            ):
             if self.is_parent_dataset:
                 self.methods += data.methods
                 self.property_types += data.property_types
@@ -1021,6 +1100,10 @@ def load_data(
     elements,
     default_name='',
     labels_field=None,
+    reader=None,
+    glob_string=None,
+    verbose=False,
+    **kwargs,
     ):
     """
     Loads configurations as a list of ase.Atoms objects.
@@ -1028,6 +1111,11 @@ def load_data(
     Args:
         file_path (str):
             Path to the file or folder containing the data
+
+        file_format (str):
+            A string for specifying the type of Converter to use when loading
+            the configurations. Allowed values are 'xyz', 'extxyz', 'cfg', or
+            'folder'.
 
         name_field (str):
             Key name to use to access `ase.Atoms.info[<name_field>]` to
@@ -1045,7 +1133,42 @@ def load_data(
             Key name to use to access `ase.Atoms.info[<labels_field>]` to
             obtain the labels that should be applied to the configuration. This
             field should contain a comma-separated list of strings
+
+        reader (callable):
+            An optional function for loading configurations from a file. Only
+            used for `file_format == 'folder'`
+
+        glob_string (str):
+            A string to use with `Path(file_path).rglob(glob_string)` to
+            generate a list of files to be passed to `self.reader`. Only used
+            for `file_format == 'folder'`.
+
+        verbose (bool):
+            If True, prints progress bar.
+
+    All other keyword arguments will be passed with
+    `converter.load(..., **kwargs)`
     """
+
+    if file_format == 'folder':
+        if reader is None:
+            raise RuntimeError(
+                "Must provide a `reader` function when `file_format=='folder'`"
+            )
+
+        converter = FolderConverter(reader)
+
+        return converter.load(
+            file_path,
+            name_field=name_field,
+            elements=elements,
+            default_name=default_name,
+            labels_field=labels_field,
+            glob_string=glob_string,
+            verbose=verbose,
+            **kwargs,
+        )
+
 
     if file_format in ['xyz', 'extxyz']:
         converter = EXYZConverter()
@@ -1058,6 +1181,7 @@ def load_data(
         elements=elements,
         default_name=default_name,
         labels_field=labels_field,
+        verbose=verbose,
     )
 
 
@@ -1068,7 +1192,8 @@ class DatasetParser(HTMLParser):
         'Authors',
         'Links',
         'Description',
-        'Information',
+        'Data',
+        'Summary',
         'Properties',
         'Property settings',
         'Property labels',

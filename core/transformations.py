@@ -23,25 +23,17 @@ class AddDivide(BaseTransform):
     def __str__(self):
         return 'AddDivide'
 
+        
+class PerAtomEnergies(BaseTransform):
+    """Divides the energy by the number of atoms"""
+    def __init__(self):
+        def wrapper(data, configuration=None):
+            return data/len(configuration.atoms)
 
-# class ExtractCauchyStress(BaseTransform):
-#     """Extracts the 6-component vector from a full 3x3 stress matrix"""
-#     def __init__(self):
-#         def extract(data, configuration=None):
-#             data = np.array(data)
-#             return np.array([
-#                 data[0, 0],
-#                 data[1, 1],
-#                 data[2, 2],
-#                 data[1, 2],
-#                 data[0, 2],
-#                 data[0, 1],
-#             ])
+        super(PerAtomEnergies, self).__init__(wrapper)
 
-#         super(ExtractCauchyStress, self).__init__(extract)
-
-#     def __str__(self):
-#         return 'ExtractCauchyStress'
+    def __str__(self):
+        return 'PerAtomEnergies'
 
 
 class ReshapeForces(BaseTransform):

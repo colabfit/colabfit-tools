@@ -1,6 +1,9 @@
+import warnings
 import numpy as np
+from tqdm import tqdm
 from ase import Atoms
 from ase.io import read
+from pathlib import Path
 
 from core import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
 from core.configuration import Configuration
@@ -25,24 +28,37 @@ class BaseConverter:
         name_field,
         elements,
         default_name='',
-        labels_field=None
+        labels_field=None,
+        verbose=0,
+        **kwargs,
         ):
         """Dummy wrapper to enforce input fields"""
-        return self._load(
-            file_path, name_field, elements, default_name, labels_field
+        images = self._load(
+            file_path, name_field, elements, default_name, labels_field,
+            verbose, **kwargs
         )
+        if len(images) == 0:
+            no_images_found = 'No configurations were found'
+            warnings.warn(no_images_found)
+
+        return images
 
 
 class EXYZConverter(BaseConverter):
     def _load(
-        self, file_path, name_field, elements, default_name, labels_field
+        self, file_path, name_field, elements, default_name, labels_field,
+        verbose
         ):
 
         elements = set(elements)
 
         images = read(file_path, slice(0, None), format='extxyz')
 
-        for ai, atoms in enumerate(images):
+        for ai, atoms in enumerate(tqdm(
+            images,
+            desc='Loading data',
+            disable=not verbose
+            )):
             a_elems = set(atoms.get_chemical_symbols())
             if not a_elems.issubset(elements):
                 raise RuntimeError(
@@ -72,12 +88,15 @@ class EXYZConverter(BaseConverter):
                     [_.strip() for _ in atoms.info[labels_field].split(',')]
                 )
 
-        return [Configuration(atoms) for atoms in images]
+            images[ai] = Configuration(atoms)
+
+        return images
 
 
 class CFGConverter(BaseConverter):
     def _load(
-        self, file_path, name_field, elements, default_name, labels_field
+        self, file_path, name_field, elements, default_name, labels_field,
+        verbose
         ):
 
         images = []
@@ -225,4 +244,105 @@ class CFGConverter(BaseConverter):
 
                     images.append(atoms)
 
-        return [Configuration(atoms) for atoms in images]
+        for ai, atoms in enumerate(tqdm(
+            images,
+            desc='Loading data',
+            disable=not verbose
+            )):
+            images[ai] = Configuration(atoms)
+
+        return images
+
+
+class FolderConverter(BaseConverter):
+    """
+    This converter serves as a generic template from loading configurations from
+    collections of files.
+    """
+
+    def __init__(self, reader):
+        """
+        Args:
+            reader (callable):
+                A function that takes in a file path and returns an `ase.Atoms`
+                object with the relevant data in `atoms.info` and
+                `atoms.arrays`.
+        """
+
+        self.reader = reader
+
+
+    def _load(
+        self,
+        file_path,
+        name_field,
+        elements,
+        default_name,
+        labels_field,
+        verbose,
+        glob_string,
+        **kwargs,
+        ):
+        """
+        Arguments are the same as for other converters, but with the following
+        changes:
+
+            file_path (str):
+                The path to the parent directory containing the data files.
+
+            glob_string (str):
+                A string to use with `Path(file_path).rglob(glob_string)` to
+                generate a list of files to be passed to `self.reader`
+
+        All additional kwargs will be passed to the reader function as
+        `self.reader(..., **kwargs)`
+        """
+
+        ai = 0
+        images = []
+        files = list(Path(file_path).rglob(glob_string))
+        for fpath in tqdm(
+            files,
+            desc='Loading data',
+            disable=not verbose
+            ):
+            new = self.reader(fpath, **kwargs)
+
+            if not isinstance(new, list):
+                new = [new]
+            
+            for atoms in new:
+
+                a_elems = set(atoms.get_chemical_symbols())
+                if not a_elems.issubset(elements):
+                    raise RuntimeError(
+                        f"Image {ai} elements {a_elems} is not a subset of "\
+                            "{elements}."
+                    )
+
+                if name_field is None:
+                    if ATOMS_NAME_FIELD not in atoms.info:
+                        atoms.info[ATOMS_NAME_FIELD] = f"{default_name}_{ai}"
+                else:
+                    if name_field in atoms.info:
+                        name = atoms.info[name_field]
+                        # del atoms.info[name_field]
+                        atoms.info[ATOMS_NAME_FIELD] = name
+                    else:
+                        raise RuntimeError(
+                            f"Field {name_field} not in atoms.info for index "\
+                                f"{len(images)}. Set `name_field=None` "\
+                                    "to use `default_name`."
+                        )
+
+                if labels_field is None:
+                    atoms.info[ATOMS_LABELS_FIELD] = set()
+                else:
+                    atoms.info[ATOMS_LABELS_FIELD] = set(
+                        [_.strip() for _ in atoms.info[labels_field].split(',')]
+                    )
+
+                images.append(Configuration(atoms))
+                ai += 1
+
+        return images
