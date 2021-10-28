@@ -140,7 +140,25 @@ class Property:
         #     units_cleaned[key] = {}
         #     units_cleaned[key] = val
 
-        self.property_map = property_map
+        self.property_map = dict(property_map)
+
+        # Delete any un-used properties from the property_map
+        delkeys = []
+        for key in self.property_map:
+            if key == 'energy':
+                edn_key = 'unrelaxed-potential-energy'
+            elif key == 'forces':
+                edn_key = 'unrelaxed-potential-forces'
+            elif key == 'stress':
+                edn_key = 'unrelaxed-cauchy-stress'
+            else:
+                edn_key = key
+
+            if edn_key not in self.edn:
+                delkeys.append(key)
+
+        for key in delkeys:
+            del self.property_map[key]
 
         if convert_units:
             self.convert_units()
@@ -220,7 +238,10 @@ class Property:
                 # Key not found on configurations. Don't throw error.
                 pass
 
-            if isinstance(data, np.ndarray):
+            data = np.atleast_1d(data)
+            if data.size == 1:
+                data = float(data)
+            else:
                 data = data.tolist()
 
             if (key == 'energy') or (key == 'unrelaxed-potential-energy'):
@@ -268,15 +289,26 @@ class Property:
         """
 
         for key, val in self.property_map.items():
+            if key == 'energy':
+                edn_key = 'unrelaxed-potential-energy'
+            elif key == 'forces':
+                edn_key = 'unrelaxed-potential-forces'
+            elif key == 'stress':
+                edn_key = 'unrelaxed-cauchy-stress'
+            else:
+                edn_key = key
+
             units = val['units']
 
             split_units = list(itertools.chain.from_iterable([
                 sp.split('/') for sp in units.split('*')
             ]))
 
-            val = np.array(self.edn[key]['source-value'])
+            if edn_key not in self.edn: continue
 
-            val *= UNITS[split_units[0]]
+            val = np.array(self.edn[edn_key]['source-value'], dtype=np.float64)
+
+            val *= float(UNITS[split_units[0]])
 
             for u in split_units[1:]:
                 if units[units.find(u)-1] == '*':
@@ -289,12 +321,12 @@ class Property:
                             "{}".format(u)
                     )
 
-            self.edn[key] = {
+            self.edn[edn_key] = {
                 'source-value': val.tolist(),
                 'source-unit': OPENKIM_PROPERTY_UNITS[key]
             }
 
-            self.property_map[key]['units'] = self.edn[key]['source-unit']
+            self.property_map[key]['units'] = self.edn[edn_key]['source-unit']
 
 
     def __hash__(self):
