@@ -17,8 +17,7 @@ KIM_PROPERTIES, PROPERTY_NAME_ERTY_ID, \
 
 available_kim_properties = get_properties()
 
-from core import EFS_PROPERTY_NAME
-from core import UNITS, OPENKIM_PROPERTY_UNITS
+from colabfit import EFS_PROPERTY_NAME, UNITS, OPENKIM_PROPERTY_UNITS
 
 # These are fields that are related to the geometry of the atomic structure, and
 # should be checked in the Configuration object, not here.
@@ -33,7 +32,7 @@ ignored_fields = [
 
 
 
-class Property:
+class Property(dict):
     """
     A Property is used to store the results of some kind of calculation or
     experiment, and should be mapped to an OpenKIM Property Definition. Best
@@ -185,9 +184,9 @@ class Property:
 
         Assumes that the properties, if provided, are stored in the following
         ways:
-            energy: `conf.atoms.info[property_map['energy']]`
-            forces: `conf.atoms.arrays[property_map['forces']]`
-            stress: `conf.atoms.info[property_map['stress']]`
+            energy: `conf.info[property_map['energy']]`
+            forces: `conf.arrays[property_map['forces']]`
+            stress: `conf.info[property_map['stress']]`
 
         Note: `property_map` can use the following aliases:
             - 'energy' instead of 'unrelaxed-potential-energy'
@@ -205,35 +204,35 @@ class Property:
         update_edn_with_conf(edn, conf)
 
         for key, val in property_map.items():
-            if (val['field'] not in conf.atoms.info) and (val['field'] not in conf.atoms.arrays):
+            if (val['field'] not in conf.info) and (val['field'] not in conf.arrays):
                 field_not_found_message = 'Key "{}" not found in atoms.info '\
                     'or atoms.arrays. Available keys are: {}'.format(
                         val['field'],
-                        list(conf.atoms.info.keys())
-                        + list(conf.atoms.arrays.keys())
+                        list(conf.info.keys())
+                        + list(conf.arrays.keys())
                     )
                 warnings.warn(field_not_found_message)
 
                 continue
 
-            if val['field'] in conf.atoms.info:
-                data = conf.atoms.info[val['field']]
+            if val['field'] in conf.info:
+                data = conf.info[val['field']]
 
                 if key in transformations:
                     data = transformations[key](
                         data, conf
                     )
 
-                conf.atoms.info[val['field']] = data
-            elif val['field'] in conf.atoms.arrays:
-                data = conf.atoms.arrays[val['field']]
+                conf.info[val['field']] = data
+            elif val['field'] in conf.arrays:
+                data = conf.arrays[val['field']]
 
                 if key in transformations:
                     data = transformations[key](
                         data, conf
                     )
 
-                conf.atoms.arrays[val['field']] = data
+                conf.arrays[val['field']] = data
             else:
                 # Key not found on configurations. Don't throw error.
                 pass
@@ -373,6 +372,17 @@ class Property:
     def __neq__(self, other):
         return not self.__eq__(other)
 
+    
+    def __getitem__(self, k):
+        if k not in self.edn:
+            warnings.warn(
+                f"Field '{k}' not found in Property.edn. Returning None"
+            )
+
+            return None
+
+        return self.edn[k]
+
 
     def __str__(self):
         return "Property(instance_id={}, name='{}')".format(
@@ -388,10 +398,10 @@ class Property:
 def update_edn_with_conf(edn, conf):
 
     edn['species'] = {
-        'source-value': conf.atoms.get_chemical_symbols()
+        'source-value': conf.get_chemical_symbols()
     }
 
-    lattice = np.array(conf.atoms.get_cell()).tolist()
+    lattice = np.array(conf.get_cell()).tolist()
 
     edn['unrelaxed-periodic-cell-vector-1'] = {
         'source-value': lattice[0],
@@ -409,7 +419,7 @@ def update_edn_with_conf(edn, conf):
     }
 
     edn['unrelaxed-configuration-positions'] = {
-        'source-value': conf.atoms.positions.tolist(),
+        'source-value': conf.positions.tolist(),
         'source-unit': 'angstrom'
     }
 

@@ -1,8 +1,8 @@
 import sys
 sys.path.append('.')
-from core.dataset import Dataset, load_data
-from core.property_settings import PropertySettings
-from core.transformations import ExtractCauchyStress
+from colabfit.tools.dataset import Dataset, load_data
+from colabfit.tools.property_settings import PropertySettings
+from colabfit.tools.transformations import ExtractCauchyStress
 
 # Define transformations to use when parsing data
 T = {'stress': ExtractCauchyStress()}

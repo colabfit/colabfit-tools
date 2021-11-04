@@ -1,3 +1,8 @@
+__version__ = "0.0.1"
+__author__  = "ColabFit"
+__credit__  = "University of Minnesota"
+
+
 ATOMS_ID_FIELD    = '_id'
 ATOMS_NAME_FIELD    = '_name'
 ATOMS_LABELS_FIELD  = '_labels'

@@ -21,7 +21,7 @@ This is an example dataset
 |||
 |---|---|
 |Elements|In, P|
-|File|[test_file.extxyz](tests/files/test_file.extxyz)|
+|File|[test_file.extxyz](test_file.extxyz)|
 |Format|xyz|
 |Name field|name|
 

@@ -1,26 +1,30 @@
 import os
 import re
 import shutil
-import inspect
 import markdown
 import warnings
-import traceback
 import itertools
 from tqdm import tqdm
-from ase.io import write
 from bson import ObjectId
 from html.parser import HTMLParser
 
-from core import ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, OPENKIM_PROPERTY_UNITS
-from core.configuration_sets import ConfigurationSet
-from core.converters import CFGConverter, EXYZConverter, FolderConverter
-from core.property import Property
-from core.property_settings import PropertySettings
+from ase.io import write
+
+from colabfit import ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, OPENKIM_PROPERTY_UNITS
+from colabfit.tools.configuration_sets import ConfigurationSet
+from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
+from colabfit.tools.property import Property
+from colabfit.tools.property_settings import PropertySettings
 
 # import core.transformations
 # _available_tforms = dict(
 #     inspect.getmembers(core.transformations, inspect.isclass)
 # )
+
+__all__ = [
+    'Dataset',
+    'load_data',
+]
 
 
 class Dataset:
@@ -42,9 +46,9 @@ class Dataset:
         configurations (list):
             A list of Configuration objects. Each element is guaranteed to have
             the following fields:
-                `Configuration.atoms.info[{ATOMS_ID_FIELD}]` (ObjectId)
-                `Configuration.atoms.info[{ATOMS_NAME_FIELD}]` (str)
-                `Configuration.atoms.info[{ATOMS_LABELS_FIELD}]` (str)
+                `Configuration.info[{ATOMS_ID_FIELD}]` (ObjectId)
+                `Configuration.info[{ATOMS_NAME_FIELD}]` (str)
+                `Configuration.info[{ATOMS_LABELS_FIELD}]` (str)
 
         data (list):
             A list of Property objects OR a list of Dataset objects.
@@ -86,7 +90,7 @@ class Dataset:
         name='',
         authors=None,
         links=None,
-        description=None,
+        description='',
         configurations=None,
         data=None,
         transformations=None,
@@ -182,7 +186,7 @@ class Dataset:
                 regex_dict[key] = [v]
 
         self._co_label_regexes = regex_dict
-        self.refresh_config_labels()
+        # self.refresh_config_labels()
 
 
     @property
@@ -196,7 +200,7 @@ class Dataset:
             regex_dict = {'default': 'Default configuration set'}
 
         self._cs_regexes = regex_dict
-        self.refresh_config_sets()
+        # self.refresh_config_sets()
 
 
     @property
@@ -213,7 +217,7 @@ class Dataset:
                 )
 
         self._ps_regexes = regex_dict
-        self.refresh_property_settings()
+        # self.refresh_property_settings()
 
 
     def to_markdown(
@@ -375,15 +379,15 @@ class Dataset:
             # Store the labels as a string, since sets arent' hashable
             images = []
             for conf in self.configurations:
-                conf.atoms.info[ATOMS_LABELS_FIELD] = ' '.join(
-                    conf.atoms.info[ATOMS_LABELS_FIELD]
+                conf.info[ATOMS_LABELS_FIELD] = ' '.join(
+                    conf.info[ATOMS_LABELS_FIELD]
                 )
 
-                conf.atoms.info[ATOMS_ID_FIELD] = str(
-                    conf.atoms.info[ATOMS_ID_FIELD]
+                conf.info[ATOMS_ID_FIELD] = str(
+                    conf.info[ATOMS_ID_FIELD]
                 )
 
-                images.append(conf.atoms)
+                images.append(conf)
 
             # Write to the data file.
             # TODO: this should use converter.write()
@@ -397,18 +401,18 @@ class Dataset:
 
             # Make sure the labels on the Dataset are still sets
             for conf in self.configurations:
-                conf.atoms.info[ATOMS_LABELS_FIELD] = set(
-                    conf.atoms.info[ATOMS_LABELS_FIELD].split(' ')
+                conf.info[ATOMS_LABELS_FIELD] = set(
+                    conf.info[ATOMS_LABELS_FIELD].split(' ')
                 )
 
-                conf.atoms.info[ATOMS_ID_FIELD] = ObjectId(
-                    conf.atoms.info[ATOMS_ID_FIELD]
+                conf.info[ATOMS_ID_FIELD] = ObjectId(
+                    conf.info[ATOMS_ID_FIELD]
                 )
 
 
     @classmethod
     def from_markdown(
-        cls, html_file_path, convert_units=False
+        cls, html_file_path, convert_units=False, verbose=False
         ):
         """
         Loads a Dataset from a markdown file. Note that this function requires
@@ -446,6 +450,7 @@ class Dataset:
             name_field=data_info['Name field'],
             elements=elements,
             default_name=parser.data['Name'],
+            verbose=verbose
         )
 
         # Extract labels and trigger label refresh for configurations
@@ -486,7 +491,7 @@ class Dataset:
         dataset.transformations = transformations
         dataset.property_map = property_map
 
-        dataset.parse_data(convert_units=convert_units,)
+        dataset.parse_data(convert_units=convert_units, verbose=verbose)
 
         # Extract property settings
         ps_regexes = {}
@@ -510,12 +515,213 @@ class Dataset:
 
         return dataset
 
+    # @profile
+    def clean(self, verbose=False):
+        """
+        Pseudocode:
+            - For each property
+                - add the property to a dictionary where the key is the hashed
+                configuration
+                - if the key already exists in the dictionary, check the new
+                property against all existing ones.
+        """
+
+        duplicate_checker = {}
+
+        self.check_if_is_parent_dataset()
+
+        if self.is_parent_dataset:
+            raise RuntimeError(
+                "Can't clean parent datasets. Use `flatten()` first."
+            )
+        else:
+            n_duplicates = 0
+            for data in tqdm(
+                self.data,
+                desc='Cleaning data',
+                disable=not verbose
+                ):
+
+                conf_hash = hash(tuple(sorted(
+                    hash(c) for c in data.configurations
+                )))
+
+                if conf_hash not in duplicate_checker:
+                    # Data with the same configurations doesn't exist yet
+                    duplicate_checker[conf_hash] = [data]
+                else:
+                    # Possible data matches exist
+                    duplicate = False
+                    for existing in duplicate_checker[conf_hash]:
+                        if existing == data:
+                            duplicate = True
+
+                    # Only add the data if it's not a duplicate
+                    if not duplicate:
+                        duplicate_checker[conf_hash].append(data)
+                    else:
+                        n_duplicates += 1
+
+            self.data = list(itertools.chain.from_iterable(
+                duplicate_checker.values()
+            ))
+
+            self.configurations = list(itertools.chain.from_iterable(
+                [data.configurations for data in self.data]
+            ))
+
+            if n_duplicates:
+                warnings.warn(
+                    f"Removed {n_duplicates} duplicat data entries."
+                )
+
+            return n_duplicates
+
+
+    # @profile
+    def merge(self, other, clean=False):
+        """
+        Merges the new and current Datasets. Note that the current data
+        supersedes any incoming data. This means that if incoming data points
+        to an existing configuration, the incoming data is not added to the
+        Dataset because it is assumed that the existing data pointing to the
+        same configuration is the more important version.
+
+        The following additional changes are made to the incoming data:
+            - Configurations are renamed to prepend the name of their datasets
+            - All regexes are renamed as f"^{other.name}_.*{regex}"
+
+        Args:
+            other (Dataset):
+                The new dataset to be added to the existing one.
+
+            clean (bool):
+                If True, checks for duplicates after merging. Default is False.
+        """
+
+        self.check_if_is_parent_dataset()
+        other.check_if_is_parent_dataset()
+
+        if not self.is_parent_dataset:
+            if not other.is_parent_dataset:
+                # Both datasets are children, so just merge directly
+
+                # Rename configurations for the default CS
+                for regex, cs in zip(other.cs_regexes.keys(), other.configuration_sets):
+                    if regex == 'default':
+                        self.cs_regexes[f'{other.name}_default'] = cs.description
+
+                        for conf in cs.configurations:
+                            # Make sure the configuration still matches the regex
+                            conf.info[ATOMS_NAME_FIELD] = 'default_{}'.format(
+                                conf.info[ATOMS_NAME_FIELD]
+                            )
+
+                        break
+
+                # Prepend dataset names to avoid name collisions
+                for conf in other.configurations:
+                    conf.info[ATOMS_NAME_FIELD] = '{}_{}'.format(
+                        other.name, conf.info[ATOMS_NAME_FIELD]
+                    )
+
+                self.data += other.data
+
+                # Update data and configurations, removing duplicates
+                if clean:
+                    nd = self.clean()
+
+                    if nd:
+                        warnings.warn(
+                            f"Detected {nd} duplicate entries when merging"
+                        )
+
+                # Modify regex maps to avoid collisions
+                new_cs_regexes = {}
+                for regex, desc in self.cs_regexes.items():
+                    if regex[0] == '^': regex = regex[1:]
+
+                    # new_cs_regexes[f'^{self.name}_' + regex] = desc
+                    new_cs_regexes[regex] = desc
+
+                for regex, desc in other.cs_regexes.items():
+                    if regex[0] == '^': regex = regex[1:]
+
+                    new_cs_regexes[f'^{other.name}_.*{regex}'] = desc
+
+                new_cs_regexes['default'] = f'Merged {self.name} and {other.name}'
+
+                self.cs_regexes = new_cs_regexes
+
+                new_co_label_regexes = {}
+                for regex, labels in self.co_label_regexes.items():
+                    if regex[0] == '^': regex = regex[1:]
+
+                    # new_co_label_regexes[f'^{self.name}_' + regex] = labels
+                    new_co_label_regexes[regex] = labels
+
+                for regex, labels in other.co_label_regexes.items():
+                    if regex[0] == '^': regex = regex[1:]
+
+                    new_co_label_regexes[f'^{other.name}_.*{regex}'] = labels
+
+                self.co_label_regexes = new_co_label_regexes
+
+                new_ps_regexes = {}
+                for regex, pso in self.ps_regexes.items():
+                    if regex[0] == '^': regex = regex[1:]
+
+                    # new_ps_regexes[f'^{self.name}_' + regex] = pso
+                    new_ps_regexes[regex] = pso
+
+                for regex, pso in other.ps_regexes.items():
+                    if regex[0] == '^': regex = regex[1:]
+
+                    new_ps_regexes[f'^{other.name}_.*{regex}'] = pso
+
+                self.ps_regexes = new_ps_regexes
+
+                # self.resync()
+
+                self.name           = f'{self.name}_{other.name}'
+                self.authors        = list(set(self.authors + other.authors))
+                self.links          = list(set(self.links + other.links))
+                self.description    = f'Merged {self.name} and {other.name}'
+
+            else:
+                # Other is a parent dataset
+                pass
+
+
+    # def flatten(self):
+    #     """
+    #     Pseudocode:
+    #         - convert everything to the same units
+    #         - merge authors/links
+    #         - warn if overlap (maybe this should be done in attach()?)
+    #             - tell me which dataset has an overlap with which other (disjoint)
+    #             - optionally merge subset datasets
+    #         - check if conflicting CO labels, CS regexes, or PS regexes
+    #     """
+    #     self.check_if_is_parent_dataset()
+
+    #     if not self.is_parent_dataset:
+    #         raise RuntimeError(
+    #             'Cannot flatten. Dataset has no attached Datasets.'
+    #         )
+
+    #     self.resync()
+
+    #     for data in self.data:
+    #         self.authors    += data.authors
+    #         self.links      += data.links
+    #         self.property_settings +=
 
     def add_configurations(self, configurations):
         n = len(self.configurations)
         for ci, conf in enumerate(configurations):
-            if ATOMS_NAME_FIELD not in conf.atoms.info:
-                conf.atoms.info[ATOMS_NAME_FIELD] = str(n+ci)
+            if ATOMS_NAME_FIELD not in conf.info:
+                conf.info[ATOMS_NAME_FIELD] = str(n+ci)
 
         self.configurations += configurations
 
@@ -526,13 +732,13 @@ class Dataset:
         if old_name == new_name: return
 
         for conf in self.configurations:
-            if old_name in conf.atoms.info:
-                conf.atoms.info[new_name] = conf.atoms.info[old_name]
-                del conf.atoms.info[old_name]
+            if old_name in conf.info:
+                conf.info[new_name] = conf.info[old_name]
+                del conf.info[old_name]
 
-            if old_name in conf.atoms.arrays:
-                conf.atoms.arrays[new_name] = conf.atoms.arrays[old_name]
-                del conf.atoms.arrays[old_name]
+            if old_name in conf.arrays:
+                conf.arrays[new_name] = conf.arrays[old_name]
+                del conf.arrays[old_name]
 
 
     def parse_data(self, convert_units=False, verbose=False):
@@ -577,7 +783,7 @@ class Dataset:
             except Exception as e:
                 raise RuntimeError(
                     'Caught exception while parsing data entry {}: {}\n{}'.format(
-                        ci, e, conf.atoms.info
+                        ci, e, conf.info
                     )
                 )
 
@@ -615,15 +821,15 @@ class Dataset:
 
     def clear_config_labels(self):
         for conf in self.configurations:
-            conf.atoms.info[ATOMS_LABELS_FIELD] = set()
+            conf.info[ATOMS_LABELS_FIELD] = set()
 
     def delete_config_label_regex(self, regex):
         label_set = self.co_label_regexes.pop(regex)
 
         regex = re.compile(regex)
         for conf in self.configurations:
-            if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
-                conf.atoms.info[ATOMS_LABELS_FIELD] -= label_set
+            if regex.search(conf.info[ATOMS_NAME_FIELD]):
+                conf.info[ATOMS_LABELS_FIELD] -= label_set
 
 
     def refresh_config_labels(self, verbose=False):
@@ -631,6 +837,10 @@ class Dataset:
         Re-applies labels to the `ase.Atoms.info[ATOMS_LABELS_FIELD]` list.
         Note that this overwrites any existing labels on the configurations.
         """
+
+        # TODO: one problem with the current way of displaying the labels is
+        # that it shows the total count even if multiple regexes have the same
+        # label
 
         if self.configurations is None:
             raise RuntimeError(
@@ -648,13 +858,13 @@ class Dataset:
 
             for conf in self.configurations:
                 # # Remove old labels
-                # conf.atoms.info[ATOMS_LABELS_FIELD] = set()
+                # conf.info[ATOMS_LABELS_FIELD] = set()
 
-                if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
+                if regex.search(conf.info[ATOMS_NAME_FIELD]):
                     used = True
-                    old_set =  conf.atoms.info[ATOMS_LABELS_FIELD]
+                    old_set =  conf.info[ATOMS_LABELS_FIELD]
 
-                    conf.atoms.info[ATOMS_LABELS_FIELD] = old_set.union(labels)
+                    conf.info[ATOMS_LABELS_FIELD] = old_set.union(labels)
 
             if not used:
                 no_labels = 'Labels regex "{}" did not match any '\
@@ -685,23 +895,32 @@ class Dataset:
             ):
 
             if isinstance(data, Dataset):
+                data.refresh_property_settings()
                 self.property_settings += data.property_settings
                 continue
 
             # Remove old pointers
             data.settings = None
 
-            for ps_regex, pso in self.ps_regexes.items():
-                regex = re.compile(ps_regex)
+            for conf in data.configurations:
+                match = None
+                for ps_regex, pso in self.ps_regexes.items():
+                    regex = re.compile(ps_regex)
 
-                for conf in data.configurations:
-                    if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
+                    if regex.search(conf.info[ATOMS_NAME_FIELD]):
+
                         used[ps_regex] = True
 
                         if data.settings is not None:
                             raise RuntimeError(
-                                'Properties may only be linked to one PSO'
+                                'Configuration name {} matches multiple PSO '\
+                                'regexes: {}'.format(
+                                    conf.info[ATOMS_NAME_FIELD],
+                                    [match, ps_regex]
+                                )
                             )
+
+                        match = ps_regex
 
                         data.settings = pso
 
@@ -713,10 +932,6 @@ class Dataset:
                 warnings.warn(no_ps)
 
 
-        if self.is_parent_dataset:
-            for data in self.data:
-                self.property_settings += data.property_settings
-
 
     def refresh_config_sets(self, verbose=False):
         """
@@ -725,67 +940,69 @@ class Dataset:
 
         self.configuration_sets = []
 
-        # Build configuration sets
-        default_cs_description = None
-        assigned_configurations = []
-        for cs_regex, cs_desc in tqdm(
-            self.cs_regexes.items(),
-            desc='Refreshing configuration sets',
-            disable=not verbose
-            ):
-            if cs_regex.lower() == 'default':
-                default_cs_description = cs_desc
-                continue
+        if not self.is_parent_dataset:
+            # Build configuration sets
+            default_cs_description = None
+            assigned_configurations = []
+            for cs_regex, cs_desc in tqdm(
+                self.cs_regexes.items(),
+                desc='Refreshing configuration sets',
+                disable=not verbose
+                ):
+                if cs_regex.lower() == 'default':
+                    default_cs_description = cs_desc
+                    continue
 
-            regex = re.compile(cs_regex)
-            cs_configs = []
-            for ai, conf in enumerate(self.configurations):
+                regex = re.compile(cs_regex)
+                cs_configs = []
+                for ai, conf in enumerate(self.configurations):
 
-                if regex.search(conf.atoms.info[ATOMS_NAME_FIELD]):
-                    cs_configs.append(conf)
+                    if regex.search(conf.info[ATOMS_NAME_FIELD]):
+                        cs_configs.append(conf)
 
-                    assigned_configurations.append(ai)
+                        assigned_configurations.append(ai)
 
-            self.configuration_sets.append(ConfigurationSet(
-                configurations=cs_configs,
-                description=cs_desc
-            ))
+                self.configuration_sets.append(ConfigurationSet(
+                    configurations=cs_configs,
+                    description=cs_desc
+                ))
 
-            if len(cs_configs) == 0:
-                empty_cs = 'CS regex "{}" did not match any '\
-                    'configurations.'.format(regex)
+                if len(cs_configs) == 0:
+                    empty_cs = 'CS regex "{}" did not match any '\
+                        'configurations.'.format(regex)
 
-                warnings.warn(empty_cs)
+                    warnings.warn(empty_cs)
 
-        unassigned_configurations = [
-            ii for ii in range(len(self.configurations))
-            if ii not in assigned_configurations
-        ]
+            unassigned_configurations = [
+                ii for ii in range(len(self.configurations))
+                if ii not in assigned_configurations
+            ]
 
-        if unassigned_configurations:
+            if unassigned_configurations:
 
-            if default_cs_description is None:
-                raise RuntimeError(
-                    "Must specify 'default' (or 'Default') configuration set"
-                )
+                if default_cs_description is None:
+                    raise RuntimeError(
+                        "Must specify 'default' (or 'Default') configuration set"
+                    )
 
-            self.configuration_sets.append(ConfigurationSet(
-                configurations=[
-                    self.configurations[ii]
-                    for ii in unassigned_configurations
-                ],
-                description=default_cs_description
-            ))
+                self.configuration_sets.append(ConfigurationSet(
+                    configurations=[
+                        self.configurations[ii]
+                        for ii in unassigned_configurations
+                    ],
+                    description=default_cs_description
+                ))
+            else:
+                no_default_configs = 'No configurations were added to the default '\
+                    'CS. "default" was removed from the regexes.'
+                warnings.warn(no_default_configs)
+
+                if 'default' in self.cs_regexes:
+                    del self.cs_regexes['default']
+
         else:
-            no_default_configs = 'No configurations were added to the default '\
-                'CS. "default" was removed from the regexes.'
-            warnings.warn(no_default_configs)
-
-            if 'default' in self.cs_regexes:
-                del self.cs_regexes['default']
-
-        if self.is_parent_dataset:
             for data in self.data:
+                data.refresh_config_sets()
                 self.configuration_sets += data.configuration_sets
 
 
@@ -906,9 +1123,42 @@ class Dataset:
         self.pso_labels_counts = [int(pso_labels[l]) for l in self.pso_labels]
 
 
-    def convert_units(self, units):
+    def convert_units(self):
         """Converts the dataset units to the provided type (e.g., 'OpenKIM'"""
-        pass
+        for data in self.data:
+            data.convert_units()
+
+
+    def isdisjoint(self, other):
+
+        if len(self.data) == 0:
+            raise RuntimeError(
+                "Must load data before performing set operations"
+            )
+
+        if len(other.data) == 0:
+            raise RuntimeError(
+                "Must load data before performing set operations"
+            )
+
+        self.check_if_is_parent_dataset()
+        other.check_if_is_parent_dataset()
+
+        if self.is_parent_dataset:
+            super_data1 = set(itertools.chain.from_iterable([
+                ds.data for ds in self.data
+            ]))
+        else:
+            super_data1 = set(self.data)
+
+        if other.is_parent_dataset:
+            super_data2 = set(itertools.chain.from_iterable([
+                ds.data for ds in other.data
+            ]))
+        else:
+            super_data2 = set(other.data)
+
+        return super_data1.isdisjoint(super_data2)
 
 
     def issubset(self, other):
@@ -955,6 +1205,89 @@ class Dataset:
         return not self == other
 
 
+    def get_data(self, property_field):
+        if property_field == 'energy':
+            property_field = 'unrelaxed-potential-energy'
+        if property_field == 'forces':
+            property_field = 'unrelaxed-potential-forces'
+        if property_field == 'stress':
+            property_field = 'unrelaxed-cauchy-stress'
+
+        if self.is_parent_dataset:
+            return list(itertools.chain.from_iterable(
+                data.get_data(property_field) for data in self.data
+            ))
+        else:
+            return [d[property_field] for d in self.data]
+
+    def dataset_from_config_sets(self, cs_ids, exclude=False, verbose=False):
+        if isinstance(cs_ids, int):
+            cs_ids = [cs_ids]
+
+        self.check_if_is_parent_dataset()
+
+        if self.is_parent_dataset:
+            raise RuntimeError(
+                "Can't extract CS from parent Dataset"
+            )
+
+        if exclude:
+            cs_ids = [
+                _ for _ in range(len(self.configuration_sets))
+                if _ not in cs_ids
+            ]
+
+        cs_regexes = {}
+        config_sets = []
+        for j, (regex, cs) in enumerate(zip(self.cs_regexes, self.configuration_sets)):
+            add = (j in cs_ids and not exclude) or (j not in cs_ids and exclude)
+            if add:
+                cs_regexes[regex] = cs.description
+                config_sets.append(cs)
+                print(j, cs.description)
+
+        cs_regexes['default'] = '\n'.join(
+            '{}: {}'.format(i, cs.description) for i, cs in enumerate(config_sets)
+        )
+
+        ds = Dataset('{} configuration sets: {}'.format(self.name, cs_ids))
+
+        ds.cs_regexes = cs_regexes
+        
+        ds.configurations = list(itertools.chain.from_iterable([
+            cs.configurations for cs in config_sets
+        ]))
+
+        sub_data = []
+
+        quickset = set(ds.configurations)
+
+        for data in tqdm(
+            self.data,
+            desc='Extracting configuration sets',
+            disable=not verbose
+            ):
+            add = True
+            for conf in data.configurations:
+                if conf not in quickset:
+                    add = False
+
+            if add:
+                sub_data.append(data)
+
+        ds.data = sub_data
+
+        return ds
+
+    
+    def print_config_sets(self):
+        for i, (regex, cs) in enumerate(zip(
+            self.cs_regexes, self.configuration_sets
+            )):
+
+            print(f'{i} (n_sites={cs.n_sites}, regex="{regex}"): {cs.description}')
+
+
     def filter(self, filter_type, filter_fxn):
         """
         A helper function for filtering on a Dataset. A filter is specified by
@@ -969,7 +1302,7 @@ class Dataset:
 
         filtered_dataset = dataset.filter(
             'configurations',
-            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+            lambda c: regex.search(c.info[ATOMS_NAME_FIELD])
         )
 
         # Filter based on maximum force component
@@ -1063,6 +1396,7 @@ class Dataset:
         template = """Dataset
     Name:\n\t{}\n
     Authors:\n\t{}\n
+    Links:\n\t{}\n
     Description:\n\t{}\n
     Methods:\n\t{}\n
     Units:\n\t{}\n
@@ -1078,6 +1412,7 @@ class Dataset:
         return template.format(
             self.name,
             '\n\t'.join(self.authors),
+            '\n\t'.join(self.links),
             self.description,
             '\n\t'.join(self.methods),
             '\n\t'.join('{}: {}'.format(k, self.property_map[k]['units']) for k in self.property_map),
