@@ -3,14 +3,15 @@ import unittest
 import numpy as np
 from ase import Atoms
 
-from core import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
-from core.configuration import Configuration
-from core.dataset import Dataset
+from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
+from colabfit.tools.configuration import Configuration
+from colabfit.tools.dataset import Dataset
+
 
 class TestDatasetConstruction(unittest.TestCase):
     def test_from_html(self):
         # Just makes sure from_markdown doesn't throw an error
-        dataset = Dataset.from_markdown('tests/files/test.md')
+        dataset = Dataset.from_markdown('colabfit/tests/files/test.md')
 
     def test_config_setter(self):
         atoms = []
@@ -19,27 +20,27 @@ class TestDatasetConstruction(unittest.TestCase):
             atoms[-1].info[ATOMS_NAME_FIELD] = i
 
         dataset = Dataset(name='test')
-        dataset.configurations = [Configuration(at) for at in atoms]
+        dataset.configurations = [Configuration.from_ase(at) for at in atoms]
 
         self.assertEqual(
             ['0', '1', '2'],
-            [c.atoms.info[ATOMS_NAME_FIELD] for c in dataset.configurations]
+            [c.info[ATOMS_NAME_FIELD] for c in dataset.configurations]
         )
 
         del dataset.configurations[1]
 
         self.assertEqual(
             ['0', '2'],
-            [c.atoms.info[ATOMS_NAME_FIELD] for c in dataset.configurations]
+            [c.info[ATOMS_NAME_FIELD] for c in dataset.configurations]
         )
 
         new_atoms = Atoms()
         new_atoms.info[ATOMS_NAME_FIELD] = 4
-        dataset.configurations += [Configuration(new_atoms)]
+        dataset.configurations += [Configuration.from_ase(new_atoms)]
 
         self.assertEqual(
             ['0', '2', '4'],
-            [c.atoms.info[ATOMS_NAME_FIELD] for c in dataset.configurations]
+            [c.info[ATOMS_NAME_FIELD] for c in dataset.configurations]
         )
 
     def test_co_label_refresher(self):
@@ -49,35 +50,37 @@ class TestDatasetConstruction(unittest.TestCase):
         for ii in range(10):
             atoms.append(Atoms())
             atoms[-1].info[ATOMS_NAME_FIELD] = ii
-        dataset.configurations = [Configuration(at) for at in atoms]
+        dataset.configurations = [Configuration.from_ase(at) for at in atoms]
 
         dataset.co_label_regexes = {
             '[0-4]': {'0_to_4'},
             '[5-9]': {'5_to_9'},
         }
 
+        dataset.refresh_config_labels()
+
         # Make sure label refresh is working
         for ai, conf in enumerate(dataset.configurations):
-            self.assertEqual(conf.atoms.info[ATOMS_NAME_FIELD], f"{ai}")
+            self.assertEqual(conf.info[ATOMS_NAME_FIELD], f"{ai}")
             if ai < 5:
-                self.assertSetEqual(conf.atoms.info[ATOMS_LABELS_FIELD], {'0_to_4'})
+                self.assertSetEqual(conf.info[ATOMS_LABELS_FIELD], {'0_to_4'})
             elif ai >= 5:
-                self.assertSetEqual(conf.atoms.info[ATOMS_LABELS_FIELD], {'5_to_9'})
+                self.assertSetEqual(conf.info[ATOMS_LABELS_FIELD], {'5_to_9'})
 
 
         # Make sure that a new CO gets its labels updated
         new_atoms = Atoms()
         new_atoms.info[ATOMS_NAME_FIELD] = '4'
-        dataset.configurations += [Configuration(new_atoms)]
+        dataset.configurations += [Configuration.from_ase(new_atoms)]
 
         self.assertSetEqual(
-            dataset.configurations[-1].atoms.info[ATOMS_LABELS_FIELD], set()
+            dataset.configurations[-1].info[ATOMS_LABELS_FIELD], set()
         )
 
         dataset.refresh_config_labels()
 
         self.assertSetEqual(
-            dataset.configurations[-1].atoms.info[ATOMS_LABELS_FIELD], {'0_to_4'}
+            dataset.configurations[-1].info[ATOMS_LABELS_FIELD], {'0_to_4'}
         )
 
 
@@ -88,13 +91,13 @@ class TestDatasetConstruction(unittest.TestCase):
         for ii in range(10):
             atoms.append(Atoms())
             atoms[-1].info[ATOMS_NAME_FIELD] = ii
-        dataset.configurations = [Configuration(at)for at in atoms]
+        dataset.configurations = [Configuration.from_ase(at)for at in atoms]
 
         dataset.cs_regexes = {}
 
         for cs in dataset.configuration_sets:
             for conf in cs.configurations:
-                if int(conf.atoms.info[ATOMS_NAME_FIELD][-1]) < 5:
+                if int(conf.info[ATOMS_NAME_FIELD][-1]) < 5:
                     self.assertEqual(cs.description, 'Default configuration set')
                 else:
                     self.assertEqual(cs.description, 'Default configuration set')
@@ -107,17 +110,17 @@ class TestDatasetConstruction(unittest.TestCase):
 
         for cs in dataset.configuration_sets:
             for conf in cs.configurations:
-                if int(conf.atoms.info[ATOMS_NAME_FIELD][-1]) < 5:
+                if int(conf.info[ATOMS_NAME_FIELD][-1]) < 5:
                     self.assertEqual(cs.description, '0_to_4')
                 else:
                     self.assertEqual(cs.description, '5_to_9')
 
-        dataset.cs_regexes['[3-7]'] = '3_to_7'
-
+        dataset.resync()
         self.assertEqual(len(dataset.configuration_sets), 2)
 
-        dataset.refresh_config_sets()
+        dataset.cs_regexes['[3-7]'] = '3_to_7'
 
+        dataset.resync()
         self.assertEqual(len(dataset.configuration_sets), 3)
 
 
@@ -128,7 +131,7 @@ class TestDatasetConstruction(unittest.TestCase):
         for ii in range(10):
             atoms.append(Atoms())
             atoms[-1].info[ATOMS_NAME_FIELD] = ii
-        dataset.configurations = [Configuration(at)for at in atoms]
+        dataset.configurations = [Configuration.from_ase(at)for at in atoms]
 
         dataset.cs_regexes = {
             'default': 'default',
@@ -139,7 +142,7 @@ class TestDatasetConstruction(unittest.TestCase):
         # Ensure labels are initially empty
         for cs in dataset.configuration_sets:
             for conf in cs.configurations:
-                self.assertSetEqual(set(), conf.atoms.info[ATOMS_LABELS_FIELD])
+                self.assertSetEqual(set(), conf.info[ATOMS_LABELS_FIELD])
 
         # Make sure they're re-written correctly
         dataset.co_label_regexes = {
@@ -154,13 +157,13 @@ class TestDatasetConstruction(unittest.TestCase):
                 self.assertSetEqual({'5_to_9'}, set(cs.labels))
 
             for conf in cs.configurations:
-                if int(conf.atoms.info[ATOMS_NAME_FIELD][-1]) < 5:
+                if int(conf.info[ATOMS_NAME_FIELD][-1]) < 5:
                     self.assertSetEqual(
-                        {'0_to_4'}, conf.atoms.info[ATOMS_LABELS_FIELD]
+                        {'0_to_4'}, conf.info[ATOMS_LABELS_FIELD]
                     )
                 else:
                     self.assertSetEqual(
-                        {'5_to_9'}, conf.atoms.info[ATOMS_LABELS_FIELD]
+                        {'5_to_9'}, conf.info[ATOMS_LABELS_FIELD]
                     )
 
         # Make sure they're added to correctly
@@ -169,13 +172,13 @@ class TestDatasetConstruction(unittest.TestCase):
 
         for cs in dataset.configuration_sets:
             for conf in cs.configurations:
-                if int(conf.atoms.info[ATOMS_NAME_FIELD][-1]) < 5:
+                if int(conf.info[ATOMS_NAME_FIELD][-1]) < 5:
                     self.assertSetEqual(
-                        {'0_to_4', 'new_label'}, conf.atoms.info[ATOMS_LABELS_FIELD]
+                        {'0_to_4', 'new_label'}, conf.info[ATOMS_LABELS_FIELD]
                     )
                 else:
                     self.assertSetEqual(
-                        {'5_to_9', 'new_label'}, conf.atoms.info[ATOMS_LABELS_FIELD]
+                        {'5_to_9', 'new_label'}, conf.info[ATOMS_LABELS_FIELD]
                     )
 
         # And also removed properly
@@ -184,13 +187,13 @@ class TestDatasetConstruction(unittest.TestCase):
 
         for cs in dataset.configuration_sets:
             for conf in cs.configurations:
-                if int(conf.atoms.info[ATOMS_NAME_FIELD][-1]) < 5:
+                if int(conf.info[ATOMS_NAME_FIELD][-1]) < 5:
                     self.assertSetEqual(
-                        {'new_label'}, conf.atoms.info[ATOMS_LABELS_FIELD]
+                        {'new_label'}, conf.info[ATOMS_LABELS_FIELD]
                     )
                 else:
                     self.assertSetEqual(
-                        {'5_to_9', 'new_label'}, conf.atoms.info[ATOMS_LABELS_FIELD]
+                        {'5_to_9', 'new_label'}, conf.info[ATOMS_LABELS_FIELD]
                     )
 
 
@@ -207,14 +210,14 @@ class TestSetOperations(unittest.TestCase):
 
             images1[-1].info['energy'] = float(i)
 
-        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
         dataset1.parse_data()
 
         dataset2 = Dataset('test1')
-        dataset2.configurations = [Configuration(at) for at in images1[:3]]
+        dataset2.configurations = [Configuration.from_ase(at) for at in images1[:3]]
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
@@ -235,14 +238,14 @@ class TestSetOperations(unittest.TestCase):
 
             images1[-1].info['energy'] = float(i)
 
-        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
         dataset1.parse_data()
 
         dataset2 = Dataset('test1')
-        dataset2.configurations = [Configuration(at) for at in images1[:3]]
+        dataset2.configurations = [Configuration.from_ase(at) for at in images1[:3]]
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
@@ -263,7 +266,7 @@ class TestSetOperations(unittest.TestCase):
 
             images1[-1].info['energy'] = float(i)
 
-        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
@@ -279,7 +282,7 @@ class TestSetOperations(unittest.TestCase):
 
             images2[-1].info['energy'] = float(i) + 20
 
-        dataset2.configurations = [Configuration(at) for at in images2]
+        dataset2.configurations = [Configuration.from_ase(at) for at in images2]
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
@@ -300,7 +303,7 @@ class TestSetOperations(unittest.TestCase):
 
             images1[-1].info['energy'] = float(i)
 
-        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
@@ -316,7 +319,7 @@ class TestSetOperations(unittest.TestCase):
 
             images2[-1].info['energy'] = float(i) + 20
 
-        dataset2.configurations = [Configuration(at) for at in images2]
+        dataset2.configurations = [Configuration.from_ase(at) for at in images2]
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
@@ -350,7 +353,7 @@ class TestSetOperations(unittest.TestCase):
 
             images1[-1].info['energy'] = float(i)
 
-        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
@@ -366,7 +369,7 @@ class TestSetOperations(unittest.TestCase):
 
             images2[-1].info['energy'] = float(i) + 20
 
-        dataset2.configurations = [Configuration(at) for at in images2]
+        dataset2.configurations = [Configuration.from_ase(at) for at in images2]
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
@@ -394,7 +397,7 @@ class TestSetOperations(unittest.TestCase):
 
             images1[-1].info['energy'] = float(i)
 
-        dataset1.configurations = [Configuration(at) for at in images1]
+        dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
@@ -410,7 +413,7 @@ class TestSetOperations(unittest.TestCase):
 
             images2[-1].info['energy'] = float(i) + 20
 
-        dataset2.configurations = [Configuration(at) for at in images2]
+        dataset2.configurations = [Configuration.from_ase(at) for at in images2]
         dataset2.property_map = {
             'energy': {'field': 'energy', 'units': 'eV'}
         }
@@ -437,12 +440,12 @@ class TestFilter(unittest.TestCase):
             'energy': {'field': 'energy', 'units': 'eV'}
         }
 
-        dataset.configurations = [Configuration(at) for at in images]
+        dataset.configurations = [Configuration.from_ase(at) for at in images]
 
         regex = re.compile('test[0-3]')
         filtered = dataset.filter(
             'configurations',
-            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+            lambda c: regex.search(c.info[ATOMS_NAME_FIELD])
         )
 
         self.assertEqual(len(filtered.configurations), 4)
@@ -452,7 +455,7 @@ class TestFilter(unittest.TestCase):
         regex = re.compile('test[0-3]')
         filtered = dataset.filter(
             'configurations',
-            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+            lambda c: regex.search(c.info[ATOMS_NAME_FIELD])
         )
 
         self.assertEqual(len(filtered.configurations), 4)
@@ -461,7 +464,7 @@ class TestFilter(unittest.TestCase):
         regex = re.compile('.*')
         filtered = dataset.filter(
             'configurations',
-            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+            lambda c: regex.search(c.info[ATOMS_NAME_FIELD])
         )
 
         self.assertEqual(dataset, filtered)
@@ -482,20 +485,20 @@ class TestFilter(unittest.TestCase):
             'energy': {'field': 'energy', 'units': 'eV'}
         }
 
-        dataset.configurations = [Configuration(at) for at in images]
+        dataset.configurations = [Configuration.from_ase(at) for at in images]
 
         dataset.parse_data()
 
         regex = re.compile('test[0-2]')
         filtered1 = dataset.filter(
             'configurations',
-            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+            lambda c: regex.search(c.info[ATOMS_NAME_FIELD])
         )
 
         regex = re.compile('test[3-4]')
         filtered2 = dataset.filter(
             'configurations',
-            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+            lambda c: regex.search(c.info[ATOMS_NAME_FIELD])
         )
 
         parent = Dataset('parent')
@@ -506,11 +509,11 @@ class TestFilter(unittest.TestCase):
         regex = re.compile('test[2-3]')
         parent2 = parent.filter(
             'configurations',
-            lambda c: regex.search(c.atoms.info[ATOMS_NAME_FIELD])
+            lambda c: regex.search(c.info[ATOMS_NAME_FIELD])
         )
 
-        self.assertEqual(parent2.data[0].configurations[0].atoms.info[ATOMS_NAME_FIELD], 'test2')
-        self.assertEqual(parent2.data[1].configurations[0].atoms.info[ATOMS_NAME_FIELD], 'test3')
+        self.assertEqual(parent2.data[0].configurations[0].info[ATOMS_NAME_FIELD], 'test2')
+        self.assertEqual(parent2.data[1].configurations[0].info[ATOMS_NAME_FIELD], 'test3')
 
 
     def test_filter_on_data(self):
@@ -528,7 +531,7 @@ class TestFilter(unittest.TestCase):
             'energy': {'field': 'energy', 'units': 'eV'}
         }
 
-        dataset.configurations = [Configuration(at) for at in images]
+        dataset.configurations = [Configuration.from_ase(at) for at in images]
 
         dataset.parse_data()
 
@@ -555,7 +558,7 @@ class TestFilter(unittest.TestCase):
             'energy': {'field': 'energy', 'units': 'eV'}
         }
 
-        dataset.configurations = [Configuration(at) for at in images]
+        dataset.configurations = [Configuration.from_ase(at) for at in images]
 
         dataset.parse_data()
 
@@ -584,8 +587,8 @@ class TestFilter(unittest.TestCase):
         )
 
 
-        self.assertEqual(parent2.data[0].configurations[0].atoms.info[ATOMS_NAME_FIELD], 'test2')
-        self.assertEqual(parent2.data[1].configurations[0].atoms.info[ATOMS_NAME_FIELD], 'test3')
+        self.assertEqual(parent2.data[0].configurations[0].info[ATOMS_NAME_FIELD], 'test2')
+        self.assertEqual(parent2.data[1].configurations[0].info[ATOMS_NAME_FIELD], 'test3')
 
 
     def test_multi_layer_parent(self):
@@ -603,7 +606,7 @@ class TestFilter(unittest.TestCase):
             'energy': {'field': 'energy', 'units': 'eV'}
         }
 
-        dataset.configurations = [Configuration(at) for at in images]
+        dataset.configurations = [Configuration.from_ase(at) for at in images]
 
         dataset.parse_data()
 

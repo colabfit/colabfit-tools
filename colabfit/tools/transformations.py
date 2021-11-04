@@ -1,5 +1,13 @@
 import numpy as np
 
+__all__ = [
+    'BaseTransform',
+    'AddDivide',
+    'PerAtomEnergies',
+    'ReshapeForces',
+    'Sequential'
+]
+
 
 class BaseTransform:
     """
@@ -28,7 +36,7 @@ class PerAtomEnergies(BaseTransform):
     """Divides the energy by the number of atoms"""
     def __init__(self):
         def wrapper(data, configuration=None):
-            return data/len(configuration.atoms)
+            return data/len(configuration)
 
         super(PerAtomEnergies, self).__init__(wrapper)
 

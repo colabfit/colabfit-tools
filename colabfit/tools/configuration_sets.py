@@ -1,7 +1,7 @@
 import itertools
 import numpy as np
 
-from core import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
+from colabfit import ATOMS_LABELS_FIELD
 
 
 class ConfigurationSet:
@@ -56,14 +56,14 @@ class ConfigurationSet:
         self.n_configurations =  len(self.configurations)
 
         # for conf in self.configurations[:3]:
-        #     print(self.description, conf.atoms.info[ATOMS_LABELS_FIELD])
+        #     print(self.description, conf.info[ATOMS_LABELS_FIELD])
 
         self.labels = sorted(list(set(itertools.chain.from_iterable([
-            conf.atoms.info[ATOMS_LABELS_FIELD] for conf in self.configurations
+            conf.info[ATOMS_LABELS_FIELD] for conf in self.configurations
         ]))))
 
         atoms_elements = [
-            sorted(list(set(conf.atoms.get_chemical_symbols())))
+            sorted(list(set(conf.get_chemical_symbols())))
             for conf in self.configurations
         ]
 
@@ -81,13 +81,13 @@ class ConfigurationSet:
 
         for i, conf in enumerate(self.configurations):
 
-            natoms = len(conf.atoms)
+            natoms = len(conf)
 
-            for e in set(conf.atoms.get_chemical_symbols()):
-                er = conf.atoms.get_chemical_symbols().count(e)
+            for e in set(conf.get_chemical_symbols()):
+                er = conf.get_chemical_symbols().count(e)
                 elements_ratios[i, self.elements.index(e)] = er
 
-            for l in conf.atoms.info[ATOMS_LABELS_FIELD]:
+            for l in conf.info[ATOMS_LABELS_FIELD]:
                 labels_counts[self.labels.index(l)] += 1
 
             self.n_sites += natoms
