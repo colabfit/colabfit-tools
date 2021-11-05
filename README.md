@@ -120,8 +120,7 @@ dataset.apply_transformations({
         SubtractDivide(sub=reference_energy, div=1)
     ),
     'stress': ConvertToStress(),
-}
-)
+})
 ```
 
 # Example data
