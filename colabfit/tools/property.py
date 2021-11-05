@@ -176,7 +176,7 @@ class Property(dict):
     @classmethod
     def EFS(
         cls, conf, property_map, settings=None, instance_id=1,
-        transformations=None, convert_units=False
+        convert_units=False
         ):
         """
         Constructs a property for storing energy/forces/stress data of an
@@ -193,9 +193,6 @@ class Property(dict):
             - 'forces' instead of 'unrelaxed-potential-forces'
             - 'stress' instead of 'unrelaxed-cauchy-stress'
         """
-
-        if transformations is None:
-            transformations = {}
 
         edn = kim_edn.loads(kim_property_create(
             instance_id=instance_id, property_name=EFS_PROPERTY_NAME
@@ -218,19 +215,9 @@ class Property(dict):
             if val['field'] in conf.info:
                 data = conf.info[val['field']]
 
-                if key in transformations:
-                    data = transformations[key](
-                        data, conf
-                    )
-
                 conf.info[val['field']] = data
             elif val['field'] in conf.arrays:
                 data = conf.arrays[val['field']]
-
-                if key in transformations:
-                    data = transformations[key](
-                        data, conf
-                    )
 
                 conf.arrays[val['field']] = data
             else:
@@ -372,7 +359,7 @@ class Property(dict):
     def __neq__(self, other):
         return not self.__eq__(other)
 
-    
+
     def __getitem__(self, k):
         if k not in self.edn:
             warnings.warn(

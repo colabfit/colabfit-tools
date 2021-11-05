@@ -16,10 +16,6 @@ from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConvert
 from colabfit.tools.property import Property
 from colabfit.tools.property_settings import PropertySettings
 
-# import core.transformations
-# _available_tforms = dict(
-#     inspect.getmembers(core.transformations, inspect.isclass)
-# )
 
 __all__ = [
     'Dataset',
@@ -52,11 +48,6 @@ class Dataset:
 
         data (list):
             A list of Property objects OR a list of Dataset objects.
-
-        transformations (dict):
-            A dictionary where the kye is the name of a property field, and the
-            value is a Transformation object. Used to apply transformations to
-            raw data when `parse_data()` is called.
 
         configuration_sets (list):
             List of ConfigurationSet objects defining groups of configurations
@@ -93,7 +84,6 @@ class Dataset:
         description='',
         configurations=None,
         data=None,
-        transformations=None,
         property_map=None,
         co_label_regexes=None,
         cs_regexes=None,
@@ -116,8 +106,6 @@ class Dataset:
         self.configurations     = configurations
         self.data               = data
 
-        if transformations is None: self.transformations = {}
-
         if property_map is None: property_map = {}
         self.property_map = property_map
 
@@ -131,7 +119,9 @@ class Dataset:
 
         self.co_label_regexes   = co_label_regexes
 
-        self.resync()
+        if self.configurations or self.data:
+            self.resync()
+
 
     def check_if_is_parent_dataset(self):
         self.is_parent_dataset = False
@@ -415,9 +405,7 @@ class Dataset:
         cls, html_file_path, convert_units=False, verbose=False
         ):
         """
-        Loads a Dataset from a markdown file. Note that this function requires
-        that that any necessary transformations of the raw data have already
-        been applied (aside from unit conversions).
+        Loads a Dataset from a markdown file.
         """
         base_path = os.path.split(html_file_path)[0]
 
@@ -478,17 +466,6 @@ class Dataset:
                 'units': prop[2],
             }
 
-        transformations = {}
-        # # Extract transformations
-        # for prop in parser.data['Properties'][1:]:
-        #     if prop[3] in _available_tforms:
-        #         transformations[prop[0]] = _available_tforms[prop[3]]
-        #     else:
-        #         raise RuntimeError(
-        #             "Invalid transformation specified: {}".format(prop[3])
-        #         )
-
-        dataset.transformations = transformations
         dataset.property_map = property_map
 
         dataset.parse_data(convert_units=convert_units, verbose=verbose)
@@ -755,6 +732,36 @@ class Dataset:
                 del conf.arrays[old_name]
 
 
+    def apply_transformations(self, tform_dict):
+        """
+        Args:
+            tform_dict (dict):
+                key = property field to apply transformations to
+                value = Transformation object
+        """
+
+        if self.is_parent_dataset:
+            for data in self.data:
+                data.apply_transformations(tform_dict)
+        else:
+            for data in self.data:
+                for key in tform_dict:
+                    if key == 'energy':
+                        edn_key = 'unrelaxed-potential-energy'
+                    elif key == 'forces':
+                        edn_key = 'unrelaxed-potential-forces'
+                    elif key == 'stress':
+                        edn_key = 'unrelaxed-cauchy-stress'
+                    else:
+                        edn_key = key
+
+                    if edn_key in data.edn:
+                        data.edn[edn_key]['source-value'] = tform_dict[key](
+                            data.edn[edn_key]['source-value'],
+                            data.configurations
+                        )
+
+
     def parse_data(self, convert_units=False, verbose=False):
         if len(self.property_map) == 0:
             raise RuntimeError(
@@ -791,7 +798,6 @@ class Dataset:
             try:
                 self.data.append(Property.EFS(
                     conf, map_copy, instance_id=ci+1,
-                    transformations=self.transformations,
                     convert_units=convert_units
                 ))
             except Exception as e:
@@ -1007,6 +1013,7 @@ class Dataset:
                     description=default_cs_description
                 ))
             else:
+
                 no_default_configs = 'No configurations were added to the default '\
                     'CS. "default" was removed from the regexes.'
                 warnings.warn(no_default_configs)

@@ -19,24 +19,24 @@ class BaseTransform:
     def __init__(self, tform):
         self._tform = tform
 
-    def __call__(self, data, configuration=None):
-        return self._tform(data, configuration)
+    def __call__(self, data, configurations):
+        return self._tform(data, configurations)
 
 
-class AddDivide(BaseTransform):
+class SubtractDivide(BaseTransform):
     """Adds a scalar to the data, then divides by a scalar"""
-    def __init__(self, add, div):
-        super(AddDivide, self).__init__(lambda x, c: (x+add)/div)
+    def __init__(self, sub, div):
+        super(SubtractDivide, self).__init__(lambda x, c: (x-sub)/div)
 
     def __str__(self):
-        return 'AddDivide'
+        return 'SubtractDivide'
 
-        
+
 class PerAtomEnergies(BaseTransform):
     """Divides the energy by the number of atoms"""
     def __init__(self):
-        def wrapper(data, configuration=None):
-            return data/len(configuration)
+        def wrapper(data, configurations=None):
+            return data/len(configurations[0])
 
         super(PerAtomEnergies, self).__init__(wrapper)
 
@@ -47,7 +47,7 @@ class PerAtomEnergies(BaseTransform):
 class ReshapeForces(BaseTransform):
     """Reshapes forces into an (N, 3) matrix"""
     def __init__(self):
-        def reshape(data, configuration=None):
+        def reshape(data, configurations=None):
             data = np.array(data)
             n = np.prod(data.shape)//3
 
@@ -61,9 +61,9 @@ class ReshapeForces(BaseTransform):
 
 class Sequential(BaseTransform):
     def __init__(self, *args):
-        def wrapper(data, configuration=None):
+        def wrapper(data, configurations=None):
             for f in args:
-                data = f(data, configuration)
+                data = f(data, configurations)
             return data
 
         super(Sequential, self).__init__(wrapper)
