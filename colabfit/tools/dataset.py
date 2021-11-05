@@ -571,9 +571,7 @@ class Dataset:
             ))
 
             if n_duplicates:
-                warnings.warn(
-                    f"Removed {n_duplicates} duplicat data entries."
-                )
+                warnings.warn(f"Removed {n_duplicates} duplicate data entries")
 
             return n_duplicates
 
@@ -629,12 +627,7 @@ class Dataset:
 
                 # Update data and configurations, removing duplicates
                 if clean:
-                    nd = self.clean()
-
-                    if nd:
-                        warnings.warn(
-                            f"Detected {nd} duplicate entries when merging"
-                        )
+                    self.clean()
 
                 # Modify regex maps to avoid collisions
                 new_cs_regexes = {}
@@ -690,32 +683,53 @@ class Dataset:
 
             else:
                 # Other is a parent dataset
-                pass
+                raise RuntimeError(
+                    "Incoming dataset is a nested dataset, but current is not."
+                )
+        else:  # Self is parent
+            if not other.is_parent_dataset:
+                raise RuntimeError(
+                    "Current dataset is a nested dataset, but incoming is not."
+                )
+            else:
+                # Merging two parent datasets
+                raise NotImplementedError(
+                    "Merging two nested datasets is not available yet."
+                )
 
 
-    # def flatten(self):
-    #     """
-    #     Pseudocode:
-    #         - convert everything to the same units
-    #         - merge authors/links
-    #         - warn if overlap (maybe this should be done in attach()?)
-    #             - tell me which dataset has an overlap with which other (disjoint)
-    #             - optionally merge subset datasets
-    #         - check if conflicting CO labels, CS regexes, or PS regexes
-    #     """
-    #     self.check_if_is_parent_dataset()
+    def flatten(self):
+        """
+        Pseudocode:
+            - convert everything to the same units
+            - merge authors/links
+            - warn if overlap (maybe this should be done in attach()?)
+                - tell me which dataset has an overlap with which other (disjoint)
+                - optionally merge subset datasets
+            - check if conflicting CO labels, CS regexes, or PS regexes
+        """
+        self.check_if_is_parent_dataset()
 
-    #     if not self.is_parent_dataset:
-    #         raise RuntimeError(
-    #             'Cannot flatten. Dataset has no attached Datasets.'
-    #         )
+        if not self.is_parent_dataset:
+            raise RuntimeError(
+                'Cannot flatten. Dataset has no attached Datasets.'
+            )
 
-    #     self.resync()
+        self.resync()
 
-    #     for data in self.data:
-    #         self.authors    += data.authors
-    #         self.links      += data.links
-    #         self.property_settings +=
+        flat = Dataset(self.name)
+
+        flat.authors        = self.authors
+        flat.links          = self.links
+        flat.description    = self.description
+
+        for data in self.data:
+            flat.merge(data, clean=True)
+
+        flat.clean()
+
+        return flat
+
 
     def add_configurations(self, configurations):
         n = len(self.configurations)
@@ -1006,9 +1020,24 @@ class Dataset:
                 self.configuration_sets += data.configuration_sets
 
 
-    def attach_dataset(self, dataset):
-        self.data.append(dataset)
-        self.configurations += dataset.configurations
+    def attach_dataset(self, dataset, supersede_existing=False):
+        """
+        Args:
+            dataset (Dataset):
+                The new dataset to be added
+
+            supersede_existing (bool):
+                If True, any new data that is being added will be used to
+                overwrite existing duplicate data when calling clean() or
+                merge(). This is important for preserving Property metadata.
+                Default is False.
+        """
+        if supersede_existing:
+            self.data = [dataset] + self.data
+            self.configurations = dataset.configurations + self.configurations
+        else:
+            self.data.append(dataset)
+            self.configurations += dataset.configurations
 
 
     def aggregate_metadata(self, verbose=False):
@@ -1244,7 +1273,6 @@ class Dataset:
             if add:
                 cs_regexes[regex] = cs.description
                 config_sets.append(cs)
-                print(j, cs.description)
 
         cs_regexes['default'] = '\n'.join(
             '{}: {}'.format(i, cs.description) for i, cs in enumerate(config_sets)
@@ -1253,7 +1281,7 @@ class Dataset:
         ds = Dataset('{} configuration sets: {}'.format(self.name, cs_ids))
 
         ds.cs_regexes = cs_regexes
-        
+
         ds.configurations = list(itertools.chain.from_iterable([
             cs.configurations for cs in config_sets
         ]))
@@ -1279,7 +1307,7 @@ class Dataset:
 
         return ds
 
-    
+
     def print_config_sets(self):
         for i, (regex, cs) in enumerate(zip(
             self.cs_regexes, self.configuration_sets
