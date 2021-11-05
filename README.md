@@ -99,11 +99,11 @@ A Dataset is a pool of configurations and properties, where the configurations a
 Datasets can be easily written/read to/from Markdown files using `Dataset.to_markdown()` and `Dataset.from_markdown()`. This can be a useful way of organizing a Dataset without having to construct it with the programming interface. A description of how to design a proper Markdown file can be found in [examples/example.md](examples/example.md).
 
 ## Data transformations
-Data transformations can be specified by supplying [Transformation](colabfit/transformations.py) objects, which will be applied before calling
-`parse_data()`.
+Data transformations can be applied by supplying
+[Transformation](colabfit/transformations.py) objects to `dataset.apply_transformations()`.
 
 ```python
-from colabfit.tools import BaseTransform, Sequential, AddDivide, PerAtomEnergies
+from colabfit.tools import BaseTransform, Sequential, SubtractDivide, PerAtomEnergies
 
 class ConvertToStress(BaseTransform):
     def __init__(self):
@@ -114,15 +114,14 @@ class ConvertToStress(BaseTransform):
 reference_energy = -3.14159  # eV/atom
 
 # Keys should match those used in dataset.property_map
-dataset.transformations = {
+dataset.apply_transformations({
     'energy': Sequential(
         PerAtomEnergies(),
-        AddDivide(add=reference_energy, div=1)
+        SubtractDivide(sub=reference_energy, div=1)
     ),
     'stress': ConvertToStress(),
 }
-
-dataset.parse_data(convert_units=False)
+)
 ```
 
 # Example data
