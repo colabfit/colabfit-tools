@@ -4,8 +4,11 @@ import shutil
 import markdown
 import warnings
 import itertools
+import numpy as np
 from tqdm import tqdm
 from bson import ObjectId
+from copy import deepcopy
+import matplotlib.pyplot as plt
 from html.parser import HTMLParser
 
 from ase.io import write
@@ -600,7 +603,8 @@ class Dataset:
                         other.name, conf.info[ATOMS_NAME_FIELD]
                     )
 
-                self.data += other.data
+                self.data += deepcopy(other.data)
+                self.configurations += deepcopy(other.configurations)
 
                 # Update data and configurations, removing duplicates
                 if clean:
@@ -633,7 +637,7 @@ class Dataset:
                 for regex, labels in other.co_label_regexes.items():
                     if regex[0] == '^': regex = regex[1:]
 
-                    new_co_label_regexes[f'^{other.name}_.*{regex}'] = labels
+                    new_co_label_regexes[f'^{other.name}_.*{regex}'] = deepcopy(labels)
 
                 self.co_label_regexes = new_co_label_regexes
 
@@ -647,15 +651,15 @@ class Dataset:
                 for regex, pso in other.ps_regexes.items():
                     if regex[0] == '^': regex = regex[1:]
 
-                    new_ps_regexes[f'^{other.name}_.*{regex}'] = pso
+                    new_ps_regexes[f'^{other.name}_.*{regex}'] = deepcopy(pso)
 
                 self.ps_regexes = new_ps_regexes
 
                 # self.resync()
 
                 self.name           = f'{self.name}_{other.name}'
-                self.authors        = list(set(self.authors + other.authors))
-                self.links          = list(set(self.links + other.links))
+                self.authors        = deepcopy(list(set(self.authors + other.authors)))
+                self.links          = deepcopy(list(set(self.links + other.links)))
                 self.description    = f'Merged {self.name} and {other.name}'
 
             else:
@@ -696,8 +700,8 @@ class Dataset:
 
         flat = Dataset(self.name)
 
-        flat.authors        = self.authors
-        flat.links          = self.links
+        flat.authors        = deepcopy(self.authors)
+        flat.links          = deepcopy(self.links)
         flat.description    = self.description
 
         for data in self.data:
@@ -1254,7 +1258,72 @@ class Dataset:
                 data.get_data(property_field) for data in self.data
             ))
         else:
-            return [d[property_field] for d in self.data]
+            return [
+                np.atleast_1d(d[property_field]['source-value']) for d in self.data
+            ]
+
+
+    def get_statistics(self, property_field):
+        """
+        Builds a `data` array by extracting the values of `property_field' for
+        each entry in the dataset, wrapping them in a numpy array, and
+        concatenating them all together. Then returns statistics on the
+        resultant array.
+
+        Returns:
+            results (dict):
+                {
+                    'average': np.average(data),
+                    'std': np.std(data),
+                    'min': np.min(data),
+                    'max': np.max(data),
+                    'average_abs': np.average(np.abs(data))
+                }
+        """
+
+        data = np.concatenate(self.get_data(property_field))
+
+        return {
+            'average': np.average(data),
+            'std': np.std(data),
+            'min': np.min(data),
+            'max': np.max(data),
+            'average_abs': np.average(np.abs(data)),
+        }
+
+
+    def plot_histograms(self, fields, yscale=None):
+        """
+        Generates histograms of the given fields.
+        """
+
+        nfields = len(fields)
+
+        if yscale is None:
+            yscale = ['linear']*nfields
+
+        nrows = max(1, nfields//3)
+        ncols = min(3, nfields%3)
+
+        fig, ax = plt.subplots(nrows, ncols, figsize=(6*ncols, 4*nrows))
+
+        for i, (prop, ys) in enumerate(zip(fields, yscale)):
+            data = np.concatenate(self.get_data(prop)).ravel()
+
+            c = i % 3
+            r = i // 3
+
+            if nrows > 1:
+                ax[r][c].hist(data, bins=100)
+                ax[r][c].set_title(prop)
+                ax[r][c].set_yscale(ys)
+            else:
+                ax[c].hist(data, bins=100)
+                ax[c].set_title(prop)
+                ax[c].set_yscale(ys)
+
+        # return fig
+
 
     def dataset_from_config_sets(self, cs_ids, exclude=False, verbose=False):
         if isinstance(cs_ids, int):
@@ -1289,9 +1358,9 @@ class Dataset:
 
         ds.cs_regexes = cs_regexes
 
-        ds.configurations = list(itertools.chain.from_iterable([
+        ds.configurations = deepcopy(list(itertools.chain.from_iterable([
             cs.configurations for cs in config_sets
-        ]))
+        ])))
 
         sub_data = []
 
@@ -1310,7 +1379,7 @@ class Dataset:
             if add:
                 sub_data.append(data)
 
-        ds.data = sub_data
+        ds.data = deepcopy(sub_data)
 
         return ds
 
@@ -1345,7 +1414,7 @@ class Dataset:
 
         filtered_dataset = dataset.filter(
             'data',
-            lambda p: np.max(p.edn['unrelaxed-potential-forces']['source-value']) < 1.0
+            lambda p: np.max(np.abs(p.edn['unrelaxed-potential-forces']['source-value'])) < 1.0
         )
         ```
 
@@ -1414,13 +1483,13 @@ class Dataset:
                             data.append(d)
                             configurations.add(c)
 
-        ds.data = data
-        ds.configurations = list(configurations)
+        ds.data = deepcopy(data)
+        ds.configurations = deepcopy(list(configurations))
 
-        ds.property_map = self.property_map
-        ds.cs_regexes = self.cs_regexes
-        ds.co_label_regexes = self.co_label_regexes
-        ds.ps_regexes = self.ps_regexes
+        ds.property_map = deepcopy(self.property_map)
+        ds.cs_regexes = deepcopy(self.cs_regexes)
+        ds.co_label_regexes = deepcopy(self.co_label_regexes)
+        ds.ps_regexes = deepcopy(self.ps_regexes)
 
         ds.resync()
 
