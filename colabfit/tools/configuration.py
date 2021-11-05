@@ -18,10 +18,17 @@ class Configuration(Atoms):
         super().__init__(*args, **kwargs)
 
         self.info[ATOMS_ID_FIELD] = ObjectId()
-        self.info[ATOMS_NAME_FIELD] = str(self.info[ATOMS_NAME_FIELD])
 
-        if labels is None:
-            labels = set()
+        if ATOMS_NAME_FIELD in self.info:
+            self.info[ATOMS_NAME_FIELD] = str(self.info[ATOMS_NAME_FIELD])
+        else:
+            self.info[ATOMS_NAME_FIELD] = ""
+
+        if ATOMS_LABELS_FIELD not in self.info:
+            if labels is None:
+                labels = set()
+        else:
+            labels = set(self.info[ATOMS_LABELS_FIELD])
 
         self.info[ATOMS_LABELS_FIELD] = set(labels)
 
@@ -39,6 +46,7 @@ class Configuration(Atoms):
             - sort atoms by X, Y, then Z positions
         """
         raise NotImplementedError()
+
 
     def __hash__(self):
         return hash((
