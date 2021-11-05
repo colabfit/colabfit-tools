@@ -317,14 +317,15 @@ class FolderConverter(BaseConverter):
 
             if not isinstance(new, list):
                 new = [new]
-            
+
             for atoms in new:
 
                 a_elems = set(atoms.get_chemical_symbols())
                 if not a_elems.issubset(elements):
                     raise RuntimeError(
-                        f"Image {ai} elements {a_elems} is not a subset of "\
-                            "{elements}."
+                        "Image {} elements {} is not a subset of {}.".format(
+                            ai, a_elems, elements
+                        )
                     )
 
                 if name_field is None:
