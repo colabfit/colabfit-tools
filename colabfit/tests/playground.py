@@ -1,7 +1,4 @@
-import sys
-sys.path.append('.')
-
-from tools.dataset import Dataset
+from colabfit.tools import Dataset
 
 ds1 = Dataset.from_markdown(
     '/home/josh/colabfit/data/formatted/V_PRM2019/README.md',
@@ -9,51 +6,57 @@ ds1 = Dataset.from_markdown(
     verbose=True
 )
 
-# ds2 = Dataset.from_markdown(
-#     '/home/josh/colabfit/data/formatted/V_PRM2019/README.md',
-#     convert_units=True,
-#     verbose=True
-# )
+ds2 = Dataset.from_markdown(
+    '/home/josh/colabfit/data/formatted/V_PRM2019/README.md',
+    convert_units=True,
+    verbose=True
+)
 
 # ds1.merge(ds2)
 # n_dup = ds1.clean()
 
-print(ds1.configurations[0])
+ds = Dataset('nested')
+ds.attach_dataset(ds1)
+ds.attach_dataset(ds2)
 
-names = [
-    'InP_JPCA2020',
-    'MoNbTaVW_PRB2021',
-    'Mo_PRM2019',
-    'Nb_PRM2019',
-    'Ta_Linear_JCP2015',
-    'Ta_PRM2019',
-    'V_PRM2019',
-    'WBe_PRB2019',
-    'W_PRB2019',
-    'TiZrHfTa_APS2021',
-    'CuPd_CMS2019',
-    'CoNbV_CMS2019',
-    'AlNiTi_CMS2019',
-]
+ds = ds.flatten()
 
-master = Dataset('master')
+print(len(ds.data))
 
-for i, name in enumerate(names):
-    print('Merging', name)
+# names = [
+#     'InP_JPCA2020',
+#     'MoNbTaVW_PRB2021',
+#     'Mo_PRM2019',
+#     'Nb_PRM2019',
+#     'Ta_Linear_JCP2015',
+#     'Ta_PRM2019',
+#     'V_PRM2019',
+#     'WBe_PRB2019',
+#     'W_PRB2019',
+#     'TiZrHfTa_APS2021',
+#     'CuPd_CMS2019',
+#     'CoNbV_CMS2019',
+#     'AlNiTi_CMS2019',
+# ]
 
-    master.merge(
-        Dataset.from_markdown(
-            f'/home/josh/colabfit/data/formatted/{name}/README.md',
-            convert_units=True,
-            verbose=True
-        ),
-        clean=False
-    )
+# master = Dataset('master')
 
-n_dup = master.clean()
+# for i, name in enumerate(names):
+#     print('Merging', name)
 
-print(f'Discovered {n_dup} duplicate data entries')
+#     master.merge(
+#         Dataset.from_markdown(
+#             f'/home/josh/colabfit/data/formatted/{name}/README.md',
+#             convert_units=True,
+#             verbose=True
+#         ),
+#         clean=False
+#     )
 
-master.resync()
+# n_dup = master.clean()
 
-# print(master)
+# print(f'Discovered {n_dup} duplicate data entries')
+
+# master.resync()
+
+# # print(master)

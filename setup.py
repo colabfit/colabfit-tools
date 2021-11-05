@@ -11,13 +11,6 @@ setup(
     url = "http://colabfit.org",
     packages=[
         'colabfit.tools',
-        # 'colabfit.tools.configuration_sets',
-        # 'colabfit.tools.configuration',
-        # 'colabfit.tools.converters',
-        # 'colabfit.tools.dataset',
-        # 'colabfit.tools.property_settings',
-        # 'colabfit.tools.property',
-        # 'colabfit.tools.transformations',
     ],
     classifiers=[
         "Development Status :: 3 - Alpha",
