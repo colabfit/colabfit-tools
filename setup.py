@@ -29,5 +29,6 @@ setup(
         'kim_property',
         'numpy',
         'tqdm',
+        'bson',
     ],
 )
