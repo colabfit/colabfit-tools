@@ -71,7 +71,7 @@ dataset.co_label_regexes = {
 [ConfigurationSet](colabfit/tools/configuration_sets.py) can be used to create groups of configurations for organizational purposes. This can be done in a similar manner to how configuration labels are applied, but using the `cs_regexes` dictionary. Note that a configuration may exist in multiple sets at the same time. Note that a `default` CS must be provided.
 ```python
 dataset.cs_regexes = {
-    'default': 'The default CS to use for configurations that don't match anything else',
+    'default': "The default CS to use for configurations that don't match anything else",
     'H2O': 'AIMD snapshots of liquid water at 100K',
 }
 ```
