@@ -124,5 +124,27 @@ dataset.apply_transformations({
 )
 ```
 
+## Exploring the data
+
+Use `Dataset.get_data()` to obtain a list of the given property field where each
+element has been wrapped in a numpy array.
+
+```
+energies = np.concatenate(dataset.get_data('energy'))
+forces   = np.concatenate(dataset.get_data('forces')).ravel()
+```
+
+Basic statistics can be obtained using `dataset.get_statistics()`.
+
+```
+# Returns: {'average': ..., 'std': ..., 'min': ..., 'max':, ..., 'average_abs': ...}
+dataset.get_statistics('energy')
+```
+
+Visualize property distributions using `dataset.plot_histograms()`.
+```
+dataset.plot_histograms(['energy', 'forces'], yscale=['linear', 'log'])
+```
+
 # Example data
 Example datasets and markdown files can be found at [this (currently private) github repository](https://github.com/jvita/colabfit/tree/tools/data/formatted). To request access, talk to Josh.
