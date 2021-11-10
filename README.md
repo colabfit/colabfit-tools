@@ -12,7 +12,7 @@ Tools for constructing and manipulating datasets for fitting interatomic potenti
 Import the basic classes and functions.
 
 ```python
-from colabfit.tools import Dataset, load_data
+from colabfit.tools.dataset import Dataset, load_data
 ```
 
 Initialize the Dataset and add basic metadata.
@@ -71,7 +71,7 @@ dataset.co_label_regexes = {
 [ConfigurationSet](colabfit/tools/configuration_sets.py) can be used to create groups of configurations for organizational purposes. This can be done in a similar manner to how configuration labels are applied, but using the `cs_regexes` dictionary. Note that a configuration may exist in multiple sets at the same time. Note that a `default` CS must be provided.
 ```python
 dataset.cs_regexes = {
-    'default': 'The default CS to use for configurations that don't match anything else',
+    'default': "The default CS to use for configurations that don't match anything else",
     'H2O': 'AIMD snapshots of liquid water at 100K',
 }
 ```
@@ -79,7 +79,7 @@ dataset.cs_regexes = {
 ## Providing calculation metadata
 Metadata for computing properties can be provided by constructing a [PropertySettings](colabfit/tools/property_settings.py) object and matching it to a property by regex matching on the property's linked configurations.
 ```python
-from colabfit.tools import PropertySettings
+from colabfit.tools.property_settings import PropertySettings
 
 dataset.ps_regexes = {
     '.*':
@@ -103,7 +103,7 @@ Data transformations can be applied by supplying
 [Transformation](colabfit/transformations.py) objects to `dataset.apply_transformations()`.
 
 ```python
-from colabfit.tools import BaseTransform, Sequential, SubtractDivide, PerAtomEnergies
+from colabfit.tools.transformations import BaseTransform, Sequential, SubtractDivide, PerAtomEnergies
 
 class ConvertToStress(BaseTransform):
     def __init__(self):
@@ -120,8 +120,7 @@ dataset.apply_transformations({
         SubtractDivide(sub=reference_energy, div=1)
     ),
     'stress': ConvertToStress(),
-}
-)
+})
 ```
 
 ## Exploring the data
