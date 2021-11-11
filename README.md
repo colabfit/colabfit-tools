@@ -100,7 +100,7 @@ Datasets can be easily written/read to/from Markdown files using `Dataset.to_mar
 
 ## Data transformations
 Data transformations can be applied by supplying
-[Transformation](colabfit/tools/transformations.py) objects to `dataset.apply_transformations()`.
+[Transformation](colabfit/tools/transformations.py) objects to `Dataset.apply_transformations()`.
 
 ```python
 from colabfit.tools.transformations import BaseTransform, Sequential, SubtractDivide, PerAtomEnergies
