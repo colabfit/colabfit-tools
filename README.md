@@ -48,7 +48,7 @@ Parse the properties by specifying a `property_map`, which is a special dictiona
 ```python
 dataset.property_map = {
     # ColabFit name: {'field': ASE field name, 'units': ASE units string}
-    'energy': {'field': 'energy', 'units': 'eV'}
+    'energy': {'field': 'energy', 'units': 'eV'},
     'forces': {'field': 'F',      'units': 'eV/Ang'}
 }
 
