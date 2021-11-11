@@ -779,8 +779,8 @@ class Dataset:
 
         if not efs:
             raise NotImplementedError(
-                "Loading from HTML for datasets that contain properties "\
-                    "other than 'energy', 'force', 'stress' is not implemented."
+                "Loading datasets that contain properties other than 'energy'"\
+                ", 'forces', or 'stress' is not implemented."
             )
 
         map_copy = {}
@@ -788,6 +788,8 @@ class Dataset:
             map_copy[key] = {}
             for key2 in self.property_map[key]:
                 map_copy[key][key2] = self.property_map[key][key2]
+
+        self.data = []
 
         for ci, conf in enumerate(tqdm(
             self.configurations,
