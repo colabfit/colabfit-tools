@@ -2,6 +2,7 @@ import json
 import warnings
 import itertools
 import numpy as np
+from copy import deepcopy
 
 import kim_edn
 from kim_property.instance import check_property_instances
@@ -17,11 +18,15 @@ KIM_PROPERTIES, PROPERTY_NAME_ERTY_ID, \
 
 available_kim_properties = get_properties()
 
-from colabfit import EFS_PROPERTY_NAME, UNITS, OPENKIM_PROPERTY_UNITS
+from colabfit import (
+    EFS_PROPERTY_NAME, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
+)
 
-# These are fields that are related to the geometry of the atomic structure, and
-# should be checked in the Configuration object, not here.
-ignored_fields = [
+# These are fields that are related to the geometry of the atomic structure
+# or the OpenKIM Property Definition and shouldn't be used for equality checks
+_ignored_fields = [
+    'property-id',
+    'instance-id',
     'a',
     'species',
     'unrelaxed-configuration-positions',
@@ -31,7 +36,6 @@ ignored_fields = [
 ]
 
 
-
 class Property(dict):
     """
     A Property is used to store the results of some kind of calculation or
@@ -39,8 +43,6 @@ class Property(dict):
     practice is for the Property to also point to one or more
     PropertySettings objects that fully define the conditions under which the
     Property was obtained.
-
-    A Property will be observed by zero to many Dataset objects.
 
     Attributes:
         edn (dict):
@@ -127,31 +129,12 @@ class Property(dict):
             fp_path=available_kim_properties
         )
 
-        # units_cleaned = {}
-        # for key, val in property_map.items():
-        #     if key == 'energy':
-        #         key = 'unrelaxed-potential-energy'
-        #     elif key == 'forces':
-        #         key = 'unrelaxed-potential-forces'
-        #     elif key == 'stress':
-        #         key = 'unrelaxed-cauchy-stress'
-
-        #     units_cleaned[key] = {}
-        #     units_cleaned[key] = val
-
         self.property_map = dict(property_map)
 
         # Delete any un-used properties from the property_map
         delkeys = []
         for key in self.property_map:
-            if key == 'energy':
-                edn_key = 'unrelaxed-potential-energy'
-            elif key == 'forces':
-                edn_key = 'unrelaxed-potential-forces'
-            elif key == 'stress':
-                edn_key = 'unrelaxed-cauchy-stress'
-            else:
-                edn_key = key
+            edn_key = EDN_KEY_MAP.get(key, key)
 
             if edn_key not in self.edn:
                 delkeys.append(key)
@@ -171,6 +154,28 @@ class Property(dict):
 
         # Add settings
         self.settings = settings
+
+    @property
+    def edn(self):
+        return self._edn
+
+
+    @edn.setter
+    def edn(self, edn):
+        self._edn = deepcopy(edn)
+
+        fields = []
+        for key in self._edn:
+            if key in _ignored_fields: continue
+
+            fields.append(EDN_KEY_MAP.get(key, key))
+
+        self._property_fields = fields
+
+
+    @property
+    def property_fields(self):
+        return self._property_fields
 
 
     @classmethod
@@ -275,14 +280,7 @@ class Property(dict):
         """
 
         for key, val in self.property_map.items():
-            if key == 'energy':
-                edn_key = 'unrelaxed-potential-energy'
-            elif key == 'forces':
-                edn_key = 'unrelaxed-potential-forces'
-            elif key == 'stress':
-                edn_key = 'unrelaxed-cauchy-stress'
-            else:
-                edn_key = key
+            edn_key = EDN_KEY_MAP.get(key, key)
 
             units = val['units']
 
@@ -349,7 +347,7 @@ class Property(dict):
                 return False
 
             # Compare value if it's not a field that should be ignored
-            if my_field not in ignored_fields:
+            if my_field not in _ignored_fields:
                 if my_val != other.edn[my_field]:
                     return False
 

@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+import random
 import markdown
 import warnings
 import itertools
@@ -13,7 +14,9 @@ from html.parser import HTMLParser
 
 from ase.io import write
 
-from colabfit import ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, OPENKIM_PROPERTY_UNITS
+from colabfit import (
+    ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, EDN_KEY_MAP, OPENKIM_PROPERTY_UNITS
+)
 from colabfit.tools.configuration_sets import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.property import Property
@@ -750,14 +753,7 @@ class Dataset:
         else:
             for data in self.data:
                 for key in tform_dict:
-                    if key == 'energy':
-                        edn_key = 'unrelaxed-potential-energy'
-                    elif key == 'forces':
-                        edn_key = 'unrelaxed-potential-forces'
-                    elif key == 'stress':
-                        edn_key = 'unrelaxed-cauchy-stress'
-                    else:
-                        edn_key = key
+                    edn_key = EDN_KEY_MAP.get(key, key)
 
                     if edn_key in data.edn:
                         data.edn[edn_key]['source-value'] = tform_dict[key](
@@ -1057,7 +1053,7 @@ class Dataset:
 
         elements = {}
         self.chemical_systems = []
-        self.property_types = []
+        self.property_fields = []
 
         self.n_configurations = 0
         self.n_sites = 0
@@ -1112,7 +1108,6 @@ class Dataset:
         self.co_labels_counts = [int(co_labels[l]) for l in self.co_labels]
 
         self.methods = []
-        self.property_types = []
         self.n_properties = 0
         prop_counts = {}
         pso_labels = {}
@@ -1122,10 +1117,10 @@ class Dataset:
             ):
             if self.is_parent_dataset:
                 self.methods += data.methods
-                self.property_types += data.property_types
+                self.property_fields += data.property_fields
                 self.n_properties += data.n_properties
 
-                for pname, pc in zip(data.property_types, data.property_counts):
+                for pname, pc in zip(data.property_fields, data.property_counts):
                     if pname not in prop_counts:
                         prop_counts[pname] = pc
                     else:
@@ -1137,14 +1132,15 @@ class Dataset:
                     else:
                         pso_labels[l] += lc
             else:
-                self.property_types.append(data.edn['property-id'])
+                # self.property_types.append(data.edn['property-id'])
                 self.n_properties += 1
 
-                if data.edn['property-id'] not in prop_counts:
-                    prop_counts[data.edn['property-id']] = 1
-                else:
-                    prop_counts[data.edn['property-id']] += 1
-
+                for field in data.property_fields:
+                    if field not in prop_counts:
+                        prop_counts[field] = 1
+                    else:
+                        prop_counts[field] += 1
+                    
                 if data.settings is not None:
                     for l in data.settings.labels:
                         if l not in pso_labels:
@@ -1154,9 +1150,9 @@ class Dataset:
 
         self.methods = list(set(pso.method for pso in self.property_settings))
 
-        self.property_types = list(prop_counts.keys())
+        self.property_fields = list(prop_counts.keys())
         self.property_counts = [
-            int(prop_counts[pname]) for pname in self.property_types
+            int(prop_counts[pname]) for pname in self.property_fields
         ]
 
         self.pso_labels = sorted(list(pso_labels.keys()))
@@ -1392,6 +1388,55 @@ class Dataset:
             print(f'{i} (n_sites={cs.n_sites}, regex="{regex}"): {cs.description}')
 
 
+    def train_test_split(self, train_frac):
+        # Initialize the train/test datasets
+        train = Dataset(self.name+'-train')
+        test  = Dataset(self.name+'-test')
+
+        # Copy over all of the important information
+        train.cs_regexes        = dict(self.cs_regexes)
+        train.co_label_regexes  = dict(self.co_label_regexes)
+        train.ps_regexes        = dict(self.ps_regexes)
+
+        test.cs_regexes        = dict(self.cs_regexes)
+        test.co_label_regexes  = dict(self.co_label_regexes)
+        test.ps_regexes        = dict(self.ps_regexes)
+
+        train.authors        = list(self.authors)
+        train.links          = list(self.links)
+        train.description    = self.description
+        train.property_map = dict(self.property_map)
+
+        test.authors        = list(self.authors)
+        test.links          = list(self.links)
+        test.description    = self.description
+        test.property_map = dict(self.property_map)
+
+        # Shuffle/split the data and add it to the train/test datasets
+        n = len(self.data)
+
+        indices = np.arange(n)
+        random.shuffle(indices)
+
+        train_num = int(train_frac*n)
+        train_indices = indices[:train_num]
+        test_indices  = indices[train_num:]
+
+        train.data = deepcopy([self.data[i] for i in train_indices])
+        test.data  = deepcopy([self.data[i] for i in test_indices])
+
+        # Extract the configurations
+        train.configurations = list(itertools.chain.from_iterable([
+            d.configurations for d in train.data
+        ]))
+
+        test.configurations = list(itertools.chain.from_iterable([
+            d.configurations for d in test.data
+        ]))
+
+        return train, test
+
+
     def filter(self, filter_type, filter_fxn):
         """
         A helper function for filtering on a Dataset. A filter is specified by
@@ -1525,7 +1570,7 @@ class Dataset:
             '\n\t'.join('{}\t({:.1f}% of sites)'.format(e, er*100) for e, er in zip(self.elements, self.elements_ratios)),
             '\n\t'.join(self.chemical_systems),
             'Total: {}'.format(self.n_properties),
-            '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.property_types, self.property_counts)),
+            '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.property_fields, self.property_counts)),
             '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.pso_labels, self.pso_labels_counts)),
             '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.co_labels, self.co_labels_counts)),
             '\n\t'.join('{}: {}'.format(i, cs.description) for i, cs in enumerate(self.configuration_sets)),
