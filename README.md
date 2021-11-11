@@ -96,11 +96,11 @@ dataset.ps_regexes = {
 A Dataset is a pool of configurations and properties, where the configurations are further organized by grouping them into configuration sets, and the properties are linked to property settings. A Dataset then aggregates information up from the configurations, properties, and property settings. In order to ensure that the information applied by specifying `co_label_regexes`, `cs_regexes`, and `ps_regexes` are up-to-date, `dataset.resync()` should be called before performing critical operations like saving a Dataset. Some core functions will call `resync()` automatically.
 
 ## Loading from Markdown
-Datasets can be easily written/read to/from Markdown files using `Dataset.to_markdown()` and `Dataset.from_markdown()`. This can be a useful way of organizing a Dataset without having to construct it with the programming interface. A description of how to design a proper Markdown file can be found in [examples/example.md](examples/example.md).
+Datasets can be easily written/read to/from Markdown files using `Dataset.to_markdown()` and `Dataset.from_markdown()`. This can be a useful way of organizing a Dataset without having to construct it with the programming interface. A description of how to design a proper Markdown file can be found in [colabfit/examples/example.md](colabfit/examples/example.md).
 
 ## Data transformations
 Data transformations can be applied by supplying
-[Transformation](colabfit/transformations.py) objects to `dataset.apply_transformations()`.
+[Transformation](colabfit/tools/transformations.py) objects to `dataset.apply_transformations()`.
 
 ```python
 from colabfit.tools.transformations import BaseTransform, Sequential, SubtractDivide, PerAtomEnergies
