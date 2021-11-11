@@ -28,3 +28,9 @@ OPENKIM_PROPERTY_UNITS = {
     'unrelaxed-cauchy-stress': 'GPa',
 }
 
+
+EDN_KEY_MAP = {
+    'energy': 'unrelaxed-potential-energy',
+    'forces': 'unrelaxed-potential-forces',
+    'stress': 'unrelaxed-cauchy-stress',
+}

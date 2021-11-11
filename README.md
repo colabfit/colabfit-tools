@@ -133,16 +133,24 @@ energies = np.concatenate(dataset.get_data('energy'))
 forces   = np.concatenate(dataset.get_data('forces')).ravel()
 ```
 
-Basic statistics can be obtained using `dataset.get_statistics()`.
+Basic statistics can be obtained using `Dataset.get_statistics()`.
 
 ```
 # Returns: {'average': ..., 'std': ..., 'min': ..., 'max':, ..., 'average_abs': ...}
 dataset.get_statistics('energy')
 ```
 
-Visualize property distributions using `dataset.plot_histograms()`.
+Visualize property distributions using `Dataset.plot_histograms()`.
 ```
 dataset.plot_histograms(['energy', 'forces'], yscale=['linear', 'log'])
+```
+
+
+## Train/test split
+Easily generate new train/test datasets using `Dataset.train_test_split()`
+
+```
+train_ds, test_ds = low_forces.train_test_split(0.1)
 ```
 
 # Example data
