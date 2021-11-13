@@ -30,5 +30,6 @@ setup(
         'numpy',
         'tqdm',
         'bson',
+        'markdown'
     ],
 )
