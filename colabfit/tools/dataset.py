@@ -61,6 +61,10 @@ class Dataset:
             A list of strings specifying the property fields that can be
             accessed using things like get_data() and apply_transformation()
 
+        property_counts (list):
+            A list of integers counting the number of instances of each property
+            in `property_fields`. Matches the order of `property_fields`
+
         property_map (dict):
             A dictionary where the keys are the names of the properties, and the
             values are a dictionry with 'field' and 'units' keys. The 'field' is
@@ -74,24 +78,63 @@ class Dataset:
             A list of ProprtySetting objects collected by taking the settings
             linked to by all entries in `properties`.
 
-        co_label_regexes (dict):
+        configuration_label_regexes (dict):
             A dictionary where the key is a string that will be compiled with
             `re.compile()`, and the value is a list of string labels. Note that
             whenever this dictionary is re-assigned, the labels on all
             configuration in `configurations` are updated.
 
-        cs_regexes (dict):
+        configuration_labels (list):
+            A list of all configuration labels. Same as
+            `sorted(list(self.configuration_label_regexes.keys()))`
+
+        configuration_labels_counts (list):
+            A list of integers indicating the number of occurrences of each
+            configuration label. Matches the order of
+            `self.configuration_labels`
+
+        configuration_set_regexes (dict):
             A dictionary where the key is a string that will be compiled with
             `re.compile()`, and the value is the description of the
             configuration set. Note that whenever this dictionary is
             re-assigned, `configuration_sets` is re-constructed.
 
-        ps_regexes (dict):
+        property_settings_regexes (dict):
             A dictionary where the key is a string that will be compiled with
             `re.compile()`, and the value is a PropertySettings object.
             configuration set. Note that whenever this dictionary is
             re-assigned, `property_settings` is re-constructed and property
             links to PropertySettings objects are re-assigned.
+
+        property_settings_labels (list):
+            A list of all property settings labels.
+
+        property_settings_labels_counts (list):
+            A list of integers indicating the number of occurrences of each
+            property settings label. Matches the order of
+            `self.property_settings_labels`
+
+        elements (list):
+            A list of strings of element names present in the dataset
+
+        elements_ratios (list):
+            A list of floats; the total concentration of each element, given as
+            a fraction of the total number of atoms in the dataset
+
+        chemical_systems (list):
+            A list of strings of chemical systems present in the dataset
+
+        n_configurations (int):
+            `len(self.configurations)`
+
+        n_sites (int):
+            `sum([len(co) for co in self.configurations])`
+
+        methods (list):
+            `[data.methods for self.data]`
+
+        n_properties (int):
+            Total number of properties in the dataset.
     """
 
     def __init__(
@@ -103,9 +146,9 @@ class Dataset:
         configurations=None,
         data=None,
         property_map=None,
-        co_label_regexes=None,
-        cs_regexes=None,
-        ps_regexes=None,
+        configuration_label_regexes=None,
+        configuration_set_regexes=None,
+        property_settings_regexes=None,
         ):
 
         self.name           = name
@@ -129,15 +172,19 @@ class Dataset:
         if property_map is None: property_map = {}
         self.property_map = property_map
 
-        if co_label_regexes is None: co_label_regexes = {}
-        if cs_regexes is None:
-            cs_regexes = {'default': 'Default configuration set'}
-        if ps_regexes is None: ps_regexes = {}
+        if configuration_label_regexes is None: configuration_label_regexes = {}
+        if configuration_set_regexes is None:
+            configuration_set_regexes  = {'default': 'Default configuration set'}
+        if property_settings_regexes is None: property_settings_regexes = {}
 
-        self.cs_regexes         = cs_regexes
-        self.ps_regexes         = ps_regexes
+        self.configuration_set_regexes = configuration_set_regexes
+        self.property_settings_regexes = property_settings_regexes
+        self.property_settings_labels = []
+        self.property_settings_labels_counts = []
 
-        self.co_label_regexes   = co_label_regexes
+        self.configuration_label_regexes   = configuration_label_regexes
+        self.configuration_labels = []
+        self.configuration_labels_counts = []
 
         if self.configurations or self.data:
             self.resync()
@@ -184,49 +231,49 @@ class Dataset:
 
 
     @property
-    def co_label_regexes(self):
-        return self._co_label_regexes
+    def configuration_label_regexes(self):
+        return self._configuration_label_regexes
 
-    @co_label_regexes.setter
-    def co_label_regexes(self, regex_dict):
+    @configuration_label_regexes.setter
+    def configuration_label_regexes(self, regex_dict):
         """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
 
         for key, v in regex_dict.items():
             if isinstance(v, str):
                 regex_dict[key] = [v]
 
-        self._co_label_regexes = regex_dict
+        self._configuration_label_regexes = regex_dict
         # self.refresh_config_labels()
 
 
     @property
-    def cs_regexes(self):
-        return self._cs_regexes
+    def configuration_set_regexes(self):
+        return self._configuration_set_regexes
 
-    @cs_regexes.setter
-    def cs_regexes(self, regex_dict):
+    @configuration_set_regexes.setter
+    def configuration_set_regexes(self, regex_dict):
         """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
         if len(regex_dict) == 0:
             regex_dict = {'default': 'Default configuration set'}
 
-        self._cs_regexes = regex_dict
+        self._configuration_set_regexes = regex_dict
         # self.refresh_config_sets()
 
 
     @property
-    def ps_regexes(self):
-        return self._ps_regexes
+    def property_settings_regexes(self):
+        return self._property_settings_regexes
 
-    @ps_regexes.setter
-    def ps_regexes(self, regex_dict):
+    @property_settings_regexes.setter
+    def property_settings_regexes(self, regex_dict):
         """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
         for k, v in regex_dict.items():
             if not isinstance(v, PropertySettings):
                 raise RuntimeError(
-                    '`ps_regexes` keys must be PropertySettings objects'
+                    '`_property_settings_regexes` keys must be PropertySettings objects'
                 )
 
-        self._ps_regexes = regex_dict
+        self._property_settings_regexes = regex_dict
         # self.refresh_property_settings()
 
 
@@ -358,9 +405,9 @@ class Dataset:
                         data_format,
                         name_field,
                         '\n'.join('| {} | {} | {} |'.format(k, v['field'], v['units']) for k,v in self.property_map.items()),
-                        '\n'.join('| `{}` | {} | {} | {} | {} |'.format(regex.replace('|', '\|'), pso.method, pso.description, ', '.join(pso.labels), ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for regex, pso in self.ps_regexes.items()),
-                        '\n'.join('| `{}` | {} | {} | {} |'.format(regex.replace('|', '\|'), desc, cs.n_configurations, cs.n_sites) for cs, (regex, desc) in zip(self.configuration_sets, self.cs_regexes.items())),
-                        '\n'.join('| `{}` | {} | {} |'.format(regex.replace('|', '\|'), ', '.join(labels), ', '.join([str(self.co_labels_counts[self.co_labels.index(l)]) for l in labels])) for regex, labels in self.co_label_regexes.items()),
+                        '\n'.join('| `{}` | {} | {} | {} | {} |'.format(regex.replace('|', '\|'), pso.method, pso.description, ', '.join(pso.labels), ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for regex, pso in self.property_settings_regexes.items()),
+                        '\n'.join('| `{}` | {} | {} | {} |'.format(regex.replace('|', '\|'), desc, cs.n_configurations, cs.n_sites) for cs, (regex, desc) in zip(self.configuration_sets, self.configuration_set_regexes.items())),
+                        '\n'.join('| `{}` | {} | {} |'.format(regex.replace('|', '\|'), ', '.join(labels), ', '.join([str(self.configuration_labels_counts[self.configuration_labels.index(l)]) for l in labels])) for regex, labels in self.configuration_label_regexes.items()),
                     )
                 )
 
@@ -462,14 +509,14 @@ class Dataset:
         )
 
         # Extract labels and trigger label refresh for configurations
-        dataset.co_label_regexes = {
+        dataset.configuration_label_regexes = {
             l[0].replace('\|', '|'):
                 [_.strip() for _ in l[1].split(',')]
                 for l in parser.data['Configuration labels'][1:]
         }
 
         # Extract configuration sets and trigger CS refresh
-        dataset.cs_regexes = {
+        dataset.configuration_set_regexes = {
             l[0].replace('\|', '|'):
                 l[1]for l in parser.data['Configuration sets'][1:]
         }
@@ -506,7 +553,7 @@ class Dataset:
                 files=files,
             )
 
-        dataset.ps_regexes = ps_regexes
+        dataset.property_settings_regexes = ps_regexes
 
         dataset.resync()
 
@@ -602,9 +649,9 @@ class Dataset:
                 # Both datasets are children, so just merge directly
 
                 # Rename configurations for the default CS
-                for regex, cs in zip(other.cs_regexes.keys(), other.configuration_sets):
+                for regex, cs in zip(other.configuration_set_regexes.keys(), other.configuration_sets):
                     if regex == 'default':
-                        self.cs_regexes[f'{other.name}_default'] = cs.description
+                        self.configuration_set_regexes[f'{other.name}_default'] = cs.description
 
                         for conf in cs.configurations:
                             # Make sure the configuration still matches the regex
@@ -629,48 +676,48 @@ class Dataset:
 
                 # Modify regex maps to avoid collisions
                 new_cs_regexes = {}
-                for regex, desc in self.cs_regexes.items():
+                for regex, desc in self.configuration_set_regexes.items():
                     if regex[0] == '^': regex = regex[1:]
 
                     # new_cs_regexes[f'^{self.name}_' + regex] = desc
                     new_cs_regexes[regex] = desc
 
-                for regex, desc in other.cs_regexes.items():
+                for regex, desc in other.configuration_set_regexes.items():
                     if regex[0] == '^': regex = regex[1:]
 
                     new_cs_regexes[f'^{other.name}_.*{regex}'] = desc
 
                 new_cs_regexes['default'] = f'Merged {self.name} and {other.name}'
 
-                self.cs_regexes = new_cs_regexes
+                self.configuration_set_regexes = new_cs_regexes
 
                 new_co_label_regexes = {}
-                for regex, labels in self.co_label_regexes.items():
+                for regex, labels in self.configuration_label_regexes.items():
                     if regex[0] == '^': regex = regex[1:]
 
                     # new_co_label_regexes[f'^{self.name}_' + regex] = labels
                     new_co_label_regexes[regex] = labels
 
-                for regex, labels in other.co_label_regexes.items():
+                for regex, labels in other.configuration_label_regexes.items():
                     if regex[0] == '^': regex = regex[1:]
 
                     new_co_label_regexes[f'^{other.name}_.*{regex}'] = deepcopy(labels)
 
-                self.co_label_regexes = new_co_label_regexes
+                self.configuration_label_regexes = new_co_label_regexes
 
                 new_ps_regexes = {}
-                for regex, pso in self.ps_regexes.items():
+                for regex, pso in self.property_settings_regexes.items():
                     if regex[0] == '^': regex = regex[1:]
 
                     # new_ps_regexes[f'^{self.name}_' + regex] = pso
                     new_ps_regexes[regex] = pso
 
-                for regex, pso in other.ps_regexes.items():
+                for regex, pso in other.property_settings_regexes.items():
                     if regex[0] == '^': regex = regex[1:]
 
                     new_ps_regexes[f'^{other.name}_.*{regex}'] = deepcopy(pso)
 
-                self.ps_regexes = new_ps_regexes
+                self.property_settings_regexes = new_ps_regexes
 
                 # self.resync()
 
@@ -870,7 +917,7 @@ class Dataset:
             conf.info[ATOMS_LABELS_FIELD] = set()
 
     def delete_config_label_regex(self, regex):
-        label_set = self.co_label_regexes.pop(regex)
+        label_set = self.configuration_label_regexes.pop(regex)
 
         regex = re.compile(regex)
         for conf in self.configurations:
@@ -895,7 +942,7 @@ class Dataset:
 
         # Apply configuration labels
         for co_regex, labels in tqdm(
-            self.co_label_regexes.items(),
+            self.configuration_label_regexes.items(),
             desc='Refreshing configuration labels',
             disable=not verbose
             ):
@@ -929,9 +976,9 @@ class Dataset:
                 "Dataset.data is None; must load data first"
             )
 
-        self.property_settings = list(self.ps_regexes.values())
+        self.property_settings = list(self.property_settings_regexes.values())
 
-        used = {ps_regex: False for ps_regex in self.ps_regexes}
+        used = {ps_regex: False for ps_regex in self.property_settings_regexes}
 
         # Reset Property PSO pointers
         for data in tqdm(
@@ -950,7 +997,7 @@ class Dataset:
 
             for conf in data.configurations:
                 match = None
-                for ps_regex, pso in self.ps_regexes.items():
+                for ps_regex, pso in self.property_settings_regexes.items():
                     regex = re.compile(ps_regex)
 
                     if regex.search(conf.info[ATOMS_NAME_FIELD]):
@@ -991,7 +1038,7 @@ class Dataset:
             default_cs_description = None
             assigned_configurations = []
             for cs_regex, cs_desc in tqdm(
-                self.cs_regexes.items(),
+                self.configuration_set_regexes.items(),
                 desc='Refreshing configuration sets',
                 disable=not verbose
                 ):
@@ -1044,8 +1091,8 @@ class Dataset:
                     'CS. "default" was removed from the regexes.'
                 warnings.warn(no_default_configs)
 
-                if 'default' in self.cs_regexes:
-                    del self.cs_regexes['default']
+                if 'default' in self.configuration_set_regexes:
+                    del self.configuration_set_regexes['default']
 
         else:
             for data in self.data:
@@ -1095,7 +1142,7 @@ class Dataset:
                     else:
                         elements[el] += er*ds.n_sites
 
-                for l, lc in zip(ds.co_labels, ds.co_labels_counts):
+                for l, lc in zip(ds.configuration_labels, ds.configuration_labels_counts):
                     if l not in co_labels:
                         co_labels[l] = lc
                     else:
@@ -1142,8 +1189,8 @@ class Dataset:
 
         self.chemical_systems = sorted(list(set(self.chemical_systems)))
 
-        self.co_labels = sorted(list(co_labels.keys()))
-        self.co_labels_counts = [int(co_labels[l]) for l in self.co_labels]
+        self.configuration_labels = sorted(list(co_labels.keys()))
+        self.configuration_labels_counts = [int(co_labels[l]) for l in self.configuration_labels]
 
         self.methods = []
         self.n_properties = 0
@@ -1164,7 +1211,7 @@ class Dataset:
                     else:
                         prop_counts[pname] += pc
 
-                for l, lc in zip(data.pso_labels, data.pso_labels_counts):
+                for l, lc in zip(data.property_settings_labels, data.property_settings_labels_counts):
                     if l not in pso_labels:
                         pso_labels[l] = lc
                     else:
@@ -1193,8 +1240,8 @@ class Dataset:
             int(prop_counts[pname]) for pname in self.property_fields
         ]
 
-        self.pso_labels = sorted(list(pso_labels.keys()))
-        self.pso_labels_counts = [int(pso_labels[l]) for l in self.pso_labels]
+        self.property_settings_labels = sorted(list(pso_labels.keys()))
+        self.property_settings_labels_counts = [int(pso_labels[l]) for l in self.property_settings_labels]
 
 
     def convert_units(self):
@@ -1506,7 +1553,7 @@ class Dataset:
 
             cs_regexes = {}
             config_sets = []
-            for j, (regex, cs) in enumerate(zip(self.cs_regexes, self.configuration_sets)):
+            for j, (regex, cs) in enumerate(zip(self.configuration_set_regexes, self.configuration_sets)):
                 add = (j in cs_ids and not exclude) or (j not in cs_ids and exclude)
                 if add:
                     cs_regexes[regex] = cs.description
@@ -1516,7 +1563,7 @@ class Dataset:
                 '{}: {}'.format(i, cs.description) for i, cs in enumerate(config_sets)
             )
 
-            ds.cs_regexes = cs_regexes
+            ds.configuration_set_regexes = cs_regexes
 
             ds.configurations = deepcopy(list(itertools.chain.from_iterable([
                 cs.configurations for cs in config_sets
@@ -1554,13 +1601,13 @@ class Dataset:
         if self.is_parent_dataset:
             for i, ds in enumerate(self.data):
                 for j, (regex, cs) in enumerate(zip(
-                    ds.cs_regexes, ds.configuration_sets
+                    ds.configuration_set_regexes, ds.configuration_sets
                     )):
 
                     print(f'DS={i}, CS={j} (n_configurations={cs.n_configurations}, n_sites={cs.n_sites}, regex="{regex}"): {cs.description}')
         else:
             for i, (regex, cs) in enumerate(zip(
-                self.cs_regexes, self.configuration_sets
+                self.configuration_set_regexes, self.configuration_sets
                 )):
 
                 print(f'CS={i} (n_configurations={cs.n_configurations}, n_sites={cs.n_sites}, regex="{regex}"): {cs.description}')
@@ -1572,13 +1619,13 @@ class Dataset:
         test  = Dataset(self.name+'-test')
 
         # Copy over all of the important information
-        train.cs_regexes        = dict(self.cs_regexes)
-        train.co_label_regexes  = dict(self.co_label_regexes)
-        train.ps_regexes        = dict(self.ps_regexes)
+        train.configuration_set_regexes        = dict(self.configuration_set_regexes)
+        train.configuration_label_regexes  = dict(self.configuration_label_regexes)
+        train.property_settings_regexes        = dict(self.property_settings_regexes)
 
-        test.cs_regexes        = dict(self.cs_regexes)
-        test.co_label_regexes  = dict(self.co_label_regexes)
-        test.ps_regexes        = dict(self.ps_regexes)
+        test.configuration_set_regexes        = dict(self.configuration_set_regexes)
+        test.configuration_label_regexes  = dict(self.configuration_label_regexes)
+        test.property_settings_regexes        = dict(self.property_settings_regexes)
 
         train.authors        = list(self.authors)
         train.links          = list(self.links)
@@ -1660,8 +1707,8 @@ class Dataset:
             dataset (Dataset):
                 A Dataset object constructed by applying the specified filter,
                 extracting any objects linked to the filtered object, then
-                copying over `property_map`, `co_label_regexes`, `cs_regexes`,
-                and `ps_regexes`.
+                copying over `property_map`, `configuration_label_regexes`,
+                `configuration_set_regexes`, and `property_settings_regexes`.
         """
 
         if self.is_parent_dataset:
@@ -1673,9 +1720,9 @@ class Dataset:
                 parent.attach_dataset(ds.filter(filter_type, filter_fxn))
 
             ds.property_map = self.property_map
-            ds.cs_regexes = self.cs_regexes
-            ds.co_label_regexes = self.co_label_regexes
-            ds.ps_regexes = self.ps_regexes
+            ds.configuration_set_regexes = self.configuration_set_regexes
+            ds.configuration_label_regexes = self.configuration_label_regexes
+            ds.ps_regexes = self.property_settings_regexes
 
             parent.resync()
 
@@ -1710,9 +1757,9 @@ class Dataset:
         ds.configurations = deepcopy(list(configurations))
 
         ds.property_map = deepcopy(self.property_map)
-        ds.cs_regexes = deepcopy(self.cs_regexes)
-        ds.co_label_regexes = deepcopy(self.co_label_regexes)
-        ds.ps_regexes = deepcopy(self.ps_regexes)
+        ds.configuration_set_regexes = deepcopy(self.configuration_set_regexes)
+        ds.configuration_label_regexes = deepcopy(self.configuration_label_regexes)
+        ds.property_settings_regexes = deepcopy(self.property_settings_regexes)
 
         ds.resync()
 
@@ -1749,8 +1796,8 @@ class Dataset:
             '\n\t'.join(self.chemical_systems),
             'Total: {}'.format(self.n_properties),
             '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.property_fields, self.property_counts)),
-            '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.pso_labels, self.pso_labels_counts)),
-            '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.co_labels, self.co_labels_counts)),
+            '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.property_settings_labels, self.property_settings_labels_counts)),
+            '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.configuration_labels, self.configuration_labels_counts)),
             '\n\t'.join('{}: {}'.format(i, cs.description) for i, cs in enumerate(self.configuration_sets)),
         )
 
