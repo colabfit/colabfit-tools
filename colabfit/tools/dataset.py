@@ -834,6 +834,13 @@ class Dataset:
 
 
     def parse_data(self, convert_units=False, verbose=False):
+        """
+        Re-constructs `self.data` by building a list of Property objects using
+        `self.property_map` and `self.configurations`. Modifies `self.data` in
+        place. If `convert_units==True`, then the units in `self.property_map`
+        are also updated.
+        """
+
         if len(self.property_map) == 0:
             raise RuntimeError(
                 'Must set `Dataset.property_map first'
