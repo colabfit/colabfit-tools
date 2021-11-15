@@ -1142,7 +1142,7 @@ class Dataset:
                         prop_counts[field] = 1
                     else:
                         prop_counts[field] += 1
-                    
+
                 if data.settings is not None:
                     for l in data.settings.labels:
                         if l not in pso_labels:
@@ -1243,7 +1243,25 @@ class Dataset:
         return not self == other
 
 
-    def get_data(self, property_field):
+    def get_data(self, property_field, concatenate=False, ravel=False):
+        """
+        Args:
+            property_field (str):
+                The string key used to extract the property values from the
+                Property objects
+
+            concatenate (bool):
+                If True, calls np.concatenate() on the list before returning.
+                Default is False.
+
+            ravel (bool):
+                If True, calls np.concatenate() on the list before returning.
+                Default is False.
+
+        Returns a list of Numpy arrays that were constructed by calling
+        [np.atleast_1d(d[property_field]['source-value']) for d in self.data]
+        """
+
         if property_field == 'energy':
             property_field = 'unrelaxed-potential-energy'
         if property_field == 'forces':
@@ -1256,9 +1274,17 @@ class Dataset:
                 data.get_data(property_field) for data in self.data
             ))
         else:
-            return [
+            tmp = [
                 np.atleast_1d(d[property_field]['source-value']) for d in self.data
             ]
+
+            if concatenate:
+                tmp = np.concatenate(tmp)
+
+            if ravel:
+                tmp = tmp.ravel()
+
+            return tmp
 
 
     def get_statistics(self, property_field):
