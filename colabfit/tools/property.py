@@ -359,21 +359,35 @@ class Property(dict):
 
 
     def __setitem__(self, k, v):
-        self.edn[k] = v
+        edn_key = EDN_KEY_MAP.get(k, k)
+
+        self.edn[edn_key] = v
 
 
     def __getitem__(self, k):
-        if k not in self.edn:
+        edn_key = EDN_KEY_MAP.get(k, k)
+
+        if edn_key not in self.edn:
             warnings.warn(
                 f"Field '{k}' not found in Property.edn. Returning None"
             )
 
             return None
 
-        return self.edn[k]
+
+        return self.edn[edn_key]
+
+
+    def get_data(self, k):
+        edn_key = EDN_KEY_MAP.get(k, k)
+
+        return np.atleast_1d(self[edn_key]['source-value'])
+
 
     def __delitem__(self, k):
-        del self.edn[k]
+        edn_key = EDN_KEY_MAP.get(k, k)
+
+        del self.edn[edn_key]
 
 
     def __str__(self):

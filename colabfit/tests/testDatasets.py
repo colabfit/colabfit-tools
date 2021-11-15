@@ -777,3 +777,8 @@ class Test_DatasetFunctions(unittest.TestCase):
         eng_new = self.dataset1.get_data('a_different_name', ravel=True)
 
         np.testing.assert_allclose(eng_org, eng_new)
+
+
+    def test_basic_transform(self):
+        self.dataset1.apply_transformation('energy', lambda x, c: 1.0)
+        eng_org = self.dataset1.get_data('energy', ravel=True)

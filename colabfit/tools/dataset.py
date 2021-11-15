@@ -22,6 +22,7 @@ from colabfit.tools.configuration_sets import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.property import Property
 from colabfit.tools.property_settings import PropertySettings
+from colabfit.tools.transformations import BaseTransform
 
 
 __all__ = [
@@ -755,27 +756,34 @@ class Dataset:
             del data[edn_key]
 
 
-    def apply_transformations(self, tform_dict):
+    def apply_transformation(self, field_name, tform):
         """
         Args:
-            tform_dict (dict):
-                key = property field to apply transformations to
-                value = Transformation object
+            field_name (str):
+                The property field name to applyl the transformation to
+
+            tform (callable):
+                A BaseTransform object or a lambda function. If a lambda
+                function is supplied, it must accept a 2-tuple as input, where
+                the first value will be the property field data, and the second
+                value will be the list of configurations linked to the property.
         """
+
+        if not isinstance(tform, BaseTransform):
+            tform = BaseTransform(tform)
 
         if self.is_parent_dataset:
             for data in self.data:
-                data.apply_transformations(tform_dict)
+                data.apply_transformation(field_name, tform)
         else:
             for data in self.data:
-                for key in tform_dict:
-                    edn_key = EDN_KEY_MAP.get(key, key)
+                edn_key = EDN_KEY_MAP.get(field_name, field_name)
 
-                    if edn_key in data.edn:
-                        data.edn[edn_key]['source-value'] = tform_dict[key](
-                            data.edn[edn_key]['source-value'],
-                            data.configurations
-                        )
+                if edn_key in data.edn:
+                    data.edn[edn_key]['source-value'] = tform(
+                        data.edn[edn_key]['source-value'],
+                        data.configurations
+                    )
 
 
     def parse_data(self, convert_units=False, verbose=False):
@@ -1367,10 +1375,7 @@ class Dataset:
 
             property_field = EDN_KEY_MAP.get(property_field, property_field)
 
-            tmp = [
-                np.atleast_1d(d[property_field]['source-value'])
-                for d in self.data
-            ]
+            tmp = [d.get_data(property_field) for d in self.data]
 
             if concatenate:
                 tmp = np.concatenate(tmp)
