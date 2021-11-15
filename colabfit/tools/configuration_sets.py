@@ -23,7 +23,7 @@ class ConfigurationSet:
             configurations. Matches order of `labels`.
 
         elements (list):
-            A list of strings of element names present in t he collection
+            A list of strings of element names present in the collection
 
         elements_ratios (list):
             A list of floats; the total concentration of each element, given as

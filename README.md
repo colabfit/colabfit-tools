@@ -57,20 +57,20 @@ dataset.parse_data(convert_units=True)
 ```
 
 ## Applying labels to configurations
-Metadata can be applied to individual configurations using labels. Labels are applied by matching a regular expression to `configuration.info[ASE_NAME_FIELD]` for each configuration. Regex mappings are provided by setting the `co_label_regexes` dictionary.
+Metadata can be applied to individual configurations using labels. Labels are applied by matching a regular expression to `configuration.info[ASE_NAME_FIELD]` for each configuration. Regex mappings are provided by setting the `configuration_label_regexes` dictionary.
 ```python
 
 # Labels can be specified as lists or single strings (which will be wrapped in a list).
-dataset.co_label_regexes = {
+dataset.configuration_label_regexes = {
     'H2O': ['water', 'molecule'],
     '.*': '100K',
 }
 ```
 
 ## Building configuration sets
-[ConfigurationSet](colabfit/tools/configuration_sets.py) can be used to create groups of configurations for organizational purposes. This can be done in a similar manner to how configuration labels are applied, but using the `cs_regexes` dictionary. Note that a configuration may exist in multiple sets at the same time. Note that a `default` CS must be provided.
+[ConfigurationSet](colabfit/tools/configuration_sets.py) can be used to create groups of configurations for organizational purposes. This can be done in a similar manner to how configuration labels are applied, but using the `configuration_set_regexes` dictionary. Note that a configuration may exist in multiple sets at the same time. Note that a `default` CS must be provided.
 ```python
-dataset.cs_regexes = {
+dataset.configuration_set_regexes = {
     'default': "The default CS to use for configurations that don't match anything else",
     'H2O': 'AIMD snapshots of liquid water at 100K',
 }
@@ -81,7 +81,7 @@ Metadata for computing properties can be provided by constructing a [PropertySet
 ```python
 from colabfit.tools.property_settings import PropertySettings
 
-dataset.ps_regexes = {
+dataset.property_settings_regexes = {
     '.*':
         PropertySettings(
             method='VASP',
@@ -93,7 +93,7 @@ dataset.ps_regexes = {
 ```
 
 ## Synchronizing a dataset
-A Dataset is a pool of configurations and properties, where the configurations are further organized by grouping them into configuration sets, and the properties are linked to property settings. A Dataset then aggregates information up from the configurations, properties, and property settings. In order to ensure that the information applied by specifying `co_label_regexes`, `cs_regexes`, and `ps_regexes` are up-to-date, `dataset.resync()` should be called before performing critical operations like saving a Dataset. Some core functions will call `resync()` automatically.
+A Dataset is a pool of configurations and properties, where the configurations are further organized by grouping them into configuration sets, and the properties are linked to property settings. A Dataset then aggregates information up from the configurations, properties, and property settings. In order to ensure that the information applied by specifying `configuration_label_regexes`, `configuration_set_regexes`, and `property_settings_regexes` are up-to-date, `dataset.resync()` should be called before performing critical operations like saving a Dataset. Some core functions will call `resync()` automatically.
 
 ## Loading from Markdown
 Datasets can be easily written/read to/from Markdown files using `Dataset.to_markdown()` and `Dataset.from_markdown()`. This can be a useful way of organizing a Dataset without having to construct it with the programming interface. A description of how to design a proper Markdown file can be found in [colabfit/examples/example.md](colabfit/examples/example.md).
