@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 import random
+from ase.io.formats import parse_filename
 import markdown
 import warnings
 import itertools
@@ -54,6 +55,16 @@ class Dataset:
 
         data (list):
             A list of Property objects OR a list of Dataset objects.
+
+        property_fields (list):
+            A list of strings specifying the property fields that can be
+            accessed using things like get_data() and apply_transformation()
+
+        property_map (dict):
+            A dictionary where the keys are the names of the properties, and the
+            values are a dictionry with 'field' and 'units' keys. The 'field' is
+            the key used to access the `info` or `arrays` dictionary of a
+            configuration, and 'units' is an ASE-readable units string
 
         configuration_sets (list):
             List of ConfigurationSet objects defining groups of configurations
@@ -111,6 +122,8 @@ class Dataset:
 
         self.configurations     = configurations
         self.data               = data
+
+        self.configuration_sets = []
 
         if property_map is None: property_map = {}
         self.property_map = property_map
@@ -727,16 +740,19 @@ class Dataset:
     def rename_property(self, old_name, new_name):
         """Renames old_name field to new_name in atoms.info and atoms.arrays"""
 
-        if old_name == new_name: return
+        """
+        TODO:
+        Here's what I would actually want this function to do:
+            - update the key used in property_map
+            - make sure get_data and apply_transform can use the new name
+            - probably update property_map everywhere
+        """
 
-        for conf in self.configurations:
-            if old_name in conf.info:
-                conf.info[new_name] = conf.info[old_name]
-                del conf.info[old_name]
+        edn_key = EDN_KEY_MAP.get(old_name, old_name)
 
-            if old_name in conf.arrays:
-                conf.arrays[new_name] = conf.arrays[old_name]
-                del conf.arrays[old_name]
+        for data in self.data:
+            data[new_name] = data[edn_key]
+            del data[edn_key]
 
 
     def apply_transformations(self, tform_dict):
@@ -1080,6 +1096,18 @@ class Dataset:
                 self.chemical_systems += ds.chemical_systems
                 self.n_sites += ds.n_sites
 
+            self.authors = deepcopy(list(set(itertools.chain.from_iterable(
+                ds.authors for ds in self.data
+            ))))
+
+            self.links = deepcopy(list(set(itertools.chain.from_iterable(
+                ds.links for ds in self.data
+            ))))
+
+            self.description = '\n'.join(
+                f'{ii}: {data.description.strip()}' for ii, data in enumerate(self.data)
+            )
+
         else:
             for cs in self.configuration_sets:
                 self.n_configurations += cs.n_configurations
@@ -1243,12 +1271,29 @@ class Dataset:
         return not self == other
 
 
-    def get_data(self, property_field, concatenate=False, ravel=False):
+    def get_data(self, property_field, cs_ids=None, exclude=False, concatenate=False, ravel=False):
         """
         Args:
             property_field (str):
                 The string key used to extract the property values from the
                 Property objects
+
+            cs_ids (int or list):
+                The integers specifying the configuration sets to obtain the
+                data from. Default is None, which returns data from all
+                configuration sets.
+
+                If `self` is a base dataset, then `cs_ids` should be a list of
+                integers used for indexing `self.configuration_sets`.
+
+                If `self` is a parent dataset, then `cs_ids` should be a list of
+                2-tuples `(i, j)` where a configuration set will be indexed
+                using `self.data[i].configuration_sets[j]`.
+
+            exclude (bool):
+                Only to be used when `cs_ids` is not None. If `exclude==True`,
+                then data is only returned for the configuration sets that are
+                _not_ in `cs_ids`.
 
             concatenate (bool):
                 If True, calls np.concatenate() on the list before returning.
@@ -1262,27 +1307,76 @@ class Dataset:
         [np.atleast_1d(d[property_field]['source-value']) for d in self.data]
         """
 
-        if property_field == 'energy':
-            property_field = 'unrelaxed-potential-energy'
-        if property_field == 'forces':
-            property_field = 'unrelaxed-potential-forces'
-        if property_field == 'stress':
-            property_field = 'unrelaxed-cauchy-stress'
+        if cs_ids is None:
+            if self.is_parent_dataset:
+                cs_ids = list(itertools.chain.from_iterable([
+                    [(i, j) for j in range(len(self.data[i].configuration_sets))]
+                    for i in range(len(self.data))
+                ]))
+            else:
+                cs_ids = list(range(len(self.configuration_sets)))
+
+        if isinstance(cs_ids, int) or isinstance(cs_ids, tuple):
+            cs_ids = [cs_ids]
+
+        self.check_if_is_parent_dataset()
 
         if self.is_parent_dataset:
-            return list(itertools.chain.from_iterable(
-                data.get_data(property_field) for data in self.data
-            ))
-        else:
+            # Break the 2-tuples into separate lists
+            ds_ids, sub_cs_ids = list(zip(*cs_ids))
+
+            rebuilt_cs_ids = {ds_i: [] for ds_i in ds_ids}
+
+            for ds_i, cs_j in zip(ds_ids, sub_cs_ids):
+                rebuilt_cs_ids[ds_i].append(cs_j)
+
+
+            # if concatenate=true, each one will be an n-d array
+            # if ravel=true, each one will be a 1-d array
+            # otherwise, it will be a list of arbitrary objects
+
             tmp = [
-                np.atleast_1d(d[property_field]['source-value']) for d in self.data
+                self.data[i].get_data(
+                    property_field,
+                    cs_ids=sub_list,
+                    exclude=exclude,
+                    concatenate=concatenate,
+                    ravel=ravel,
+                ) for i, sub_list in rebuilt_cs_ids.items()
+            ]
+
+            if (not concatenate) and (not ravel):
+                # Then tmp will be a list of arbitrary objects
+                tmp = list(itertools.chain.from_iterable(tmp))
+            else:
+                # tmp will either be an n-d or 1-d array; either way, concat
+
+                tmp = np.concatenate(tmp)
+
+                if ravel:
+                    tmp = tmp.ravel()
+
+            return tmp
+        else:
+
+            if exclude:
+                cs_ids = [
+                    _ for _ in range(len(self.configuration_sets))
+                    if _ not in cs_ids
+                ]
+
+            property_field = EDN_KEY_MAP.get(property_field, property_field)
+
+            tmp = [
+                np.atleast_1d(d[property_field]['source-value'])
+                for d in self.data
             ]
 
             if concatenate:
                 tmp = np.concatenate(tmp)
 
             if ravel:
-                tmp = tmp.ravel()
+                tmp = np.concatenate(tmp).ravel()
 
             return tmp
 
@@ -1350,70 +1444,121 @@ class Dataset:
 
 
     def dataset_from_config_sets(self, cs_ids, exclude=False, verbose=False):
-        if isinstance(cs_ids, int):
+        """
+        Returns a new dataset that only contains the specified configuration
+        sets.
+
+        Args:
+            cs_ids (int or list):
+                The index of the configuration set(s) to use for building the
+                new dataset. If `self` is a parent dataset, then `cs_ids` shoud
+                either be a 2-tuple or a list of 2-tuples (i, j), where the
+                configuration sets will be indexed as
+                `dataset.data[i].configuration_sets[j]`.
+
+            exclude (bool):
+                If False, builds a new dataset using all of the configuration
+                sets _except_ those specified by `cs_ids`. Default is False.
+
+            verbose (bool):
+                If True, prints progress. Default is False
+
+
+        Returns:
+            ds (Dataset):
+                The new dataset. If `self` is a parent dataset, then the new
+                dataset will also be a parent dataset.
+        """
+
+        if isinstance(cs_ids, int) or isinstance(cs_ids, tuple):
             cs_ids = [cs_ids]
 
         self.check_if_is_parent_dataset()
 
+        ds = Dataset('{} configuration sets: {}'.format(self.name, cs_ids))
+        ds.description = ds.name
+
         if self.is_parent_dataset:
-            raise RuntimeError(
-                "Can't extract CS from parent Dataset"
+            # Break the 2-tuples into separate lists
+            ds_ids, sub_cs_ids = list(zip(*cs_ids))
+
+            rebuilt_cs_ids = {ds_i: [] for ds_i in ds_ids}
+
+            for ds_i, cs_j in zip(ds_ids, sub_cs_ids):
+                rebuilt_cs_ids[ds_i].append(cs_j)
+
+            for ds_i, sub_list in rebuilt_cs_ids.items():
+                ds.attach_dataset(self.data[ds_i].dataset_from_config_sets(
+                    cs_ids=sub_list, exclude=exclude, verbose=verbose
+                ))
+        else:
+
+            if exclude:
+                cs_ids = [
+                    _ for _ in range(len(self.configuration_sets))
+                    if _ not in cs_ids
+                ]
+
+            cs_regexes = {}
+            config_sets = []
+            for j, (regex, cs) in enumerate(zip(self.cs_regexes, self.configuration_sets)):
+                add = (j in cs_ids and not exclude) or (j not in cs_ids and exclude)
+                if add:
+                    cs_regexes[regex] = cs.description
+                    config_sets.append(cs)
+
+            cs_regexes['default'] = '\n'.join(
+                '{}: {}'.format(i, cs.description) for i, cs in enumerate(config_sets)
             )
 
-        if exclude:
-            cs_ids = [
-                _ for _ in range(len(self.configuration_sets))
-                if _ not in cs_ids
-            ]
+            ds.cs_regexes = cs_regexes
 
-        cs_regexes = {}
-        config_sets = []
-        for j, (regex, cs) in enumerate(zip(self.cs_regexes, self.configuration_sets)):
-            add = (j in cs_ids and not exclude) or (j not in cs_ids and exclude)
-            if add:
-                cs_regexes[regex] = cs.description
-                config_sets.append(cs)
+            ds.configurations = deepcopy(list(itertools.chain.from_iterable([
+                cs.configurations for cs in config_sets
+            ])))
 
-        cs_regexes['default'] = '\n'.join(
-            '{}: {}'.format(i, cs.description) for i, cs in enumerate(config_sets)
-        )
+            sub_data = []
 
-        ds = Dataset('{} configuration sets: {}'.format(self.name, cs_ids))
+            quickset = set(ds.configurations)
 
-        ds.cs_regexes = cs_regexes
+            for data in tqdm(
+                self.data,
+                desc='Extracting configuration sets',
+                disable=not verbose
+                ):
+                add = True
+                for conf in data.configurations:
+                    if conf not in quickset:
+                        add = False
 
-        ds.configurations = deepcopy(list(itertools.chain.from_iterable([
-            cs.configurations for cs in config_sets
-        ])))
+                if add:
+                    sub_data.append(data)
 
-        sub_data = []
+            ds.data = deepcopy(sub_data)
 
-        quickset = set(ds.configurations)
+        ds.authors        = list(self.authors)
+        ds.links          = list(self.links)
+        ds.property_map   = dict(self.property_map)
 
-        for data in tqdm(
-            self.data,
-            desc='Extracting configuration sets',
-            disable=not verbose
-            ):
-            add = True
-            for conf in data.configurations:
-                if conf not in quickset:
-                    add = False
-
-            if add:
-                sub_data.append(data)
-
-        ds.data = deepcopy(sub_data)
+        ds.resync()
 
         return ds
 
 
-    def print_config_sets(self):
-        for i, (regex, cs) in enumerate(zip(
-            self.cs_regexes, self.configuration_sets
-            )):
+    def print_configuration_sets(self):
+        if self.is_parent_dataset:
+            for i, ds in enumerate(self.data):
+                for j, (regex, cs) in enumerate(zip(
+                    ds.cs_regexes, ds.configuration_sets
+                    )):
 
-            print(f'{i} (n_sites={cs.n_sites}, regex="{regex}"): {cs.description}')
+                    print(f'DS={i}, CS={j} (n_configurations={cs.n_configurations}, n_sites={cs.n_sites}, regex="{regex}"): {cs.description}')
+        else:
+            for i, (regex, cs) in enumerate(zip(
+                self.cs_regexes, self.configuration_sets
+                )):
+
+                print(f'CS={i} (n_configurations={cs.n_configurations}, n_sites={cs.n_sites}, regex="{regex}"): {cs.description}')
 
 
     def train_test_split(self, train_frac):
