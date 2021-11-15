@@ -358,6 +358,10 @@ class Property(dict):
         return not self.__eq__(other)
 
 
+    def __setitem__(self, k, v):
+        self.edn[k] = v
+
+
     def __getitem__(self, k):
         if k not in self.edn:
             warnings.warn(
@@ -367,6 +371,9 @@ class Property(dict):
             return None
 
         return self.edn[k]
+
+    def __delitem__(self, k):
+        del self.edn[k]
 
 
     def __str__(self):

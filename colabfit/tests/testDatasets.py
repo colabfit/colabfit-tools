@@ -5,7 +5,7 @@ from ase import Atoms
 
 from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
 from colabfit.tools.configuration import Configuration
-from colabfit.tools.dataset import Dataset
+from colabfit.tools.dataset import Dataset, load_data
 
 
 class TestDatasetConstruction(unittest.TestCase):
@@ -50,6 +50,7 @@ class TestDatasetConstruction(unittest.TestCase):
         for ii in range(10):
             atoms.append(Atoms())
             atoms[-1].info[ATOMS_NAME_FIELD] = ii
+
         dataset.configurations = [Configuration.from_ase(at) for at in atoms]
 
         dataset.co_label_regexes = {
@@ -91,9 +92,10 @@ class TestDatasetConstruction(unittest.TestCase):
         for ii in range(10):
             atoms.append(Atoms())
             atoms[-1].info[ATOMS_NAME_FIELD] = ii
+
         dataset.configurations = [Configuration.from_ase(at)for at in atoms]
 
-        dataset.cs_regexes = {}
+        # dataset.cs_regexes = {}
 
         for cs in dataset.configuration_sets:
             for conf in cs.configurations:
@@ -195,6 +197,22 @@ class TestDatasetConstruction(unittest.TestCase):
                     self.assertSetEqual(
                         {'5_to_9', 'new_label'}, conf.info[ATOMS_LABELS_FIELD]
                     )
+
+    def test_default_name(self):
+        dataset = Dataset('test')
+
+        dataset.configurations = load_data(
+            'colabfit/tests/files/test_file.extxyz',
+            file_format='xyz',
+            name_field=None,
+            elements=['In', 'P'],
+            default_name='test',
+        )
+
+        self.assertEqual(
+            ['test_0', 'test_1', 'test_2'],
+            [co.info[ATOMS_NAME_FIELD] for co in dataset.configurations]
+        )
 
 
 class TestSetOperations(unittest.TestCase):
@@ -648,3 +666,114 @@ class TestFilter(unittest.TestCase):
 
         self.assertEquals(len(subset.data[0].configurations), 4)
         self.assertEquals(len(subset.data[1].configurations), 2)
+
+
+class Test_ParentDatasets(unittest.TestCase):
+    def setUp(self):
+        dataset = Dataset('test')
+
+        dataset.configurations = load_data(
+            'colabfit/tests/files/test_file.extxyz',
+            file_format='xyz',
+            name_field='name',
+            elements=['In', 'P'],
+            default_name='test',
+        )
+
+        dataset.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'},
+            'forces': {'field': 'forces', 'units': 'eV/Ang'},
+        }
+
+        dataset.parse_data()
+
+        dataset.cs_regexes = {
+            'd0lda[7|5]': 'first two',
+            'd0lda1': 'last one',
+        }
+
+        dataset.resync()
+        self.dataset = dataset
+
+
+    def test_basic(self):
+        child0 = self.dataset.dataset_from_config_sets(0)
+        child1 = self.dataset.dataset_from_config_sets(1)
+
+        parent1 = Dataset('parent1')
+        parent1.attach_dataset(child0)
+        parent1.attach_dataset(child1)
+        parent1.resync()
+
+        parent2 = parent1.dataset_from_config_sets([(0, 0), (1, 0)])
+
+        parent2.resync()
+
+        self.assertEqual(parent1, parent2)
+
+        eng1 = parent1.get_data('energy', ravel=True)
+        eng2 = parent2.get_data('energy', ravel=True)
+
+        np.testing.assert_allclose(eng1, eng2)
+
+
+class Test_DatasetFunctions(unittest.TestCase):
+    def setUp(self):
+        dataset1 = Dataset('dataset1')
+
+        images1 = []
+        for i in range(5):
+            images1.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images1[-1].info[ATOMS_NAME_FIELD] = dataset1.name + str(i)
+            images1[-1].info[ATOMS_LABELS_FIELD] = dataset1.name + '_label_'+ str(i)
+
+            images1[-1].info['energy'] = float(i)
+            images1[-1].arrays['forces'] = np.ones_like(images1[-1].positions)*float(i)
+
+        dataset1.configurations = [Configuration.from_ase(at) for at in images1]
+        dataset1.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'},
+            'forces': {'field': 'forces', 'units': 'eV/Ang'},
+        }
+
+        dataset1.parse_data()
+        dataset1.resync()
+
+        dataset2 = Dataset('dataset2')
+
+        images2 = []
+        for i in range(5):
+            images2.append(Atoms('H2', positions=np.random.random((2, 3))))
+            images2[-1].info[ATOMS_NAME_FIELD] = dataset2.name + str(i)
+            images2[-1].info[ATOMS_LABELS_FIELD] = dataset2.name + '_label_'+ str(i)
+
+            images2[-1].info['energy'] = float(i)
+            images2[-1].arrays['forces'] = np.ones_like(images2[-1].positions)*float(i)
+
+        dataset2.configurations = [Configuration.from_ase(at) for at in images2]
+        dataset2.property_map = {
+            'energy': {'field': 'energy', 'units': 'eV'},
+            'forces': {'field': 'forces', 'units': 'eV/Ang'},
+        }
+
+        dataset2.parse_data()
+        dataset2.resync()
+
+        parent = Dataset('parent')
+        parent.attach_dataset(dataset1)
+        parent.attach_dataset(dataset2)
+        parent.resync()
+
+        self.dataset1 = dataset1
+        self.dataset2 = dataset2
+        self.parent   = parent
+
+
+    def test_rename_property(self):
+        eng_org = self.dataset1.get_data('energy', ravel=True)
+
+        self.dataset1.rename_property('energy', 'a_different_name')
+
+        eng_new = self.dataset1.get_data('a_different_name', ravel=True)
+
+        np.testing.assert_allclose(eng_org, eng_new)
