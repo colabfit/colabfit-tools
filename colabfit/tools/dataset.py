@@ -2,7 +2,6 @@ import os
 import re
 import shutil
 import random
-from ase.io.formats import parse_filename
 import markdown
 import warnings
 import itertools
@@ -11,7 +10,6 @@ from tqdm import tqdm
 from bson import ObjectId
 from copy import deepcopy
 import matplotlib.pyplot as plt
-from html.parser import HTMLParser
 
 from ase.io import write
 
@@ -23,6 +21,9 @@ from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConvert
 from colabfit.tools.property import Property
 from colabfit.tools.property_settings import PropertySettings
 from colabfit.tools.transformations import BaseTransform
+from colabfit.tools.dataset_parser import (
+    DatasetParser, MarkdownFormatError, BadTableFormatting
+)
 
 
 __all__ = [
@@ -311,6 +312,14 @@ class Dataset:
 
         template = \
 """
+# Summary
+|||
+|---|---|
+|Chemical systems|{}|
+|Element ratios|{}|
+|# of configurations|{}|
+|# of atoms|{}|
+
 # Name
 
 {}
@@ -326,14 +335,6 @@ class Dataset:
 # Description
 
 {}
-
-# Summary
-|||
-|---|---|
-|Chemical systems|{}|
-|Element ratios|{}|
-|# of configurations|{}|
-|# of atoms|{}|
 
 # Data
 
@@ -392,14 +393,14 @@ class Dataset:
             with open(html_file_name, 'w') as html:
                 html.write(
                     template.format(
-                        self.name,
-                        '\n\n'.join(self.authors),
-                        '\n\n'.join(self.links),
-                        self.description,
                         ', '.join(self.chemical_systems),
                         ', '.join(['{} ({:.1f}%)'.format(e, er*100) for e, er in zip(self.elements, self.elements_ratios)]),
                         len(self.configurations),
                         self.n_sites,
+                        self.name,
+                        '\n\n'.join(self.authors),
+                        '\n\n'.join(self.links),
+                        self.description,
                         ', '.join(self.elements),
                         data_file_name, data_file_name,
                         data_format,
@@ -477,22 +478,41 @@ class Dataset:
         base_path = os.path.split(html_file_path)[0]
 
         with open(html_file_path, 'r') as f:
-            html = markdown.markdown(f.read(), extensions=['tables'])
+            try:
+                html = markdown.markdown(f.read(), extensions=['tables'])
+            except:
+                raise MarkdownFormatError(
+                    "Markdown file could not be read by markdown.markdown()"
+                )
 
         # Parse information from markdown file
         parser = DatasetParser()
         parser.feed(html)
-        parser.data['Name'] = parser.data['Name'][0]
 
-        data_info = dict([l for l in parser.data['Data'] if len(l)])
-        elements = [_.strip() for _ in data_info['Elements'].split(',')]
+        parser.data['Name'] = parser.get_data('Name')[0]
 
+        data_info = dict([l for l in parser.get_data('Data') if len(l)])
+
+        try:
+            elements = [_.strip() for _ in data_info['Elements'].split(',')]
+        except:
+            raise BadTableFormatting(
+                "Error trying to access 'Elements' row in 'Data' table."
+            )
+
+        for key in ['File', 'Format', 'Name field']:
+            try:
+                data_info[key]
+            except KeyError:
+                raise BadTableFormatting(
+                    f"Could not find key '{key}' in table 'Data'"
+                )
         # Build skeleton Dataset
         dataset = cls(
-            name=parser.data['Name'],
-            authors=parser.data['Authors'],
-            links=parser.data['Links'],
-            description=parser.data['Description'][0],
+            name=parser.get_data('Name'),
+            authors=parser.get_data('Authors'),
+            links=parser.get_data('Links'),
+            description=parser.get_data('Description')[0],
         )
 
         # Load configurations
@@ -512,13 +532,13 @@ class Dataset:
         dataset.configuration_label_regexes = {
             l[0].replace('\|', '|'):
                 [_.strip() for _ in l[1].split(',')]
-                for l in parser.data['Configuration labels'][1:]
+                for l in parser.get_data('Configuration labels')[1:]
         }
 
         # Extract configuration sets and trigger CS refresh
         dataset.configuration_set_regexes = {
             l[0].replace('\|', '|'):
-                l[1]for l in parser.data['Configuration sets'][1:]
+                l[1]for l in parser.get_data('Configuration sets')[1:]
         }
 
         # # Map property fields to supplied names
@@ -527,7 +547,7 @@ class Dataset:
 
         # Extract computed properties
         property_map = {}
-        for prop in parser.data['Properties'][1:]:
+        for prop in parser.get_data('Properties')[1:]:
             property_map[prop[0]] = {
                 'field': prop[1],
                 'units': prop[2],
@@ -539,7 +559,7 @@ class Dataset:
 
         # Extract property settings
         ps_regexes = {}
-        for row in parser.data['Property settings'][1:]:
+        for row in parser.get_data('Property settings')[1:]:
             files = []
             if len(row) > 4:
                 for fname in row[4:]:
@@ -1900,80 +1920,3 @@ def load_data(
         verbose=verbose,
     )
 
-
-class DatasetParser(HTMLParser):
-
-    KNOWN_HEADERS = [
-        'Name',
-        'Authors',
-        'Links',
-        'Description',
-        'Data',
-        'Summary',
-        'Properties',
-        'Property settings',
-        'Property labels',
-        'Configuration sets',
-        'Configuration labels',
-    ]
-
-    def __init__(self):
-        super().__init__()
-
-        self.data           = {}
-        self._t             = None
-        self._table         = None
-        self._loading_table = False
-        self._loading_row   = False
-        self._header        = None
-        self._href          = None
-
-    def handle_starttag(self, tag, attrs):
-        self._t = tag
-
-        if tag == 'table':
-            self._table = []
-            self._loading_table = True
-        elif (tag == 'thead') or ('tag' == 'tbody'):
-            pass
-        elif tag == 'tr':
-            self._loading_row = True
-            self._table.append([])
-
-        for att in attrs:
-            if att[0] == 'href':
-                self._href = att[1]
-
-
-    def handle_endtag(self, tag):
-        if tag == 'table':
-            self.data[self._header] = self._table
-            self._table = None
-        elif tag == 'tr':
-            self._loading_row = False
-
-    def handle_data(self, data):
-        data = data.rstrip('\n')
-
-        if data:
-            if self._t == 'h1':
-                # Begin reading new block
-                if data not in self.KNOWN_HEADERS:
-                    raise RuntimeError(
-                        f"Header '{data}' not in {self.KNOWN_HEADERS}"
-                    )
-                self._header = data
-                self.data[self._header] = []
-            else:
-                # Add data to current block
-                if not self._loading_table:
-                    # Adding basic text
-                    self.data[self._header] += [_.strip() for _ in data.split('\n')]
-                else:
-                    # Specifically adding to a table
-                    if self._loading_row:
-                        if self._href is not None:
-                            self._table[-1].append((data, self._href))
-                            self._href = None
-                        else:
-                            self._table[-1].append(data)
