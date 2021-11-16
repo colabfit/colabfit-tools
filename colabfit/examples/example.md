@@ -20,7 +20,11 @@ A table providing a basic summary of the dataset. This table is not used for con
 
 # Data
 
-A table for storing the inputs to `load_data()`. Must have the following rows:
+A table for storing the inputs to `load_data()`. First column of each row
+('Elements', 'File', 'Format', 'Name field') must be as spelled/capitalized
+here. File name must Must have the following rows
+(with first columns spelled/capitalized in
+this way):
 
 |||
 |---|---|

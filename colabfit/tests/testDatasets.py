@@ -53,7 +53,7 @@ class TestDatasetConstruction(unittest.TestCase):
 
         dataset.configurations = [Configuration.from_ase(at) for at in atoms]
 
-        dataset.co_label_regexes = {
+        dataset.configuration_label_regexes = {
             '[0-4]': {'0_to_4'},
             '[5-9]': {'5_to_9'},
         }
@@ -104,7 +104,7 @@ class TestDatasetConstruction(unittest.TestCase):
                 else:
                     self.assertEqual(cs.description, 'Default configuration set')
 
-        dataset.cs_regexes = {
+        dataset.configuration_set_regexes = {
             'default': 'default',
             '[0-4]': '0_to_4',
             '[5-9]': '5_to_9',
@@ -120,7 +120,7 @@ class TestDatasetConstruction(unittest.TestCase):
         dataset.resync()
         self.assertEqual(len(dataset.configuration_sets), 2)
 
-        dataset.cs_regexes['[3-7]'] = '3_to_7'
+        dataset.configuration_set_regexes['[3-7]'] = '3_to_7'
 
         dataset.resync()
         self.assertEqual(len(dataset.configuration_sets), 3)
@@ -135,7 +135,7 @@ class TestDatasetConstruction(unittest.TestCase):
             atoms[-1].info[ATOMS_NAME_FIELD] = ii
         dataset.configurations = [Configuration.from_ase(at)for at in atoms]
 
-        dataset.cs_regexes = {
+        dataset.configuration_set_regexes = {
             'default': 'default',
             '[0-4]': '0_to_4',
             '[5-9]': '5_to_9',
@@ -147,7 +147,7 @@ class TestDatasetConstruction(unittest.TestCase):
                 self.assertSetEqual(set(), conf.info[ATOMS_LABELS_FIELD])
 
         # Make sure they're re-written correctly
-        dataset.co_label_regexes = {
+        dataset.configuration_label_regexes = {
             '[0-4]': {'0_to_4'},
             '[5-9]': {'5_to_9'},
         }
@@ -169,7 +169,7 @@ class TestDatasetConstruction(unittest.TestCase):
                     )
 
         # Make sure they're added to correctly
-        dataset.co_label_regexes['[0-9]'] = {'new_label'}
+        dataset.configuration_label_regexes['[0-9]'] = {'new_label'}
         dataset.resync()
 
         for cs in dataset.configuration_sets:
@@ -687,7 +687,7 @@ class Test_ParentDatasets(unittest.TestCase):
 
         dataset.parse_data()
 
-        dataset.cs_regexes = {
+        dataset.configuration_set_regexes = {
             'd0lda[7|5]': 'first two',
             'd0lda1': 'last one',
         }
