@@ -2,7 +2,10 @@ import numpy as np
 from ase import Atoms
 from bson import ObjectId
 
-from colabfit import ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
+from colabfit import (
+    ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
+    ATOMS_CONSTRAINTS_FIELD
+)
 
 
 class Configuration(Atoms):
@@ -14,7 +17,7 @@ class Configuration(Atoms):
     AND zero to many Property objects.
     """
 
-    def __init__(self, labels=None, *args, **kwargs):
+    def __init__(self, labels=None, constraints=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.info[ATOMS_ID_FIELD] = ObjectId()
@@ -31,6 +34,14 @@ class Configuration(Atoms):
             labels = set(self.info[ATOMS_LABELS_FIELD])
 
         self.info[ATOMS_LABELS_FIELD] = set(labels)
+
+        if ATOMS_CONSTRAINTS_FIELD not in self.info:
+            if constraints is None:
+                constraints = set()
+        else:
+            constraints = set(self.info[ATOMS_CONSTRAINTS_FIELD])
+
+        self.info[ATOMS_CONSTRAINTS_FIELD] = set(constraints)
 
 
     @classmethod
@@ -49,8 +60,15 @@ class Configuration(Atoms):
 
 
     def __hash__(self):
+        constraints_hash = hash(tuple(
+            hash(tuple(self.info[c])) if c in self.info
+            else hash(np.array(self.arrays[c]).data.tobytes())
+            for c in self.info[ATOMS_CONSTRAINTS_FIELD]
+        ))
+
         return hash((
             len(self),
+            constraints_hash,
             hash(self.arrays['positions'].data.tobytes()),
             hash(self.arrays['numbers'].data.tobytes()),
             hash(np.array(self.cell).data.tobytes()),
