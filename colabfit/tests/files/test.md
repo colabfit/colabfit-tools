@@ -27,17 +27,20 @@ This is an example dataset
 
 # Properties
 
-|Name|Field|Units|
-|---|---|---|
-|energy|energy|eV|
-|forces|forces|eV/Ang|
-|stress|virial|kilobar|
+|Property|Name|Field|Units|
+|---|---|---|---|
+|default|energy|energy|eV|
+|default|forces|forces|eV/Ang|
+|default|stress|virial|kilobar|
+|[my-custom-property](test_property.edn)|a-custom-field-name|field-name|None|
+|[my-custom-property](test_property.edn)|a-custom-1d-array|1d-array|eV|
+|[my-custom-property](test_property.edn)|a-custom-per-atom-array|per-atom-array|eV|
 
 # Property settings
 
 |Regex|Method|Description|Labels|Files|
 |---|---|----|----|
-|`.*`|VASP|Energies, forces, and stresses computed with VASP using certain settings| PBE, GGA |[INCAR](tests/files/test_file.INCAR)|
+|`.*`|VASP|Energies, forces, and stresses computed with VASP using certain settings| PBE, GGA |[INCAR](test_file.INCAR)|
 
 # Configuration sets
 

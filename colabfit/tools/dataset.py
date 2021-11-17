@@ -4,6 +4,7 @@ import shutil
 import random
 import markdown
 import warnings
+import traceback
 import itertools
 import numpy as np
 from tqdm import tqdm
@@ -13,12 +14,16 @@ import matplotlib.pyplot as plt
 
 from ase.io import write
 
+from kim_property import get_properties
+available_kim_properties = get_properties()
+
 from colabfit import (
-    ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, EDN_KEY_MAP, OPENKIM_PROPERTY_UNITS
+    ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, EDN_KEY_MAP,
+    OPENKIM_PROPERTY_UNITS
 )
 from colabfit.tools.configuration_sets import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
-from colabfit.tools.property import Property
+from colabfit.tools.property import Property, PropertyParsingError
 from colabfit.tools.property_settings import PropertySettings
 from colabfit.tools.transformations import BaseTransform
 from colabfit.tools.dataset_parser import (
@@ -67,10 +72,13 @@ class Dataset:
             in `property_fields`. Matches the order of `property_fields`
 
         property_map (dict):
-            A dictionary where the keys are the names of the properties, and the
-            values are a dictionry with 'field' and 'units' keys. The 'field' is
-            the key used to access the `info` or `arrays` dictionary of a
-            configuration, and 'units' is an ASE-readable units string
+
+            A dictionary with the following structure:
+
+                <property-id>:
+                    <kim-field>:
+                        'field': <ase-field>
+                        'units': <ase-units>
 
         configuration_sets (list):
             List of ConfigurationSet objects defining groups of configurations
@@ -169,6 +177,8 @@ class Dataset:
         self.data               = data
 
         self.configuration_sets = []
+
+        self._custom_definitions = {}
 
         if property_map is None: property_map = {}
         self.property_map = property_map
@@ -540,17 +550,32 @@ class Dataset:
             l[0].replace('\|', '|'):
                 l[1]for l in parser.get_data('Configuration sets')[1:]
         }
-
-        # # Map property fields to supplied names
-        # for row in parser.data['Properties'][1:]:
-        #     dataset.rename_property(row[1], row[0])
-
-        # Extract computed properties
         property_map = {}
         for prop in parser.get_data('Properties')[1:]:
-            property_map[prop[0]] = {
-                'field': prop[1],
-                'units': prop[2],
+            pid, kim_field, ase_field, units = prop
+
+            if pid == 'default':
+                pname = pid
+            elif pid in available_kim_properties:
+                pname = pid
+            elif isinstance(pid, tuple):
+                pname = pid[0]
+
+                edn_path = os.path.join(base_path, pid[1])
+                dataset._custom_definitions[pname] = edn_path
+                # dataset._custom_definitions[pname] = os.path.abspath(edn_path)
+                # dataset._custom_definitions[pname] = os.path.join(os.getcwd(), edn_path)
+
+            pid_dict = property_map.setdefault(pname, {})
+
+            if kim_field in pid_dict:
+                raise BadTableFormatting(
+                    "Duplicate property field found"
+                )
+
+            pid_dict[kim_field] = {
+                'field': ase_field,
+                'units': units
             }
 
         dataset.property_map = property_map
@@ -866,46 +891,56 @@ class Dataset:
                 'Must set `Dataset.property_map first'
             )
 
-        efs_names = {
-            'energy', 'forces', 'stress', 'virial',
-            'unrelaxed-potential-energy',
-            'unrelaxed-potential-forces',
-            'unrelaxed-cauchy-stress',
-            }
-
-        efs = set(self.property_map.keys()).issubset(efs_names)
-
-        if not efs:
-            raise NotImplementedError(
-                "Loading datasets that contain properties other than 'energy'"\
-                ", 'forces', or 'stress' is not implemented."
-            )
-
-        map_copy = {}
-        for key in self.property_map:
-            map_copy[key] = {}
-            for key2 in self.property_map[key]:
-                map_copy[key][key2] = self.property_map[key][key2]
+        map_copy = deepcopy(self.property_map)
 
         self.data = []
 
+        id_counter = 1
         for ci, conf in enumerate(tqdm(
             self.configurations,
             desc='Parsing data',
             disable=not verbose
             )):
 
-            try:
-                self.data.append(Property.EFS(
-                    conf, map_copy, instance_id=ci+1,
-                    convert_units=convert_units
-                ))
-            except Exception as e:
-                raise RuntimeError(
-                    'Caught exception while parsing data entry {}: {}\n{}'.format(
-                        ci, e, conf.info
-                    )
-                )
+            for pid in self.property_map:
+                if pid != 'default':
+                    try:
+                        # This will raise an exception if a required key is missing
+                        if pid in available_kim_properties:
+                            definition = pid
+                        else:
+                            definition = self._custom_definitions[pid]
+
+                        prop = Property.from_definition(
+                            pid, definition, conf, map_copy[pid],
+                            instance_id=id_counter,
+                            convert_units=convert_units
+                        )
+
+                        self.data.append(prop)
+                        id_counter += 1
+                    except Exception as e:
+                        err = traceback.format_exc()
+                        warnings.warn(err + f"\nUnable to parse property of type: {pid}")
+                else:
+
+                    try:
+                        # This will raise an error if energy isnt found on the conf
+                        prop = Property.Default(
+                            conf, map_copy['default'], instance_id=id_counter,
+                            convert_units=convert_units
+                        )
+
+                        self.data.append(prop)
+                        id_counter += 1
+                    except Exception as e:
+                        raise PropertyParsingError(
+                            'Caught exception while parsing data entry {}: {}\n{}'.format(
+                                ci, e, conf.info
+                            )
+                        )
+
+
 
         if convert_units:
             for key in self.property_map:
@@ -1355,6 +1390,14 @@ class Dataset:
 
     def get_data(self, property_field, cs_ids=None, exclude=False, concatenate=False, ravel=False):
         """
+        Returns a list of properties obtained by looping over `self.data` and
+        extracting the desired field if it exists on the property.
+
+        Note that if the field does not exist on the property, that property
+        will be skipped. This means that if there are multiple properties linked
+        to a single configuration, `len(get_data(...))` will not be the same as
+        `len(self.configurations)`
+
         Args:
             property_field (str):
                 The string key used to extract the property values from the
@@ -1450,6 +1493,7 @@ class Dataset:
             property_field = EDN_KEY_MAP.get(property_field, property_field)
 
             tmp = [d.get_data(property_field) for d in self.data]
+            tmp = [t for t in tmp if t is not np.nan]
 
             if concatenate:
                 tmp = np.concatenate(tmp)

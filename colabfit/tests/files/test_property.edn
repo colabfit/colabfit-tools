@@ -1,0 +1,29 @@
+{
+  "property-id" "my-custom-property"
+
+  "property-title" "A custom, user-provided Property Definition. See https://openkim.org/doc/schema/properties-framework/ for instructions on how to build these files."
+
+  "property-description" "Some human-readable description"
+
+  "a-custom-field-name" {
+    "type"         "string"
+    "has-unit"     false
+    "extent"       []
+    "required"     false
+    "description"  "The description of the custom field"
+  }
+  "a-custom-1d-array" {
+    "type"         "float"
+    "has-unit"     true
+    "extent"       [":"]
+    "required"     true
+    "description"  "This should be a 1D vector of floats"
+  }
+  "a-custom-per-atom-array" {
+    "type"         "float"
+    "has-unit"     true
+    "extent"       [":",3]
+    "required"     true
+    "description"  "This is a 2D array of floats, where the second dimension has a length of 3"
+  }
+}

@@ -1,6 +1,8 @@
 import json
+import datetime
 import warnings
 import itertools
+from kim_property.create import PROPERTY_NAME_TO_PROPERTY_ID
 import numpy as np
 from copy import deepcopy
 
@@ -19,13 +21,15 @@ KIM_PROPERTIES, PROPERTY_NAME_ERTY_ID, \
 available_kim_properties = get_properties()
 
 from colabfit import (
-    EFS_PROPERTY_NAME, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
+    DEFAULT_PROPERTY_NAME, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
 )
 
 # These are fields that are related to the geometry of the atomic structure
 # or the OpenKIM Property Definition and shouldn't be used for equality checks
 _ignored_fields = [
     'property-id',
+    'property-title',
+    'property-description',
     'instance-id',
     'a',
     'species',
@@ -34,6 +38,10 @@ _ignored_fields = [
     'unrelaxed-periodic-cell-vector-2',
     'unrelaxed-periodic-cell-vector-3',
 ]
+
+
+class PropertyParsingError(Exception):
+    pass
 
 
 class Property(dict):
@@ -47,6 +55,24 @@ class Property(dict):
     Attributes:
         edn (dict):
             A dictionary defining an OpenKIM Property Instance in EDN format.
+
+        property_map (dict):
+            key = a string that can be used as a key like `self.edn[key]`
+            value = A sub-dictionary with the following structure:
+                {
+                    'field': A field name used to access atoms.info
+                        or atoms.arrays
+                    'units': A string matching one of the units names in
+                        ase.units (https://wiki.fysik.dtu.dk/ase/ase/units.html)
+                }
+
+            These units will be used to convert the given units to eV,
+            Angstrom, a.m.u., Kelvin, ...
+
+            For compound units (e.g. "eV/Ang"), the string will be split on
+            '*' and '/'. The raw data will be multiplied by the first unit
+            and anything preceded by a '*'. It will be divided by anything
+            preceded by a '/'.
 
         configurations (list):
             A list of `colabfit.Configuration` objects
@@ -74,30 +100,18 @@ class Property(dict):
             name (str):
                 Short OpenKIM Property Definition name
 
-            conf (Configuration):
-                A ColabFit Configuration object
+            configurations (list):
+                A list of ColabFit Configuration object
 
             property_map (dict):
-                key = a string that can be used as a key like `self.edn[key]`
-                value = A sub-dictionary with the following structure:
-                    {
-                        'field': A field name used to access atoms.info
-                            or atoms.arrays
-                        'units': A string matching one of the units names in
-                            ase.units (https://wiki.fysik.dtu.dk/ase/ase/units.html)
-                    }
-
-                These units will be used to convert the given units to eV,
-                Angstrom, a.m.u., Kelvin, ...
-
-                For compound units (e.g. "eV/Ang"), the string will be split on
-                '*' and '/'. The raw data will be multiplied by the first unit
-                and anything preceded by a '*'. It will be divided by anything
-                preceded by a '/'.
+                A property map as described in the Property attributes section.
 
             settings (PropertySettings):
                 A `colabfit.PropertySettings` objects specifying how to compute
                 the property.
+
+            edn (dict):
+                A dictionary defining an OpenKIM Property Instance in EDN format.
 
             instance_id (int):
                 A positive non-zero integer
@@ -179,28 +193,118 @@ class Property(dict):
 
 
     @classmethod
-    def EFS(
+    def from_definition(
+        cls, name, definition, conf, property_map,
+        settings=None, instance_id=1, convert_units=False
+    ):
+
+        """
+        Custom properties shouldn't have to satisfy the OpenKIM requirements
+        """
+
+        adding_new = False
+        if name not in PROPERTY_NAME_TO_PROPERTY_ID:
+            adding_new = True
+
+            now = datetime.datetime.now()
+
+            dummy_name = 'tag:@,{:04d}-{:02d}-{:02d}:property/{}'.format(
+                now.year,
+                now.month,
+                now.day,
+                name
+            )
+
+            PROPERTY_NAME_TO_PROPERTY_ID[name]          = dummy_name
+            PROPERTY_ID_TO_PROPERTY_NAME[name]          = name
+            PROPERTY_ID_TO_PROPERTY_NAME[dummy_name]    = name
+
+        edn = kim_edn.loads(kim_property_create(
+            # instance_id=instance_id, property_name=definition
+            instance_id=instance_id,
+            property_name=name
+        ))[0]
+
+        # edn['property-id'] = name
+
+        if adding_new:
+            with open(definition, 'r') as edn_file:
+                edn_def = kim_edn.loads(''.join(edn_file.readlines()))
+
+            def_dict = {}
+            for k, d in edn_def.items():
+                try:
+                    def_dict[k] = dict(d)
+                except:
+                    def_dict[k] = d
+
+            def_dict['property-id'] = dummy_name
+
+            available_kim_properties[dummy_name] = def_dict
+
+        update_edn_with_conf(edn, conf)
+
+        for key, val in property_map.items():
+            if val['field'] in conf.info:
+                data = conf.info[val['field']]
+            elif val['field'] in conf.arrays:
+                data = conf.arrays[val['field']]
+            else:
+                # Key not found on configurations. Will be checked later
+                pass
+
+            if isinstance(data, str):
+                pass
+            else:
+                data = np.atleast_1d(data)
+                if data.size == 1:
+                    data = float(data)
+                else:
+                    data = data.tolist()
+
+            edn[key] = {
+                'source-value': data,
+            }
+
+            if val['units'] != 'None':
+                edn[key]['source-unit'] = val['units']
+
+        return cls(
+            name=name,
+            configurations=[conf],
+            property_map=property_map,
+            settings=settings,
+            edn=edn,
+            convert_units=convert_units,
+        )
+
+
+    @classmethod
+    def Default(
         cls, conf, property_map, settings=None, instance_id=1,
         convert_units=False
         ):
-        """
-        Constructs a property for storing energy/forces/stress data of an
-        `colabfit.Configuration` object.
+        f"""
+        Constructs a default property for storing common properties like energy,
+        force, stress, ...
+
+        Uses {DEFAULT_PROPERTY_NAME} as the Property Definition.
 
         Assumes that the properties, if provided, are stored in the following
         ways:
             energy: `conf.info[property_map['energy']]`
             forces: `conf.arrays[property_map['forces']]`
             stress: `conf.info[property_map['stress']]`
+            ...
 
-        Note: `property_map` can use the following aliases:
-            - 'energy' instead of 'unrelaxed-potential-energy'
-            - 'forces' instead of 'unrelaxed-potential-forces'
-            - 'stress' instead of 'unrelaxed-cauchy-stress'
+        Note that some fields have been given pseudonyms:
+
+        (key=pseudonym, value=original name)
+        {EDN_KEY_MAP}
         """
 
         edn = kim_edn.loads(kim_property_create(
-            instance_id=instance_id, property_name=EFS_PROPERTY_NAME
+            instance_id=instance_id, property_name=DEFAULT_PROPERTY_NAME
         ))[0]
 
         update_edn_with_conf(edn, conf)
@@ -217,6 +321,7 @@ class Property(dict):
 
                 continue
 
+            # TODO: WHY is this code here??
             if val['field'] in conf.info:
                 data = conf.info[val['field']]
 
@@ -235,17 +340,19 @@ class Property(dict):
             else:
                 data = data.tolist()
 
-            if (key == 'energy') or (key == 'unrelaxed-potential-energy'):
-                edn['unrelaxed-potential-energy'] = {
+            edn_key = EDN_KEY_MAP.get(key, key)
+
+            if edn_key == 'unrelaxed-potential-energy':
+                edn[edn_key] = {
                     'source-value': data,
                     'source-unit': val['units'],
                 }
-            if (key == 'forces') or (key == 'unrelaxed-potential-forces'):
-                edn['unrelaxed-potential-forces'] = {
+            if edn_key == 'unrelaxed-potential-forces':
+                edn[edn_key] = {
                     'source-value': data,
                     'source-unit': val['units']
                 }
-            if (key == 'stress') or (key == 'unrelaxed-cauchy-stress'):
+            if edn_key == 'unrelaxed-cauchy-stress':
                 data = np.array(data)
                 if np.prod(data.shape) == 9:
                     data = data.reshape((3, 3))
@@ -258,13 +365,13 @@ class Property(dict):
                         data[0, 1],
                     ]).tolist()
 
-                edn['unrelaxed-cauchy-stress'] = {
+                edn[edn_key] = {
                     'source-value': data,
                     'source-unit': val['units']
                 }
 
         return cls(
-            name=EFS_PROPERTY_NAME,
+            name=DEFAULT_PROPERTY_NAME,
             configurations=[conf],
             property_map=property_map,
             settings=settings,
@@ -358,6 +465,9 @@ class Property(dict):
         return not self.__eq__(other)
 
 
+    def keys(self):
+        return self.edn.keys()
+
     def __setitem__(self, k, v):
         edn_key = EDN_KEY_MAP.get(k, k)
 
@@ -381,7 +491,10 @@ class Property(dict):
     def get_data(self, k):
         edn_key = EDN_KEY_MAP.get(k, k)
 
-        return np.atleast_1d(self[edn_key]['source-value'])
+        if edn_key in self.edn:
+            return np.atleast_1d(self[edn_key]['source-value'])
+        else:
+            return np.nan
 
 
     def __delitem__(self, k):
