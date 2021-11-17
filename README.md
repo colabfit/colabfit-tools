@@ -44,13 +44,60 @@ dataset.configurations = load_data(
 ```
 
 ## Parsing the data
-Parse the properties by specifying a `property_map`, which is a special dictionary on a dataset. Note that the key should be the name of an OpenKIM Property Definition (though 'energy', 'forces', and 'stress' are automatically renamed). `'field'` is used to specify the key for extracting the property from `ase.Atoms.info` or `ase.Atoms.arrays`. `load_data()` will extract the fields provided in `property_map` from the configuration, and store them as [Property](colabfit/tools/property.py) objects in the `dataset.data` list.
+Parse the properties by specifying a `property_map`, which is a special dictionary on a dataset. Note that the keys should either be 1) the name of an OpenKIM Property Definition from [the list of approved OpenKIM Property Definitions](https://openkim.org/properties), or 2) the name of a locally-defined property (see details below) , or 3) the string `'default'`. Note that `'default'` means that an existing property will be used with support for basic fields like `'energy'`, `'forces'`, and `'stress'`. `'field'` is used to specify the key for extracting the property from `ase.Atoms.info` or `ase.Atoms.arrays`. `load_data()` will extract the fields provided in `property_map` from the configuration, and store them as [Property](colabfit/tools/property.py) objects in the `dataset.data` list. If a custom property is used, the `Dataset.custom_definitions` dictionary must be updated to either point to the local EDN file or a Python dictionary representation of the contents of the EDN file.
+
 ```python
 dataset.property_map = {
-    # ColabFit name: {'field': ASE field name, 'units': ASE units string}
-    'energy': {'field': 'energy', 'units': 'eV'},
-    'forces': {'field': 'F',      'units': 'eV/Ang'}
+    # ColabFit Property Name: {Property field name: {'field': ASE field name, 'units': ASE units string}}
+    'default': {
+        'energy': {'field': 'energy', 'units': 'eV'},
+        'forces': {'field': 'F',      'units': 'eV/Ang'}
+    },
+    'my-custom-property': {
+        'a-custom-field-name':      {'field': 'field-name',      'units': None},
+        'a-custom-1d-array':        {'field': '1d-array',        'units': 'eV'},
+        'a-custom-per-atom-array':  {'field': 'per-atom-array',  'units': 'eV'},
+    }
 }
+
+dataset.custom_definitions = {
+    'my-custom-property': 'tests/files/test_property.edn'.
+}
+```
+
+## Defining custom properties
+Custom properties can be defined by writing an EDN file that has been formatted according to the [KIM Properties Framework](https://openkim.org/doc/schema/properties-framework/). An example EDN file is shown below, and can be modified to fit most use cases.
+```
+{
+  "property-id" "my-custom-property"
+
+  "property-title" "A custom, user-provided Property Definition. See https://openkim.org/doc/schema/properties-framework/ for instructions on how to build these files."
+
+  "property-description" "Some human-readable description"
+
+  "a-custom-field-name" {
+    "type"         "string"
+    "has-unit"     false
+    "extent"       []
+    "required"     false
+    "description"  "The description of the custom field"
+  }
+  "a-custom-1d-array" {
+    "type"         "float"
+    "has-unit"     true
+    "extent"       [":"]
+    "required"     true
+    "description"  "This should be a 1D vector of floats"
+  }
+  "a-custom-per-atom-array" {
+    "type"         "float"
+    "has-unit"     true
+    "extent"       [":",3]
+    "required"     true
+    "description"  "This is a 2D array of floats, where the second dimension has a length of 3"
+  }
+}
+```
 
 # Parse data, and optionally convert to ColabFit-compliant units
 dataset.parse_data(convert_units=True)
