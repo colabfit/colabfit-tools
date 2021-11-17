@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from ase import Atoms
 
-from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
+from colabfit import ATOMS_CONSTRAINTS_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
 from colabfit.tools.configuration import Configuration
 
 
@@ -100,3 +100,59 @@ class TestConfigurations(unittest.TestCase):
         self.assertNotEqual(hash(conf1), hash(conf2))
         self.assertEqual(hash(conf1), hash(conf3))
 
+
+    def test_constrained_hashing(self):
+        atoms = Atoms('H4', pbc=True)
+        atoms.info[ATOMS_NAME_FIELD] = 'test'
+
+        labels = {'label1', 'label2'}
+        atoms.info[ATOMS_LABELS_FIELD] = labels
+
+        atoms.info[ATOMS_CONSTRAINTS_FIELD] = {ATOMS_LABELS_FIELD}
+
+        natoms = len(atoms)
+
+        cell = np.array([
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1]
+        ])
+        pos = np.random.random((natoms, 3))
+
+        atoms.cell = cell
+        atoms.positions = pos
+
+        conf1 = Configuration.from_ase(atoms)
+        conf2 = Configuration.from_ase(atoms)
+
+        self.assertEqual(hash(conf1), hash(conf2))
+
+
+    def test_constrained_hashing(self):
+        atoms = Atoms('H4', pbc=True)
+        atoms.info[ATOMS_NAME_FIELD] = 'test'
+        labels = {'label1', 'label2'}
+        atoms.info[ATOMS_LABELS_FIELD] = labels
+
+        atoms.info[ATOMS_CONSTRAINTS_FIELD] = {ATOMS_LABELS_FIELD}
+
+        natoms = len(atoms)
+
+        cell = np.array([
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1]
+        ])
+        pos = np.random.random((natoms, 3))
+
+        atoms.cell = cell
+        atoms.positions = pos
+
+        atoms2 = Atoms(atoms)
+
+        atoms2.info[ATOMS_LABELS_FIELD] = {'a_different_label'}
+
+        conf1 = Configuration.from_ase(atoms)
+        conf2 = Configuration.from_ase(atoms2)
+
+        self.assertNotEqual(hash(conf1), hash(conf2))

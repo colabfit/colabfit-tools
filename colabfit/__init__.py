@@ -3,9 +3,10 @@ __author__  = "ColabFit"
 __credit__  = "University of Minnesota"
 
 
-ATOMS_ID_FIELD    = '_id'
-ATOMS_NAME_FIELD    = '_name'
-ATOMS_LABELS_FIELD  = '_labels'
+ATOMS_ID_FIELD          = '_id'
+ATOMS_NAME_FIELD        = '_name'
+ATOMS_LABELS_FIELD      = '_labels'
+ATOMS_CONSTRAINTS_FIELD = '_constraints'
 
 DEFAULT_PROPERTY_NAME = 'configuration-nonorthogonal-periodic-3d-cell-fixed-particles-fixed'
 

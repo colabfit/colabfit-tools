@@ -300,7 +300,7 @@ class TestDatasetConstruction(unittest.TestCase):
         }
 
         dataset.custom_definitions = {
-            'my-custom-property':{
+            'my-custom-property': {
                 "property-id":
                     "my-custom-property",
                 "property-title":
@@ -360,14 +360,18 @@ class TestSetOperations(unittest.TestCase):
 
         dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset1.parse_data()
 
         dataset2 = Dataset('test1')
         dataset2.configurations = [Configuration.from_ase(at) for at in images1[:3]]
         dataset2.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset2.parse_data()
 
@@ -388,14 +392,18 @@ class TestSetOperations(unittest.TestCase):
 
         dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset1.parse_data()
 
         dataset2 = Dataset('test1')
         dataset2.configurations = [Configuration.from_ase(at) for at in images1[:3]]
         dataset2.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset2.parse_data()
 
@@ -416,7 +424,9 @@ class TestSetOperations(unittest.TestCase):
 
         dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset1.parse_data()
 
@@ -432,7 +442,9 @@ class TestSetOperations(unittest.TestCase):
 
         dataset2.configurations = [Configuration.from_ase(at) for at in images2]
         dataset2.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset2.parse_data()
 
@@ -453,7 +465,9 @@ class TestSetOperations(unittest.TestCase):
 
         dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset1.parse_data()
 
@@ -469,7 +483,9 @@ class TestSetOperations(unittest.TestCase):
 
         dataset2.configurations = [Configuration.from_ase(at) for at in images2]
         dataset2.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset2.parse_data()
 
@@ -503,7 +519,9 @@ class TestSetOperations(unittest.TestCase):
 
         dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset1.parse_data()
 
@@ -519,7 +537,9 @@ class TestSetOperations(unittest.TestCase):
 
         dataset2.configurations = [Configuration.from_ase(at) for at in images2]
         dataset2.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset2.parse_data()
 
@@ -547,7 +567,9 @@ class TestSetOperations(unittest.TestCase):
 
         dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset1.parse_data()
 
@@ -563,7 +585,9 @@ class TestSetOperations(unittest.TestCase):
 
         dataset2.configurations = [Configuration.from_ase(at) for at in images2]
         dataset2.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
         dataset2.parse_data()
 
@@ -585,7 +609,9 @@ class TestFilter(unittest.TestCase):
             images[-1].info['energy'] = float(i)
 
         dataset.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
 
         dataset.configurations = [Configuration.from_ase(at) for at in images]
@@ -630,8 +656,11 @@ class TestFilter(unittest.TestCase):
             images[-1].info['energy'] = float(i)
 
         dataset.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
+
 
         dataset.configurations = [Configuration.from_ase(at) for at in images]
 
@@ -676,8 +705,11 @@ class TestFilter(unittest.TestCase):
             images[-1].info['energy'] = float(i)
 
         dataset.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
+
 
         dataset.configurations = [Configuration.from_ase(at) for at in images]
 
@@ -703,8 +735,11 @@ class TestFilter(unittest.TestCase):
             images[-1].info['energy'] = float(i)
 
         dataset.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
+
 
         dataset.configurations = [Configuration.from_ase(at) for at in images]
 
@@ -751,8 +786,11 @@ class TestFilter(unittest.TestCase):
             images[-1].info['energy'] = float(i)
 
         dataset.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'}
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+            },
         }
+
 
         dataset.configurations = [Configuration.from_ase(at) for at in images]
 
@@ -811,8 +849,10 @@ class Test_ParentDatasets(unittest.TestCase):
         )
 
         dataset.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'},
-            'forces': {'field': 'forces', 'units': 'eV/Ang'},
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+                'forces': {'field': 'forces', 'units': 'eV/Ang'},
+            }
         }
 
         dataset.parse_data()
@@ -862,8 +902,10 @@ class Test_DatasetFunctions(unittest.TestCase):
 
         dataset1.configurations = [Configuration.from_ase(at) for at in images1]
         dataset1.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'},
-            'forces': {'field': 'forces', 'units': 'eV/Ang'},
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+                'forces': {'field': 'forces', 'units': 'eV/Ang'},
+            }
         }
 
         dataset1.parse_data()
@@ -882,8 +924,10 @@ class Test_DatasetFunctions(unittest.TestCase):
 
         dataset2.configurations = [Configuration.from_ase(at) for at in images2]
         dataset2.property_map = {
-            'energy': {'field': 'energy', 'units': 'eV'},
-            'forces': {'field': 'forces', 'units': 'eV/Ang'},
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+                'forces': {'field': 'forces', 'units': 'eV/Ang'},
+            }
         }
 
         dataset2.parse_data()
