@@ -220,6 +220,131 @@ class TestDatasetConstruction(unittest.TestCase):
         )
 
 
+    def test_custom_properties(self):
+
+        dataset = Dataset(name='test')
+        atoms = []
+        for ii in range(1, 11):
+            atoms.append(Atoms(f'H{ii}', positions=np.random.random((ii, 3))))
+            atoms[-1].info[ATOMS_NAME_FIELD] = ii
+
+            atoms[-1].info['eng'] = ii
+            atoms[-1].info['fcs'] = np.ones((ii, 3))*ii
+
+            atoms[-1].info['string'] = f'string_{ii}'
+            atoms[-1].info['1d-array'] = np.ones(5)*ii
+            atoms[-1].arrays['per-atom-array'] = np.ones((ii, 3))*ii+1
+
+        dataset.configurations = [Configuration.from_ase(at)for at in atoms]
+
+        dataset.property_map = {
+            'default': {
+                'energy': {'field': 'eng', 'units': 'eV'},
+                'forces': {'field': 'fcs', 'units': 'eV/Ang'},
+            },
+            'my-custom-property': {
+                'a-custom-string':
+                    {'field': 'string', 'units': None},
+                'a-custom-1d-array':
+                    {'field': '1d-array', 'units': 'eV'},
+                'a-custom-per-atom-array':
+                    {'field': 'per-atom-array', 'units': 'eV'},
+            }
+        }
+
+        dataset.custom_definitions = {
+            'my-custom-property': 'colabfit/tests/files/test_property.edn'
+        }
+
+        dataset.parse_data()
+
+        self.assertEqual(20, len(dataset.data))
+        self.assertEqual(10, len(dataset.get_data('energy')))
+        self.assertEqual(10, len(dataset.get_data('forces')))
+        self.assertEqual(10, len(dataset.get_data('a-custom-string')))
+        self.assertEqual(10, len(dataset.get_data('a-custom-1d-array')))
+        self.assertEqual(10, len(dataset.get_data('a-custom-per-atom-array')))
+
+
+
+    def test_custom_properties_no_edn(self):
+
+        dataset = Dataset(name='test')
+        atoms = []
+        for ii in range(1, 11):
+            atoms.append(Atoms(f'H{ii}', positions=np.random.random((ii, 3))))
+            atoms[-1].info[ATOMS_NAME_FIELD] = ii
+
+            atoms[-1].info['eng'] = ii
+            atoms[-1].info['fcs'] = np.ones((ii, 3))*ii
+
+            atoms[-1].info['string'] = f'string_{ii}'
+            atoms[-1].info['1d-array'] = np.ones(5)*ii
+            atoms[-1].arrays['per-atom-array'] = np.ones((ii, 3))*ii+1
+
+        dataset.configurations = [Configuration.from_ase(at)for at in atoms]
+
+        dataset.property_map = {
+            'default': {
+                'energy': {'field': 'eng', 'units': 'eV'},
+                'forces': {'field': 'fcs', 'units': 'eV/Ang'},
+            },
+            'my-custom-property': {
+                'a-custom-string':
+                    {'field': 'string', 'units': None},
+                'a-custom-1d-array':
+                    {'field': '1d-array', 'units': 'eV'},
+                'a-custom-per-atom-array':
+                    {'field': 'per-atom-array', 'units': 'eV'},
+            }
+        }
+
+        dataset.custom_definitions = {
+            'my-custom-property':{
+                "property-id":
+                    "my-custom-property",
+                "property-title":
+                    "A custom, user-provided Property Definition. See "\
+                    "https://openkim.org/doc/schema/properties-framework/ for "\
+                    "instructions on how to build these files.",
+                "property-description":
+                    "Some human-readable description",
+                "a-custom-field-name": {
+                    "type":         "string",
+                    "has-unit":     False,
+                    "extent":       [],
+                    "required":     False,
+                    "description":  "The description of the custom field"
+                },
+                "a-custom-1d-array": {
+                    "type":         "float",
+                    "has-unit":     True,
+                    "extent":       [":"],
+                    "required":     True,
+                    "description":  "This should be a 1D vector of floats"
+                },
+                "a-custom-per-atom-array": {
+                    "type":         "float",
+                    "has-unit":     True,
+                    "extent":       [":", 3],
+                    "required":     True,
+                    "description":
+                        "This is a 2D array of floats, where the second "\
+                        "dimension has a length of 3"
+                },
+            }
+        }
+
+        dataset.parse_data()
+
+        self.assertEqual(20, len(dataset.data))
+        self.assertEqual(10, len(dataset.get_data('energy')))
+        self.assertEqual(10, len(dataset.get_data('forces')))
+        self.assertEqual(10, len(dataset.get_data('a-custom-string')))
+        self.assertEqual(10, len(dataset.get_data('a-custom-1d-array')))
+        self.assertEqual(10, len(dataset.get_data('a-custom-per-atom-array')))
+
+
 class TestSetOperations(unittest.TestCase):
 
     def test_subset_is_subset(self):

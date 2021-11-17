@@ -115,6 +115,10 @@ class Dataset:
             re-assigned, `property_settings` is re-constructed and property
             links to PropertySettings objects are re-assigned.
 
+        custom_definitions (dict):
+            key = the name of a locally-defined property
+            value = the path to an EDN file containing the property definition
+
         property_settings_labels (list):
             A list of all property settings labels.
 
@@ -178,7 +182,7 @@ class Dataset:
 
         self.configuration_sets = []
 
-        self._custom_definitions = {}
+        self.custom_definitions = {}
 
         if property_map is None: property_map = {}
         self.property_map = property_map
@@ -562,7 +566,7 @@ class Dataset:
                 pname = pid[0]
 
                 edn_path = os.path.join(base_path, pid[1])
-                dataset._custom_definitions[pname] = edn_path
+                dataset.custom_definitions[pname] = edn_path
                 # dataset._custom_definitions[pname] = os.path.abspath(edn_path)
                 # dataset._custom_definitions[pname] = os.path.join(os.getcwd(), edn_path)
 
@@ -909,7 +913,7 @@ class Dataset:
                         if pid in available_kim_properties:
                             definition = pid
                         else:
-                            definition = self._custom_definitions[pid]
+                            definition = self.custom_definitions[pid]
 
                         prop = Property.from_definition(
                             pid, definition, conf, map_copy[pid],
@@ -920,6 +924,9 @@ class Dataset:
                         self.data.append(prop)
                         id_counter += 1
                     except Exception as e:
+                        # TODO: you need a better way of doing this. Need to
+                        # throw different errors if it's missing keys vs if it
+                        # crashed
                         err = traceback.format_exc()
                         warnings.warn(err + f"\nUnable to parse property of type: {pid}")
                 else:
