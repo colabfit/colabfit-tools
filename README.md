@@ -64,6 +64,8 @@ dataset.custom_definitions = {
     'my-custom-property': 'tests/files/test_property.edn'.
     # OR: 'my-custom-property': {... contents of an EDN file}
 }
+
+dataset.parse_data(convert_units=True, verbose=True)
 ```
 
 ## Defining custom properties
