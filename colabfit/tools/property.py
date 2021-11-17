@@ -228,15 +228,18 @@ class Property(dict):
         # edn['property-id'] = name
 
         if adding_new:
-            with open(definition, 'r') as edn_file:
-                edn_def = kim_edn.loads(''.join(edn_file.readlines()))
+            if isinstance(definition, dict):
+                def_dict = definition
+            else:
+                with open(definition, 'r') as edn_file:
+                    edn_def = kim_edn.loads(''.join(edn_file.readlines()))
 
-            def_dict = {}
-            for k, d in edn_def.items():
-                try:
-                    def_dict[k] = dict(d)
-                except:
-                    def_dict[k] = d
+                def_dict = {}
+                for k, d in edn_def.items():
+                    try:
+                        def_dict[k] = dict(d)
+                    except:
+                        def_dict[k] = d
 
             def_dict['property-id'] = dummy_name
 
@@ -266,7 +269,7 @@ class Property(dict):
                 'source-value': data,
             }
 
-            if val['units'] != 'None':
+            if (val['units'] != 'None') or (val['units'] is None):
                 edn[key]['source-unit'] = val['units']
 
         return cls(
