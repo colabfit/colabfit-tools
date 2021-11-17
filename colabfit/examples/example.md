@@ -1,8 +1,20 @@
 # Summary
 
-This section is ignored during parsing. It is intended to be used as a place to display additional information about a Dataset.
+This section is ignored during parsing. It is intended to be used as a place to
+display additional information about a Dataset, and will be ignored by `Dataset.from_markdown()`.
 
-All other sections and tables are required for use with `Dataset.from_markdown()`. Sections should be specified using `<h1>` headers. Exact header spelling and capitalization is required. All table column headers are required unless otherwise specified. Sections may be given in different orders than shown here. Additional sections may be added, but will be ignored by `Dataset.from_markdown()`.
+All other sections and tables are required for use with
+`Dataset.from_markdown()`. Sections should be specified using `<h1>` headers.
+Exact header spelling and capitalization is required. All table column headers
+are required unless otherwise specified. Sections that have tables in them will
+only use the table for `Dataset.from_markdown()`. Sections may be given in different
+orders than shown here. Additional sections may be added, but will be ignored by
+`Dataset.from_markdown()`.
+
+Any files should be provided as links in Markdown as described
+[here](https://www.markdownguide.org/basic-syntax/#links), using the format
+`"[<text>](<path_to_file>)"`.
+
 
 The table below will be automatically generated when using `Dataset.to_markdown()`.
 
@@ -31,11 +43,7 @@ A multi-line human-readable description of the dataset
 
 # Data
 
-A table for storing the inputs to `load_data()`. First column of each row
-('Elements', 'File', 'Format', 'Name field') must be as spelled/capitalized
-here. File name must Must have the following rows
-(with first columns spelled/capitalized in
-this way):
+A table for storing the inputs to `load_data()`. First column of each row ('Elements', 'File', 'Format', 'Name field') must be as spelled/capitalized here. File name must Must have the following rows (with first columns spelled/capitalized in this way):
 
 |||
 |---|---|
@@ -46,12 +54,30 @@ this way):
 
 # Properties
 
-The tabular form of `Dataset.property_map`. For example:
+The table below should have the following columns:
+* `Property`: An OpenKIM Property Definition ID from [the list of approved OpenKIM Property
+   Definitions](https://openkim.org/properties), OR a link to a local EDN file
+   (using the notation `[<name_of_property>](<path_to_edn_file>)`) that has been
+   formatted according to the [KIM Properties
+   Framework](https://openkim.org/doc/schema/properties-framework/) , OR
+   `default`. Note that `default` means that the generic base property for
+   energies/forces/stresses/etc. should be used.
+* `KIM field`: A string that can be used as a key for an EDN dictionary
+  representation of an OpenKIM Property Instance
+* `ASE field`: A string that can be used as a key for the `info` or `arrays`
+  dictionary on a configuration
+* `Units`: A string describing the units of the field (in an ASE-readable
+  format), or `None` if the field is unitless
 
-|Name|Field|Units|
-|---|---|---|
-|energy|energy|eV|
-|forces|F|eV/Ang|
+|Property|KIM field|ASE field|Units|
+|---|---|---|---|
+|default|energy|energy|eV|
+|default|forces|F|eV/Ang|
+|[my-custom-property](colabfit/tests/files/test_property.edn)|a-custom-field-name|field-name|None|
+|[my-custom-property](colabfit/tests/files/test_property.edn)|a-custom-1d-array|1d-array|eV|
+|[my-custom-property](colabfit/tests/files/test_property.edn)|a-custom-per-atom-array|per-atom-array|eV|
+
+
 
 # Property settings
 

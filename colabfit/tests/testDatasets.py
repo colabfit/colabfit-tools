@@ -13,6 +13,11 @@ class TestDatasetConstruction(unittest.TestCase):
         # Just makes sure from_markdown doesn't throw an error
         dataset = Dataset.from_markdown('colabfit/tests/files/test.md')
 
+        self.assertEqual(6, len(dataset.data))
+        self.assertEqual(3, len(dataset.get_data('a-custom-field-name')))
+        self.assertEqual(3, len(dataset.get_data('energy')))
+
+
     def test_config_setter(self):
         atoms = []
         for i in range(3):

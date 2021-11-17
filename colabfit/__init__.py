@@ -7,7 +7,8 @@ ATOMS_ID_FIELD    = '_id'
 ATOMS_NAME_FIELD    = '_name'
 ATOMS_LABELS_FIELD  = '_labels'
 
-EFS_PROPERTY_NAME = 'configuration-nonorthogonal-periodic-3d-cell-fixed-particles-fixed'
+DEFAULT_PROPERTY_NAME = 'configuration-nonorthogonal-periodic-3d-cell-fixed-particles-fixed'
+
 from ase.units import create_units
 UNITS = create_units('2014')
 
