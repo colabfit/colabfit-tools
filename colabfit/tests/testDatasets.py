@@ -6,6 +6,7 @@ from ase import Atoms
 from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
 from colabfit.tools.configuration import Configuration
 from colabfit.tools.dataset import Dataset, load_data
+from colabfit.tools.property import MissingPropertyFieldWarning
 
 
 class TestDatasetConstruction(unittest.TestCase):
@@ -306,7 +307,7 @@ class TestDatasetConstruction(unittest.TestCase):
                 "property-title":
                     "A custom, user-provided Property Definition. See "\
                     "https://openkim.org/doc/schema/properties-framework/ for "\
-                    "instructions on how to build these files.",
+                    "instructions on how to build these files",
                 "property-description":
                     "Some human-readable description",
                 "a-custom-field-name": {
@@ -343,6 +344,47 @@ class TestDatasetConstruction(unittest.TestCase):
         self.assertEqual(10, len(dataset.get_data('a-custom-string')))
         self.assertEqual(10, len(dataset.get_data('a-custom-1d-array')))
         self.assertEqual(10, len(dataset.get_data('a-custom-per-atom-array')))
+
+
+    def test_custom_properties_missing_key(self):
+
+        dataset = Dataset(name='test')
+        atoms = []
+        for ii in range(1, 11):
+            atoms.append(Atoms(f'H{ii}', positions=np.random.random((ii, 3))))
+            atoms[-1].info[ATOMS_NAME_FIELD] = ii
+
+            atoms[-1].info['eng'] = ii
+            atoms[-1].info['fcs'] = np.ones((ii, 3))*ii
+
+            atoms[-1].info['string'] = f'string_{ii}'
+            atoms[-1].info['1d-array'] = np.ones(5)*ii
+
+            # Remove one of the important keys
+            # atoms[-1].arrays['per-atom-array'] = np.ones((ii, 3))*ii+1
+
+        dataset.configurations = [Configuration.from_ase(at)for at in atoms]
+
+        dataset.property_map = {
+            'default': {
+                'energy': {'field': 'eng', 'units': 'eV'},
+                'forces': {'field': 'fcs', 'units': 'eV/Ang'},
+            },
+            'my-custom-property': {
+                'a-custom-string':
+                    {'field': 'string', 'units': None},
+                'a-custom-1d-array':
+                    {'field': '1d-array', 'units': 'eV'},
+                'a-custom-per-atom-array':
+                    {'field': 'per-atom-array', 'units': 'eV'},
+            }
+        }
+
+        dataset.custom_definitions = {
+            'my-custom-property': 'colabfit/tests/files/test_property.edn'
+        }
+
+        self.assertWarns(MissingPropertyFieldWarning, dataset.parse_data)
 
 
 class TestSetOperations(unittest.TestCase):

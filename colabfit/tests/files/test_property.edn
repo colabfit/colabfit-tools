@@ -1,7 +1,7 @@
 {
-  "property-id" "my-custom-property"
+  "property-id" "tag:@,0000-00-00:property/my-custom-property"
 
-  "property-title" "A custom, user-provided Property Definition. See https://openkim.org/doc/schema/properties-framework/ for instructions on how to build these files."
+  "property-title" "A custom, user-provided Property Definition. See https://openkim.org/doc/schema/properties-framework/ for instructions on how to build these files"
 
   "property-description" "Some human-readable description"
 

@@ -1,8 +1,9 @@
+import os
 import json
-import datetime
+import edn_format
+import tempfile
 import warnings
 import itertools
-from kim_property.create import PROPERTY_NAME_TO_PROPERTY_ID
 import numpy as np
 from copy import deepcopy
 
@@ -13,10 +14,9 @@ from kim_property import (
     get_properties,
     check_instance_optional_key_marked_required_are_present
 )
-from kim_property.pickle import unpickle_kim_properties
 
-KIM_PROPERTIES, PROPERTY_NAME_ERTY_ID, \
-    PROPERTY_ID_TO_PROPERTY_NAME = unpickle_kim_properties()
+from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
+from kim_property.create import KIM_PROPERTIES
 
 available_kim_properties = get_properties()
 
@@ -31,7 +31,6 @@ _ignored_fields = [
     'property-title',
     'property-description',
     'instance-id',
-    'a',
     'species',
     'unrelaxed-configuration-positions',
     'unrelaxed-periodic-cell-vector-1',
@@ -43,6 +42,13 @@ _ignored_fields = [
 class PropertyParsingError(Exception):
     pass
 
+class MissingPropertyFieldWarning(Warning):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+class InvalidPropertyDefinition(Exception):
+    pass
 
 class Property(dict):
     """
@@ -121,15 +127,17 @@ class Property(dict):
                 is False
         """
 
+        self.name = name
+
         if edn is None:
             self.edn = kim_edn.loads(kim_property_create(
                 instance_id=instance_id, property_name=name
             ))[0]
         else:
-            if name != PROPERTY_ID_TO_PROPERTY_NAME[edn['property-id']]:
-                raise RuntimeError(
-                    "`name` does not match `edn['property_name']`"
-                )
+            # if name != PROPERTY_ID_TO_PROPERTY_NAME[edn['property-id']]:
+            #     raise RuntimeError(
+            #         "`name` does not match `edn['property_name']`"
+            #     )
 
             self.edn = edn
 
@@ -202,48 +210,64 @@ class Property(dict):
         Custom properties shouldn't have to satisfy the OpenKIM requirements
         """
 
-        adding_new = False
-        if name not in PROPERTY_NAME_TO_PROPERTY_ID:
-            adding_new = True
+        global KIM_PROPERTIES
 
-            now = datetime.datetime.now()
+        load_from_existing = False
 
-            dummy_name = 'tag:@,{:04d}-{:02d}-{:02d}:property/{}'.format(
-                now.year,
-                now.month,
-                now.day,
-                name
+        if isinstance(definition, dict):
+            dummy_dict = deepcopy(definition)
+
+            # Spoof if necessary
+            if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
+                # Invalid ID. Try spoofing it
+                dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
+                dummy_dict['property-id'] += definition['property-id']
+                warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+
+            load_from_existing = dummy_dict['property-id'] in KIM_PROPERTIES
+            definition = dummy_dict['property-id']
+
+        elif isinstance(definition, str):
+            if os.path.isfile(definition):
+                dummy_dict = kim_edn.load(definition)
+
+                # Check if you need to spoof the property ID to trick OpenKIM
+                if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
+                    # Invalid ID. Try spoofing it
+                    dummy_dict['property-id'] = 'tag:@,0000-00-00:property/' + definition['property-id']
+                    warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+
+                load_from_existing = dummy_dict['property-id'] in KIM_PROPERTIES
+                definition = dummy_dict['property-id']
+
+            else:
+                # Then this has to be an existing (or added) KIM Property Definition
+                load_from_existing = True
+
+                # It may have been added previously, but spoofed
+                if VALID_KIM_ID.match(definition) is None:
+                    # Invalid ID. Try spoofing it
+                    definition = 'tag:@,0000-00-00:property/' + definition
+        else:
+            raise InvalidPropertyDefinition(
+                "Property definition must either be a dictionary or a path to "\
+                "an EDN file"
             )
 
-            PROPERTY_NAME_TO_PROPERTY_ID[name]          = dummy_name
-            PROPERTY_ID_TO_PROPERTY_NAME[name]          = name
-            PROPERTY_ID_TO_PROPERTY_NAME[dummy_name]    = name
+        if load_from_existing:
+            edn = kim_edn.loads(kim_property_create(
+                instance_id=instance_id,
+                property_name=definition,
+            ))[0]
+        else:
+            with tempfile.NamedTemporaryFile('w') as tmp:
+                tmp.write(json.dumps(dummy_dict))
+                tmp.flush()
 
-        edn = kim_edn.loads(kim_property_create(
-            # instance_id=instance_id, property_name=definition
-            instance_id=instance_id,
-            property_name=name
-        ))[0]
-
-        # edn['property-id'] = name
-
-        if adding_new:
-            if isinstance(definition, dict):
-                def_dict = definition
-            else:
-                with open(definition, 'r') as edn_file:
-                    edn_def = kim_edn.loads(''.join(edn_file.readlines()))
-
-                def_dict = {}
-                for k, d in edn_def.items():
-                    try:
-                        def_dict[k] = dict(d)
-                    except:
-                        def_dict[k] = d
-
-            def_dict['property-id'] = dummy_name
-
-            available_kim_properties[dummy_name] = def_dict
+                edn = kim_edn.loads(kim_property_create(
+                    instance_id=instance_id,
+                    property_name=tmp.name,
+                ))[0]
 
         update_edn_with_conf(edn, conf)
 
@@ -254,7 +278,9 @@ class Property(dict):
                 data = conf.arrays[val['field']]
             else:
                 # Key not found on configurations. Will be checked later
-                pass
+                raise MissingPropertyFieldWarning(
+                    f"Key '{key}' not found during Property.from_defintion()"
+                )
 
             if isinstance(data, str):
                 pass
@@ -269,7 +295,7 @@ class Property(dict):
                 'source-value': data,
             }
 
-            if (val['units'] != 'None') or (val['units'] is None):
+            if (val['units'] != 'None') and (val['units'] is not None):
                 edn[key]['source-unit'] = val['units']
 
         return cls(
@@ -509,7 +535,8 @@ class Property(dict):
     def __str__(self):
         return "Property(instance_id={}, name='{}')".format(
             self.edn['instance-id'],
-            PROPERTY_ID_TO_PROPERTY_NAME[self.edn['property-id']]
+            # PROPERTY_ID_TO_PROPERTY_NAME[self.edn['property-id']]
+            self.name
         )
 
 

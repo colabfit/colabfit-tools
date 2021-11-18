@@ -3,14 +3,16 @@ import re
 import shutil
 import random
 import markdown
-import warnings
 import traceback
+import warnings
 import itertools
 import numpy as np
 from tqdm import tqdm
 from bson import ObjectId
 from copy import deepcopy
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 
 from ase.io import write
 
@@ -18,12 +20,14 @@ from kim_property import get_properties
 available_kim_properties = get_properties()
 
 from colabfit import (
-    ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, EDN_KEY_MAP,
+    ATOMS_CONSTRAINTS_FIELD, ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, EDN_KEY_MAP,
     OPENKIM_PROPERTY_UNITS
 )
 from colabfit.tools.configuration_sets import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
-from colabfit.tools.property import Property, PropertyParsingError
+from colabfit.tools.property import (
+    MissingPropertyFieldWarning, Property, PropertyParsingError
+)
 from colabfit.tools.property_settings import PropertySettings
 from colabfit.tools.transformations import BaseTransform
 from colabfit.tools.dataset_parser import (
@@ -183,6 +187,8 @@ class Dataset:
         self.configuration_sets = []
 
         self.custom_definitions = {}
+
+        self._definitions_added_to_kim = []
 
         if property_map is None: property_map = {}
         self.property_map = property_map
@@ -451,12 +457,16 @@ class Dataset:
             # Store the labels as a string, since sets arent' hashable
             images = []
             for conf in self.configurations:
-                conf.info[ATOMS_LABELS_FIELD] = ' '.join(
+                conf.info[ATOMS_LABELS_FIELD] = tuple(
                     conf.info[ATOMS_LABELS_FIELD]
                 )
 
                 conf.info[ATOMS_ID_FIELD] = str(
                     conf.info[ATOMS_ID_FIELD]
+                )
+
+                conf.info[ATOMS_CONSTRAINTS_FIELD] = tuple(
+                    conf.info[ATOMS_CONSTRAINTS_FIELD]
                 )
 
                 images.append(conf)
@@ -474,11 +484,15 @@ class Dataset:
             # Make sure the labels on the Dataset are still sets
             for conf in self.configurations:
                 conf.info[ATOMS_LABELS_FIELD] = set(
-                    conf.info[ATOMS_LABELS_FIELD].split(' ')
+                    conf.info[ATOMS_LABELS_FIELD]
                 )
 
                 conf.info[ATOMS_ID_FIELD] = ObjectId(
                     conf.info[ATOMS_ID_FIELD]
+                )
+
+                conf.info[ATOMS_CONSTRAINTS_FIELD] = set(
+                    conf.info[ATOMS_CONSTRAINTS_FIELD]
                 )
 
 
@@ -912,8 +926,11 @@ class Dataset:
                         # This will raise an exception if a required key is missing
                         if pid in available_kim_properties:
                             definition = pid
+                        elif pid in self._definitions_added_to_kim:
+                            definition = pid
                         else:
                             definition = self.custom_definitions[pid]
+                            self._definitions_added_to_kim.append(pid)
 
                         prop = Property.from_definition(
                             pid, definition, conf, map_copy[pid],
@@ -923,12 +940,18 @@ class Dataset:
 
                         self.data.append(prop)
                         id_counter += 1
+                    except MissingPropertyFieldWarning as e:
+                        warnings.warn(
+                            f'missingPropertySkipping {conf}. {e.message}',
+                            category=MissingPropertyFieldWarning
+                        )
                     except Exception as e:
-                        # TODO: you need a better way of doing this. Need to
-                        # throw different errors if it's missing keys vs if it
-                        # crashed
-                        err = traceback.format_exc()
-                        warnings.warn(err + f"\nUnable to parse property of type: {pid}")
+                        traceback.format_exc()
+                        raise PropertyParsingError(
+                            'Caught exception while parsing data entry {}: {}\n{}'.format(
+                                ci, e, conf.info
+                            )
+                        )
                 else:
 
                     try:
@@ -941,6 +964,7 @@ class Dataset:
                         self.data.append(prop)
                         id_counter += 1
                     except Exception as e:
+                        traceback.format_exc()
                         raise PropertyParsingError(
                             'Caught exception while parsing data entry {}: {}\n{}'.format(
                                 ci, e, conf.info
@@ -952,6 +976,8 @@ class Dataset:
         if convert_units:
             for key in self.property_map:
                 self.property_map[key]['units'] = OPENKIM_PROPERTY_UNITS[key]
+
+        self.resync()
 
 
     def refresh_property_map(self, verbose=False):
@@ -1319,7 +1345,7 @@ class Dataset:
             data.convert_units()
 
 
-    def isdisjoint(self, other):
+    def isdisjoint(self, other, configurations_only=False):
 
         if len(self.data) == 0:
             raise RuntimeError(
@@ -1334,24 +1360,43 @@ class Dataset:
         self.check_if_is_parent_dataset()
         other.check_if_is_parent_dataset()
 
-        if self.is_parent_dataset:
-            super_data1 = set(itertools.chain.from_iterable([
-                ds.data for ds in self.data
-            ]))
+        if configurations_only:
+            if self.is_parent_dataset:
+                super_configs1 = set(itertools.chain.from_iterable([
+                    ds.configurations for ds in self.data
+                ]))
+            else:
+                super_configs1 = set(self.configurations)
+
+            if other.is_parent_dataset:
+                super_configs2 = set(itertools.chain.from_iterable([
+                    ds.configurations for ds in other.data
+                ]))
+            else:
+                super_configs2 = set(other.configurations)
+
+            return super_configs1.isdisjoint(super_configs2)
+
+
         else:
-            super_data1 = set(self.data)
+            if self.is_parent_dataset:
+                super_data1 = set(itertools.chain.from_iterable([
+                    ds.data for ds in self.data
+                ]))
+            else:
+                super_data1 = set(self.data)
 
-        if other.is_parent_dataset:
-            super_data2 = set(itertools.chain.from_iterable([
-                ds.data for ds in other.data
-            ]))
-        else:
-            super_data2 = set(other.data)
+            if other.is_parent_dataset:
+                super_data2 = set(itertools.chain.from_iterable([
+                    ds.data for ds in other.data
+                ]))
+            else:
+                super_data2 = set(other.data)
 
-        return super_data1.isdisjoint(super_data2)
+            return super_data1.isdisjoint(super_data2)
 
 
-    def issubset(self, other):
+    def issubset(self, other, configurations_only=False):
 
         if len(self.data) == 0:
             raise RuntimeError(
@@ -1366,25 +1411,44 @@ class Dataset:
         self.check_if_is_parent_dataset()
         other.check_if_is_parent_dataset()
 
-        if self.is_parent_dataset:
-            super_data1 = set(itertools.chain.from_iterable([
-                ds.data for ds in self.data
-            ]))
+        if configurations_only:
+            if self.is_parent_dataset:
+                super_configs1 = set(itertools.chain.from_iterable([
+                    ds.configurations for ds in self.data
+                ]))
+            else:
+                super_configs1 = set(self.configurations)
+
+            if other.is_parent_dataset:
+                super_configs2 = set(itertools.chain.from_iterable([
+                    ds.configurations for ds in other.data
+                ]))
+            else:
+                super_configs2 = set(other.configurations)
+
+            return super_configs1.issubset(super_configs2)
+
         else:
-            super_data1 = set(self.data)
 
-        if other.is_parent_dataset:
-            super_data2 = set(itertools.chain.from_iterable([
-                ds.data for ds in other.data
-            ]))
-        else:
-            super_data2 = set(other.data)
+            if self.is_parent_dataset:
+                super_data1 = set(itertools.chain.from_iterable([
+                    ds.data for ds in self.data
+                ]))
+            else:
+                super_data1 = set(self.data)
 
-        return super_data1.issubset(super_data2)
+            if other.is_parent_dataset:
+                super_data2 = set(itertools.chain.from_iterable([
+                    ds.data for ds in other.data
+                ]))
+            else:
+                super_data2 = set(other.data)
+
+            return super_data1.issubset(super_data2)
 
 
-    def issuperset(self, other):
-        return other.issubset(self)
+    def issuperset(self, other, configurations_only=False):
+        return other.issubset(self, configurations_only=configurations_only)
 
 
     def __eq__(self, other):
@@ -1540,37 +1604,39 @@ class Dataset:
         }
 
 
-    def plot_histograms(self, fields, yscale=None):
+    def plot_histograms(self, fields, xscale='linear', yscale='linear'):
         """
         Generates histograms of the given fields.
         """
 
         nfields = len(fields)
 
-        if yscale is None:
-            yscale = ['linear']*nfields
+        nrows = max(1, int(np.ceil(nfields/3)))
+        ncols = max(3, nfields%3)
 
-        nrows = max(1, nfields//3)
-        ncols = min(3, nfields%3)
+        fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
 
-        fig, ax = plt.subplots(nrows, ncols, figsize=(6*ncols, 4*nrows))
-
-        for i, (prop, ys) in enumerate(zip(fields, yscale)):
-            data = np.concatenate(self.get_data(prop)).ravel()
+        for i, prop in enumerate(fields):
+            data = self.get_data(prop, ravel=True)
 
             c = i % 3
             r = i // 3
 
             if nrows > 1:
-                ax[r][c].hist(data, bins=100)
-                ax[r][c].set_title(prop)
-                ax[r][c].set_yscale(ys)
+                fig.add_trace(
+                    go.Histogram(x=data, nbinsx=100),
+                    row=r+1, col=c+1,
+                )
             else:
-                ax[c].hist(data, bins=100)
-                ax[c].set_title(prop)
-                ax[c].set_yscale(ys)
+                fig.add_trace(
+                    go.Histogram(x=data, nbinsx=100),
+                    row=1, col=c+1
+                )
 
-        # return fig
+        fig.update_layout(showlegend=False)
+        fig.update_xaxes(type=xscale)
+        fig.update_yaxes(type=yscale)
+        fig.show()
 
 
     def dataset_from_config_sets(self, cs_ids, exclude=False, verbose=False):
@@ -1740,7 +1806,7 @@ class Dataset:
         return train, test
 
 
-    def filter(self, filter_type, filter_fxn):
+    def filter(self, filter_type, filter_fxn, copy=False, verbose=False):
         """
         A helper function for filtering on a Dataset. A filter is specified by
         providing  a `filter_type` and a `filter_fxn`. In the case of a parent
@@ -1781,6 +1847,10 @@ class Dataset:
             filter_fxn (callable):
                 A callable function to use as `filter(filter_fxn)`.
 
+            copy (bool):
+                If True, deep copies all dataset attributes before returning
+                filtered results. Default is False.
+
         Returns:
             dataset (Dataset):
                 A Dataset object constructed by applying the specified filter,
@@ -1814,9 +1884,15 @@ class Dataset:
         if filter_type == 'data':
             # Append any matching data entries, and their linked configurations
 
-            for d in self.data:
+            for d in tqdm(
+                self.data,
+                desc='Filtering data',
+                disable=not verbose
+                ):
+
                 if filter_fxn(d):
                     data.append(d)
+
                     for c in d.configurations:
                         configurations.add(c)
 
@@ -1825,19 +1901,41 @@ class Dataset:
             if len(self.data) == 0:
                 configurations = filter(filter_fxn, self.configurations)
             else:
-                for d in self.data:
+
+                for d in tqdm(
+                    self.data,
+                    desc='Filtering data',
+                    disable=not verbose
+                    ):
                     for c in d.configurations:
                         if filter_fxn(c):
                             data.append(d)
                             configurations.add(c)
 
-        ds.data = deepcopy(data)
-        ds.configurations = deepcopy(list(configurations))
+        configurations = list(configurations)
 
-        ds.property_map = deepcopy(self.property_map)
-        ds.configuration_set_regexes = deepcopy(self.configuration_set_regexes)
-        ds.configuration_label_regexes = deepcopy(self.configuration_label_regexes)
-        ds.property_settings_regexes = deepcopy(self.property_settings_regexes)
+        property_map = self.property_map
+        configuration_set_regexes = self.configuration_set_regexes
+        configuration_label_regexes = self.configuration_label_regexes
+        property_settings_regexes = self.property_settings_regexes
+
+
+        if copy:
+            data = deepcopy(data)
+            configurations = deepcopy(configurations)
+
+            property_map = deepcopy(property_map)
+            configuration_set_regexes = deepcopy(configuration_set_regexes)
+            configuration_label_regexes = deepcopy(configuration_label_regexes)
+            property_settings_regexes = deepcopy(property_settings_regexes)
+
+        ds.data = data
+        ds.configurations = configurations
+
+        ds.property_map = property_map
+        ds.configuration_set_regexes = configuration_set_regexes
+        ds.configuration_label_regexes = configuration_label_regexes
+        ds.property_settings_regexes = property_settings_regexes
 
         ds.resync()
 
@@ -1942,6 +2040,12 @@ def load_data(
             raise RuntimeError(
                 "Must provide a `reader` function when `file_format=='folder'`"
             )
+
+        if glob_string is None:
+            raise RuntimeError(
+                "Must provide `glob_string` when `file_format=='folder'`"
+            )
+
 
         converter = FolderConverter(reader)
 
