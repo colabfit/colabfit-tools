@@ -941,8 +941,8 @@ class Dataset:
             for pid in self.property_map:
                 if pid != 'default':
                     try:
-                        # This will raise an exception if a required key is missing
-                        if PROPERTY_NAME_TO_PROPERTY_ID[pid] in KIM_PROPERTIES:
+                        # if pid in KIM_PROPERTIES:
+                        if pid in PROPERTY_NAME_TO_PROPERTY_ID:
                             # Existing property in OpenKIM
                             definition = PROPERTY_NAME_TO_PROPERTY_ID[pid]
                         elif pid in EDN_KEY_MAP:
