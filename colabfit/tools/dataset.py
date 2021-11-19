@@ -1,7 +1,9 @@
 import os
 import re
+import json
 import shutil
 import random
+from kim_property.create import PROPERTY_NAME_TO_PROPERTY_ID
 import markdown
 import traceback
 import warnings
@@ -16,8 +18,9 @@ import plotly.graph_objects as go
 
 from ase.io import write
 
-from kim_property import get_properties
-available_kim_properties = get_properties()
+from kim_property.create import KIM_PROPERTIES
+# from kim_property import get_properties
+# available_kim_properties = get_properties()
 
 from colabfit import (
     ATOMS_CONSTRAINTS_FIELD, ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, EDN_KEY_MAP,
@@ -26,7 +29,7 @@ from colabfit import (
 from colabfit.tools.configuration_sets import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.property import (
-    MissingPropertyFieldWarning, Property, PropertyParsingError
+    Property, PropertyParsingError
 )
 from colabfit.tools.property_settings import PropertySettings
 from colabfit.tools.transformations import BaseTransform
@@ -409,6 +412,18 @@ class Dataset:
         else:
             html_file_name = os.path.join(base_folder, html_file_name)
 
+            definition_files = {}
+            for pid, definition in self.custom_definitions:
+                if isinstance(definition, dict):
+                    def_fpath = open(os.path.join(base_folder, '{}.edn'), 'w')
+
+                    json.dump(definition, def_fpath)
+
+                    definition_files[pid] = def_fpath
+                else:
+                    definition_files[pid] = definition
+
+
             # Write the markdown file
             with open(html_file_name, 'w') as html:
                 html.write(
@@ -425,7 +440,8 @@ class Dataset:
                         data_file_name, data_file_name,
                         data_format,
                         name_field,
-                        '\n'.join('| {} | {} | {} |'.format(k, v['field'], v['units']) for k,v in self.property_map.items()),
+                        # '\n'.join('| {} | {} | {} | {} |'.format('[{}]({})'.format(pid, definition_files[pid]), fdict['field'], fdict['units']) for pid, fdict in self.property_map.items()),
+                        '\n'.join('\n'.join('| {} | {} | {} | {}'.format( '[{}]({})'.format(pid, definition_files[pid]), kim_field, field_map['field'], field_map['units']) for kim_field, field_map in fdict.items()) for pid, fdict in self.property_map.items()),
                         '\n'.join('| `{}` | {} | {} | {} | {} |'.format(regex.replace('|', '\|'), pso.method, pso.description, ', '.join(pso.labels), ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for regex, pso in self.property_settings_regexes.items()),
                         '\n'.join('| `{}` | {} | {} | {} |'.format(regex.replace('|', '\|'), desc, cs.n_configurations, cs.n_sites) for cs, (regex, desc) in zip(self.configuration_sets, self.configuration_set_regexes.items())),
                         '\n'.join('| `{}` | {} | {} |'.format(regex.replace('|', '\|'), ', '.join(labels), ', '.join([str(self.configuration_labels_counts[self.configuration_labels.index(l)]) for l in labels])) for regex, labels in self.configuration_label_regexes.items()),
@@ -574,7 +590,7 @@ class Dataset:
 
             if pid == 'default':
                 pname = pid
-            elif pid in available_kim_properties:
+            elif pid in KIM_PROPERTIES:
                 pname = pid
             elif isinstance(pid, tuple):
                 pname = pid[0]
@@ -849,9 +865,11 @@ class Dataset:
 
 
     def rename_property(self, old_name, new_name):
-        """Renames old_name field to new_name in atoms.info and atoms.arrays"""
+        """Renames old_name field to new_name in each Property"""
 
         """
+        This should also work for CO fields.
+
         TODO:
         Here's what I would actually want this function to do:
             - update the key used in property_map
@@ -924,11 +942,18 @@ class Dataset:
                 if pid != 'default':
                     try:
                         # This will raise an exception if a required key is missing
-                        if pid in available_kim_properties:
-                            definition = pid
+                        if PROPERTY_NAME_TO_PROPERTY_ID[pid] in KIM_PROPERTIES:
+                            # Existing property in OpenKIM
+                            definition = PROPERTY_NAME_TO_PROPERTY_ID[pid]
+                        elif pid in EDN_KEY_MAP:
+                            # Existing property with a pseudonym
+                            definition = EDN_KEY_MAP[pid]
+                            definition = PROPERTY_NAME_TO_PROPERTY_ID[definition]
                         elif pid in self._definitions_added_to_kim:
+                            # Recently added local definition with spoofing
                             definition = pid
                         else:
+                            # Completely new definition
                             definition = self.custom_definitions[pid]
                             self._definitions_added_to_kim.append(pid)
 
@@ -940,11 +965,11 @@ class Dataset:
 
                         self.data.append(prop)
                         id_counter += 1
-                    except MissingPropertyFieldWarning as e:
-                        warnings.warn(
-                            f'missingPropertySkipping {conf}. {e.message}',
-                            category=MissingPropertyFieldWarning
-                        )
+                    # except MissingPropertyFieldWarning as e:
+                    #     warnings.warn(
+                    #         f'Skipping configuration {ci}. {e.message}',
+                    #         category=MissingPropertyFieldWarning
+                    #     )
                     except Exception as e:
                         traceback.format_exc()
                         raise PropertyParsingError(
@@ -971,11 +996,9 @@ class Dataset:
                             )
                         )
 
-
-
-        if convert_units:
-            for key in self.property_map:
-                self.property_map[key]['units'] = OPENKIM_PROPERTY_UNITS[key]
+                if convert_units:
+                    for key in self.property_map[pid]:
+                        self.property_map[pid][key]['units'] = OPENKIM_PROPERTY_UNITS[key]
 
         self.resync()
 
@@ -991,16 +1014,17 @@ class Dataset:
             # if isinstance(data, Dataset):
             #     raise NotImplementedError("Nested datasets not supported yet.")
 
+            property_map.setdefault(data.name, {})
             for key, val in data.property_map.items():
-                if key not in property_map:
-                    property_map[key] = dict(val)
+                if key not in property_map[data.name]:
+                    property_map[data.name][key] = dict(val)
                 else:
-                    if val['units'] != property_map[key]['units']:
+                    if val['units'] != property_map[data.name][key]['units']:
                         raise RuntimeError(
                             "Conflicting units found for property "\
                                 "'{}': '{}' and '{}'".format(
                                     key, val['units'],
-                                    property_map[key]['units']
+                                    property_map[data.name][key]['units']
                                 )
                         )
 
@@ -1604,10 +1628,13 @@ class Dataset:
         }
 
 
-    def plot_histograms(self, fields, xscale='linear', yscale='linear'):
+    def plot_histograms(self, fields=None, xscale='linear', yscale='linear'):
         """
         Generates histograms of the given fields.
         """
+
+        if fields is None:
+            fields = self.property_fields
 
         nfields = len(fields)
 
@@ -1734,7 +1761,7 @@ class Dataset:
 
         ds.authors        = list(self.authors)
         ds.links          = list(self.links)
-        ds.property_map   = dict(self.property_map)
+        ds.property_map   = deepcopy(self.property_map)
 
         ds.resync()
 
@@ -1774,12 +1801,12 @@ class Dataset:
         train.authors        = list(self.authors)
         train.links          = list(self.links)
         train.description    = self.description
-        train.property_map = dict(self.property_map)
+        train.property_map   = deepcopy(self.property_map)
 
         test.authors        = list(self.authors)
         test.links          = list(self.links)
         test.description    = self.description
-        test.property_map = dict(self.property_map)
+        test.property_map   = deepcopy(self.property_map)
 
         # Shuffle/split the data and add it to the train/test datasets
         n = len(self.data)
@@ -1872,6 +1899,12 @@ class Dataset:
             ds.configuration_label_regexes = self.configuration_label_regexes
             ds.ps_regexes = self.property_settings_regexes
 
+            if copy:
+                ds.property_map = deepcopy(ds.property_map)
+                ds.configuration_set_regexes = deepcopy(ds.configuration_set_regexes)
+                ds.configuration_label_regexes = deepcopy(ds.configuration_label_regexes)
+                ds.property_settings_regexes = deepcopy(ds.property_settings_regexes)
+
             parent.resync()
 
             return parent
@@ -1959,13 +1992,16 @@ class Dataset:
     Configuration labels:\n\t{}\n
     Configuration sets:\n\t{}"""
 
+
+
         return template.format(
             self.name,
             '\n\t'.join(self.authors),
             '\n\t'.join(self.links),
             self.description,
             '\n\t'.join(self.methods),
-            '\n\t'.join('{}: {}'.format(k, self.property_map[k]['units']) for k in self.property_map),
+            # '\n\t'.join('{}: {}'.format(k, self.property_map[k]['units']) for k in self.property_map),
+            '\n\t'.join( '{}:{}'.format( pid, '\n\t\t'.join( '{}: {}'.format(field, fdict[field]['units']) for field in fdict)) for pid, fdict in self.property_map.items()),
             self.n_configurations,
             self.n_sites,
             '\n\t'.join('{}\t({:.1f}% of sites)'.format(e, er*100) for e, er in zip(self.elements, self.elements_ratios)),
@@ -1976,6 +2012,8 @@ class Dataset:
             '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.configuration_labels, self.configuration_labels_counts)),
             '\n\t'.join('{}: {}'.format(i, cs.description) for i, cs in enumerate(self.configuration_sets)),
         )
+
+
 
 
 def load_data(

@@ -18,8 +18,6 @@ from kim_property import (
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
 
-available_kim_properties = get_properties()
-
 from colabfit import (
     DEFAULT_PROPERTY_NAME, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
 )
@@ -131,7 +129,8 @@ class Property(dict):
 
         if edn is None:
             self.edn = kim_edn.loads(kim_property_create(
-                instance_id=instance_id, property_name=name
+                instance_id=instance_id,
+                property_name=name
             ))[0]
         else:
             # if name != PROPERTY_ID_TO_PROPERTY_NAME[edn['property-id']]:
@@ -143,13 +142,16 @@ class Property(dict):
 
         check_instance_optional_key_marked_required_are_present(
             self.edn,
-            available_kim_properties[self.edn['property-id']]
+            KIM_PROPERTIES[self.edn['property-id']]
         )
 
         check_property_instances(
             self.edn,
-            fp_path=available_kim_properties
+            fp_path=KIM_PROPERTIES
         )
+
+        if name == DEFAULT_PROPERTY_NAME:
+            self.name = 'default'
 
         self.property_map = dict(property_map)
 
@@ -340,13 +342,20 @@ class Property(dict):
 
         for key, val in property_map.items():
             if (val['field'] not in conf.info) and (val['field'] not in conf.arrays):
+                # field_not_found_message = 'Key "{}" not found in atoms.info '\
+                #     'or atoms.arrays. Available keys are: {}'.format(
+                #         val['field'],
+                #         list(conf.info.keys())
+                #         + list(conf.arrays.keys())
+                #     )
+
                 field_not_found_message = 'Key "{}" not found in atoms.info '\
-                    'or atoms.arrays. Available keys are: {}'.format(
-                        val['field'],
-                        list(conf.info.keys())
-                        + list(conf.arrays.keys())
-                    )
-                warnings.warn(field_not_found_message)
+                    'or atoms.arrays'.format(key)
+
+                warnings.warn(
+                    field_not_found_message,
+                    category=MissingPropertyFieldWarning
+                )
 
                 continue
 

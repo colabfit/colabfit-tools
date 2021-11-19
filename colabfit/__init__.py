@@ -35,4 +35,5 @@ EDN_KEY_MAP = {
     'energy': 'unrelaxed-potential-energy',
     'forces': 'unrelaxed-potential-forces',
     'stress': 'unrelaxed-cauchy-stress',
+    'virial': 'unrelaxed-cauchy-stress',
 }

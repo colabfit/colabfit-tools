@@ -46,6 +46,11 @@ class Configuration(Atoms):
 
     @classmethod
     def from_ase(cls, atoms):
+        # Workaround for bug in todict() fromdict() with constraints.
+        # Merge request: https://gitlab.com/ase/ase/-/merge_requests/2574
+        if atoms.constraints is not None:
+            atoms.constraints = [c.todict() for c in atoms.constraints]
+
         return cls.fromdict(atoms.todict())
 
 
