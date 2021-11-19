@@ -1,6 +1,5 @@
 import os
 import json
-import edn_format
 import tempfile
 import warnings
 import itertools
