@@ -1014,6 +1014,11 @@ class Dataset:
 
 
     def refresh_property_map(self, verbose=False):
+
+        if len(self.data) == 0:
+            # Avoid erasing property_map if data hasn't been loaded yet
+            return
+
         property_map = {}
 
         for data in tqdm(
@@ -1204,7 +1209,8 @@ class Dataset:
 
                 if default_cs_description is None:
                     raise RuntimeError(
-                        "Must specify 'default' (or 'Default') configuration set"
+                        "Must specify 'default' (or 'Default') configuration "\
+                        "set if given regexes don't encompass all configurations"
                     )
 
                 self.configuration_sets.append(ConfigurationSet(
@@ -1216,11 +1222,11 @@ class Dataset:
                 ))
             else:
 
-                no_default_configs = 'No configurations were added to the default '\
-                    'CS. "default" was removed from the regexes.'
-                warnings.warn(no_default_configs)
-
                 if 'default' in self.configuration_set_regexes:
+                    no_default_configs = 'No configurations were added to the default '\
+                        'CS. "default" was removed from the regexes.'
+                    warnings.warn(no_default_configs)
+
                     del self.configuration_set_regexes['default']
 
         else:
@@ -1293,7 +1299,10 @@ class Dataset:
             )
 
         else:
+            # Separate counter to normalize ratios taking overlap into account
+            dummy_count = 0
             for cs in self.configuration_sets:
+                dummy_count += cs.n_sites
 
                 for el, er in zip(cs.elements, cs.elements_ratios):
                     if el not in elements:
@@ -1314,7 +1323,7 @@ class Dataset:
 
         self.elements = sorted(list(elements.keys()))
         self.elements_ratios = [
-            elements[el]/self.n_sites for el in self.elements
+            elements[el]/dummy_count for el in self.elements
         ]
 
         self.chemical_systems = sorted(list(set(self.chemical_systems)))
