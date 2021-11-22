@@ -17,7 +17,9 @@ Minnesota.
    :maxdepth: 2
    :caption: Contents:
 
+   overview
    getting_started
+   usage
    classes
 
 

@@ -1,8 +1,9 @@
+===============
 Getting started
 ===============
 
 Installation
-------------
+============
 
 Currently, installation is only supported using :code:`pip` to install directly
 from the private GitHub repository.
@@ -17,3 +18,14 @@ Using pip
 Note that since :code:`colabfit-tools` is currently still a private project,
 :code:`<username_or_pat>` must either be your GitHub username (if you have access to the repository) or a
 Personal Access Token that has appropriate permissions.
+
+========
+Examples
+========
+
+.. toctree::
+    :maxdepth: 1
+
+    basic_example
+    qm9
+    si_prx_gap

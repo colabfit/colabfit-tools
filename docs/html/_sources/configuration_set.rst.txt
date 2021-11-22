@@ -1,7 +1,7 @@
 .. module:: colabfit.tools.configuration_sets
 
 =================
-Configuration Set
+ConfigurationSet
 =================
 
 .. autoclass:: colabfit.tools.configuration_sets.ConfigurationSet

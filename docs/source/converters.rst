@@ -1,7 +1,7 @@
 .. module:: colabfit.tools.converters
 
 ==========
-Converters
+Converter
 ==========
 
 .. autoclass:: colabfit.tools.converters.BaseConverter
