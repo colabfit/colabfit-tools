@@ -7,7 +7,7 @@ information such as the DFT software package, a description of the calculation,
 and an example file for running the calculation.
 
 =================
-Property Settings
+PropertySettings
 =================
 
 .. autoclass:: colabfit.tools.property_settings.PropertySettings
