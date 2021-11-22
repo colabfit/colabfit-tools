@@ -413,7 +413,7 @@ class Dataset:
             html_file_name = os.path.join(base_folder, html_file_name)
 
             definition_files = {}
-            for pid, definition in self.custom_definitions:
+            for pid, definition in self.custom_definitions.items():
                 if isinstance(definition, dict):
                     def_fpath = open(os.path.join(base_folder, '{}.edn'), 'w')
 
@@ -863,6 +863,15 @@ class Dataset:
 
         self.configurations += configurations
 
+    def rename_configuration_field(self, old_name, new_name):
+        for conf in self.configurations:
+            if old_name in conf.info:
+                conf.info[new_name] = conf.info[old_name]
+                del conf.info[old_name]
+            if old_name in conf.arrays:
+                conf.arrays[new_name] = conf.arrays[old_name]
+                del conf.arrays[old_name]
+
 
     def rename_property(self, old_name, new_name):
         """Renames old_name field to new_name in each Property"""
@@ -880,8 +889,9 @@ class Dataset:
         edn_key = EDN_KEY_MAP.get(old_name, old_name)
 
         for data in self.data:
-            data[new_name] = data[edn_key]
-            del data[edn_key]
+            if old_name in data:
+                data[new_name] = data[edn_key]
+                del data[edn_key]
 
 
     def apply_transformation(self, field_name, tform):
@@ -1483,6 +1493,31 @@ class Dataset:
         return not self == other
 
 
+    def get_available_configuration_fields(self):
+        fields = {'info': set(), 'arrays': set()}
+
+        for conf in self.configurations:
+            for k in conf.info:
+                fields['info'].add(k)
+            for k in conf.arrays:
+                fields['arrays'].add(k)
+
+        return fields
+
+
+    def get_configuration_field(self, field):
+        results = []
+        for conf in self.configurations:
+            if field in conf.info:
+                results.append(conf.info[field])
+            elif field in conf.arrays:
+                results.append(conf.arrays[field])
+            else:
+                continue
+
+        return results
+
+
     def get_data(self, property_field, cs_ids=None, exclude=False, concatenate=False, ravel=False):
         """
         Returns a list of properties obtained by looping over `self.data` and
@@ -1976,6 +2011,10 @@ class Dataset:
 
 
     def __str__(self):
+        return f"Dataset(name={self.name})"
+
+
+    def summary(self):
         template = """Dataset
     Name:\n\t{}\n
     Authors:\n\t{}\n
@@ -1994,14 +2033,13 @@ class Dataset:
 
 
 
-        return template.format(
+        print(template.format(
             self.name,
             '\n\t'.join(self.authors),
             '\n\t'.join(self.links),
             self.description,
             '\n\t'.join(self.methods),
-            # '\n\t'.join('{}: {}'.format(k, self.property_map[k]['units']) for k in self.property_map),
-            '\n\t'.join( '{}:{}'.format( pid, '\n\t\t'.join( '{}: {}'.format(field, fdict[field]['units']) for field in fdict)) for pid, fdict in self.property_map.items()),
+            '\n\t'.join( '{}:\n\t{}'.format( pid, '\n\t\t'.join( '{}: {}'.format(field, fdict[field]['units']) for field in fdict)) for pid, fdict in self.property_map.items()),
             self.n_configurations,
             self.n_sites,
             '\n\t'.join('{}\t({:.1f}% of sites)'.format(e, er*100) for e, er in zip(self.elements, self.elements_ratios)),
@@ -2011,7 +2049,7 @@ class Dataset:
             '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.property_settings_labels, self.property_settings_labels_counts)),
             '\n\t'.join('{}: {}'.format(l, lc) for l, lc in zip(self.configuration_labels, self.configuration_labels_counts)),
             '\n\t'.join('{}: {}'.format(i, cs.description) for i, cs in enumerate(self.configuration_sets)),
-        )
+        ))
 
 
 
