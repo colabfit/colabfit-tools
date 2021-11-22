@@ -3,14 +3,22 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to colabfit-tools's documentation!
-==========================================
+==============
+colabfit-tools
+==============
+
+:code:`colabfit-tools` is a package for constructing, manipulating, and
+exploring datasets for data-driven interatomic potentials. This package is part
+of the `ColabFit project <https://colabfit.openkim.org/>`_ at the University of
+Minnesota.
+
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Contents:
 
    getting_started
+   classes
 
 
 Indices and tables

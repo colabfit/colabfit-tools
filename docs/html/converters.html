@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2. Converters &mdash; ColabFit Tools Documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="3. Dataset" href="dataset.html" />
+    <link rel="prev" title="1. Configuration Set" href="configuration_set.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> colabfit-tools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">1. Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property.html">2. Property</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_settings.html">3. Property Settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration_set.html">1. Configuration Set</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">2. Converters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">3. Dataset</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">colabfit-tools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="classes.html">Classes</a> &raquo;</li>
+      <li><span class="section-number">2. </span>Converters</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/converters.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <span class="target" id="module-colabfit.tools.converters"></span><section id="converters">
+<h1><span class="section-number">2. </span>Converters<a class="headerlink" href="#converters" title="Permalink to this headline"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="colabfit.tools.converters.BaseConverter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.converters.</span></span><span class="sig-name descname"><span class="pre">BaseConverter</span></span><a class="headerlink" href="#colabfit.tools.converters.BaseConverter" title="Permalink to this definition"></a></dt>
+<dd><p>A Converter is used to load a list of <code class="xref py py-class docutils literal notranslate"><span class="pre">ase.Atoms</span></code> objects and convert
+them to <a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> objects.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.converters.BaseConverter.load">
+<span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name_field</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">elements</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels_field</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.converters.BaseConverter.load" title="Permalink to this definition"></a></dt>
+<dd><p>Loads a list of <code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code>
+objects.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>file_path</strong> (<em>str</em>) – The path to the data files.</p></li>
+<li><p><strong>name_field</strong> (<em>str</em>) – The key for accessing the <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code> dictionary of a
+Configuration object to return the name of the Configuration.</p></li>
+<li><p><strong>elements</strong> (<em>list</em>) – A list of strings of element names. Order matters or file types
+where a mapping from atom number to element type isn’t provided
+(e.g., CFG files).</p></li>
+<li><p><strong>default_name</strong> (<em>str</em>) – The name to attach to the Configuration object if <code class="xref py py-attr docutils literal notranslate"><span class="pre">name_field</span></code>
+does not exist on <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code>. Default is an
+empty string.</p></li>
+<li><p><strong>labels_field</strong> (<em>str</em>) – The key for accessing the <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code> dictionary of a
+Configuration object that returns a set of string labels.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em>) – If True, prints the loading progress. Default is False.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="colabfit.tools.converters.CFGConverter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.converters.</span></span><span class="sig-name descname"><span class="pre">CFGConverter</span></span><a class="headerlink" href="#colabfit.tools.converters.CFGConverter" title="Permalink to this definition"></a></dt>
+<dd><p>A Converter for the CFG files used by the <a class="reference external" href="https://gitlab.com/ashapeev/mlip-2/-/blob/master/doc/manual/manual.pdf">Moment Tensor Potential software</a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="colabfit.tools.converters.EXYZConverter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.converters.</span></span><span class="sig-name descname"><span class="pre">EXYZConverter</span></span><a class="headerlink" href="#colabfit.tools.converters.EXYZConverter" title="Permalink to this definition"></a></dt>
+<dd><p>A Converter for <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/io/formatoptions.html#extxyz">Extended XYZ</a> files</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="colabfit.tools.converters.FolderConverter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.converters.</span></span><span class="sig-name descname"><span class="pre">FolderConverter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reader</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.converters.FolderConverter" title="Permalink to this definition"></a></dt>
+<dd><p>This converter serves as a generic template from loading configurations from
+collections of files. It is useful for loading from storage formats like
+JSON, HDF5, or nested folders of output files from DFT codes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>reader</strong> (<em>callable</em>) – A function that takes in a file path and returns an <cite>ase.Atoms</cite>
+object with the relevant data in <cite>atoms.info</cite> and
+<cite>atoms.arrays</cite>.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.converters.FolderConverter._load">
+<span class="sig-name descname"><span class="pre">_load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name_field</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">elements</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels_field</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">glob_string</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.converters.FolderConverter._load" title="Permalink to this definition"></a></dt>
+<dd><p>Arguments are the same as for other converters, but with the following
+changes:</p>
+<blockquote>
+<div><dl class="simple">
+<dt>file_path (str):</dt><dd><p>The path to the parent directory containing the data files.</p>
+</dd>
+<dt>glob_string (str):</dt><dd><p>A string to use with <cite>Path(file_path).rglob(glob_string)</cite> to
+generate a list of files to be passed to <cite>self.reader</cite></p>
+</dd>
+</dl>
+</div></blockquote>
+<p>All additional kwargs will be passed to the reader function as
+<code class="code docutils literal notranslate"><span class="pre">self.reader(...,</span> <span class="pre">**kwargs)</span></code></p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="configuration_set.html" class="btn btn-neutral float-left" title="1. Configuration Set" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="dataset.html" class="btn btn-neutral float-right" title="3. Dataset" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, ColabFit.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

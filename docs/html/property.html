@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2. Property &mdash; ColabFit Tools Documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="3. Property Settings" href="property_settings.html" />
+    <link rel="prev" title="1. Configuration" href="configuration.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> colabfit-tools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">1. Configuration</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">2. Property</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_settings.html">3. Property Settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration_set.html">1. Configuration Set</a></li>
+<li class="toctree-l2"><a class="reference internal" href="converters.html">2. Converters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">3. Dataset</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">colabfit-tools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="classes.html">Classes</a> &raquo;</li>
+      <li><span class="section-number">2. </span>Property</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/property.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <span class="target" id="module-colabfit.tools.property"></span><p>A <a class="reference internal" href="#colabfit.tools.property.Property" title="colabfit.tools.property.Property"><code class="xref py py-class docutils literal notranslate"><span class="pre">Property</span></code></a> is usually extracted from a
+<a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> object using the
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.parse_data" title="colabfit.tools.dataset.Dataset.parse_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code></a> of a <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset" title="colabfit.tools.dataset.Dataset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Dataset()</span></code></a> object.</p>
+<section id="property">
+<h1><span class="section-number">2. </span>Property<a class="headerlink" href="#property" title="Permalink to this headline"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.property.</span></span><span class="sig-name descname"><span class="pre">Property</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configurations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convert_units</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property" title="Permalink to this definition"></a></dt>
+<dd><p>A Property is used to store the results of some kind of calculation or
+experiment, and should be mapped to an <a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">OpenKIM Property Definition</a>. Best
+practice is for the Property to also point to one or more
+PropertySettings objects that fully define the conditions under which the
+Property was obtained.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.edn">
+<span class="sig-name descname"><span class="pre">edn</span></span><a class="headerlink" href="#colabfit.tools.property.Property.edn" title="Permalink to this definition"></a></dt>
+<dd><p>A dictionary defining an OpenKIM Property Instance in EDN format.
+For more details, see the <a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">OpenKIM Property Framework</a> documentation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.property_map">
+<span class="sig-name descname"><span class="pre">property_map</span></span><a class="headerlink" href="#colabfit.tools.property.Property.property_map" title="Permalink to this definition"></a></dt>
+<dd><p>key = a string that can be used as a key like <cite>self.edn[key]</cite>
+value = A sub-dictionary with the following keys:</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt><code class="xref py py-attr docutils literal notranslate"><span class="pre">field</span></code>:</dt><dd><p>A field name used to access <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code> or <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.arrays</span></code></p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref py py-attr docutils literal notranslate"><span class="pre">units</span></code>:</dt><dd><p>A string matching one of the units names in <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/units.html">ase.units</a>.
+These units will be used to convert the given units to eV,
+Angstrom, a.m.u., Kelvin, … For compound units (e.g. “eV/Ang”), the string will be split on
+‘*’ and ‘/’. The raw data will be multiplied by the first unit
+and anything preceded by a ‘*’. It will be divided by anything
+preceded by a ‘/’.</p>
+</dd>
+</dl>
+</li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.configurations">
+<span class="sig-name descname"><span class="pre">configurations</span></span><a class="headerlink" href="#colabfit.tools.property.Property.configurations" title="Permalink to this definition"></a></dt>
+<dd><p>A list of <a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> objects.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.settings">
+<span class="sig-name descname"><span class="pre">settings</span></span><a class="headerlink" href="#colabfit.tools.property.Property.settings" title="Permalink to this definition"></a></dt>
+<dd><p>A <a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a> object
+defining the conditions under which the propoerty was obtained. This
+is allowed to be None, but it is highly recommended that it be
+provided.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings">PropertySettings</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – Short OpenKIM Property Definition name</p></li>
+<li><p><strong>configurations</strong> (<em>list</em>) – A list of ColabFit Configuration object</p></li>
+<li><p><strong>property_map</strong> (<em>dict</em>) – A property map as described in the Property attributes section.</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><em>PropertySettings</em></a>) – A <cite>colabfit.property.PropertySettings</cite> objects specifying how to
+compute the property.</p></li>
+<li><p><strong>edn</strong> (<em>dict</em>) – A dictionary defining an OpenKIM Property Instance in EDN format.</p></li>
+<li><p><strong>instance_id</strong> (<em>int</em>) – A positive non-zero integer</p></li>
+<li><p><strong>convert_units</strong> (<em>bool</em>) – If True, converts units to those expected by ColabFit. Default
+is False</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.__delitem__">
+<span class="sig-name descname"><span class="pre">__delitem__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.__delitem__" title="Permalink to this definition"></a></dt>
+<dd><p>Delete self[key].</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.__eq__">
+<span class="sig-name descname"><span class="pre">__eq__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.__eq__" title="Permalink to this definition"></a></dt>
+<dd><p>Returns False if any of the following conditions are true:</p>
+<ul class="simple">
+<li><p>Properties point to settings with different calculation methods</p></li>
+<li><p>Properties point to different configurations</p></li>
+<li><p>OpenKIM EDN fields differ in any way</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.__getitem__">
+<span class="sig-name descname"><span class="pre">__getitem__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.__getitem__" title="Permalink to this definition"></a></dt>
+<dd><p>Overloaded <code class="xref py py-meth docutils literal notranslate"><span class="pre">dict.__getitem__()</span></code> for getting the values of <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.edn</span></code></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.__hash__">
+<span class="sig-name descname"><span class="pre">__hash__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.__hash__" title="Permalink to this definition"></a></dt>
+<dd><p>Hashes the Property by hashing its linked PropertySettings,
+Configurations, and EDN.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configurations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convert_units</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – Short OpenKIM Property Definition name</p></li>
+<li><p><strong>configurations</strong> (<em>list</em>) – A list of ColabFit Configuration object</p></li>
+<li><p><strong>property_map</strong> (<em>dict</em>) – A property map as described in the Property attributes section.</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><em>PropertySettings</em></a>) – A <cite>colabfit.property.PropertySettings</cite> objects specifying how to
+compute the property.</p></li>
+<li><p><strong>edn</strong> (<em>dict</em>) – A dictionary defining an OpenKIM Property Instance in EDN format.</p></li>
+<li><p><strong>instance_id</strong> (<em>int</em>) – A positive non-zero integer</p></li>
+<li><p><strong>convert_units</strong> (<em>bool</em>) – If True, converts units to those expected by ColabFit. Default
+is False</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.__repr__">
+<span class="sig-name descname"><span class="pre">__repr__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.__repr__" title="Permalink to this definition"></a></dt>
+<dd><p>Return repr(self).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.__setitem__">
+<span class="sig-name descname"><span class="pre">__setitem__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">v</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.__setitem__" title="Permalink to this definition"></a></dt>
+<dd><p>Overloaded <code class="xref py py-meth docutils literal notranslate"><span class="pre">dict.__setitem__()</span></code> for setting the values of <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.edn</span></code></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.__str__">
+<span class="sig-name descname"><span class="pre">__str__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.__str__" title="Permalink to this definition"></a></dt>
+<dd><p>Return str(self).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.__weakref__">
+<span class="sig-name descname"><span class="pre">__weakref__</span></span><a class="headerlink" href="#colabfit.tools.property.Property.__weakref__" title="Permalink to this definition"></a></dt>
+<dd><p>list of weak references to the object (if defined)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.convert_units">
+<span class="sig-name descname"><span class="pre">convert_units</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.convert_units" title="Permalink to this definition"></a></dt>
+<dd><p>For each key in <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.property_map</span></code>, convert <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.edn[key]</span></code>
+from its original units to the expected ColabFit-compliant units.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.from_definition">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_definition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">definition</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conf</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convert_units</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.from_definition" title="Permalink to this definition"></a></dt>
+<dd><p>Custom properties shouldn’t have to satisfy the OpenKIM requirements</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.get_data">
+<span class="sig-name descname"><span class="pre">get_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.get_data" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">self[k]['source-value']</span></code> if <code class="code docutils literal notranslate"><span class="pre">k</span></code> is a valid key,
+else <code class="code docutils literal notranslate"><span class="pre">np.nan</span></code>.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>data (np.array or np.nan)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.property.Property.keys">
+<span class="sig-name descname"><span class="pre">keys</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.keys" title="Permalink to this definition"></a></dt>
+<dd><p>Overloaded dictionary function for getting the keys of <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.edn</span></code></p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="configuration.html" class="btn btn-neutral float-left" title="1. Configuration" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="property_settings.html" class="btn btn-neutral float-right" title="3. Property Settings" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, ColabFit.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
