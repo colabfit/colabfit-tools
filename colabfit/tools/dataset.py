@@ -1294,7 +1294,6 @@ class Dataset:
 
         else:
             for cs in self.configuration_sets:
-                self.n_configurations += cs.n_configurations
 
                 for el, er in zip(cs.elements, cs.elements_ratios):
                     if el not in elements:
@@ -1309,7 +1308,9 @@ class Dataset:
                         co_labels[l] += lc
 
                 self.chemical_systems += cs.chemical_systems
-                self.n_sites += cs.n_sites
+
+        self.n_configurations = len(self.configurations)
+        self.n_sites = sum([len(c) for c in self.configurations])
 
         self.elements = sorted(list(elements.keys()))
         self.elements_ratios = [
