@@ -10,14 +10,20 @@ from colabfit import (
 
 class Configuration(Atoms):
     """
-    A Configuration is used to store an `ase.Atoms` object and to propagate
-    certain changes to any observers who are watching the Configuration.
+    A Configuration is an extension of an :class:`ase.Atoms` object that is
+    guaranteed to have the following fields in its :attr:`info` dictionary:
 
-    A Configuration will be observed by zero to many ConfigurationSet objects
-    AND zero to many Property objects.
+    - :attr:`~colabfit.ATOMS_ID_FIELD`
+    - :attr:`~colabfit.ATOMS_NAME_FIELD`
+    - :attr:`~colabfit.ATOMS_LABELS_FIELD`
+    - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD`
     """
 
     def __init__(self, labels=None, constraints=None, *args, **kwargs):
+        """
+        Constructs a Configuration. Calls :meth:`ase.Atoms.__init__()`, then
+        populates the additional required fields.
+        """
         super().__init__(*args, **kwargs)
 
         self.info[ATOMS_ID_FIELD] = ObjectId()
@@ -46,6 +52,9 @@ class Configuration(Atoms):
 
     @classmethod
     def from_ase(cls, atoms):
+        """
+        Generates a :class:`Configuration` from an :code:`ase.Atoms` object.
+        """
         # Workaround for bug in todict() fromdict() with constraints.
         # Merge request: https://gitlab.com/ase/ase/-/merge_requests/2574
         if atoms.constraints is not None:
@@ -54,17 +63,22 @@ class Configuration(Atoms):
         return cls.fromdict(atoms.todict())
 
 
-    def colabfit_format(self):
-        """
-        Formats the attached Atoms object to be in proper ColabFit format:
-            - shift to origin
-            - rotate to LAMMPS-compliant orientation
-            - sort atoms by X, Y, then Z positions
-        """
-        raise NotImplementedError()
+    # def colabfit_format(self):
+    #     """
+    #     Formats the attached Atoms object to be in proper ColabFit format:
+    #         - shift to origin
+    #         - rotate to LAMMPS-compliant orientation
+    #         - sort atoms by X, Y, then Z positions
+    #     """
+    #     raise NotImplementedError()
 
 
     def __hash__(self):
+        """
+        Generates a hash for :code:`self` by hashing its length, constraints,
+        positions, (atomic) numbers, simulation cell, and periodic
+        boundary conditions
+        """
         constraints_hash = hash(tuple(
             hash(tuple(self.info[c])) if c in self.info
             else hash(np.array(self.arrays[c]).data.tobytes())

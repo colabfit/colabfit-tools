@@ -18,15 +18,8 @@ __all__ = [
 
 class BaseConverter:
     """
-    A Converter is used to load a list of ase.Atoms objects, and clean them to
-    ensure that metadata is stored in expected fields.
-
-    Expected fields:
-        atoms.info[ATOMS_NAME_FIELD]:
-            A string describing the atoms object
-
-        atoms.info[ATOMS_LABELS_FIELD]:
-            A set of strings. Empty set if no labels
+    A Converter is used to load a list of :class:`ase.Atoms` objects and convert
+    them to :py:class:`~colabfit.tools.configuration.Configuration` objects.
     """
 
     def load(
@@ -36,14 +29,44 @@ class BaseConverter:
         elements,
         default_name='',
         labels_field=None,
-        verbose=0,
+        verbose=False,
         **kwargs,
         ):
-        """Dummy wrapper to enforce input fields"""
+        """
+        Loads a list of :class:`~colabfit.tools.configurations.Configuration`
+        objects.
+
+        Args:
+            file_path (str):
+                The path to the data files.
+
+            name_field (str):
+                The key for accessing the :attr:`info` dictionary of a
+                Configuration object to return the name of the Configuration.
+
+            elements (list):
+                A list of strings of element names. Order matters or file types
+                where a mapping from atom number to element type isn't provided
+                (e.g., CFG files).
+
+            default_name (str):
+                The name to attach to the Configuration object if :attr:`name_field`
+                does not exist on :attr:`Configuration.info`. Default is an
+                empty string.
+
+            labels_field (str):
+                The key for accessing the :attr:`info` dictionary of a
+                Configuration object that returns a set of string labels.
+
+            verbose (bool):
+                If True, prints the loading progress. Default is False.
+
+        """
         images = self._load(
             file_path, name_field, elements, default_name, labels_field,
             verbose, **kwargs
         )
+
         if len(images) == 0:
             no_images_found = 'No configurations were found'
             warnings.warn(no_images_found)
@@ -52,6 +75,9 @@ class BaseConverter:
 
 
 class EXYZConverter(BaseConverter):
+    """
+    A Converter for `Extended XYZ <https://wiki.fysik.dtu.dk/ase/ase/io/formatoptions.html#extxyz>`_ files
+    """
     def _load(
         self, file_path, name_field, elements, default_name, labels_field,
         verbose
@@ -101,6 +127,9 @@ class EXYZConverter(BaseConverter):
 
 
 class CFGConverter(BaseConverter):
+    """
+    A Converter for the CFG files used by the `Moment Tensor Potential software <https://gitlab.com/ashapeev/mlip-2/-/blob/master/doc/manual/manual.pdf>`_
+    """
     def _load(
         self, file_path, name_field, elements, default_name, labels_field,
         verbose
@@ -264,7 +293,8 @@ class CFGConverter(BaseConverter):
 class FolderConverter(BaseConverter):
     """
     This converter serves as a generic template from loading configurations from
-    collections of files.
+    collections of files. It is useful for loading from storage formats like
+    JSON, HDF5, or nested folders of output files from DFT codes.
     """
 
     def __init__(self, reader):
@@ -302,7 +332,7 @@ class FolderConverter(BaseConverter):
                 generate a list of files to be passed to `self.reader`
 
         All additional kwargs will be passed to the reader function as
-        `self.reader(..., **kwargs)`
+        :code:`self.reader(..., **kwargs)`
         """
 
         ai = 0

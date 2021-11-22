@@ -31,7 +31,9 @@ release = '0.1'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx_rtd_theme'
+    'sphinx_rtd_theme',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -48,6 +50,9 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
+
+html_title = 'ColabFit Tools Documentation'
+
 html_theme = 'sphinx_rtd_theme'
 
 html_theme_options = {
@@ -67,7 +72,33 @@ html_theme_options = {
     'titles_only': False
 }
 
+html_sidebars = {
+    '**': [
+        'globaltoc.html',
+        'relations.html',
+        'sourcelink.html',
+        'searchbox.html'
+    ]
+}
+
+autoclass_content = 'both'
+
+# html_context = {
+#     'display_github': True,
+#     'github_user': 'colabfit',
+#     'github_repo': 'colabfit-tools',
+#     'github_version': 'gh-pages/docs/',
+# }
+
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 # html_static_path = ['_static']
+
+def skip(app, what, name, obj, would_skip, options):
+    if name == "__init__":
+        return False
+    return would_skip
+
+def setup(app):
+    app.connect("autodoc-skip-member", skip)

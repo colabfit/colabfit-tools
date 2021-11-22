@@ -641,12 +641,8 @@ class Dataset:
     # @profile
     def clean(self, verbose=False):
         """
-        Pseudocode:
-            - For each property
-                - add the property to a dictionary where the key is the hashed
-                configuration
-                - if the key already exists in the dictionary, check the new
-                property against all existing ones.
+        Uses hashing to compare the configurations of all properties and check
+        for duplicate configurations.
         """
 
         duplicate_checker = {}
@@ -1766,20 +1762,15 @@ class Dataset:
 
     def get_statistics(self, property_field):
         """
-        Builds a `data` array by extracting the values of `property_field' for
+        Builds an list by extracting the values of `property_field` for
         each entry in the dataset, wrapping them in a numpy array, and
         concatenating them all together. Then returns statistics on the
         resultant array.
 
         Returns:
-            results (dict):
-                {
-                    'average': np.average(data),
-                    'std': np.std(data),
-                    'min': np.min(data),
-                    'max': np.max(data),
-                    'average_abs': np.average(np.abs(data))
-                }
+            results (dict)::
+                ..code-block::
+                    {'average': np.average(data), 'std': np.std(data), 'min': np.min(data), 'max': np.max(data), 'average_abs': np.average(np.abs(data))}
         """
 
         data = np.concatenate(self.get_data(property_field))
@@ -2004,25 +1995,23 @@ class Dataset:
         providing  a `filter_type` and a `filter_fxn`. In the case of a parent
         dataset, the filter is applied to each of the children individually.
 
-        Examples:
+        Examples::
 
-        ```
-        # Filter based on configuration name
-        regex = re.compile('example_name.*')
+            # Filter based on configuration name
+            regex = re.compile('example_name.*')
 
-        filtered_dataset = dataset.filter(
-            'configurations',
-            lambda c: regex.search(c.info[ATOMS_NAME_FIELD])
-        )
+            filtered_dataset = dataset.filter(
+                'configurations',
+                lambda c: regex.search(c.info[ATOMS_NAME_FIELD])
+            )
 
-        # Filter based on maximum force component
-        import numpy as np
+            # Filter based on maximum force component
+            import numpy as np
 
-        filtered_dataset = dataset.filter(
-            'data',
-            lambda p: np.max(np.abs(p.edn['unrelaxed-potential-forces']['source-value'])) < 1.0
-        )
-        ```
+            filtered_dataset = dataset.filter(
+                'data',
+                lambda p: np.max(np.abs(p.edn['unrelaxed-potential-forces']['source-value'])) < 1.0
+            )
 
         Args:
             filter_type (str):
