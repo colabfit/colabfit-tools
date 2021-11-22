@@ -80,10 +80,10 @@ class Property(dict):
         configurations (list):
             A list of `colabfit.Configuration` objects
 
-        settings (list):
-            A list of PropertySettings objects defining the conditions under
-            which the propoerty was obtained. This list is allowed to be empty,
-            but it is highly recommended that it have at least one entry.
+        settings (PropertySettings):
+            A PropertySettings object defining the conditions under
+            which the propoerty was obtained. This is allowed to be None,
+            but it is highly recommended that it be provided.
     """
 
     _observers = []
@@ -110,8 +110,8 @@ class Property(dict):
                 A property map as described in the Property attributes section.
 
             settings (PropertySettings):
-                A `colabfit.PropertySettings` objects specifying how to compute
-                the property.
+                A `colabfit.property.PropertySettings` objects specifying how to
+                compute the property.
 
             edn (dict):
                 A dictionary defining an OpenKIM Property Instance in EDN format.
