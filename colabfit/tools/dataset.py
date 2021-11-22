@@ -1235,6 +1235,126 @@ class Dataset:
                 self.configuration_sets += data.configuration_sets
 
 
+    def define_configuration_set(self, fxn, desc, regex):
+        """
+        Args:
+            fxn (callable):
+                A function that is called for every item in
+                `self.configurations`, returning True if the PSO should be
+                applied to the data entry.
+
+            desc (str):
+                The description of the new configuration set.
+
+            regex (str):
+                The string that will be used for regex matching to identify
+                the updated configurations in the future. `regex` will be
+                appended to the name of each matching configuration
+        """
+
+        if regex in self.configuration_set_regexes:
+            raise RuntimeError(
+                "Regex '{}' already exists in `self.configuration_set_regexes`."\
+                    "Update the ConfigurationSet description there instead"
+            )
+
+        if self.is_parent_dataset:
+            for data in self.data:
+                data.define_configuration_set(fxn, desc, regex)
+        else:
+
+            matching_cos = []
+            for co in self.configurations:
+                if fxn(co):
+                    matching_cos.append(co)
+                    co.info[ATOMS_NAME_FIELD] += regex
+
+            self.configuration_sets.append(ConfigurationSet(
+                configurations=matching_cos,
+                description=desc
+            ))
+
+        self.configuration_set_regexes[regex] = desc
+
+
+    def attach_configuration_labels(self, fxn, labels, regex):
+        """
+        Args:
+            fxn (callable):
+                A function that is called for every item in
+                `self.configurations`, returning True if the PSO should be
+                applied to the data entry.
+
+            labels (str or list):
+                The labels to be applied
+
+            regex (str):
+                The string that will be used for regex matching to identify
+                the updated configurations in the future. `regex` will be
+                appended to the name of each matching configuration
+        """
+
+        if regex in self.configuration_label_regexes:
+            raise RuntimeError(
+                "Regex '{}' already exists in `self.configuration_label_regexes`."\
+                    "Update the Configuration labels there instead"
+            )
+
+
+        if isinstance(labels, str):
+            labels = [labels]
+            labels = set(labels)
+
+        if self.is_parent_dataset:
+            for data in self.data:
+                data.attach_configuration_labels(fxn, labels, regex)
+        else:
+            for co in self.configurations:
+                if fxn(co):
+                    co.info[ATOMS_LABELS_FIELD] = co.info[ATOMS_LABELS_FIELD].union(labels)
+                    co.info[ATOMS_NAME_FIELD] += regex
+
+        self.configuration_label_regexes[regex] = regex
+
+
+    def attach_property_settings(self, fxn, pso, regex):
+        """
+        Args:
+            fxn (callable):
+                A function that is called for every item in `self.data`,
+                returning True if the PSO should be applied to the data entry.
+
+            pso (PropertySettings):
+                A property settings object
+
+            regex (str):
+                The string that will be used for regex matching to identify
+                the updated data entries in the future. `regex` will be
+                appended to the name of each matching configuration
+        """
+
+        if regex in self.property_settings_regexes:
+            raise RuntimeError(
+                "Regex '{}' already exists in `self.property_settings_regexes`."\
+                    "Update the PropertySettings object there instead"
+            )
+
+
+        if self.is_parent_dataset:
+            for data in self.data:
+                data.attach_property_settings(fxn, pso, regex)
+        else:
+            for data in self.data:
+                if fxn(data):
+                    data.settings = pso
+
+                    for co in data.configurations:
+                        co.info[ATOMS_NAME_FIELD] += regex
+
+        self.property_settings_regexes[regex] = pso
+
+
+
     def attach_dataset(self, dataset, supersede_existing=False):
         """
         Args:
