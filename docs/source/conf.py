@@ -55,8 +55,8 @@ exclude_patterns = []
 
 html_title = 'ColabFit Tools Documentation'
 
-# html_logo = 'colabfit-logo.svg'
-html_favicon = 'colabfit-logo.svg'
+# html_logo = 'colabfit-logo.png'
+html_favicon = 'colabfit-logo.png'
 
 html_theme = 'sphinx_rtd_theme'
 
