@@ -860,6 +860,18 @@ class Dataset:
         self.configurations += configurations
 
     def rename_configuration_field(self, old_name, new_name):
+        """
+        Renames fields in :attr:`Configuration.info` and
+        :attr:`Configuration.arrays`.
+
+        Args:
+            old_name (str): the original name of the field
+            new_name (str): the new name of the field
+
+        Returns:
+            None. Modifies configuration fields in-place.
+        """
+
         for conf in self.configurations:
             if old_name in conf.info:
                 conf.info[new_name] = conf.info[old_name]

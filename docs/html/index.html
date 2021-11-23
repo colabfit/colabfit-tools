@@ -7,6 +7,8 @@
   <title>colabfit-tools &mdash; ColabFit Tools Documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.svg"/>
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -15,6 +17,8 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -69,12 +73,21 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="colabfit-tools">
+  <a class="reference internal image-reference" href="_images/colabfit-logo.svg"><img alt="_images/colabfit-logo.svg" class="align-center" height="200" src="_images/colabfit-logo.svg" width="200" /></a>
+<section id="colabfit-tools">
 <h1>colabfit-tools<a class="headerlink" href="#colabfit-tools" title="Permalink to this headline"></a></h1>
 <p><code class="code docutils literal notranslate"><span class="pre">colabfit-tools</span></code> is a package for constructing, manipulating, and
 exploring datasets for data-driven interatomic potentials. This package is part
 of the <a class="reference external" href="https://colabfit.openkim.org/">ColabFit project</a> at the University of
 Minnesota.</p>
+<p>Despite the rapidly increasing popularity of data-driven interatomic
+potentials (DDIPs), training data for these models has historically been
+difficult to obtain and work with. Data is often stored in internally-developed
+formats, insufficiently documented, and not made readily available to the
+public.</p>
+<p><code class="code docutils literal notranslate"><span class="pre">colabfit_tools</span></code> aims to address these problems by defining a standard
+method for representing DDIP training datasets programatically, and providing
+software tools for manipulating these representations.</p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
@@ -83,10 +96,7 @@ Minnesota.</p>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="getting_started.html#installation">Installation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="getting_started.html#using-pip">Using pip</a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#installation">Installation</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a><ul>
@@ -96,25 +106,22 @@ Minnesota.</p>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#property-map">Property map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#applying-configuration-labels">Applying Configuration labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#custom-properties">Custom properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#reading-writing-datasets-with-markdown">Reading/writing Datasets with Markdown</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#visualization">Visualization</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#filtering">Filtering</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#filtering-a-dataset">Filtering a Dataset</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#checking-for-subsets">Checking for subsets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#data-transformation">Data transformation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#train-test-splits">Train/test splits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#loading-data">Loading data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#building-configuration-sets">Building configuration sets</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="classes.html">Classes</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="core_classes.html">Core classes</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="configuration.html">Configuration</a></li>
-<li class="toctree-l3"><a class="reference internal" href="property.html">Property</a></li>
-<li class="toctree-l3"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
-<li class="toctree-l3"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
-<li class="toctree-l3"><a class="reference internal" href="dataset.html">Dataset</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="additional_tools.html">Additional tools</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="converters.html">Converter</a></li>
-<li class="toctree-l3"><a class="reference internal" href="transformations.html">Transform</a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="core_classes.html">Core classes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="additional_tools.html">Additional tools</a></li>
 </ul>
 </li>
 </ul>

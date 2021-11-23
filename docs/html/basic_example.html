@@ -7,6 +7,8 @@
   <title>Basic example &mdash; ColabFit Tools Documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.svg"/>
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -15,6 +17,8 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -42,7 +46,17 @@
 <li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="examples.html">Examples</a><ul class="current">
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Basic example</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Basic example</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#creating-a-dataset-from-scratch">Creating a Dataset from scratch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adding-configurations">Adding Configurations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#applying-labels-to-configurations">Applying labels to configurations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configuration-sets-using-regexes">Configuration sets using regexes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#synchronizing-the-dataset">Synchronizing the dataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#parsing-the-data">Parsing the data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#exploring-the-data">Exploring the data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#providing-calculation-metadata">Providing calculation metadata</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP</a></li>
 </ul>
@@ -78,9 +92,181 @@
              
   <section id="basic-example">
 <h1>Basic example<a class="headerlink" href="#basic-example" title="Permalink to this headline"></a></h1>
-<p>TODO: Write a basic example. Make some dummy data, write it to an XYZ file, load
-it using load_data(), do stuff.</p>
-<p>This should basically be what’s in the README right now, but a runnable version.</p>
+<p>This example corresponds to the <code class="code docutils literal notranslate"><span class="pre">colabfit/examples/basic_example.ipynb</span></code>
+Jupyter notebook in the GitHub repo, which can be run in Google Colab.</p>
+<section id="creating-a-dataset-from-scratch">
+<h2>Creating a Dataset from scratch<a class="headerlink" href="#creating-a-dataset-from-scratch" title="Permalink to this headline"></a></h2>
+<p>Initialize the Dataset and add basic metadata.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.dataset</span> <span class="kn">import</span> <span class="n">Dataset</span>
+
+<span class="n">dataset</span> <span class="o">=</span> <span class="n">Dataset</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;example&#39;</span><span class="p">)</span>
+
+<span class="n">dataset</span><span class="o">.</span><span class="n">authors</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s1">&#39;J. E. Lennard-Jones&#39;</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="n">dataset</span><span class="o">.</span><span class="n">links</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s1">&#39;https://en.wikipedia.org/wiki/John_Lennard-Jones&#39;</span>
+<span class="p">]</span>
+
+<span class="n">dataset</span><span class="o">.</span><span class="n">description</span> <span class="o">=</span> <span class="s2">&quot;This is an example dataset&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="adding-configurations">
+<h2>Adding Configurations<a class="headerlink" href="#adding-configurations" title="Permalink to this headline"></a></h2>
+<p>Load the configurations onto the Dataset by either manually constructing the
+Configurations and assigning them to the <code class="xref py py-attr docutils literal notranslate"><span class="pre">configurations</span></code> attribute, or
+using <a class="reference internal" href="dataset.html#colabfit.tools.dataset.load_data" title="colabfit.tools.dataset.load_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code></a>, which calls a pre-made Converter and
+returns a list of Configuration objects.</p>
+<section id="manually">
+<h3>Manually<a class="headerlink" href="#manually" title="Permalink to this headline"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">ase</span> <span class="kn">import</span> <span class="n">Atoms</span>
+
+<span class="n">images</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1000</span><span class="p">):</span>
+    <span class="n">atoms</span> <span class="o">=</span> <span class="n">Atoms</span><span class="p">(</span><span class="s1">&#39;H&#39;</span><span class="o">*</span><span class="n">i</span><span class="p">,</span> <span class="n">positions</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="n">i</span><span class="p">,</span> <span class="mi">3</span><span class="p">)))</span>
+
+    <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;_name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;configuration_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+    <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;dft_energy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span><span class="o">*</span><span class="n">i</span>
+    <span class="n">atoms</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="s1">&#39;dft_forces&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+
+    <span class="n">images</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">atoms</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.configuration</span> <span class="kn">import</span> <span class="n">Configuration</span>
+
+<span class="n">dataset</span><span class="o">.</span><span class="n">configurations</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">Configuration</span><span class="o">.</span><span class="n">from_ase</span><span class="p">(</span><span class="n">atoms</span><span class="p">)</span> <span class="k">for</span> <span class="n">atoms</span> <span class="ow">in</span> <span class="n">images</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="using-load-data">
+<h3>Using <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code><a class="headerlink" href="#using-load-data" title="Permalink to this headline"></a></h3>
+<p>Note that the file_format must be specified, and a name_field (or None) should
+be provided to specify the name of the loaded configurations.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ase.io</span> <span class="kn">import</span> <span class="n">write</span>
+
+<span class="n">write</span><span class="p">(</span><span class="s1">&#39;/content/example.extxyz&#39;</span><span class="p">,</span> <span class="n">images</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.dataset</span> <span class="kn">import</span> <span class="n">load_data</span>
+
+<span class="n">dataset</span><span class="o">.</span><span class="n">configurations</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span>
+        <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;/content/example.extxyz&#39;</span><span class="p">,</span>
+        <span class="n">file_format</span><span class="o">=</span><span class="s1">&#39;xyz&#39;</span><span class="p">,</span>
+        <span class="n">name_field</span><span class="o">=</span><span class="s1">&#39;_name&#39;</span><span class="p">,</span>
+        <span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;H&#39;</span><span class="p">],</span>
+        <span class="n">default_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="applying-labels-to-configurations">
+<h2>Applying labels to configurations<a class="headerlink" href="#applying-labels-to-configurations" title="Permalink to this headline"></a></h2>
+<p>Labels can be specified as lists or single strings (which will be wrapped in a list)
+Metadata can be applied to individual configurations using labels. Labels are
+applied by matching a regular expression to
+<code class="code docutils literal notranslate"><span class="pre">configuration.info[ASE_NAME_FIELD]</span></code> for each configuration. Regex
+mappings are provided by setting the configuration_label_regexes dictionary.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configuration_label_regexes</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;configuration_[1-10]&#39;</span><span class="p">:</span> <span class="s1">&#39;small&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;.*&#39;</span><span class="p">:</span> <span class="s1">&#39;random&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="configuration-sets-using-regexes">
+<h2>Configuration sets using regexes<a class="headerlink" href="#configuration-sets-using-regexes" title="Permalink to this headline"></a></h2>
+<p>A <a class="reference internal" href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet" title="colabfit.tools.configuration_sets.ConfigurationSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">ConfigurationSet</span></code></a> can be used to
+create groups of configurations for organizational purposes. This can be done in
+a similar manner to how configuration labels are applied, but using the
+<code class="code docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code> dictionary. Note that a configuration may
+exist in multiple sets at the same time.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configuration_set_regexes</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;configuration_[1-499]&#39;</span><span class="p">:</span>   <span class="s2">&quot;The first configuration set&quot;</span><span class="p">,</span>
+    <span class="s1">&#39;configuration_[500-999]&#39;</span><span class="p">:</span> <span class="s2">&quot;The second configuration set&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="synchronizing-the-dataset">
+<h2>Synchronizing the dataset<a class="headerlink" href="#synchronizing-the-dataset" title="Permalink to this headline"></a></h2>
+<p>A Dataset is a pool of configurations and properties, where the configurations
+are further organized by grouping them into configuration sets, and the
+properties are linked to property settings. A Dataset then aggregates
+information up from the configurations, properties, and property settings. In
+order to ensure that the information applied by specifying
+<code class="code docutils literal notranslate"><span class="pre">configuration_label_regexes</span></code>, <code class="code docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code>, and
+<code class="code docutils literal notranslate"><span class="pre">property_settings_regexes</span></code> are up-to-date, <code class="xref py py-meth docutils literal notranslate"><span class="pre">dataset.resync()</span></code>
+should be called before performing critical operations like saving a Dataset.
+Some core functions will call <code class="xref py py-meth docutils literal notranslate"><span class="pre">resync()</span></code> automatically.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">resync</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="parsing-the-data">
+<h2>Parsing the data<a class="headerlink" href="#parsing-the-data" title="Permalink to this headline"></a></h2>
+<p>Parse the properties by specifying a <code class="code docutils literal notranslate"><span class="pre">property_map</span></code>, which is a special
+dictionary on a Dataset. See <a class="reference internal" href="usage.html#property-map"><span class="std std-ref">Property map</span></a> for more details.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">property_map</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s1">&#39;energy&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;dft_energy&#39;</span><span class="p">,</span> <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;eV&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;forces&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;dft_forces&#39;</span><span class="p">,</span> <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;eV/Ang&#39;</span><span class="p">},</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">parse_data</span><span class="p">(</span><span class="n">convert_units</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="exploring-the-data">
+<h2>Exploring the data<a class="headerlink" href="#exploring-the-data" title="Permalink to this headline"></a></h2>
+<p>Use <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.get_data" title="colabfit.tools.dataset.Dataset.get_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data()</span></code></a> to obtain a list of the
+given property field where each element has been wrapped in a numpy array.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">energies</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="s1">&#39;energy&#39;</span><span class="p">,</span> <span class="n">ravel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">forces</span>   <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="s1">&#39;forces&#39;</span><span class="p">,</span> <span class="n">ravel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Basic statistics can be obtained using
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.get_statistics" title="colabfit.tools.dataset.Dataset.get_statistics"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_statistics()</span></code></a>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Returns: {&#39;average&#39;: ..., &#39;std&#39;: ..., &#39;min&#39;: ..., &#39;max&#39;:, ..., &#39;average_abs&#39;: ...}</span>
+<span class="n">dataset</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;energy&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.plot_histograms" title="colabfit.tools.dataset.Dataset.plot_histograms"><code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_histograms()</span></code></a> function is useful
+for quickly visualizing the distribution of your data.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">plot_histograms</span><span class="p">([</span><span class="s1">&#39;energy&#39;</span><span class="p">,</span> <span class="s1">&#39;forces&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+</section>
+<section id="providing-calculation-metadata">
+<h2>Providing calculation metadata<a class="headerlink" href="#providing-calculation-metadata" title="Permalink to this headline"></a></h2>
+<p>Metadata for computing properties can be provided by constructing a
+<a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a> object and matching
+it to a property by regex matching on the property’s linked configurations.
+It is good practice to always attach a PropertySettings object to every
+Property to improve reproducibility of the data. It is especially useful to
+include example input files using the <code class="xref py py-attr docutils literal notranslate"><span class="pre">files</span></code> field.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.property_settings</span> <span class="kn">import</span> <span class="n">PropertySettings</span>
+
+<span class="n">dataset</span><span class="o">.</span><span class="n">property_settings_regexes</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;.*&#39;</span><span class="p">:</span>
+        <span class="n">PropertySettings</span><span class="p">(</span>
+            <span class="n">method</span><span class="o">=</span><span class="s1">&#39;VASP&#39;</span><span class="p">,</span>
+            <span class="n">description</span><span class="o">=</span><span class="s1">&#39;energy/force calculations&#39;</span><span class="p">,</span>
+            <span class="n">files</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;/path/to/INCAR&#39;</span><span class="p">],</span>
+            <span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;PBE&#39;</span><span class="p">,</span> <span class="s1">&#39;GGA&#39;</span><span class="p">],</span>
+        <span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
 </section>
 
 
