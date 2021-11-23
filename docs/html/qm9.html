@@ -47,7 +47,13 @@
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="examples.html">Examples</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="basic_example.html">Basic example</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">QM9 example</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">QM9 example</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#writing-a-custom-property-for-qm9">Writing a custom property for QM9</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#defining-a-reader-function">Defining a reader function</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#writing-to-markdown">Writing to Markdown</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#cleaning-the-dataset">Cleaning the dataset</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP</a></li>
 </ul>
 </li>
@@ -82,8 +88,220 @@
              
   <section id="qm9-example">
 <h1>QM9 example<a class="headerlink" href="#qm9-example" title="Permalink to this headline"></a></h1>
-<p>TODO: link to the QM9 notebook to be run in Google Colab, but also provide a
-walkthrough here.</p>
+<p>This example will be used to highlight some of the more advanced features of the
+Dataset class using the popular <a class="reference external" href="https://figshare.com/collections/Quantum_chemistry_structures_and_properties_of_134_kilo_molecules/978904">QM9 dataset</a>.
+It is suggested that you go through the <a class="reference internal" href="basic_example.html#basic-example"><span class="std std-ref">basic example</span></a> first. The complete
+code will not be shown in this example (for the complete code, see the Jupyter
+notebook at <code class="code docutils literal notranslate"><span class="pre">colabfit/examples/qm9.ipynb</span></code>); instead, only the additional features will be
+discussed here.</p>
+<p>Note that this example assumes that the raw data has already been downloaded
+using the following commands:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>mkdir qm9
+<span class="gp">$ </span><span class="nb">cd</span> qm9 <span class="o">&amp;&amp;</span> wget -O dsgdb9nsd.xyz.tar.bz2 https://figshare.com/ndownloader/files/3195389 <span class="o">&amp;&amp;</span> tar -xvjf dsgdb9nsd.xyz.tar.bz2
+</pre></div>
+</div>
+<section id="writing-a-custom-property-for-qm9">
+<h2>Writing a custom property for QM9<a class="headerlink" href="#writing-a-custom-property-for-qm9" title="Permalink to this headline"></a></h2>
+<p>The QM9 dataset contains a large number of computed properties for each
+Configuration, as documented in <a class="reference external" href="https://figshare.com/articles/dataset/Readme_file_Data_description_for_Quantum_chemistry_structures_and_properties_of_134_kilo_molecules_/1057641?backTo=/collections/Quantum_chemistry_structures_and_properties_of_134_kilo_molecules/978904">its original README</a>.</p>
+<p>In order to preserve this information, a custom property can be defined
+(see <a class="reference internal" href="usage.html#custom-properties"><span class="std std-ref">Custom properties</span></a> for more information).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qm9_property_definition</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;property-id&#39;</span><span class="p">:</span> <span class="s1">&#39;qm9-property&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;property-title&#39;</span><span class="p">:</span> <span class="s1">&#39;A, B, C, mu, alpha, homo, lumo, gap, r2, zpve, U0, U, H, G, Cv&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;property-description&#39;</span><span class="p">:</span> <span class="s1">&#39;Geometries minimal in energy, corresponding harmonic frequencies, dipole moments, polarizabilities, along with energies, enthalpies, and free energies of atomization&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;a&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Rotational constant A&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;b&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Rotational constant B&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;c&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Rotational constant C&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;mu&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Dipole moment&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;alpha&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Isotropic polarizability&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;homo&#39;</span><span class="p">:</span>  <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Energy of Highest occupied molecular orbital (HOMO)&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;lumo&#39;</span><span class="p">:</span>  <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Energy of Lowest occupied molecular orbital (LUMO)&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;gap&#39;</span><span class="p">:</span>   <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Gap, difference between LUMO and HOMO&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;r2&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Electronic spatial extent&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;zpve&#39;</span><span class="p">:</span>  <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Zero point vibrational energy&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;u0&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Internal energy at 0 K&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;u&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Internal energy at 298.15 K&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;h&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Enthalpy at 298.15 K&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;g&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Free energy at 298.15 K&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;cv&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Heat capacity at 298.15 K&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;smiles-relaxed&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;SMILES for relaxed geometry&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;inchi-relaxed&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;InChI for relaxed geometry&#39;</span><span class="p">},</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">custom_definitions</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;qm9-property&#39;</span><span class="p">:</span> <span class="n">qm9_property_definition</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>Note that a property definition is used for performing verification checks when
+parsing the data. A <code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code> must still be provided for specifying
+_how_ to parse the data and what the units of the fields are.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">property_map</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;qm9-property&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="c1"># Property Definition field: {&#39;field&#39;: ASE field, &#39;units&#39;: ASE-readable units}</span>
+        <span class="s1">&#39;a&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;A&#39;</span><span class="p">,</span>     <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;GHz&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;b&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;B&#39;</span><span class="p">,</span>     <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;GHz&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;c&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;C&#39;</span><span class="p">,</span>     <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;GHz&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;mu&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;mu&#39;</span><span class="p">,</span>    <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Debye&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;alpha&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;alpha&#39;</span><span class="p">,</span> <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Bohr*Bohr*Bohr&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;homo&#39;</span><span class="p">:</span>  <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;homo&#39;</span><span class="p">,</span>  <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Hartree&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;lumo&#39;</span><span class="p">:</span>  <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;lumo&#39;</span><span class="p">,</span>  <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Hartree&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;gap&#39;</span><span class="p">:</span>   <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;gap&#39;</span><span class="p">,</span>   <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Hartree&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;r2&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;r2&#39;</span><span class="p">,</span>    <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Bohr*Bohr&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;zpve&#39;</span><span class="p">:</span>  <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;zpve&#39;</span><span class="p">,</span>  <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Hartree&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;u0&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;U0&#39;</span><span class="p">,</span>    <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Hartree&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;u&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;U&#39;</span><span class="p">,</span>     <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Hartree&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;h&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span>     <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Hartree&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;g&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;G&#39;</span><span class="p">,</span>     <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;Hartree&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;cv&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;Cv&#39;</span><span class="p">,</span>    <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;cal/mol/K&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;smiles-relaxed&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;SMILES_relaxed&#39;</span><span class="p">,</span> <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">},</span>
+        <span class="s1">&#39;inchi-relaxed&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;SMILES_relaxed&#39;</span><span class="p">,</span>  <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">},</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">property_map</span> <span class="o">=</span> <span class="n">property_map</span>
+</pre></div>
+</div>
+</section>
+<section id="defining-a-reader-function">
+<h2>Defining a reader function<a class="headerlink" href="#defining-a-reader-function" title="Permalink to this headline"></a></h2>
+<p>Since the data in QM9 is not stored in a typical format (it uses an uncommon
+modification to the typical XYZ format), it is necessary to use the
+<a class="reference internal" href="converters.html#colabfit.tools.converters.FolderConverter" title="colabfit.tools.converters.FolderConverter"><code class="xref py py-class docutils literal notranslate"><span class="pre">FolderConverter</span></code></a> class, with a custom
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">reader()</span></code> function.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">reader</span><span class="p">(</span><span class="n">file_path</span><span class="p">):</span>
+    <span class="c1"># A function for returning a list of ASE a</span>
+
+    <span class="n">properties_order</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="s1">&#39;index&#39;</span><span class="p">,</span> <span class="s1">&#39;A&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;mu&#39;</span><span class="p">,</span> <span class="s1">&#39;alpha&#39;</span><span class="p">,</span> <span class="s1">&#39;homo&#39;</span><span class="p">,</span> <span class="s1">&#39;lumo&#39;</span><span class="p">,</span> <span class="s1">&#39;gap&#39;</span><span class="p">,</span> <span class="s1">&#39;r2&#39;</span><span class="p">,</span> <span class="s1">&#39;zpve&#39;</span><span class="p">,</span> <span class="s1">&#39;U0&#39;</span><span class="p">,</span> <span class="s1">&#39;U&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span><span class="p">,</span> <span class="s1">&#39;Cv&#39;</span>
+    <span class="p">]</span>
+
+    <span class="n">images</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="n">_</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">readlines</span><span class="p">()]</span>
+
+        <span class="n">na</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">properties</span> <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+
+        <span class="n">symbols</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">partial_charges</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">2</span><span class="o">+</span><span class="n">na</span><span class="p">]:</span>
+            <span class="n">split</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="n">split</span> <span class="o">=</span> <span class="p">[</span><span class="n">_</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;*^&#39;</span><span class="p">,</span> <span class="s1">&#39;e&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">split</span><span class="p">]</span>  <span class="c1"># Python-readable scientific notation</span>
+
+            <span class="c1"># Line order: symbol, x, y, z, charge</span>
+            <span class="n">symbols</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">split</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">positions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">split</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">4</span><span class="p">])</span>
+            <span class="n">partial_charges</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">split</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="n">positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">positions</span><span class="p">)</span>
+        <span class="n">partial_charges</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">partial_charges</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+
+        <span class="n">atoms</span> <span class="o">=</span> <span class="n">Atoms</span><span class="p">(</span><span class="n">symbols</span><span class="o">=</span><span class="n">symbols</span><span class="p">,</span> <span class="n">positions</span><span class="o">=</span><span class="n">positions</span><span class="p">)</span>
+
+        <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;mulliken_partial_charges&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">partial_charges</span>
+
+        <span class="n">name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">file_path</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">name</span>
+
+        <span class="k">for</span> <span class="n">pname</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">properties_order</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">properties</span><span class="p">[</span><span class="mi">2</span><span class="p">:]):</span>
+            <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="n">pname</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+
+        <span class="n">frequencies</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">lines</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+        <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;frequencies&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">frequencies</span>
+
+        <span class="n">smiles</span> <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+        <span class="n">inchi</span>  <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+
+        <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;SMILES&#39;</span><span class="p">]</span>    <span class="o">=</span> <span class="n">smiles</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;SMILES_relaxed&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">smiles</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;InChI&#39;</span><span class="p">]</span>     <span class="o">=</span> <span class="n">inchi</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;InChI_relaxed&#39;</span><span class="p">]</span>  <span class="o">=</span> <span class="n">inchi</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="n">images</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">atoms</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">images</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configurations</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span>
+    <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;qm9&#39;</span><span class="p">,</span>
+    <span class="n">file_format</span><span class="o">=</span><span class="s1">&#39;folder&#39;</span><span class="p">,</span>
+    <span class="n">name_field</span><span class="o">=</span><span class="s1">&#39;name&#39;</span><span class="p">,</span>  <span class="c1"># key in Configuration.info to use as the Configuration name</span>
+    <span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;N&#39;</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">,</span> <span class="s1">&#39;F&#39;</span><span class="p">],</span>    <span class="c1"># order matters for CFG files, but not others</span>
+    <span class="n">default_name</span><span class="o">=</span><span class="s1">&#39;qm9&#39;</span><span class="p">,</span>  <span class="c1"># default name with `name_field` not found</span>
+    <span class="n">reader</span><span class="o">=</span><span class="n">reader</span><span class="p">,</span>
+    <span class="n">glob_string</span><span class="o">=</span><span class="s1">&#39;*.xyz&#39;</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="writing-to-markdown">
+<h2>Writing to Markdown<a class="headerlink" href="#writing-to-markdown" title="Permalink to this headline"></a></h2>
+<p>To avoid having to re-process the raw data using <code class="code docutils literal notranslate"><span class="pre">reader</span></code>, and to provide
+a cleaner storage format, <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.to_markdown" title="colabfit.tools.dataset.Dataset.to_markdown"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_markdown()</span></code></a>
+can be used (see <a class="reference internal" href="usage.html#reading-writing-datasets-with-markdown"><span class="std std-ref">Reading/writing Datasets with Markdown</span></a> for more
+details).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">to_markdown</span><span class="p">(</span>
+    <span class="n">base_folder</span><span class="o">=</span><span class="s1">&#39;/content&#39;</span><span class="p">,</span>
+    <span class="n">html_file_name</span><span class="o">=</span><span class="s1">&#39;README.md&#39;</span><span class="p">,</span>
+    <span class="n">data_file_name</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">name</span><span class="o">+</span><span class="s1">&#39;.extxyz&#39;</span><span class="p">,</span>
+    <span class="n">data_format</span><span class="o">=</span><span class="s1">&#39;xyz&#39;</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="cleaning-the-dataset">
+<h2>Cleaning the dataset<a class="headerlink" href="#cleaning-the-dataset" title="Permalink to this headline"></a></h2>
+<p>Using the <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.plot_histograms" title="colabfit.tools.dataset.Dataset.plot_histograms"><code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_histograms()</span></code></a> and
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.get_statistics" title="colabfit.tools.dataset.Dataset.get_statistics"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_statistics()</span></code></a> functions reveals that
+the QM9 dataset has some outlying data entries.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;a&#39;</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;b&#39;</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;c&#39;</span><span class="p">))</span>
+
+<span class="c1"># {&#39;average&#39;: 9.814382088508797, &#39;std&#39;: 1809.4589082320583, &#39;min&#39;: 0.0, &#39;max&#39;: 619867.68314, &#39;average_abs&#39;: 9.814382088508797}</span>
+<span class="c1"># {&#39;average&#39;: 1.4060972645920002, &#39;std&#39;: 1.5837889998648804, &#39;min&#39;: 0.33712, &#39;max&#39;: 437.90386, &#39;average_abs&#39;: 1.4060972645920002}</span>
+<span class="c1"># {&#39;average&#39;: 1.1249210272988013, &#39;std&#39;: 1.0956136904779634, &#39;min&#39;: 0.33118, &#39;max&#39;: 282.94545, &#39;average_abs&#39;: 1.1249210272988013}</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">plot_histograms</span><span class="p">([</span>
+    <span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="s1">&#39;b&#39;</span><span class="p">,</span> <span class="s1">&#39;c&#39;</span><span class="p">,</span> <span class="s1">&#39;mu&#39;</span><span class="p">,</span> <span class="s1">&#39;alpha&#39;</span><span class="p">,</span> <span class="s1">&#39;homo&#39;</span><span class="p">,</span> <span class="s1">&#39;lumo&#39;</span><span class="p">,</span> <span class="s1">&#39;r2&#39;</span><span class="p">,</span> <span class="s1">&#39;zpve&#39;</span><span class="p">,</span> <span class="s1">&#39;u0&#39;</span><span class="p">,</span> <span class="s1">&#39;u&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;h&#39;</span><span class="p">,</span> <span class="s1">&#39;g&#39;</span><span class="p">,</span> <span class="s1">&#39;cv&#39;</span>
+<span class="p">])</span>
+</pre></div>
+</div>
+<img alt="_images/qm9_histograms.png" class="align-center" src="_images/qm9_histograms.png" />
+<p>The <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.filter" title="colabfit.tools.dataset.Dataset.filter"><code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code></a> function can be used to
+return a new dataset without the outlying data.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">clean</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="s1">&#39;data&#39;</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;a&#39;</span><span class="p">][</span><span class="s1">&#39;source-value&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">20</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;b&#39;</span><span class="p">][</span><span class="s1">&#39;source-value&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">10</span><span class="p">),</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">clean</span><span class="o">.</span><span class="n">plot_histograms</span><span class="p">([</span>
+    <span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="s1">&#39;b&#39;</span><span class="p">,</span> <span class="s1">&#39;c&#39;</span><span class="p">,</span> <span class="s1">&#39;mu&#39;</span><span class="p">,</span> <span class="s1">&#39;alpha&#39;</span><span class="p">,</span> <span class="s1">&#39;homo&#39;</span><span class="p">,</span> <span class="s1">&#39;lumo&#39;</span><span class="p">,</span> <span class="s1">&#39;r2&#39;</span><span class="p">,</span> <span class="s1">&#39;zpve&#39;</span><span class="p">,</span> <span class="s1">&#39;u0&#39;</span><span class="p">,</span> <span class="s1">&#39;u&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;h&#39;</span><span class="p">,</span> <span class="s1">&#39;g&#39;</span><span class="p">,</span> <span class="s1">&#39;cv&#39;</span>
+<span class="p">])</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">clean</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;a&#39;</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">clean</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;b&#39;</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">clean</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;c&#39;</span><span class="p">))</span>
+
+<span class="c1"># {&#39;average&#39;: 3.407053427070018, &#39;std&#39;: 1.3368223663235594, &#39;min&#39;: 0.0, &#39;max&#39;: 19.99697, &#39;average_abs&#39;: 3.407053427070018}</span>
+<span class="c1"># {&#39;average&#39;: 1.3966863945821093, &#39;std&#39;: 0.45813797072575396, &#39;min&#39;: 0.33712, &#39;max&#39;: 9.93509, &#39;average_abs&#39;: 1.3966863945821093}</span>
+<span class="c1"># {&#39;average&#39;: 1.1177706236464617, &#39;std&#39;: 0.328798457356026, &#39;min&#39;: 0.33118, &#39;max&#39;: 6.46247, &#39;average_abs&#39;: 1.1177706236464617}</span>
+</pre></div>
+</div>
+<img alt="_images/qm9_clean_histograms.png" class="align-center" src="_images/qm9_clean_histograms.png" />
+</section>
 </section>
 
 
