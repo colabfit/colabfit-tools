@@ -7,6 +7,8 @@
   <title>Usage &mdash; ColabFit Tools Documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.svg"/>
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -15,6 +17,8 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -43,9 +47,17 @@
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#property-map">Property map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#applying-configuration-labels">Applying Configuration labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#custom-properties">Custom properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reading-writing-datasets-with-markdown">Reading/writing Datasets with Markdown</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#visualization">Visualization</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#filtering">Filtering</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#filtering-a-dataset">Filtering a Dataset</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#checking-for-subsets">Checking for subsets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#data-transformation">Data transformation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#train-test-splits">Train/test splits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#loading-data">Loading data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#building-configuration-sets">Building configuration sets</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="classes.html">Classes</a></li>
@@ -77,14 +89,70 @@
              
   <section id="usage">
 <h1>Usage<a class="headerlink" href="#usage" title="Permalink to this headline"></a></h1>
+<ul class="simple">
+<li><p>have all of the special dictionaries described somewhere.</p></li>
+</ul>
+<section id="property-map">
+<h2>Property map<a class="headerlink" href="#property-map" title="Permalink to this headline"></a></h2>
+<dl class="simple">
+<dt>Note that the keys should be one of the following:</dt><dd><ol class="arabic simple">
+<li><p>The name of an OpenKIM Property Definition from the <a class="reference external" href="https://openkim.org/properties">list of approved OpenKIM Property Definitions</a></p></li>
+<li><p>The name of a locally-defined property (see <a class="reference internal" href="#custom-properties"><span class="std std-ref">Custom properties</span></a>)</p></li>
+<li><p>The string <code class="code docutils literal notranslate"><span class="pre">'default'</span></code>. Note that <code class="code docutils literal notranslate"><span class="pre">'default'</span></code> means that an
+existing property will be used with support for basic fields like
+‘energy’, ‘forces’, and ‘stress’.</p></li>
+</ol>
+</dd>
+</dl>
+<p>‘field’ is used to specify the key for extracting the property from <code class="xref py py-meth docutils literal notranslate"><span class="pre">Configuration.info()</span></code> or <code class="xref py py-meth docutils literal notranslate"><span class="pre">Configuartion.arrays()</span></code>.
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.parse_data" title="colabfit.tools.dataset.Dataset.parse_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code></a> will extract the fields
+provided in property_map from the configuration, and store them as Property
+objects in the dataset.data list. If a custom property is used, the
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">custom_definitions</span></code> dictionary of a
+Dataset must be updated to either point to the local EDN file or a Python
+dictionary representation of the contents of the EDN file. See
+<a class="reference internal" href="#custom-properties"><span class="std std-ref">Custom properties</span></a> for more details</p>
+</section>
+<section id="applying-configuration-labels">
+<h2>Applying Configuration labels<a class="headerlink" href="#applying-configuration-labels" title="Permalink to this headline"></a></h2>
+<ul class="simple">
+<li><p>Point to Si_PRX_GAP for an example of how to add configuration labels and
+build configuration sets.</p></li>
+</ul>
+</section>
+<section id="custom-properties">
+<h2>Custom properties<a class="headerlink" href="#custom-properties" title="Permalink to this headline"></a></h2>
+<ul class="simple">
+<li><p>Point to the QM9 for an example of how to use custom properties</p></li>
+<li><p>Update the link in basic_example to piont to this section</p></li>
+</ul>
+</section>
+<section id="reading-writing-datasets-with-markdown">
+<h2>Reading/writing Datasets with Markdown<a class="headerlink" href="#reading-writing-datasets-with-markdown" title="Permalink to this headline"></a></h2>
+</section>
 <section id="visualization">
 <h2>Visualization<a class="headerlink" href="#visualization" title="Permalink to this headline"></a></h2>
 </section>
-<section id="filtering">
-<h2>Filtering<a class="headerlink" href="#filtering" title="Permalink to this headline"></a></h2>
+<section id="filtering-a-dataset">
+<h2>Filtering a Dataset<a class="headerlink" href="#filtering-a-dataset" title="Permalink to this headline"></a></h2>
 </section>
 <section id="checking-for-subsets">
 <h2>Checking for subsets<a class="headerlink" href="#checking-for-subsets" title="Permalink to this headline"></a></h2>
+</section>
+<section id="data-transformation">
+<h2>Data transformation<a class="headerlink" href="#data-transformation" title="Permalink to this headline"></a></h2>
+</section>
+<section id="train-test-splits">
+<h2>Train/test splits<a class="headerlink" href="#train-test-splits" title="Permalink to this headline"></a></h2>
+</section>
+<section id="loading-data">
+<h2>Loading data<a class="headerlink" href="#loading-data" title="Permalink to this headline"></a></h2>
+<ul class="simple">
+<li><p>XYZ, CFG, JSON, HDF5</p></li>
+</ul>
+</section>
+<section id="building-configuration-sets">
+<h2>Building configuration sets<a class="headerlink" href="#building-configuration-sets" title="Permalink to this headline"></a></h2>
 </section>
 </section>
 

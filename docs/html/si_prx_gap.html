@@ -7,6 +7,8 @@
   <title>Si PRX GAP &mdash; ColabFit Tools Documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.svg"/>
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -15,6 +17,8 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -44,7 +48,14 @@
 <li class="toctree-l1 current"><a class="reference internal" href="examples.html">Examples</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="basic_example.html">Basic example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Si PRX GAP</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Si PRX GAP</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#loading-from-a-file">Loading from a file</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#manually-constructed-configurationsets">Manually constructed ConfigurationSets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#manually-applied-configuration-labels">Manually applied Configuration labels</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#renaming-configuration-fields">Renaming Configuration fields</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#filtering-based-on-xc-functional">Filtering based on XC-functional</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
@@ -78,7 +89,163 @@
              
   <section id="si-prx-gap">
 <h1>Si PRX GAP<a class="headerlink" href="#si-prx-gap" title="Permalink to this headline"></a></h1>
-<p>TODO: same thing that you did for the QM9 one.</p>
+<p>This example will be used to highlight some of the more advanced features of the
+Dataset class using the popular <a class="reference external" href="https://www.repository.cam.ac.uk/handle/1810/317974">Si GAP dataset</a>.
+It is suggested that you go through the <a class="reference internal" href="basic_example.html#basic-example"><span class="std std-ref">basic example</span></a> first. The complete
+code will not be shown in this example (for the complete code, see the Jupyter
+notebook at <code class="code docutils literal notranslate"><span class="pre">colabfit/examples/si_prx_gap.ipynb</span></code>); instead, only the additional features will be
+discussed here.</p>
+<p>Note that this example assumes that the raw data has already been downloaded
+using the following commands:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>mkdir si_prx_gap
+<span class="gp">$ </span><span class="nb">cd</span> si_prx_gap <span class="o">&amp;&amp;</span> wget -O Si_PRX_GAP.zip https://www.repository.cam.ac.uk/bitstream/handle/1810/317974/Si_PRX_GAP.zip?sequence<span class="o">=</span><span class="m">1</span><span class="p">&amp;</span><span class="nv">isAllowed</span><span class="o">=</span>yield
+<span class="gp">$ </span><span class="nb">cd</span> si_prx_gap <span class="o">&amp;&amp;</span> unzip Si_PRX_GAP.zip
+</pre></div>
+</div>
+<section id="loading-from-a-file">
+<h2>Loading from a file<a class="headerlink" href="#loading-from-a-file" title="Permalink to this headline"></a></h2>
+<p>This example uses <a class="reference internal" href="dataset.html#colabfit.tools.dataset.load_data" title="colabfit.tools.dataset.load_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code></a> to load the data
+from an existing Extended XYZ file. Note that the raw data includes the
+<code class="code docutils literal notranslate"><span class="pre">config_type</span></code> field, which is used to generate the names of the loaded
+Configurations. A <code class="xref py py-attr docutils literal notranslate"><span class="pre">default_name</span></code> is also provided to handle the
+configurations that do not have a <code class="code docutils literal notranslate"><span class="pre">config_type</span></code> field.
+<code class="code docutils literal notranslate"><span class="pre">verbose=True</span></code> is used here since the dataset is large enough to warrant a
+progress bar.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configurations</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span>
+        <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;./si_prx_gap/gp_iter6_sparse9k.xml.xyz&#39;</span><span class="p">,</span>
+        <span class="n">file_format</span><span class="o">=</span><span class="s1">&#39;xyz&#39;</span><span class="p">,</span>
+        <span class="n">name_field</span><span class="o">=</span><span class="s1">&#39;config_type&#39;</span><span class="p">,</span>  <span class="c1"># key in Configuration.info to use as the Configuration name</span>
+        <span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Si&#39;</span><span class="p">],</span>
+        <span class="n">default_name</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>  <span class="c1"># default name with `name_field` not found</span>
+        <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="manually-constructed-configurationsets">
+<h2>Manually constructed ConfigurationSets<a class="headerlink" href="#manually-constructed-configurationsets" title="Permalink to this headline"></a></h2>
+<p>Since this dataset was manually constructed by its authors, a large amount of
+additional information has been provided to better identify the Configurations
+(see Table I. in <a class="reference external" href="https://journals.aps.org/prx/abstract/10.1103/PhysRevX.8.041048">the original paper</a>).
+In order to retain this information, we define ConfigurationSets by regex
+matching on the Configuration names (see <a class="reference internal" href="usage.html#building-configuration-sets"><span class="std std-ref">Building configuration sets</span></a> for
+more details).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configuration_set_regexes</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;isolated_atom&#39;</span><span class="p">:</span> <span class="s1">&#39;Reference atom&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;bt&#39;</span><span class="p">:</span> <span class="s1">&#39;Beta-tin&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;dia&#39;</span><span class="p">:</span> <span class="s1">&#39;Diamond&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;sh&#39;</span><span class="p">:</span> <span class="s1">&#39;Simple hexagonal&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;hex_diamond&#39;</span><span class="p">:</span> <span class="s1">&#39;Hexagonal diamond&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;bcc&#39;</span><span class="p">:</span> <span class="s1">&#39;Body-centered-cubic&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;bc8&#39;</span><span class="p">:</span> <span class="s1">&#39;BC8&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;fcc&#39;</span><span class="p">:</span> <span class="s1">&#39;Face-centered-cubic&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;hcp&#39;</span><span class="p">:</span> <span class="s1">&#39;Hexagonal-close-packed&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;st12&#39;</span><span class="p">:</span> <span class="s1">&#39;ST12&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;liq&#39;</span><span class="p">:</span> <span class="s1">&#39;Liquid&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;amorph&#39;</span><span class="p">:</span> <span class="s1">&#39;Amorphous&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;surface_001&#39;</span><span class="p">:</span> <span class="s1">&#39;Diamond surface (001)&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;surface_110&#39;</span><span class="p">:</span> <span class="s1">&#39;Diamond surface (110)&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;surface_111&#39;</span><span class="p">:</span> <span class="s1">&#39;Diamond surface (111)&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;surface_111_pandey&#39;</span><span class="p">:</span> <span class="s1">&#39;Pandey reconstruction of diamond (111) surface&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;surface_111_3x3_das&#39;</span><span class="p">:</span> <span class="s1">&#39;Dimer-adatom-stacking-fault (DAS) reconstruction&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;111adatom&#39;</span><span class="p">:</span> <span class="s1">&#39;Configurations with adatom on (111) surface&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;crack_110_1-10&#39;</span><span class="p">:</span> <span class="s1">&#39;Small (110) crack tip&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;crack_111_1-10&#39;</span><span class="p">:</span> <span class="s1">&#39;Small (111) crack tip&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;decohesion&#39;</span><span class="p">:</span> <span class="s1">&#39;Decohesion of diamond-structure Si along various directions&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;divacancy&#39;</span><span class="p">:</span> <span class="s1">&#39;Diamond divacancy configurations&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;interstitial&#39;</span><span class="p">:</span> <span class="s1">&#39;Diamond interstitial configurations&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;screw_disloc&#39;</span><span class="p">:</span> <span class="s1">&#39;Si screw dislocation core&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;sp&#39;</span><span class="p">:</span> <span class="s1">&#39;sp bonded configurations&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;sp2&#39;</span><span class="p">:</span> <span class="s1">&#39;sp2 bonded configurations&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;vacancy&#39;</span><span class="p">:</span> <span class="s1">&#39;Diamond vacancy configurations&#39;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="manually-applied-configuration-labels">
+<h2>Manually applied Configuration labels<a class="headerlink" href="#manually-applied-configuration-labels" title="Permalink to this headline"></a></h2>
+<p>Similarly, this additional knowledge about the types of Configurations in the
+dataset can be used to apply metadata labels to the Configurations, which is
+useful for enabling querying over the data by future users. See <a class="reference internal" href="usage.html#applying-configuration-labels"><span class="std std-ref">Applying Configuration labels</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configuration_label_regexes</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;isolated_atom&#39;</span><span class="p">:</span> <span class="s1">&#39;isolated_atom&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;bt&#39;</span><span class="p">:</span> <span class="s1">&#39;a5&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;dia&#39;</span><span class="p">:</span> <span class="s1">&#39;diamond&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;sh&#39;</span><span class="p">:</span> <span class="s1">&#39;sh&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;hex_diamond&#39;</span><span class="p">:</span> <span class="s1">&#39;sonsdaleite&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;bcc&#39;</span><span class="p">:</span> <span class="s1">&#39;bcc&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;bc8&#39;</span><span class="p">:</span> <span class="s1">&#39;bc8&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;fcc&#39;</span><span class="p">:</span> <span class="s1">&#39;fcc&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;hcp&#39;</span><span class="p">:</span> <span class="s1">&#39;hcp&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;st12&#39;</span><span class="p">:</span> <span class="s1">&#39;st12&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;liq&#39;</span><span class="p">:</span> <span class="s1">&#39;liquid&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;amorph&#39;</span><span class="p">:</span> <span class="s1">&#39;amorphous&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;surface_001&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;surface&#39;</span><span class="p">,</span> <span class="s1">&#39;001&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;surface_110&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;surface&#39;</span><span class="p">,</span> <span class="s1">&#39;110&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;surface_111&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;surface&#39;</span><span class="p">,</span> <span class="s1">&#39;111&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;surface_111_pandey&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;surface&#39;</span><span class="p">,</span> <span class="s1">&#39;111&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;surface_111_3x3_das&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;surface&#39;</span><span class="p">,</span> <span class="s1">&#39;111&#39;</span><span class="p">,</span> <span class="s1">&#39;das&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;111adatom&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;surface&#39;</span><span class="p">,</span> <span class="s1">&#39;111&#39;</span><span class="p">,</span> <span class="s1">&#39;adatom&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;crack_110_1-10&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;crack&#39;</span><span class="p">,</span> <span class="s1">&#39;110&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;crack_111_1-10&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;crac&#39;</span><span class="p">,</span> <span class="s1">&#39;111&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;decohesion&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;diamond&#39;</span><span class="p">,</span> <span class="s1">&#39;decohesion&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;divacancy&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;diamond&#39;</span><span class="p">,</span> <span class="s1">&#39;vacancy&#39;</span><span class="p">,</span> <span class="s1">&#39;divacancy&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;interstitial&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;diamond&#39;</span><span class="p">,</span> <span class="s1">&#39;interstitial&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;screw_disloc&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;screw&#39;</span><span class="p">,</span> <span class="s1">&#39;dislocation&#39;</span><span class="p">],</span>
+    <span class="s1">&#39;sp&#39;</span><span class="p">:</span> <span class="s1">&#39;sp&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;sp2&#39;</span><span class="p">:</span> <span class="s1">&#39;sp2&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;vacancy&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;diamond&#39;</span><span class="p">,</span> <span class="s1">&#39;vacancy&#39;</span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="renaming-configuration-fields">
+<h2>Renaming Configuration fields<a class="headerlink" href="#renaming-configuration-fields" title="Permalink to this headline"></a></h2>
+<p>In order to ensure that <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.parse_data" title="colabfit.tools.dataset.Dataset.parse_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code></a> is
+able to properly parse the data, the fields in <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code> and
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.arrays</span></code> should match those used in
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">Dataset.property_map</span></code>. In the case of the Si GAP dataset, some of the
+data has incorrectly labeled energy/force/virial fields, where it uses
+“DFT_*” instead of “dft_*” (lowercase) like the rest of the Configurations. In
+order to fix this, we use the
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.rename_configuration_field" title="colabfit.tools.dataset.Dataset.rename_configuration_field"><code class="xref py py-meth docutils literal notranslate"><span class="pre">rename_configuration_field()</span></code></a> function:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">rename_configuration_field</span><span class="p">(</span><span class="s1">&#39;DFT_energy&#39;</span><span class="p">,</span> <span class="s1">&#39;dft_energy&#39;</span><span class="p">)</span>
+<span class="n">dataset</span><span class="o">.</span><span class="n">rename_configuration_field</span><span class="p">(</span><span class="s1">&#39;DFT_force&#39;</span><span class="p">,</span> <span class="s1">&#39;dft_force&#39;</span><span class="p">)</span>
+<span class="n">dataset</span><span class="o">.</span><span class="n">rename_configuration_field</span><span class="p">(</span><span class="s1">&#39;DFT_virial&#39;</span><span class="p">,</span> <span class="s1">&#39;dft_virial&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="filtering-based-on-xc-functional">
+<h2>Filtering based on XC-functional<a class="headerlink" href="#filtering-based-on-xc-functional" title="Permalink to this headline"></a></h2>
+<p>In the Si GAP dataset, some of the data was computed using a PBE functional,
+and some was computed using a PW91 functional. This information is stored in the
+<code class="code docutils literal notranslate"><span class="pre">xc_functional</span></code> field of the <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code> array.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">set</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_configuration_field</span><span class="p">(</span><span class="s1">&#39;xc_functional&#39;</span><span class="p">))</span>
+<span class="c1"># output: {&#39;PBE&#39;, &#39;PW91&#39;}</span>
+</pre></div>
+</div>
+<p>A user may want to only work with subsets of the data that were computed with
+the exact same DFT settings. To facilitate this, we break the original Dataset
+into three separate datasets using the
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.filter" title="colabfit.tools.dataset.Dataset.filter"><code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code></a> function (see <a class="reference internal" href="usage.html#filtering-a-dataset"><span class="std std-ref">Filtering a Dataset</span></a> for more details).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">no_xc_data</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="s1">&#39;configurations&#39;</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;xc_functional&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="p">)</span>
+
+<span class="n">pbe_data</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="s1">&#39;configurations&#39;</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;xc_functional&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;PBE&#39;</span>
+<span class="p">)</span>
+
+<span class="n">pw91_data</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+    <span class="s1">&#39;configurations&#39;</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;xc_functional&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;PW91&#39;</span>
+
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
 </section>
 
 

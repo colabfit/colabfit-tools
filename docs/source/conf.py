@@ -33,7 +33,9 @@ release = '0.1'
 extensions = [
     'sphinx_rtd_theme',
     'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinx.ext.autosectionlabel',
+    'sphinx_copybutton',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -52,6 +54,9 @@ exclude_patterns = []
 #
 
 html_title = 'ColabFit Tools Documentation'
+
+# html_logo = 'colabfit-logo.svg'
+html_favicon = 'colabfit-logo.svg'
 
 html_theme = 'sphinx_rtd_theme'
 

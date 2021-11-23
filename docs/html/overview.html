@@ -7,6 +7,8 @@
   <title>Overview &mdash; ColabFit Tools Documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.svg"/>
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -15,6 +17,8 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -75,14 +79,6 @@
              
   <section id="overview">
 <h1>Overview<a class="headerlink" href="#overview" title="Permalink to this headline"></a></h1>
-<p>Despite the rapidly increasing popularity of data-driven interatomic
-potentials (DDIPs), training data for these models has historically been
-difficult to obtain and work with. Data is often stored in internally-developed
-formats, insufficiently documented, and not made readily available to the
-public.</p>
-<p><code class="code docutils literal notranslate"><span class="pre">colabfit_tools</span></code> aims to address these problems by defining a standard
-method for representing DDIP training datasets progromatically, and providing
-software tools for manipulating these representations.</p>
 <section id="dataset-standard">
 <h2>Dataset Standard<a class="headerlink" href="#dataset-standard" title="Permalink to this headline"></a></h2>
 <p>The <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset" title="colabfit.tools.dataset.Dataset"><code class="xref py py-class docutils literal notranslate"><span class="pre">Dataset</span></code></a> class was designed to be able to
