@@ -29,7 +29,7 @@ structures:
       The top-level dataset, which aggregates information up from the
       configuration sets and sub-datasets for improved discoverability
 
-.. figure:: ds_diagram.svg
+.. figure:: ds_diagram.png
     :align: center
     :alt: A diagram showing the relationship between the five core data structures
 
