@@ -50,7 +50,7 @@ class InvalidPropertyDefinition(Exception):
 class Property(dict):
     """
     A Property is used to store the results of some kind of calculation or
-    experiment, and should be mapped to an OpenKIM Property Definition. Best
+    experiment, and should be mapped to an `OpenKIM Property Definition <https://openkim.org/doc/schema/properties-framework/>`_. Best
     practice is for the Property to also point to one or more
     PropertySettings objects that fully define the conditions under which the
     Property was obtained.
@@ -58,32 +58,30 @@ class Property(dict):
     Attributes:
         edn (dict):
             A dictionary defining an OpenKIM Property Instance in EDN format.
+            For more details, see the `OpenKIM Property Framework <https://openkim.org/doc/schema/properties-framework/>`_ documentation.
 
         property_map (dict):
             key = a string that can be used as a key like `self.edn[key]`
-            value = A sub-dictionary with the following structure:
-                {
-                    'field': A field name used to access atoms.info
-                        or atoms.arrays
-                    'units': A string matching one of the units names in
-                        ase.units (https://wiki.fysik.dtu.dk/ase/ase/units.html)
-                }
+            value = A sub-dictionary with the following keys:
 
-            These units will be used to convert the given units to eV,
-            Angstrom, a.m.u., Kelvin, ...
-
-            For compound units (e.g. "eV/Ang"), the string will be split on
-            '*' and '/'. The raw data will be multiplied by the first unit
-            and anything preceded by a '*'. It will be divided by anything
-            preceded by a '/'.
+            * :attr:`field`:
+                A field name used to access :attr:`Configuration.info` or :attr:`Configuration.arrays`
+            * :attr:`units`:
+                A string matching one of the units names in `ase.units <https://wiki.fysik.dtu.dk/ase/ase/units.html>`_.
+                These units will be used to convert the given units to eV,
+                Angstrom, a.m.u., Kelvin, ... For compound units (e.g. "eV/Ang"), the string will be split on
+                '*' and '/'. The raw data will be multiplied by the first unit
+                and anything preceded by a '*'. It will be divided by anything
+                preceded by a '/'.
 
         configurations (list):
-            A list of `colabfit.Configuration` objects
+            A list of :class:`~colabfit.tools.configuration.Configuration` objects.
 
         settings (PropertySettings):
-            A PropertySettings object defining the conditions under
-            which the propoerty was obtained. This is allowed to be None,
-            but it is highly recommended that it be provided.
+            A :class:`~colabfit.tools.property_settings.PropertySettings` object
+            defining the conditions under which the propoerty was obtained. This
+            is allowed to be None, but it is highly recommended that it be
+            provided.
     """
 
     _observers = []
@@ -100,14 +98,11 @@ class Property(dict):
         ):
         """
         Args:
-            name (str):
-                Short OpenKIM Property Definition name
+            name (str): Short OpenKIM Property Definition name
 
-            configurations (list):
-                A list of ColabFit Configuration object
+            configurations (list): A list of ColabFit Configuration object
 
-            property_map (dict):
-                A property map as described in the Property attributes section.
+            property_map (dict): A property map as described in the Property attributes section.
 
             settings (PropertySettings):
                 A `colabfit.property.PropertySettings` objects specifying how to
@@ -419,8 +414,8 @@ class Property(dict):
 
     def convert_units(self):
         """
-        For each key in `original_units`, convert `edn[key]` from
-        `original_units[key]` to the expected ColabFit-compliant units.
+        For each key in :attr:`self.property_map`, convert :attr:`self.edn[key]`
+        from its original units to the expected ColabFit-compliant units.
         """
 
         for key, val in self.property_map.items():
@@ -458,6 +453,10 @@ class Property(dict):
 
 
     def __hash__(self):
+        """
+        Hashes the Property by hashing its linked PropertySettings,
+        Configurations, and EDN.
+        """
         return hash((
             hash(self.settings),
             tuple([hash(c) for c in self.configurations]),
@@ -503,15 +502,18 @@ class Property(dict):
 
 
     def keys(self):
+        """Overloaded dictionary function for getting the keys of :attr:`self.edn`"""
         return self.edn.keys()
 
     def __setitem__(self, k, v):
+        """Overloaded :meth:`dict.__setitem__` for setting the values of :attr:`self.edn`"""
         edn_key = EDN_KEY_MAP.get(k, k)
 
         self.edn[edn_key] = v
 
 
     def __getitem__(self, k):
+        """Overloaded :meth:`dict.__getitem__` for getting the values of :attr:`self.edn`"""
         edn_key = EDN_KEY_MAP.get(k, k)
 
         if edn_key not in self.edn:
@@ -526,6 +528,13 @@ class Property(dict):
 
 
     def get_data(self, k):
+        """
+        Returns:
+            data (np.array or np.nan):
+                :attr:`self[k]['source-value']` if :code:`k` is a valid key,
+                else :code:`np.nan`.
+
+        """
         edn_key = EDN_KEY_MAP.get(k, k)
 
         if edn_key in self.edn:

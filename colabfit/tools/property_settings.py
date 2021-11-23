@@ -44,6 +44,7 @@ class PropertySettings:
 
 
     def __hash__(self,):
+        """Only hashes :attr:`self.method` for now"""
         return hash(self.method)
 
 
