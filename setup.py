@@ -30,6 +30,7 @@ setup(
         'numpy',
         'tqdm',
         'bson',
-        'markdown'
+        'markdown',
+        'plotly',
     ],
 )
