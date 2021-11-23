@@ -95,12 +95,12 @@ class Configuration(Atoms):
         ))
 
 
-    # def __str__(self):
-    #     ase_str = super().__str__()
-    #     return "Configuration(name='{}', atoms={})".format(
-    #         self.info[ATOMS_NAME_FIELD],
-    #         ase_str
-    #     )
+    def __str__(self):
+        ase_str = super().__str__()
+        return "Configuration(name='{}', {})".format(
+            self.info[ATOMS_NAME_FIELD],
+            ase_str[14:-1]
+        )
 
 
     # def __repr__(self):
