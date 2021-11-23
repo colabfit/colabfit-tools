@@ -1,0 +1,219 @@
+\begin{sphinxtheindex}
+\let\bigletter\sphinxstyleindexlettergroup
+\let\spxpagem \sphinxstyleindexpagemain
+\let\spxentry \sphinxstyleindexentry
+\let\spxextra \sphinxstyleindexextra
+
+  \bigletter {\sphinxsymbolsname}
+  \item \spxentry{\_\_delitem\_\_()}\spxextra{colabfit.tools.property.Property method}, 
+		\hyperpage{12}
+  \item \spxentry{\_\_eq\_\_()}\spxextra{colabfit.tools.property.Property method}, \hyperpage{12}
+  \item \spxentry{\_\_eq\_\_()}\spxextra{colabfit.tools.property\_settings.PropertySettings method}, 
+		\hyperpage{14}
+  \item \spxentry{\_\_getitem\_\_()}\spxextra{colabfit.tools.property.Property method}, 
+		\hyperpage{13}
+  \item \spxentry{\_\_hash\_\_}\spxextra{colabfit.tools.dataset.Dataset attribute}, \hyperpage{16}
+  \item \spxentry{\_\_hash\_\_()}\spxextra{colabfit.tools.configuration.Configuration method}, 
+		\hyperpage{11}
+  \item \spxentry{\_\_hash\_\_()}\spxextra{colabfit.tools.property.Property method}, \hyperpage{13}
+  \item \spxentry{\_\_hash\_\_()}\spxextra{colabfit.tools.property\_settings.PropertySettings method}, 
+		\hyperpage{14}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.configuration.Configuration method}, 
+		\hyperpage{11}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet method}, 
+		\hyperpage{15}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.converters.FolderConverter method}, 
+		\hyperpage{16}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.dataset.Dataset method}, \hyperpage{16}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.property.Property method}, \hyperpage{13}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.property\_settings.PropertySettings method}, 
+		\hyperpage{14}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.transformations.BaseTransform method}, 
+		\hyperpage{20}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.transformations.PerAtomEnergies method}, 
+		\hyperpage{20}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.transformations.ReshapeForces method}, 
+		\hyperpage{20}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.transformations.Sequential method}, 
+		\hyperpage{21}
+  \item \spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.transformations.SubtractDivide method}, 
+		\hyperpage{20}
+  \item \spxentry{\_\_repr\_\_()}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet method}, 
+		\hyperpage{15}
+  \item \spxentry{\_\_repr\_\_()}\spxextra{colabfit.tools.property.Property method}, \hyperpage{13}
+  \item \spxentry{\_\_repr\_\_()}\spxextra{colabfit.tools.property\_settings.PropertySettings method}, 
+		\hyperpage{14}
+  \item \spxentry{\_\_setitem\_\_()}\spxextra{colabfit.tools.property.Property method}, 
+		\hyperpage{13}
+  \item \spxentry{\_\_str\_\_()}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet method}, 
+		\hyperpage{15}
+  \item \spxentry{\_\_str\_\_()}\spxextra{colabfit.tools.property.Property method}, \hyperpage{13}
+  \item \spxentry{\_\_str\_\_()}\spxextra{colabfit.tools.property\_settings.PropertySettings method}, 
+		\hyperpage{14}
+  \item \spxentry{\_\_weakref\_\_}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}, 
+		\hyperpage{15}
+  \item \spxentry{\_\_weakref\_\_}\spxextra{colabfit.tools.property.Property attribute}, 
+		\hyperpage{13}
+  \item \spxentry{\_\_weakref\_\_}\spxextra{colabfit.tools.property\_settings.PropertySettings attribute}, 
+		\hyperpage{14}
+  \item \spxentry{\_load()}\spxextra{colabfit.tools.converters.FolderConverter method}, 
+		\hyperpage{16}
+
+  \indexspace
+  \bigletter A
+  \item \spxentry{apply\_transformation()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{16}
+  \item \spxentry{attach\_configuration\_labels()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{16}
+  \item \spxentry{attach\_dataset()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{17}
+  \item \spxentry{attach\_property\_settings()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{17}
+
+  \indexspace
+  \bigletter B
+  \item \spxentry{BaseConverter}\spxextra{class in colabfit.tools.converters}, \hyperpage{15}
+  \item \spxentry{BaseTransform}\spxextra{class in colabfit.tools.transformations}, \hyperpage{20}
+
+  \indexspace
+  \bigletter C
+  \item \spxentry{CFGConverter}\spxextra{class in colabfit.tools.converters}, \hyperpage{16}
+  \item \spxentry{chemical\_systems}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}, 
+		\hyperpage{15}
+  \item \spxentry{clean()}\spxextra{colabfit.tools.dataset.Dataset method}, \hyperpage{17}
+  \item \spxentry{colabfit.tools.configuration}
+    \subitem \spxentry{module}, \hyperpage{11}
+  \item \spxentry{colabfit.tools.configuration\_sets}
+    \subitem \spxentry{module}, \hyperpage{14}
+  \item \spxentry{colabfit.tools.converters}
+    \subitem \spxentry{module}, \hyperpage{15}
+  \item \spxentry{colabfit.tools.dataset}
+    \subitem \spxentry{module}, \hyperpage{16}
+  \item \spxentry{colabfit.tools.property}
+    \subitem \spxentry{module}, \hyperpage{11}
+  \item \spxentry{colabfit.tools.property\_settings}
+    \subitem \spxentry{module}, \hyperpage{13}
+  \item \spxentry{colabfit.tools.transformations}
+    \subitem \spxentry{module}, \hyperpage{20}
+  \item \spxentry{Configuration}\spxextra{class in colabfit.tools.configuration}, \hyperpage{11}
+  \item \spxentry{configurations}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}, 
+		\hyperpage{14}
+  \item \spxentry{configurations}\spxextra{colabfit.tools.property.Property attribute}, 
+		\hyperpage{12}
+  \item \spxentry{ConfigurationSet}\spxextra{class in colabfit.tools.configuration\_sets}, 
+		\hyperpage{14}
+  \item \spxentry{convert\_units()}\spxextra{colabfit.tools.dataset.Dataset method}, \hyperpage{17}
+  \item \spxentry{convert\_units()}\spxextra{colabfit.tools.property.Property method}, 
+		\hyperpage{13}
+
+  \indexspace
+  \bigletter D
+  \item \spxentry{Dataset}\spxextra{class in colabfit.tools.dataset}, \hyperpage{16}
+  \item \spxentry{dataset\_from\_config\_sets()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{17}
+  \item \spxentry{define\_configuration\_set()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{17}
+  \item \spxentry{description}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}, 
+		\hyperpage{14}
+  \item \spxentry{description}\spxextra{colabfit.tools.property\_settings.PropertySettings attribute}, 
+		\hyperpage{14}
+
+  \indexspace
+  \bigletter E
+  \item \spxentry{edn}\spxextra{colabfit.tools.property.Property attribute}, \hyperpage{12}
+  \item \spxentry{elements}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}, 
+		\hyperpage{15}
+  \item \spxentry{elements\_ratios}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}, 
+		\hyperpage{15}
+  \item \spxentry{EXYZConverter}\spxextra{class in colabfit.tools.converters}, \hyperpage{16}
+
+  \indexspace
+  \bigletter F
+  \item \spxentry{files}\spxextra{colabfit.tools.property\_settings.PropertySettings attribute}, 
+		\hyperpage{14}
+  \item \spxentry{filter()}\spxextra{colabfit.tools.dataset.Dataset method}, \hyperpage{18}
+  \item \spxentry{flatten()}\spxextra{colabfit.tools.dataset.Dataset method}, \hyperpage{18}
+  \item \spxentry{FolderConverter}\spxextra{class in colabfit.tools.converters}, \hyperpage{16}
+  \item \spxentry{from\_ase()}\spxextra{colabfit.tools.configuration.Configuration class method}, 
+		\hyperpage{11}
+  \item \spxentry{from\_definition()}\spxextra{colabfit.tools.property.Property class method}, 
+		\hyperpage{13}
+  \item \spxentry{from\_markdown()}\spxextra{colabfit.tools.dataset.Dataset class method}, 
+		\hyperpage{19}
+
+  \indexspace
+  \bigletter G
+  \item \spxentry{get\_data()}\spxextra{colabfit.tools.dataset.Dataset method}, \hyperpage{19}
+  \item \spxentry{get\_data()}\spxextra{colabfit.tools.property.Property method}, \hyperpage{13}
+  \item \spxentry{get\_statistics()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{19}
+
+  \indexspace
+  \bigletter K
+  \item \spxentry{keys()}\spxextra{colabfit.tools.property.Property method}, \hyperpage{13}
+
+  \indexspace
+  \bigletter L
+  \item \spxentry{labels}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}, 
+		\hyperpage{14}
+  \item \spxentry{labels}\spxextra{colabfit.tools.property\_settings.PropertySettings attribute}, 
+		\hyperpage{14}
+  \item \spxentry{labels\_counts}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}, 
+		\hyperpage{15}
+  \item \spxentry{load()}\spxextra{colabfit.tools.converters.BaseConverter method}, \hyperpage{15}
+
+  \indexspace
+  \bigletter M
+  \item \spxentry{merge()}\spxextra{colabfit.tools.dataset.Dataset method}, \hyperpage{19}
+  \item \spxentry{method}\spxextra{colabfit.tools.property\_settings.PropertySettings attribute}, 
+		\hyperpage{14}
+  \item \spxentry{module}
+    \subitem \spxentry{colabfit.tools.configuration}, \hyperpage{11}
+    \subitem \spxentry{colabfit.tools.configuration\_sets}, \hyperpage{14}
+    \subitem \spxentry{colabfit.tools.converters}, \hyperpage{15}
+    \subitem \spxentry{colabfit.tools.dataset}, \hyperpage{16}
+    \subitem \spxentry{colabfit.tools.property}, \hyperpage{11}
+    \subitem \spxentry{colabfit.tools.property\_settings}, \hyperpage{13}
+    \subitem \spxentry{colabfit.tools.transformations}, \hyperpage{20}
+
+  \indexspace
+  \bigletter N
+  \item \spxentry{n\_sites}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}, 
+		\hyperpage{15}
+
+  \indexspace
+  \bigletter P
+  \item \spxentry{parse\_data()}\spxextra{colabfit.tools.dataset.Dataset method}, \hyperpage{20}
+  \item \spxentry{PerAtomEnergies}\spxextra{class in colabfit.tools.transformations}, 
+		\hyperpage{20}
+  \item \spxentry{plot\_histograms()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{20}
+  \item \spxentry{Property}\spxextra{class in colabfit.tools.property}, \hyperpage{12}
+  \item \spxentry{property\_map}\spxextra{colabfit.tools.property.Property attribute}, 
+		\hyperpage{12}
+  \item \spxentry{PropertySettings}\spxextra{class in colabfit.tools.property\_settings}, 
+		\hyperpage{14}
+
+  \indexspace
+  \bigletter R
+  \item \spxentry{refresh\_config\_labels()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{20}
+  \item \spxentry{refresh\_config\_sets()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{20}
+  \item \spxentry{refresh\_property\_settings()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{20}
+  \item \spxentry{rename\_property()}\spxextra{colabfit.tools.dataset.Dataset method}, 
+		\hyperpage{20}
+  \item \spxentry{ReshapeForces}\spxextra{class in colabfit.tools.transformations}, \hyperpage{20}
+
+  \indexspace
+  \bigletter S
+  \item \spxentry{Sequential}\spxextra{class in colabfit.tools.transformations}, \hyperpage{21}
+  \item \spxentry{settings}\spxextra{colabfit.tools.property.Property attribute}, \hyperpage{12}
+  \item \spxentry{SubtractDivide}\spxextra{class in colabfit.tools.transformations}, \hyperpage{20}
+
+  \indexspace
+  \bigletter T
+  \item \spxentry{to\_markdown()}\spxextra{colabfit.tools.dataset.Dataset method}, \hyperpage{20}
+
+\end{sphinxtheindex}
