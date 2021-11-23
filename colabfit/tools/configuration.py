@@ -102,6 +102,5 @@ class Configuration(Atoms):
             ase_str[14:-1]
         )
 
-
-    # def __repr__(self):
-    #     return str(self)
+    def __repr__(self):
+        return str(self)
