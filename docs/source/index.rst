@@ -14,11 +14,12 @@ Minnesota.
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    overview
    getting_started
+   examples
    usage
    classes
 

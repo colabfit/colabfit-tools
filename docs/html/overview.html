@@ -39,9 +39,12 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Overview</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#dataset-standard">Dataset Standard</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="getting_started.html#examples">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="classes.html">Classes</a></li>
 </ul>
@@ -72,8 +75,61 @@
              
   <section id="overview">
 <h1>Overview<a class="headerlink" href="#overview" title="Permalink to this headline"></a></h1>
-<p>TODO: populate this page with a description of the package. Maybe include that
-graphic of how a dataset is organized. Explain why the package is useful, etc.</p>
+<p>Despite the rapidly increasing popularity of data-driven interatomic
+potentials (DDIPs), training data for these models has historically been
+difficult to obtain and work with. Data is often stored in internally-developed
+formats, insufficiently documented, and not made readily available to the
+public.</p>
+<p><code class="code docutils literal notranslate"><span class="pre">colabfit_tools</span></code> aims to address these problems by defining a standard
+method for representing DDIP training datasets progromatically, and providing
+software tools for manipulating these representations.</p>
+<section id="dataset-standard">
+<h2>Dataset Standard<a class="headerlink" href="#dataset-standard" title="Permalink to this headline"></a></h2>
+<p>The <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset" title="colabfit.tools.dataset.Dataset"><code class="xref py py-class docutils literal notranslate"><span class="pre">Dataset</span></code></a> class was designed to be able to
+be as flexible as possible to incorporate different types of data
+(computational/experimental) while also making the datasets efficient to query,
+store, and manipulate. A <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset" title="colabfit.tools.dataset.Dataset"><code class="xref py py-class docutils literal notranslate"><span class="pre">Dataset</span></code></a> is constructed using five core data
+structures:</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt><a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> (CO):</dt><dd><p>The information necessary to uniquely define the input to a calculation
+(e.g., atomic types, positions, lattice vectors, constraints, …)</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><a class="reference internal" href="property.html#colabfit.tools.property.Property" title="colabfit.tools.property.Property"><code class="xref py py-class docutils literal notranslate"><span class="pre">Property</span></code></a> (PR):</dt><dd><p>The outputs from a calculation (e.g., DFT-computed
+energies/forces/stresses)</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a> (PSO):</dt><dd><p>Additional metadata that useful for setting up the calculation (e.g.,
+software version, input files, …)</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><a class="reference internal" href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet" title="colabfit.tools.configuration_sets.ConfigurationSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">ConfigurationSet</span></code></a> (CS):</dt><dd><p>An object defining a group of
+<a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> instances and
+providing useful metadata for organizing datasets (e.g., “Snapshots from a
+molecular dynamics run at 1000K”)</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset" title="colabfit.tools.dataset.Dataset"><code class="xref py py-class docutils literal notranslate"><span class="pre">Dataset</span></code></a> (DS):</dt><dd><p>The top-level dataset, which aggregates information up from the
+configuration sets and sub-datasets for improved discoverability</p>
+</dd>
+</dl>
+</li>
+</ul>
+<figure class="align-center" id="id1">
+<img alt="A diagram showing the relationship between the five core data structures" src="_images/ds_diagram.svg" /><figcaption>
+<p><span class="caption-text">A diagram showing the relationship between the five core data structures</span><a class="headerlink" href="#id1" title="Permalink to this image"></a></p>
+</figcaption>
+</figure>
+</section>
 </section>
 
 
