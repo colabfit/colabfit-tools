@@ -102,5 +102,6 @@ class Configuration(Atoms):
             ase_str[14:-1]
         )
 
-    def __repr__(self):
-        return str(self)
+    # # Don't do this. It will cause a recursion error
+    # def __repr__(self):
+    #     return str(self)
