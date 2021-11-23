@@ -102,12 +102,9 @@ Custom properties can be defined by writing an EDN file that has been formatted 
 }
 ```
 
-# Parse data, and optionally convert to ColabFit-compliant units
-dataset.parse_data(convert_units=True)
-```
-
 ## Applying labels to configurations
 Metadata can be applied to individual configurations using labels. Labels are applied by matching a regular expression to `configuration.info[ASE_NAME_FIELD]` for each configuration. Regex mappings are provided by setting the `configuration_label_regexes` dictionary.
+
 ```python
 
 # Labels can be specified as lists or single strings (which will be wrapped in a list).
