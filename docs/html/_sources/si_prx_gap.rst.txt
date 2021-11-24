@@ -1,6 +1,6 @@
-==========
-Si PRX GAP
-==========
+==================
+Si PRX GAP example
+==================
 
 This example will be used to highlight some of the more advanced features of the
 Dataset class using the popular `Si GAP dataset <https://www.repository.cam.ac.uk/handle/1810/317974>`_.
