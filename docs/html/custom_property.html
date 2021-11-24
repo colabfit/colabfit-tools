@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>An example custom property definition &mdash; ColabFit Tools Documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Usage" href="usage.html" />
+    <link rel="prev" title="Writing an input Markdown file" href="md_file_input.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> colabfit-tools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="examples.html">Examples</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="basic_example.html">Basic example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="md_file_input.html">Writing an input Markdown file</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">An example custom property definition</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="classes.html">Classes</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">colabfit-tools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="examples.html">Examples</a> &raquo;</li>
+      <li>An example custom property definition</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/custom_property.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="an-example-custom-property-definition">
+<h1>An example custom property definition<a class="headerlink" href="#an-example-custom-property-definition" title="Permalink to this headline"></a></h1>
+<p>If you are working with properties that:
+1. Are not part of the core properties like “energy”, “force”, “stress”, and “charge”
+2. AND none of the existing properties available from the <a class="reference external" href="https://openkim.org/properties">OpenKIM Property List</a> fit your needs</p>
+<p>Then it will be necessary to write a custom property definition to make sure
+that a Dataset is able to properly read your data, and to provide future users
+of your data with good documentation of the computed values.</p>
+<p>A Property Definition must follow the format described in the <a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">OpenKIM
+Property Framework</a>. An
+example definition is shown below (see the <a class="reference internal" href="qm9.html#qm9-example"><span class="std std-ref">QM9 example</span></a> for how this is
+used in practice):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qm9_property_definition</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;property-id&#39;</span><span class="p">:</span> <span class="s1">&#39;qm9-property&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;property-title&#39;</span><span class="p">:</span> <span class="s1">&#39;A, B, C, mu, alpha, homo, lumo, gap, r2, zpve, U0, U, H, G, Cv&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;property-description&#39;</span><span class="p">:</span> <span class="s1">&#39;Geometries minimal in energy, corresponding harmonic frequencies, dipole moments, polarizabilities, along with energies, enthalpies, and free energies of atomization&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;a&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Rotational constant A&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;b&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Rotational constant B&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;c&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Rotational constant C&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;mu&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Dipole moment&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;alpha&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Isotropic polarizability&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;homo&#39;</span><span class="p">:</span>  <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Energy of Highest occupied molecular orbital (HOMO)&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;lumo&#39;</span><span class="p">:</span>  <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Energy of Lowest occupied molecular orbital (LUMO)&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;gap&#39;</span><span class="p">:</span>   <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Gap, difference between LUMO and HOMO&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;r2&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Electronic spatial extent&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;zpve&#39;</span><span class="p">:</span>  <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Zero point vibrational energy&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;u0&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Internal energy at 0 K&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;u&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Internal energy at 298.15 K&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;h&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Enthalpy at 298.15 K&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;g&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Free energy at 298.15 K&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;cv&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Heat capacity at 298.15 K&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;smiles-relaxed&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;SMILES for relaxed geometry&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;inchi-relaxed&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;InChI for relaxed geometry&#39;</span><span class="p">},</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="md_file_input.html" class="btn btn-neutral float-left" title="Writing an input Markdown file" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="usage.html" class="btn btn-neutral float-right" title="Usage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, ColabFit.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

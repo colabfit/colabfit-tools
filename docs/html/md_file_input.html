@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Writing an input Markdown file &mdash; ColabFit Tools Documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="An example custom property definition" href="custom_property.html" />
+    <link rel="prev" title="Si PRX GAP" href="si_prx_gap.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> colabfit-tools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="examples.html">Examples</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="basic_example.html">Basic example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Writing an input Markdown file</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#example-input-markdown-file">Example input Markdown file</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="custom_property.html">An example custom property definition</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="classes.html">Classes</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">colabfit-tools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="examples.html">Examples</a> &raquo;</li>
+      <li>Writing an input Markdown file</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/md_file_input.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="writing-an-input-markdown-file">
+<h1>Writing an input Markdown file<a class="headerlink" href="#writing-an-input-markdown-file" title="Permalink to this headline"></a></h1>
+<p>If your data is already in <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/io/formatoptions.html#extxyz">Extended XYZ format</a>,
+then one of the easiest ways to load it into a Dataset object is to write a
+properly formatted Markdown file and use the
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">from_markdwon()</span></code> method on a Dataset. Note
+that any Markdown file generated by the
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.to_markdown" title="colabfit.tools.dataset.Dataset.to_markdown"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_markdown()</span></code></a> function should be readable
+by <code class="xref py py-meth docutils literal notranslate"><span class="pre">from_markdown()</span></code>, which can make it easy to publish and distribute
+Datasets.</p>
+<p>An example input Markdown file can be found in
+<code class="code docutils literal notranslate"><span class="pre">colabfit/examples/example.md</span></code> on the Github repository, but the contents
+of that file are duplicated here for convenience:</p>
+<section id="example-input-markdown-file">
+<h2>Example input Markdown file<a class="headerlink" href="#example-input-markdown-file" title="Permalink to this headline"></a></h2>
+<div class="highlight-markdown notranslate"><div class="highlight"><pre><span></span><span class="gh"># Summary</span>
+
+This section is ignored during parsing. It is intended to be used as a place to
+display additional information about a Dataset, and will be ignored by <span class="sb">`Dataset.from_markdown()`</span>.
+
+All other sections and tables are required for use with
+<span class="sb">`Dataset.from_markdown()`</span>. Sections should be specified using <span class="sb">`&lt;h1&gt;`</span> headers.
+Exact header spelling and capitalization is required. All table column headers
+are required unless otherwise specified. Sections that have tables in them will
+only use the table for <span class="sb">`Dataset.from_markdown()`</span>. Sections may be given in different
+orders than shown here. Additional sections may be added, but will be ignored by
+<span class="sb">`Dataset.from_markdown()`</span>.
+
+Any files should be provided as links in Markdown as described
+[<span class="nt">here</span>](<span class="na">https://www.markdownguide.org/basic-syntax/#links</span>), using the format
+<span class="sb">`&quot;[&lt;text&gt;](&lt;path_to_file&gt;)&quot;`</span>.
+
+
+The table below will be automatically generated when using <span class="sb">`Dataset.to_markdown()`</span>.
+
+|||
+|---|---|
+|Chemical systems||
+|Element ratios||
+|# of configurations||
+|# of atoms||
+
+<span class="gh"># Name</span>
+
+A single-line name to use for the dataset.
+
+<span class="gh"># Authors</span>
+
+Authors of the dataset (one per line)
+
+<span class="gh"># Links</span>
+
+Links to associate with the dataset (one per line)
+
+<span class="gh"># Description</span>
+
+A multi-line human-readable description of the dataset
+
+<span class="gh"># Data</span>
+
+A table for storing the inputs to <span class="sb">`load_data()`</span>. First column of each row (&#39;Elements&#39;, &#39;File&#39;, &#39;Format&#39;, &#39;Name field&#39;) must be as spelled/capitalized here. File name must Must have the following rows (with first columns spelled/capitalized in this way):
+
+|||
+|---|---|
+|Elements| a comma-separated list of elements (&quot;Mo, Ni, Cu&quot;)|
+|File| a hyperlink to the raw data file ([example.extxyz](example.extxyz))|
+|Format| a string specifying the file format (&#39;xyz&#39;, &#39;cfg&#39;)|
+|Name field| the key to use as the name of configurations (&#39;name&#39;)|
+
+<span class="gh"># Properties</span>
+
+The table below should have the following columns:
+<span class="k">*</span> <span class="sb">`Property`</span>: An OpenKIM Property Definition ID from [the list of approved OpenKIM Property
+   Definitions](https://openkim.org/properties), OR a link to a local EDN file
+   (using the notation <span class="sb">`[&lt;name_of_property&gt;](&lt;path_to_edn_file&gt;)`</span>) that has been
+   formatted according to the [<span class="nt">KIM Properties</span>
+<span class="nt">   Framework</span>](<span class="na">https://openkim.org/doc/schema/properties-framework/</span>) , OR
+   <span class="sb">`default`</span>. Note that <span class="sb">`default`</span> means that the generic base property for
+   energies/forces/stresses/etc. should be used.
+<span class="k">*</span> <span class="sb">`KIM field`</span>: A string that can be used as a key for an EDN dictionary
+  representation of an OpenKIM Property Instance
+<span class="k">*</span> <span class="sb">`ASE field`</span>: A string that can be used as a key for the <span class="sb">`info`</span> or <span class="sb">`arrays`</span>
+  dictionary on a configuration
+<span class="k">*</span> <span class="sb">`Units`</span>: A string describing the units of the field (in an ASE-readable
+  format), or <span class="sb">`None`</span> if the field is unitless
+
+|Property|KIM field|ASE field|Units|
+|---|---|---|---|
+|default|energy|energy|eV|
+|default|forces|F|eV/Ang|
+|[my-custom-property](colabfit/tests/files/test_property.edn)|a-custom-field-name|field-name|None|
+|[my-custom-property](colabfit/tests/files/test_property.edn)|a-custom-1d-array|1d-array|eV|
+|[my-custom-property](colabfit/tests/files/test_property.edn)|a-custom-per-atom-array|per-atom-array|eV|
+
+
+<span class="gh"># Property settings</span>
+
+The tabular form of <span class="sb">`Dataset.property_settings_regexes`</span>. Note that the &quot;Labels&quot; and &quot;Files&quot; columns should be in the table, but may be left empty. For example:
+
+|Regex|Method|Description|Labels|Files|
+|---|---|---|---|---|
+| <span class="sb">`.*`</span> | VASP | energies/forces/stresses | PBE, GGA |  |
+
+<span class="gh"># Configuration sets</span>
+
+The tabular form of <span class="sb">`Dataset.configuration_set_regexes`</span>. Only the first two columns (&quot;Regex&quot; and &quot;Description&quot;) are required. The rest will be filled in programmatically by <span class="sb">`Dataset.to_markdown()`</span> and ignored by <span class="sb">`Dataset.from_markdown()`</span>. For example:
+
+|Regex|Description|# of structures| # of atoms|
+|---|---|---|---|
+| <span class="sb">`default`</span> | The default CS to use for configurations | | |
+| <span class="sb">`H2O`</span> | AIMD snapshots of liquid water at 100K | | |
+
+<span class="gh"># Configuration labels</span>
+
+The tabular form of <span class="sb">`Dataset.configuration_label_regexes`</span>. Only the first two columns (&quot;Regex&quot; and &quot;Labels&quot;) are required. The rest will be filled in programmatically by <span class="sb">`Dataset.to_markdown()`</span> and ignored by <span class="sb">`Dataset.from_markdown()`</span>. For example:
+
+|Regex|Labels|Counts|
+|---|---|---|
+| <span class="sb">`H2O`</span> | water, molecule |  |
+| <span class="sb">`.*`</span> | 100K |  |
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="si_prx_gap.html" class="btn btn-neutral float-left" title="Si PRX GAP" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="custom_property.html" class="btn btn-neutral float-right" title="An example custom property definition" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, ColabFit.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

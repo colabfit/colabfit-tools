@@ -46,7 +46,7 @@ __all__ = [
 
 class Dataset:
 
-    f"""
+    """
     Attributes:
         name (str):
             Name of the dataset
@@ -61,11 +61,7 @@ class Dataset:
             A description of the datast
 
         configurations (list):
-            A list of Configuration objects. Each element is guaranteed to have
-            the following fields:
-                `Configuration.info[{ATOMS_ID_FIELD}]` (ObjectId)
-                `Configuration.info[{ATOMS_NAME_FIELD}]` (str)
-                `Configuration.info[{ATOMS_LABELS_FIELD}]` (str)
+            A list of Configuration objects.
 
         data (list):
             A list of Property objects OR a list of Dataset objects.
@@ -78,27 +74,12 @@ class Dataset:
             A list of integers counting the number of instances of each property
             in `property_fields`. Matches the order of `property_fields`
 
-        property_map (dict):
-
-            A dictionary with the following structure:
-
-                <property-id>:
-                    <kim-field>:
-                        'field': <ase-field>
-                        'units': <ase-units>
-
         configuration_sets (list):
             List of ConfigurationSet objects defining groups of configurations
 
         property_settings (list):
             A list of ProprtySetting objects collected by taking the settings
             linked to by all entries in `properties`.
-
-        configuration_label_regexes (dict):
-            A dictionary where the key is a string that will be compiled with
-            `re.compile()`, and the value is a list of string labels. Note that
-            whenever this dictionary is re-assigned, the labels on all
-            configuration in `configurations` are updated.
 
         configuration_labels (list):
             A list of all configuration labels. Same as
@@ -108,19 +89,6 @@ class Dataset:
             A list of integers indicating the number of occurrences of each
             configuration label. Matches the order of
             `self.configuration_labels`
-
-        configuration_set_regexes (dict):
-            A dictionary where the key is a string that will be compiled with
-            `re.compile()`, and the value is the description of the
-            configuration set. Note that whenever this dictionary is
-            re-assigned, `configuration_sets` is re-constructed.
-
-        property_settings_regexes (dict):
-            A dictionary where the key is a string that will be compiled with
-            `re.compile()`, and the value is a PropertySettings object.
-            configuration set. Note that whenever this dictionary is
-            re-assigned, `property_settings` is re-constructed and property
-            links to PropertySettings objects are re-assigned.
 
         custom_definitions (dict):
             key = the name of a locally-defined property
@@ -236,35 +204,68 @@ class Dataset:
         self.aggregate_metadata(verbose)
 
 
-    # @property
-    # def property_map(self):
-    #     return self._property_map
+    @property
+    def property_map(self):
+        """
+        A dictionary with the following structure.
 
-    # @property_map.setter
-    # def property_map(self, property_map):
-    #     # clean_map = {}
-    #     for key in property_map:
-    #         # clean_map[key] = {}
-    #         for key2 in ['field', 'units']:
-    #             if key2 not in property_map[key]:
-    #                 raise RuntimeError(
-    #                     'Missing "{}" in property_map["{}"]'.format(key2, key)
-    #                 )
+        .. code-block:: python
 
-    #     self._property_map = property_map
+            {
+                <property_name>: {
+                    <property_field>: {
+                        'field': <key_for_info_or_arrays>,
+                        'units': <ase_readable_units>
+                    }
+                }
+            }
+
+        See :ref:`Parsing data` for more details.
+        """
+        return self._property_map
+
+
+    @property_map.setter
+    def property_map(self, property_map):
+        """IMPORTANT: call :meth:`resync` after modifying"""
+
+        for pname, pdict in property_map.values():
+            for fname, fdict in pdict.values():
+                for key in ['field', 'units']:
+                    if key not in fdict:
+                        raise RuntimeError(
+                            'Missing "{}" in property_map["{}"]["{}"}'.format(
+                                key, pname, fname
+                            )
+                    )
+
+        self._property_map = property_map
 
 
     @property
+    def property_settings_regexes(self):
+        """
+        A dictionary where the key is a string that will be compiled with
+        `re.compile()`, and the value is a PropertySettings object.
+        configuration set. Note that whenever :meth:`Dataset.resync` is called,
+        `property_settings` is re-constructed and property links to
+        PropertySettings objects are re-assigned.
+        """
+
+    @property
     def configuration_label_regexes(self):
+        """
+        A dictionary where the key is a string that will be compiled with
+        `re.compile()`, and the value is a list of string labels. Note that
+        whenever :meth:`Dataset.resync` is called, the labels provided in this
+        dictionary are re-applied to the matching Configurations.
+        """
+
         return self._configuration_label_regexes
 
     @configuration_label_regexes.setter
     def configuration_label_regexes(self, regex_dict):
-        """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
-
-        for key, v in regex_dict.items():
-            if isinstance(v, str):
-                regex_dict[key] = [v]
+        """IMPORTANT: call :meth:`resync` after modifying"""
 
         self._configuration_label_regexes = regex_dict
         # self.refresh_config_labels()
@@ -272,11 +273,19 @@ class Dataset:
 
     @property
     def configuration_set_regexes(self):
+        """
+        A dictionary where the key is a string that will be compiled with
+        `re.compile()`, and the value is a description of a
+        :class:`~colabfit.tools.configuration_sets.ConfigurationSet`. Note that
+        whenever :meth:`Dataset.resync` is called,
+        :attr:`self.configuration_sets` sets will be reconstructed.
+        """
         return self._configuration_set_regexes
 
     @configuration_set_regexes.setter
     def configuration_set_regexes(self, regex_dict):
-        """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
+        """IMPORTANT: call :meth:`resync` after modifying"""
+
         if len(regex_dict) == 0:
             regex_dict = {'default': 'Default configuration set'}
 
@@ -286,11 +295,17 @@ class Dataset:
 
     @property
     def property_settings_regexes(self):
+        """
+        A dictionary where the key is a string that will be compiled with
+        `re.compile()`, and the value is the description of the
+        configuration set. Note that whenever this dictionary is
+        re-assigned, `configuration_sets` is re-constructed.
+        """
         return self._property_settings_regexes
 
     @property_settings_regexes.setter
     def property_settings_regexes(self, regex_dict):
-        """IMPORTANT: use re-assignment instead of `del`, `.pop`, `.update()`"""
+        """IMPORTANT: call :meth:`resync` after modifying"""
         for k, v in regex_dict.items():
             if not isinstance(v, PropertySettings):
                 raise RuntimeError(
@@ -820,13 +835,10 @@ class Dataset:
 
     def flatten(self):
         """
-        Pseudocode:
-            - convert everything to the same units
-            - merge authors/links
-            - warn if overlap (maybe this should be done in attach()?)
-                - tell me which dataset has an overlap with which other (disjoint)
-                - optionally merge subset datasets
-            - check if conflicting CO labels, CS regexes, or PS regexes
+        Attempts to "flatten" a parent dataset by merging the Property and
+        Configuration lists of all of its children.
+
+        Author lists, reference links, and descriptions are also merged.
         """
         self.check_if_is_parent_dataset()
 
@@ -934,9 +946,9 @@ class Dataset:
 
     def parse_data(self, convert_units=False, verbose=False):
         """
-        Re-constructs `self.data` by building a list of Property objects using
-        `self.property_map` and `self.configurations`. Modifies `self.data` in
-        place. If `convert_units==True`, then the units in `self.property_map`
+        Re-constructs :attr:`self.data` by building a list of Property objects using
+        :attr:`self.property_map` and :attr:`self.configurations`. Modifies :attr:`self.data` in
+        place. If :code:`convert_units==True`, then the units in :attr:`self.property_map`
         are also updated.
         """
 
@@ -1365,6 +1377,9 @@ class Dataset:
 
     def attach_dataset(self, dataset, supersede_existing=False):
         """
+        Attaches a child dataset. Use this method instead of directly modifying
+        :attr:`Dataset.data`.
+
         Args:
             dataset (Dataset):
                 The new dataset to be added
@@ -1952,7 +1967,7 @@ class Dataset:
                 print(f'CS={i} (n_configurations={cs.n_configurations}, n_sites={cs.n_sites}, regex="{regex}"): {cs.description}')
 
 
-    def train_test_split(self, train_frac):
+    def train_test_split(self, train_frac, copy=False):
         # Initialize the train/test datasets
         train = Dataset(self.name+'-train')
         test  = Dataset(self.name+'-test')
@@ -1986,8 +2001,12 @@ class Dataset:
         train_indices = indices[:train_num]
         test_indices  = indices[train_num:]
 
-        train.data = deepcopy([self.data[i] for i in train_indices])
-        test.data  = deepcopy([self.data[i] for i in test_indices])
+        train.data = [self.data[i] for i in train_indices]
+        test.data  = [self.data[i] for i in test_indices]
+
+        if copy:
+            train.data = deepcopy(train.data)
+            test.data  = deepcopy(test.data)
 
         # Extract the configurations
         train.configurations = list(itertools.chain.from_iterable([

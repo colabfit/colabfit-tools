@@ -47,12 +47,13 @@
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes</a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="core_classes.html">Core classes</a></li>
-<li class="toctree-l2 current"><a class="reference internal" href="additional_tools.html">Additional tools</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="converters.html">Converter</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">Transform</a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property.html">Property</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="converters.html">Converter</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Transform</a></li>
 </ul>
 </li>
 </ul>
@@ -72,7 +73,6 @@
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
           <li><a href="classes.html">Classes</a> &raquo;</li>
-          <li><a href="additional_tools.html">Additional tools</a> &raquo;</li>
       <li>Transform</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/transformations.rst.txt" rel="nofollow"> View page source</a>
@@ -91,55 +91,30 @@
 <dd><p>A Transform is used for processing raw data before loading it into a
 Dataset. For example for things like subtracting off a reference energy or
 extracting the 6-component version of the cauchy stress from a 3x3 matrix.</p>
-<dl class="py method">
-<dt class="sig sig-object py" id="colabfit.tools.transformations.BaseTransform.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tform</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.transformations.BaseTransform.__init__" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.transformations.SubtractDivide">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.transformations.</span></span><span class="sig-name descname"><span class="pre">SubtractDivide</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sub</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">div</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.transformations.SubtractDivide" title="Permalink to this definition"></a></dt>
 <dd><p>Adds a scalar to the data, then divides by a scalar</p>
-<dl class="py method">
-<dt class="sig sig-object py" id="colabfit.tools.transformations.SubtractDivide.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sub</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">div</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.transformations.SubtractDivide.__init__" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.transformations.PerAtomEnergies">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.transformations.</span></span><span class="sig-name descname"><span class="pre">PerAtomEnergies</span></span><a class="headerlink" href="#colabfit.tools.transformations.PerAtomEnergies" title="Permalink to this definition"></a></dt>
 <dd><p>Divides the energy by the number of atoms</p>
-<dl class="py method">
-<dt class="sig sig-object py" id="colabfit.tools.transformations.PerAtomEnergies.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.transformations.PerAtomEnergies.__init__" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.transformations.ReshapeForces">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.transformations.</span></span><span class="sig-name descname"><span class="pre">ReshapeForces</span></span><a class="headerlink" href="#colabfit.tools.transformations.ReshapeForces" title="Permalink to this definition"></a></dt>
 <dd><p>Reshapes forces into an (N, 3) matrix</p>
-<dl class="py method">
-<dt class="sig sig-object py" id="colabfit.tools.transformations.ReshapeForces.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.transformations.ReshapeForces.__init__" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.transformations.Sequential">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.transformations.</span></span><span class="sig-name descname"><span class="pre">Sequential</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.transformations.Sequential" title="Permalink to this definition"></a></dt>
-<dd><dl class="py method">
-<dt class="sig sig-object py" id="colabfit.tools.transformations.Sequential.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.transformations.Sequential.__init__" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
-
-</dd></dl>
 
 </section>
 

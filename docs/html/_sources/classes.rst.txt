@@ -5,7 +5,23 @@ Classes
 =======
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
+    :caption: Low-level classes
+
+    configuration
+    property
+    property_settings
     
-    core_classes
-    additional_tools
+.. toctree::
+    :maxdepth: 2
+    :caption: High-level classes
+
+    configuration_set
+    dataset
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Additional tools
+
+    converters
+    transformations

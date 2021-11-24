@@ -52,6 +52,18 @@ class ConfigurationSet:
 
 
     def aggregate(self):
+        """
+        Aggregates critical information from :attr:`self.configurations`.
+
+        Aggregated information:
+
+        * Number of configurations (:attr:`n_configurations`)
+        * Total number of atoms (:attr:`n_sites`)
+        * Configuration labels (:attr:`labels`)
+        * Total counts of each label (:attr:`labels_counts`)
+        * Chemical systems (:attr:`chemical_systems`)
+        * Relative confcentrations of each element (:attr:`elements_ratios`)
+        """
 
         self.n_configurations =  len(self.configurations)
 
