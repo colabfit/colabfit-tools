@@ -8,4 +8,4 @@ Dataset
     :undoc-members:
 
 .. automodule:: colabfit.tools.dataset
-    :members:
+    :members: load_data

@@ -121,23 +121,9 @@
       <ul>
         <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.__init__">(colabfit.tools.configuration_sets.ConfigurationSet method)</a>
 </li>
-        <li><a href="converters.html#colabfit.tools.converters.FolderConverter.__init__">(colabfit.tools.converters.FolderConverter method)</a>
-</li>
-        <li><a href="dataset.html#colabfit.tools.dataset.Dataset.__init__">(colabfit.tools.dataset.Dataset method)</a>
-</li>
         <li><a href="property.html#colabfit.tools.property.Property.__init__">(colabfit.tools.property.Property method)</a>
 </li>
         <li><a href="property_settings.html#colabfit.tools.property_settings.PropertySettings.__init__">(colabfit.tools.property_settings.PropertySettings method)</a>
-</li>
-        <li><a href="transformations.html#colabfit.tools.transformations.BaseTransform.__init__">(colabfit.tools.transformations.BaseTransform method)</a>
-</li>
-        <li><a href="transformations.html#colabfit.tools.transformations.PerAtomEnergies.__init__">(colabfit.tools.transformations.PerAtomEnergies method)</a>
-</li>
-        <li><a href="transformations.html#colabfit.tools.transformations.ReshapeForces.__init__">(colabfit.tools.transformations.ReshapeForces method)</a>
-</li>
-        <li><a href="transformations.html#colabfit.tools.transformations.Sequential.__init__">(colabfit.tools.transformations.Sequential method)</a>
-</li>
-        <li><a href="transformations.html#colabfit.tools.transformations.SubtractDivide.__init__">(colabfit.tools.transformations.SubtractDivide method)</a>
 </li>
       </ul></li>
   </ul></td>
@@ -152,9 +138,11 @@
       </ul></li>
       <li><a href="property.html#colabfit.tools.property.Property.__setitem__">__setitem__() (colabfit.tools.property.Property method)</a>
 </li>
-      <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.__str__">__str__() (colabfit.tools.configuration_sets.ConfigurationSet method)</a>
+      <li><a href="configuration.html#colabfit.tools.configuration.Configuration.__str__">__str__() (colabfit.tools.configuration.Configuration method)</a>
 
       <ul>
+        <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.__str__">(colabfit.tools.configuration_sets.ConfigurationSet method)</a>
+</li>
         <li><a href="property.html#colabfit.tools.property.Property.__str__">(colabfit.tools.property.Property method)</a>
 </li>
         <li><a href="property_settings.html#colabfit.tools.property_settings.PropertySettings.__str__">(colabfit.tools.property_settings.PropertySettings method)</a>
@@ -178,6 +166,8 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.add_configurations">add_configurations() (colabfit.tools.dataset.Dataset method)</a>
 </li>
+      <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.aggregate">aggregate() (colabfit.tools.configuration_sets.ConfigurationSet method)</a>
+</li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.aggregate_metadata">aggregate_metadata() (colabfit.tools.dataset.Dataset method)</a>
 </li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.apply_transformation">apply_transformation() (colabfit.tools.dataset.Dataset method)</a>
@@ -189,6 +179,8 @@
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.attach_dataset">attach_dataset() (colabfit.tools.dataset.Dataset method)</a>
 </li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.attach_property_settings">attach_property_settings() (colabfit.tools.dataset.Dataset method)</a>
+</li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.authors">authors (colabfit.tools.dataset.Dataset attribute)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -213,7 +205,11 @@
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.check_if_is_parent_dataset">check_if_is_parent_dataset() (colabfit.tools.dataset.Dataset method)</a>
 </li>
       <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.chemical_systems">chemical_systems (colabfit.tools.configuration_sets.ConfigurationSet attribute)</a>
+
+      <ul>
+        <li><a href="dataset.html#colabfit.tools.dataset.Dataset.chemical_systems">(colabfit.tools.dataset.Dataset attribute)</a>
 </li>
+      </ul></li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.clean">clean() (colabfit.tools.dataset.Dataset method)</a>
 </li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.clear_config_labels">clear_config_labels() (colabfit.tools.dataset.Dataset method)</a>
@@ -246,8 +242,6 @@
         <li><a href="dataset.html#module-colabfit.tools.dataset">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     colabfit.tools.property
 
@@ -255,6 +249,8 @@
         <li><a href="property.html#module-colabfit.tools.property">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     colabfit.tools.property_settings
 
@@ -273,11 +269,19 @@
 </li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.configuration_label_regexes">configuration_label_regexes (colabfit.tools.dataset.Dataset property)</a>
 </li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.configuration_labels">configuration_labels (colabfit.tools.dataset.Dataset attribute)</a>
+</li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.configuration_labels_counts">configuration_labels_counts (colabfit.tools.dataset.Dataset attribute)</a>
+</li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.configuration_set_regexes">configuration_set_regexes (colabfit.tools.dataset.Dataset property)</a>
+</li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.configuration_sets">configuration_sets (colabfit.tools.dataset.Dataset attribute)</a>
 </li>
       <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.configurations">configurations (colabfit.tools.configuration_sets.ConfigurationSet attribute)</a>
 
       <ul>
+        <li><a href="dataset.html#colabfit.tools.dataset.Dataset.configurations">(colabfit.tools.dataset.Dataset attribute)</a>
+</li>
         <li><a href="property.html#colabfit.tools.property.Property.configurations">(colabfit.tools.property.Property attribute)</a>
 </li>
       </ul></li>
@@ -289,12 +293,16 @@
         <li><a href="property.html#colabfit.tools.property.Property.convert_units">(colabfit.tools.property.Property method)</a>
 </li>
       </ul></li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.custom_definitions">custom_definitions (colabfit.tools.dataset.Dataset attribute)</a>
+</li>
   </ul></td>
 </tr></table>
 
 <h2 id="D">D</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.data">data (colabfit.tools.dataset.Dataset attribute)</a>
+</li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset">Dataset (class in colabfit.tools.dataset)</a>
 </li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.dataset_from_config_sets">dataset_from_config_sets() (colabfit.tools.dataset.Dataset method)</a>
@@ -308,6 +316,8 @@
       <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.description">description (colabfit.tools.configuration_sets.ConfigurationSet attribute)</a>
 
       <ul>
+        <li><a href="dataset.html#colabfit.tools.dataset.Dataset.description">(colabfit.tools.dataset.Dataset attribute)</a>
+</li>
         <li><a href="property_settings.html#colabfit.tools.property_settings.PropertySettings.description">(colabfit.tools.property_settings.PropertySettings attribute)</a>
 </li>
       </ul></li>
@@ -320,11 +330,19 @@
       <li><a href="property.html#colabfit.tools.property.Property.edn">edn (colabfit.tools.property.Property attribute)</a>
 </li>
       <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.elements">elements (colabfit.tools.configuration_sets.ConfigurationSet attribute)</a>
+
+      <ul>
+        <li><a href="dataset.html#colabfit.tools.dataset.Dataset.elements">(colabfit.tools.dataset.Dataset attribute)</a>
 </li>
+      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.elements_ratios">elements_ratios (colabfit.tools.configuration_sets.ConfigurationSet attribute)</a>
+
+      <ul>
+        <li><a href="dataset.html#colabfit.tools.dataset.Dataset.elements_ratios">(colabfit.tools.dataset.Dataset attribute)</a>
 </li>
+      </ul></li>
       <li><a href="converters.html#colabfit.tools.converters.EXYZConverter">EXYZConverter (class in colabfit.tools.converters)</a>
 </li>
   </ul></td>
@@ -403,9 +421,11 @@
         <li><a href="property_settings.html#colabfit.tools.property_settings.PropertySettings.labels">(colabfit.tools.property_settings.PropertySettings attribute)</a>
 </li>
       </ul></li>
+      <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.labels_counts">labels_counts (colabfit.tools.configuration_sets.ConfigurationSet attribute)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.labels_counts">labels_counts (colabfit.tools.configuration_sets.ConfigurationSet attribute)</a>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.links">links (colabfit.tools.dataset.Dataset attribute)</a>
 </li>
       <li><a href="converters.html#colabfit.tools.converters.BaseConverter.load">load() (colabfit.tools.converters.BaseConverter method)</a>
 </li>
@@ -420,6 +440,8 @@
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.merge">merge() (colabfit.tools.dataset.Dataset method)</a>
 </li>
       <li><a href="property_settings.html#colabfit.tools.property_settings.PropertySettings.method">method (colabfit.tools.property_settings.PropertySettings attribute)</a>
+</li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.methods">methods (colabfit.tools.dataset.Dataset attribute)</a>
 </li>
       <li>
     module
@@ -446,7 +468,19 @@
 <h2 id="N">N</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.n_configurations">n_configurations (colabfit.tools.dataset.Dataset attribute)</a>
+</li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.n_properties">n_properties (colabfit.tools.dataset.Dataset attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet.n_sites">n_sites (colabfit.tools.configuration_sets.ConfigurationSet attribute)</a>
+
+      <ul>
+        <li><a href="dataset.html#colabfit.tools.dataset.Dataset.n_sites">(colabfit.tools.dataset.Dataset attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.name">name (colabfit.tools.dataset.Dataset attribute)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -462,11 +496,25 @@
 </li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.print_configuration_sets">print_configuration_sets() (colabfit.tools.dataset.Dataset method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="property.html#colabfit.tools.property.Property">Property (class in colabfit.tools.property)</a>
 </li>
-      <li><a href="property.html#colabfit.tools.property.Property.property_map">property_map (colabfit.tools.property.Property attribute)</a>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.property_counts">property_counts (colabfit.tools.dataset.Dataset attribute)</a>
+</li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.property_fields">property_fields (colabfit.tools.dataset.Dataset attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.property_map">property_map (colabfit.tools.dataset.Dataset property)</a>
+
+      <ul>
+        <li><a href="property.html#colabfit.tools.property.Property.property_map">(colabfit.tools.property.Property attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.property_settings">property_settings (colabfit.tools.dataset.Dataset attribute)</a>
+</li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.property_settings_labels">property_settings_labels (colabfit.tools.dataset.Dataset attribute)</a>
+</li>
+      <li><a href="dataset.html#colabfit.tools.dataset.Dataset.property_settings_labels_counts">property_settings_labels_counts (colabfit.tools.dataset.Dataset attribute)</a>
 </li>
       <li><a href="dataset.html#colabfit.tools.dataset.Dataset.property_settings_regexes">property_settings_regexes (colabfit.tools.dataset.Dataset property)</a>
 </li>

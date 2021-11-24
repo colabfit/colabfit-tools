@@ -48,15 +48,16 @@
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="core_classes.html">Core classes</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="configuration.html">Configuration</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">Property</a></li>
-<li class="toctree-l3"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
-<li class="toctree-l3"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
-<li class="toctree-l3"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Property</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#basics-of-a-property">Basics of a Property</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="additional_tools.html">Additional tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="converters.html">Converter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="transformations.html">Transform</a></li>
 </ul>
 </li>
 </ul>
@@ -76,7 +77,6 @@
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
           <li><a href="classes.html">Classes</a> &raquo;</li>
-          <li><a href="core_classes.html">Core classes</a> &raquo;</li>
       <li>Property</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/property.rst.txt" rel="nofollow"> View page source</a>
@@ -87,11 +87,21 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <span class="target" id="module-colabfit.tools.property"></span><p>A <a class="reference internal" href="#colabfit.tools.property.Property" title="colabfit.tools.property.Property"><code class="xref py py-class docutils literal notranslate"><span class="pre">Property</span></code></a> is usually extracted from a
-<a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> object using the
-<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.parse_data" title="colabfit.tools.dataset.Dataset.parse_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code></a> of a <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset" title="colabfit.tools.dataset.Dataset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Dataset()</span></code></a> object.</p>
-<section id="property">
+  <span class="target" id="module-colabfit.tools.property"></span><section id="property">
 <h1>Property<a class="headerlink" href="#property" title="Permalink to this headline"></a></h1>
+<section id="basics-of-a-property">
+<h2>Basics of a Property<a class="headerlink" href="#basics-of-a-property" title="Permalink to this headline"></a></h2>
+<p>A Property stores all of the information about the output of a calculation. A
+Property is usually extracted from a
+<a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> object using the
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.parse_data" title="colabfit.tools.dataset.Dataset.parse_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code></a> of a
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset" title="colabfit.tools.dataset.Dataset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Dataset()</span></code></a> object. For more details about how this
+data is stored on a Configuration, see
+<a class="reference internal" href="configuration.html#configuration-info-and-arrays-fields"><span class="std std-ref">Configuration info and arrays fields</span></a>. For more details on how to specify
+the mapping for loading data off of a Configuration, see
+<a class="reference internal" href="usage.html#parsing-data"><span class="std std-ref">Parsing data</span></a>.</p>
+<p>Best practice is to also include a
+<a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a> object.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.property.Property">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.property.</span></span><span class="sig-name descname"><span class="pre">Property</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configurations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convert_units</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property" title="Permalink to this definition"></a></dt>
@@ -104,7 +114,12 @@ Property was obtained.</p>
 <dt class="sig sig-object py" id="colabfit.tools.property.Property.edn">
 <span class="sig-name descname"><span class="pre">edn</span></span><a class="headerlink" href="#colabfit.tools.property.Property.edn" title="Permalink to this definition"></a></dt>
 <dd><p>A dictionary defining an OpenKIM Property Instance in EDN format.
-For more details, see the <a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">OpenKIM Property Framework</a> documentation.</p>
+For more details, see the <a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">OpenKIM Property Framework</a>
+documentation. In most cases, this dictionary should not be manually
+constructed by the user. Instead, an OpenKIM Property Definition
+(see <a class="reference internal" href="usage.html#custom-properties"><span class="std std-ref">Custom properties</span></a> for details) should be provided using
+a <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.property_map" title="colabfit.tools.dataset.Dataset.property_map"><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code></a>, which will
+let <a class="reference internal" href="#colabfit.tools.property.Property.edn" title="colabfit.tools.property.Property.edn"><code class="xref py py-attr docutils literal notranslate"><span class="pre">edn</span></code></a> be automatically constructed.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>dict</p>
@@ -115,8 +130,8 @@ For more details, see the <a class="reference external" href="https://openkim.or
 <dl class="py attribute">
 <dt class="sig sig-object py" id="colabfit.tools.property.Property.property_map">
 <span class="sig-name descname"><span class="pre">property_map</span></span><a class="headerlink" href="#colabfit.tools.property.Property.property_map" title="Permalink to this definition"></a></dt>
-<dd><p>key = a string that can be used as a key like <cite>self.edn[key]</cite>
-value = A sub-dictionary with the following keys:</p>
+<dd><p>key = a string that can be used as a key like <code class="code docutils literal notranslate"><span class="pre">self.edn[key]</span></code></p>
+<p>value = A sub-dictionary with the following keys:</p>
 <ul class="simple">
 <li><dl class="simple">
 <dt><code class="xref py py-attr docutils literal notranslate"><span class="pre">field</span></code>:</dt><dd><p>A field name used to access <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code> or <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.arrays</span></code></p>
@@ -166,21 +181,6 @@ provided.</p>
 </dl>
 </dd></dl>
 
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>name</strong> (<em>str</em>) – Short OpenKIM Property Definition name</p></li>
-<li><p><strong>configurations</strong> (<em>list</em>) – A list of ColabFit Configuration object</p></li>
-<li><p><strong>property_map</strong> (<em>dict</em>) – A property map as described in the Property attributes section.</p></li>
-<li><p><strong>settings</strong> (<a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><em>PropertySettings</em></a>) – A <cite>colabfit.property.PropertySettings</cite> objects specifying how to
-compute the property.</p></li>
-<li><p><strong>edn</strong> (<em>dict</em>) – A dictionary defining an OpenKIM Property Instance in EDN format.</p></li>
-<li><p><strong>instance_id</strong> (<em>int</em>) – A positive non-zero integer</p></li>
-<li><p><strong>convert_units</strong> (<em>bool</em>) – If True, converts units to those expected by ColabFit. Default
-is False</p></li>
-</ul>
-</dd>
-</dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.property.Property.__delitem__">
 <span class="sig-name descname"><span class="pre">__delitem__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.__delitem__" title="Permalink to this definition"></a></dt>
@@ -290,6 +290,7 @@ else <code class="code docutils literal notranslate"><span class="pre">np.nan</s
 
 </dd></dl>
 
+</section>
 </section>
 
 
