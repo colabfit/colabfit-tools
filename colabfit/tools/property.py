@@ -61,7 +61,8 @@ class Property(dict):
             For more details, see the `OpenKIM Property Framework <https://openkim.org/doc/schema/properties-framework/>`_ documentation.
 
         property_map (dict):
-            key = a string that can be used as a key like `self.edn[key]`
+            key = a string that can be used as a key like :code:`self.edn[key]`
+
             value = A sub-dictionary with the following keys:
 
             * :attr:`field`:
