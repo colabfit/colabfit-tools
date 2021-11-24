@@ -5,6 +5,12 @@ Overview
 Dataset Standard
 ================
 
+.. figure:: ds_diagram.png
+    :align: center
+    :alt: A diagram showing the relationship between the five core data structures
+
+    A diagram showing the relationship between the five core data structures
+
 The :class:`~colabfit.tools.dataset.Dataset` class was designed to be able to
 be as flexible as possible to incorporate different types of data
 (computational/experimental) while also making the datasets efficient to query,
@@ -28,9 +34,3 @@ structures:
 * :class:`~colabfit.tools.dataset.Dataset` (DS):
       The top-level dataset, which aggregates information up from the
       configuration sets and sub-datasets for improved discoverability
-
-.. figure:: ds_diagram.png
-    :align: center
-    :alt: A diagram showing the relationship between the five core data structures
-
-    A diagram showing the relationship between the five core data structures
