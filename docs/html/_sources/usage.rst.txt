@@ -4,6 +4,25 @@ Usage
 
 This section describes the core usage of the :code:`colabfit-tools` package.
 
+Synchronizing a Dataset
+=======================
+When working with a Dataset, it is important to make sure that the dataset has
+been "synchronized" in order to ensure that all of the data (configuration
+labels, configuration sets, aggregated metadata, ...) have been properly updated
+to reflect any recent changes to the Dataset. However, this often requires
+looping over (potentially large) lists of Property and Configuration objects.
+
+A :meth:`~colabfit.tools.dataset.Dataset.resync` function is provided in order
+to allow Datasets to be synchronized without performing these iterations at
+unnecessary times.
+
+**Important**: the :meth:`resync` function should be called after making any
+major changes to a Dataset (e.g., loading data, or updating one of the
+:ref:`regex dictionaries <Regex dictionaries>`).
+
+Note: this function will be called automatically before many core operations
+(like :meth:`~colabfit.tools.dataset.Dataset.to_markdown`).
+
 Custom properties
 =================
 See :ref:`an example custom property definition <Custom property
@@ -174,12 +193,18 @@ an example of how to write a Markdown file for an un-processed dataset, and the
 :ref:`QM9 example` for an example of writing un-processed data out to XYZ format
 after it has been loaded into a Dataset.
 
-Data visualization
-==================
+Data exploration
+================
 
-A Dataset's :meth:`~colabfit.tools.dataset.Dataset.plot_histograms`
+A Dataset's :meth:`~colabfit.tools.dataset.Dataset.plot_histograms`,
+:meth:`~colabfit.tools.dataset.Dataset.get_data`,
 and :meth:`~colabfit.tools.dataset.Dataset.get_statistics` functions can be
 extremely useful for quickly visualizing your data and detecting outliers.
+
+.. code-block:: python
+
+    energies = dataset.get_data('energy', ravel=True)
+    forces   = dataset.get_data('forces', concatenate=True)
 
 .. code-block:: python
     
