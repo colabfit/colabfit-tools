@@ -230,7 +230,7 @@ extremely useful for quickly visualizing your data and detecting outliers.
     # {'average': 1.4060972645920002, 'std': 1.5837889998648804, 'min': 0.33712, 'max': 437.90386, 'average_abs': 1.4060972645920002}
     # {'average': 1.1249210272988013, 'std': 1.0956136904779634, 'min': 0.33118, 'max': 282.94545, 'average_abs': 1.1249210272988013}
 
-See the :ref:`QM9 example` and the :ref:`Si PRX GAP` example to further explore
+See the :ref:`QM9 example` and the :ref:`Si PRX GAP example` to further explore
 the benefits of these functions.
 
 Filtering a Dataset

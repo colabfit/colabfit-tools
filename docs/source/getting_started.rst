@@ -26,4 +26,4 @@ First steps
 * Review the :ref:`Basics of Configurations` to better understand how data is
   stored when it is first loaded in.
 * Follow the :ref:`Basic example`
-* Continue with the :ref:`QM9 example` and/or the :ref:`Si PRX GAP` example
+* Continue with the :ref:`QM9 example` and/or the :ref:`Si PRX GAP example`
