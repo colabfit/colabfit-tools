@@ -13,10 +13,10 @@ class Configuration(Atoms):
     A Configuration is an extension of an :class:`ase.Atoms` object that is
     guaranteed to have the following fields in its :attr:`info` dictionary:
 
-    - :attr:`~colabfit.ATOMS_ID_FIELD`
-    - :attr:`~colabfit.ATOMS_NAME_FIELD`
-    - :attr:`~colabfit.ATOMS_LABELS_FIELD`
-    - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD`
+    - :attr:`~colabfit.ATOMS_ID_FIELD` = :code:"_id"
+    - :attr:`~colabfit.ATOMS_NAME_FIELD` = :code:"_name"
+    - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
+    - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD` = :code:"_constraints"
     """
 
     def __init__(self, labels=None, constraints=None, *args, **kwargs):
