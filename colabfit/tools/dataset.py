@@ -92,6 +92,7 @@ class Dataset:
 
         custom_definitions (dict):
             key = the name of a locally-defined property
+
             value = the path to an EDN file containing the property definition
 
         property_settings_labels (list):

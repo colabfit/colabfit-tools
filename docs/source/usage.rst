@@ -6,9 +6,8 @@ This section describes the core usage of the :code:`colabfit-tools` package.
 
 Custom properties
 =================
-
-See :ref:`an example custom property definition <An example custom property
-definition>` for how to write custom property definitions.
+See :ref:`an example custom property definition <Custom property
+definition example>` for how to write custom property definitions.
 
 
 Regex dictionaries
