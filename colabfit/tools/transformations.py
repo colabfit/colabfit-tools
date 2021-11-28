@@ -60,6 +60,17 @@ class ReshapeForces(BaseTransform):
 
 
 class Sequential(BaseTransform):
+    """
+    An object used for defining a chain of Transformations to be performed
+    sequentially. For example:
+
+    .. code-block:: python
+
+        Sequential(
+            PerAtomEnergies(),
+            SubtractDivide(sub=<reference_energy>, div=1)
+        )
+    """
     def __init__(self, *args):
         def wrapper(data, configurations=None):
             for f in args:

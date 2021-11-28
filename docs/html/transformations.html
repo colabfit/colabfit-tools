@@ -114,7 +114,15 @@ extracting the 6-component version of the cauchy stress from a 3x3 matrix.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.transformations.Sequential">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.transformations.</span></span><span class="sig-name descname"><span class="pre">Sequential</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.transformations.Sequential" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>An object used for defining a chain of Transformations to be performed
+sequentially. For example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">Sequential</span><span class="p">(</span>
+    <span class="n">PerAtomEnergies</span><span class="p">(),</span>
+    <span class="n">SubtractDivide</span><span class="p">(</span><span class="n">sub</span><span class="o">=&lt;</span><span class="n">reference_energy</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">div</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
 
 </section>
 
