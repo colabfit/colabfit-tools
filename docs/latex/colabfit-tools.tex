@@ -61,7 +61,7 @@
 
 
 \title{colabfit\sphinxhyphen{}tools}
-\date{Nov 22, 2021}
+\date{Nov 23, 2021}
 \release{0.1}
 \author{ColabFit}
 \newcommand{\sphinxlogo}{\vbox{}}
@@ -75,6 +75,8 @@
 \sphinxtableofcontents
 \pagestyle{normal}
 \phantomsection\label{\detokenize{index::doc}}
+\noindent{\hspace*{\fill}\sphinxincludegraphics[width=200\sphinxpxdimen,height=200\sphinxpxdimen]{{colabfit-logo}.png}\hspace*{\fill}}
+
 
 
 \sphinxAtStartPar
@@ -83,12 +85,81 @@ exploring datasets for data\sphinxhyphen{}driven interatomic potentials. This pa
 of the \sphinxhref{https://colabfit.openkim.org/}{ColabFit project} at the University of
 Minnesota.
 
+\sphinxAtStartPar
+Despite the rapidly increasing popularity of data\sphinxhyphen{}driven interatomic
+potentials (DDIPs), training data for these models has historically been
+difficult to obtain and work with. Data is often stored in internally\sphinxhyphen{}developed
+formats, insufficiently documented, and not made readily available to the
+public.
+
+\sphinxAtStartPar
+\sphinxcode{\sphinxupquote{colabfit\_tools}} aims to address these problems by defining a standard
+method for representing DDIP training datasets programatically, and providing
+software tools for manipulating these representations.
+
 
 \chapter{Overview}
 \label{\detokenize{overview:overview}}\label{\detokenize{overview::doc}}
+
+\section{Dataset Standard}
+\label{\detokenize{overview:dataset-standard}}
 \sphinxAtStartPar
-TODO: populate this page with a description of the package. Maybe include that
-graphic of how a dataset is organized. Explain why the package is useful, etc.
+The {\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{Dataset}}}}} class was designed to be able to
+be as flexible as possible to incorporate different types of data
+(computational/experimental) while also making the datasets efficient to query,
+store, and manipulate. A {\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{Dataset}}}}} is constructed using five core data
+structures:
+\begin{itemize}
+\item {} \begin{description}
+\item[{{\hyperref[\detokenize{configuration:colabfit.tools.configuration.Configuration}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{Configuration}}}}} (CO):}] \leavevmode
+\sphinxAtStartPar
+The information necessary to uniquely define the input to a calculation
+(e.g., atomic types, positions, lattice vectors, constraints, …)
+
+\end{description}
+
+\item {} \begin{description}
+\item[{{\hyperref[\detokenize{property:colabfit.tools.property.Property}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{Property}}}}} (PR):}] \leavevmode
+\sphinxAtStartPar
+The outputs from a calculation (e.g., DFT\sphinxhyphen{}computed
+energies/forces/stresses)
+
+\end{description}
+
+\item {} \begin{description}
+\item[{{\hyperref[\detokenize{property_settings:colabfit.tools.property_settings.PropertySettings}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{PropertySettings}}}}} (PSO):}] \leavevmode
+\sphinxAtStartPar
+Additional metadata that useful for setting up the calculation (e.g.,
+software version, input files, …)
+
+\end{description}
+
+\item {} \begin{description}
+\item[{{\hyperref[\detokenize{configuration_set:colabfit.tools.configuration_sets.ConfigurationSet}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{ConfigurationSet}}}}} (CS):}] \leavevmode
+\sphinxAtStartPar
+An object defining a group of
+{\hyperref[\detokenize{configuration:colabfit.tools.configuration.Configuration}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{Configuration}}}}} instances and
+providing useful metadata for organizing datasets (e.g., “Snapshots from a
+molecular dynamics run at 1000K”)
+
+\end{description}
+
+\item {} \begin{description}
+\item[{{\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{Dataset}}}}} (DS):}] \leavevmode
+\sphinxAtStartPar
+The top\sphinxhyphen{}level dataset, which aggregates information up from the
+configuration sets and sub\sphinxhyphen{}datasets for improved discoverability
+
+\end{description}
+
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\capstart
+
+\noindent\sphinxincludegraphics{{ds_diagram}.png}
+\caption{A diagram showing the relationship between the five core data structures}\label{\detokenize{overview:id1}}\end{figure}
 
 
 \chapter{Getting started}
@@ -114,45 +185,757 @@ Personal Access Token that has appropriate permissions.
 
 
 \chapter{Examples}
-\label{\detokenize{getting_started:examples}}
+\label{\detokenize{examples:examples}}\label{\detokenize{examples::doc}}
 
 \section{Basic example}
 \label{\detokenize{basic_example:basic-example}}\label{\detokenize{basic_example::doc}}
 \sphinxAtStartPar
-TODO: Write a basic example. Make some dummy data, write it to an XYZ file, load
-it using load\_data(), do stuff.
+This example corresponds to the \sphinxcode{\sphinxupquote{colabfit/examples/basic\_example.ipynb}}
+Jupyter notebook in the GitHub repo, which can be run in Google Colab.
+
+
+\subsection{Creating a Dataset from scratch}
+\label{\detokenize{basic_example:creating-a-dataset-from-scratch}}
+\sphinxAtStartPar
+Initialize the Dataset and add basic metadata.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{k+kn}{from} \PYG{n+nn}{colabfit}\PYG{n+nn}{.}\PYG{n+nn}{tools}\PYG{n+nn}{.}\PYG{n+nn}{dataset} \PYG{k+kn}{import} \PYG{n}{Dataset}
+
+\PYG{n}{dataset} \PYG{o}{=} \PYG{n}{Dataset}\PYG{p}{(}\PYG{n}{name}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{example}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}
+
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{authors} \PYG{o}{=} \PYG{p}{[}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{J. E. Lennard\PYGZhy{}Jones}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+\PYG{p}{]}
+
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{links} \PYG{o}{=} \PYG{p}{[}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{https://en.wikipedia.org/wiki/John\PYGZus{}Lennard\PYGZhy{}Jones}\PYG{l+s+s1}{\PYGZsq{}}
+\PYG{p}{]}
+
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{description} \PYG{o}{=} \PYG{l+s+s2}{\PYGZdq{}}\PYG{l+s+s2}{This is an example dataset}\PYG{l+s+s2}{\PYGZdq{}}
+\end{sphinxVerbatim}
+
+
+\subsection{Adding Configurations}
+\label{\detokenize{basic_example:adding-configurations}}
+\sphinxAtStartPar
+Load the configurations onto the Dataset by either manually constructing the
+Configurations and assigning them to the \sphinxcode{\sphinxupquote{configurations}} attribute, or
+using {\hyperref[\detokenize{dataset:colabfit.tools.dataset.load_data}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{load\_data()}}}}}, which calls a pre\sphinxhyphen{}made Converter and
+returns a list of Configuration objects.
+
+
+\subsubsection{Manually}
+\label{\detokenize{basic_example:manually}}
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{k+kn}{import} \PYG{n+nn}{numpy} \PYG{k}{as} \PYG{n+nn}{np}
+\PYG{k+kn}{from} \PYG{n+nn}{ase} \PYG{k+kn}{import} \PYG{n}{Atoms}
+
+\PYG{n}{images} \PYG{o}{=} \PYG{p}{[}\PYG{p}{]}
+\PYG{k}{for} \PYG{n}{i} \PYG{o+ow}{in} \PYG{n+nb}{range}\PYG{p}{(}\PYG{l+m+mi}{1}\PYG{p}{,} \PYG{l+m+mi}{1000}\PYG{p}{)}\PYG{p}{:}
+    \PYG{n}{atoms} \PYG{o}{=} \PYG{n}{Atoms}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{H}\PYG{l+s+s1}{\PYGZsq{}}\PYG{o}{*}\PYG{n}{i}\PYG{p}{,} \PYG{n}{positions}\PYG{o}{=}\PYG{n}{np}\PYG{o}{.}\PYG{n}{random}\PYG{o}{.}\PYG{n}{random}\PYG{p}{(}\PYG{p}{(}\PYG{n}{i}\PYG{p}{,} \PYG{l+m+mi}{3}\PYG{p}{)}\PYG{p}{)}\PYG{p}{)}
+
+    \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{\PYGZus{}name}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]} \PYG{o}{=} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{configuration\PYGZus{}}\PYG{l+s+s1}{\PYGZsq{}} \PYG{o}{+} \PYG{n+nb}{str}\PYG{p}{(}\PYG{n}{i}\PYG{p}{)}
+
+    \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{dft\PYGZus{}energy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{i}\PYG{o}{*}\PYG{n}{i}
+    \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{arrays}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{dft\PYGZus{}forces}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{random}\PYG{o}{.}\PYG{n}{normal}\PYG{p}{(}\PYG{n}{size}\PYG{o}{=}\PYG{p}{(}\PYG{n}{i}\PYG{p}{,} \PYG{l+m+mi}{3}\PYG{p}{)}\PYG{p}{)}
+
+    \PYG{n}{images}\PYG{o}{.}\PYG{n}{append}\PYG{p}{(}\PYG{n}{atoms}\PYG{p}{)}
+\end{sphinxVerbatim}
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{k+kn}{from} \PYG{n+nn}{colabfit}\PYG{n+nn}{.}\PYG{n+nn}{tools}\PYG{n+nn}{.}\PYG{n+nn}{configuration} \PYG{k+kn}{import} \PYG{n}{Configuration}
+
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{configurations} \PYG{o}{=} \PYG{p}{[}
+    \PYG{n}{Configuration}\PYG{o}{.}\PYG{n}{from\PYGZus{}ase}\PYG{p}{(}\PYG{n}{atoms}\PYG{p}{)} \PYG{k}{for} \PYG{n}{atoms} \PYG{o+ow}{in} \PYG{n}{images}
+\PYG{p}{]}
+\end{sphinxVerbatim}
+
+
+\subsubsection{Using \sphinxstyleliteralintitle{\sphinxupquote{load\_data()}}}
+\label{\detokenize{basic_example:using-load-data}}
+\sphinxAtStartPar
+Note that the file\_format must be specified, and a name\_field (or None) should
+be provided to specify the name of the loaded configurations.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{k+kn}{from} \PYG{n+nn}{ase}\PYG{n+nn}{.}\PYG{n+nn}{io} \PYG{k+kn}{import} \PYG{n}{write}
+
+\PYG{n}{write}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{/content/example.extxyz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{n}{images}\PYG{p}{)}
+\end{sphinxVerbatim}
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{k+kn}{from} \PYG{n+nn}{colabfit}\PYG{n+nn}{.}\PYG{n+nn}{tools}\PYG{n+nn}{.}\PYG{n+nn}{dataset} \PYG{k+kn}{import} \PYG{n}{load\PYGZus{}data}
+
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{configurations} \PYG{o}{=} \PYG{n}{load\PYGZus{}data}\PYG{p}{(}
+        \PYG{n}{file\PYGZus{}path}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{/content/example.extxyz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+        \PYG{n}{file\PYGZus{}format}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{xyz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+        \PYG{n}{name\PYGZus{}field}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{\PYGZus{}name}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+        \PYG{n}{elements}\PYG{o}{=}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{H}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+        \PYG{n}{default\PYGZus{}name}\PYG{o}{=}\PYG{k+kc}{None}\PYG{p}{,}
+\PYG{p}{)}
+\end{sphinxVerbatim}
+
+
+\subsection{Applying labels to configurations}
+\label{\detokenize{basic_example:applying-labels-to-configurations}}
+\sphinxAtStartPar
+Labels can be specified as lists or single strings (which will be wrapped in a list)
+Metadata can be applied to individual configurations using labels. Labels are
+applied by matching a regular expression to
+\sphinxcode{\sphinxupquote{configuration.info{[}ASE\_NAME\_FIELD{]}}} for each configuration. Regex
+mappings are provided by setting the configuration\_label\_regexes dictionary.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{configuration\PYGZus{}label\PYGZus{}regexes} \PYG{o}{=} \PYG{p}{\PYGZob{}}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{configuration\PYGZus{}[1\PYGZhy{}10]}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{small}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{.*}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{random}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+\PYG{p}{\PYGZcb{}}
+\end{sphinxVerbatim}
+
+
+\subsection{Configuration sets using regexes}
+\label{\detokenize{basic_example:configuration-sets-using-regexes}}
+\sphinxAtStartPar
+A {\hyperref[\detokenize{configuration_set:colabfit.tools.configuration_sets.ConfigurationSet}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{ConfigurationSet}}}}} can be used to
+create groups of configurations for organizational purposes. This can be done in
+a similar manner to how configuration labels are applied, but using the
+\sphinxcode{\sphinxupquote{configuration\_set\_regexes}} dictionary. Note that a configuration may
+exist in multiple sets at the same time.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{configuration\PYGZus{}set\PYGZus{}regexes} \PYG{o}{=} \PYG{p}{\PYGZob{}}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{configuration\PYGZus{}[1\PYGZhy{}499]}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}   \PYG{l+s+s2}{\PYGZdq{}}\PYG{l+s+s2}{The first configuration set}\PYG{l+s+s2}{\PYGZdq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{configuration\PYGZus{}[500\PYGZhy{}999]}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s2}{\PYGZdq{}}\PYG{l+s+s2}{The second configuration set}\PYG{l+s+s2}{\PYGZdq{}}\PYG{p}{,}
+\PYG{p}{\PYGZcb{}}
+\end{sphinxVerbatim}
+
+
+\subsection{Synchronizing the dataset}
+\label{\detokenize{basic_example:synchronizing-the-dataset}}
+\sphinxAtStartPar
+A Dataset is a pool of configurations and properties, where the configurations
+are further organized by grouping them into configuration sets, and the
+properties are linked to property settings. A Dataset then aggregates
+information up from the configurations, properties, and property settings. In
+order to ensure that the information applied by specifying
+\sphinxcode{\sphinxupquote{configuration\_label\_regexes}}, \sphinxcode{\sphinxupquote{configuration\_set\_regexes}}, and
+\sphinxcode{\sphinxupquote{property\_settings\_regexes}} are up\sphinxhyphen{}to\sphinxhyphen{}date, \sphinxcode{\sphinxupquote{dataset.resync()}}
+should be called before performing critical operations like saving a Dataset.
+Some core functions will call \sphinxcode{\sphinxupquote{resync()}} automatically.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{resync}\PYG{p}{(}\PYG{p}{)}
+\end{sphinxVerbatim}
+
+
+\subsection{Parsing the data}
+\label{\detokenize{basic_example:parsing-the-data}}
+\sphinxAtStartPar
+Parse the properties by specifying a \sphinxcode{\sphinxupquote{property\_map}}, which is a special
+dictionary on a Dataset. See {\hyperref[\detokenize{usage:property-map}]{\sphinxcrossref{\DUrole{std,std-ref}{Property map}}}} for more details.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{property\PYGZus{}map} \PYG{o}{=} \PYG{p}{\PYGZob{}}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{default}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{energy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{dft\PYGZus{}energy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{eV}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{forces}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{dft\PYGZus{}forces}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{eV/Ang}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{}}
+\end{sphinxVerbatim}
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{parse\PYGZus{}data}\PYG{p}{(}\PYG{n}{convert\PYGZus{}units}\PYG{o}{=}\PYG{k+kc}{False}\PYG{p}{,} \PYG{n}{verbose}\PYG{o}{=}\PYG{k+kc}{True}\PYG{p}{)}
+\end{sphinxVerbatim}
+
+
+\subsection{Exploring the data}
+\label{\detokenize{basic_example:exploring-the-data}}
+\sphinxAtStartPar
+Use {\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.get_data}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{get\_data()}}}}} to obtain a list of the
+given property field where each element has been wrapped in a numpy array.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{energies} \PYG{o}{=} \PYG{n}{dataset}\PYG{o}{.}\PYG{n}{get\PYGZus{}data}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{energy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{n}{ravel}\PYG{o}{=}\PYG{k+kc}{True}\PYG{p}{)}
+\PYG{n}{forces}   \PYG{o}{=} \PYG{n}{dataset}\PYG{o}{.}\PYG{n}{get\PYGZus{}data}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{forces}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{n}{ravel}\PYG{o}{=}\PYG{k+kc}{True}\PYG{p}{)}
+\end{sphinxVerbatim}
 
 \sphinxAtStartPar
-This should basically be what’s in the README right now, but a runnable version.
+Basic statistics can be obtained using
+{\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.get_statistics}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{get\_statistics()}}}}}.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{\PYGZsh{} Returns: \PYGZob{}\PYGZsq{}average\PYGZsq{}: ..., \PYGZsq{}std\PYGZsq{}: ..., \PYGZsq{}min\PYGZsq{}: ..., \PYGZsq{}max\PYGZsq{}:, ..., \PYGZsq{}average\PYGZus{}abs\PYGZsq{}: ...\PYGZcb{}}
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{get\PYGZus{}statistics}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{energy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}
+\end{sphinxVerbatim}
+
+\sphinxAtStartPar
+The {\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.plot_histograms}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{plot\_histograms()}}}}} function is useful
+for quickly visualizing the distribution of your data.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{plot\PYGZus{}histograms}\PYG{p}{(}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{energy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{forces}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{)}
+\end{sphinxVerbatim}
+
+
+\subsection{Providing calculation metadata}
+\label{\detokenize{basic_example:providing-calculation-metadata}}
+\sphinxAtStartPar
+Metadata for computing properties can be provided by constructing a
+{\hyperref[\detokenize{property_settings:colabfit.tools.property_settings.PropertySettings}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{PropertySettings}}}}} object and matching
+it to a property by regex matching on the property’s linked configurations.
+It is good practice to always attach a PropertySettings object to every
+Property to improve reproducibility of the data. It is especially useful to
+include example input files using the \sphinxcode{\sphinxupquote{files}} field.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{k+kn}{from} \PYG{n+nn}{colabfit}\PYG{n+nn}{.}\PYG{n+nn}{tools}\PYG{n+nn}{.}\PYG{n+nn}{property\PYGZus{}settings} \PYG{k+kn}{import} \PYG{n}{PropertySettings}
+
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{property\PYGZus{}settings\PYGZus{}regexes} \PYG{o}{=} \PYG{p}{\PYGZob{}}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{.*}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}
+        \PYG{n}{PropertySettings}\PYG{p}{(}
+            \PYG{n}{method}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{VASP}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+            \PYG{n}{description}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{energy/force calculations}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+            \PYG{n}{files}\PYG{o}{=}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{/path/to/INCAR}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+            \PYG{n}{labels}\PYG{o}{=}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{PBE}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{GGA}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+        \PYG{p}{)}
+\PYG{p}{\PYGZcb{}}
+\end{sphinxVerbatim}
 
 
 \section{QM9 example}
 \label{\detokenize{qm9:qm9-example}}\label{\detokenize{qm9::doc}}
 \sphinxAtStartPar
-TODO: link to the QM9 notebook to be run in Google Colab, but also provide a
-walkthrough here.
+This example will be used to highlight some of the more advanced features of the
+Dataset class using the popular \sphinxhref{https://figshare.com/collections/Quantum\_chemistry\_structures\_and\_properties\_of\_134\_kilo\_molecules/978904}{QM9 dataset}.
+It is suggested that you go through the {\hyperref[\detokenize{basic_example:basic-example}]{\sphinxcrossref{\DUrole{std,std-ref}{basic example}}}} first. The complete
+code will not be shown in this example (for the complete code, see the Jupyter
+notebook at \sphinxcode{\sphinxupquote{colabfit/examples/qm9.ipynb}}); instead, only the additional features will be
+discussed here.
+
+\sphinxAtStartPar
+Note that this example assumes that the raw data has already been downloaded
+using the following commands:
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{g+gp}{\PYGZdl{} }mkdir qm9
+\PYG{g+gp}{\PYGZdl{} }\PYG{n+nb}{cd} qm9 \PYG{o}{\PYGZam{}\PYGZam{}} wget \PYGZhy{}O dsgdb9nsd.xyz.tar.bz2 https://figshare.com/ndownloader/files/3195389 \PYG{o}{\PYGZam{}\PYGZam{}} tar \PYGZhy{}xvjf dsgdb9nsd.xyz.tar.bz2
+\end{sphinxVerbatim}
+
+
+\subsection{Writing a custom property for QM9}
+\label{\detokenize{qm9:writing-a-custom-property-for-qm9}}
+\sphinxAtStartPar
+The QM9 dataset contains a large number of computed properties for each
+Configuration, as documented in \sphinxhref{https://figshare.com/articles/dataset/Readme\_file\_Data\_description\_for\_Quantum\_chemistry\_structures\_and\_properties\_of\_134\_kilo\_molecules\_/1057641?backTo=/collections/Quantum\_chemistry\_structures\_and\_properties\_of\_134\_kilo\_molecules/978904}{its original README}.
+
+\sphinxAtStartPar
+In order to preserve this information, a custom property can be defined
+(see {\hyperref[\detokenize{usage:custom-properties}]{\sphinxcrossref{\DUrole{std,std-ref}{Custom properties}}}} for more information).
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{qm9\PYGZus{}property\PYGZus{}definition} \PYG{o}{=} \PYG{p}{\PYGZob{}}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{property\PYGZhy{}id}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{qm9\PYGZhy{}property}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{property\PYGZhy{}title}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{A, B, C, mu, alpha, homo, lumo, gap, r2, zpve, U0, U, H, G, Cv}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{property\PYGZhy{}description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Geometries minimal in energy, corresponding harmonic frequencies, dipole moments, polarizabilities, along with energies, enthalpies, and free energies of atomization}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{a}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Rotational constant A}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{b}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Rotational constant B}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{c}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Rotational constant C}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{mu}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}    \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Dipole moment}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{alpha}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Isotropic polarizability}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{homo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}  \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Energy of Highest occupied molecular orbital (HOMO)}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{lumo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}  \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Energy of Lowest occupied molecular orbital (LUMO)}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{gap}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}   \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Gap, difference between LUMO and HOMO}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{r2}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}    \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Electronic spatial extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{zpve}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}  \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Zero point vibrational energy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{u0}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}    \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Internal energy at 0 K}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{u}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Internal energy at 298.15 K}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{h}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Enthalpy at 298.15 K}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{g}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Free energy at 298.15 K}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{cv}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}    \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{float}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Heat capacity at 298.15 K}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{smiles\PYGZhy{}relaxed}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}    \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{string}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{False}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{SMILES for relaxed geometry}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{inchi\PYGZhy{}relaxed}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{string}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{has\PYGZhy{}unit}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{False}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{extent}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{p}{]}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{required}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{True}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{description}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{InChI for relaxed geometry}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+\PYG{p}{\PYGZcb{}}
+\end{sphinxVerbatim}
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{custom\PYGZus{}definitions} \PYG{o}{=} \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{qm9\PYGZhy{}property}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{n}{qm9\PYGZus{}property\PYGZus{}definition}\PYG{p}{\PYGZcb{}}
+\end{sphinxVerbatim}
+
+\sphinxAtStartPar
+Note that a property definition is used for performing verification checks when
+parsing the data. A \sphinxcode{\sphinxupquote{property\_map}} must still be provided for specifying
+\_how\_ to parse the data and what the units of the fields are.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{property\PYGZus{}map} \PYG{o}{=} \PYG{p}{\PYGZob{}}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{qm9\PYGZhy{}property}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}}
+        \PYG{c+c1}{\PYGZsh{} Property Definition field: \PYGZob{}\PYGZsq{}field\PYGZsq{}: ASE field, \PYGZsq{}units\PYGZsq{}: ASE\PYGZhy{}readable units\PYGZcb{}}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{a}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{A}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}     \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{GHz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{b}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{B}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}     \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{GHz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{c}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{C}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}     \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{GHz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{mu}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}    \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{mu}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Debye}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{alpha}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{alpha}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Bohr*Bohr*Bohr}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{homo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}  \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{homo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}  \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Hartree}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{lumo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}  \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{lumo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}  \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Hartree}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{gap}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}   \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{gap}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}   \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Hartree}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{r2}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}    \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{r2}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Bohr*Bohr}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{zpve}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}  \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{zpve}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}  \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Hartree}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{u0}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}    \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{U0}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Hartree}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{u}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{U}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}     \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Hartree}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{h}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{H}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}     \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Hartree}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{g}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}     \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{G}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}     \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Hartree}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{cv}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:}    \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Cv}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{cal/mol/K}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{smiles\PYGZhy{}relaxed}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{SMILES\PYGZus{}relaxed}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{None}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{inchi\PYGZhy{}relaxed}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{\PYGZob{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{field}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{SMILES\PYGZus{}relaxed}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}  \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{units}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{k+kc}{None}\PYG{p}{\PYGZcb{}}\PYG{p}{,}
+    \PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{}}
+\end{sphinxVerbatim}
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{property\PYGZus{}map} \PYG{o}{=} \PYG{n}{property\PYGZus{}map}
+\end{sphinxVerbatim}
+
+
+\subsection{Defining a reader function}
+\label{\detokenize{qm9:defining-a-reader-function}}
+\sphinxAtStartPar
+Since the data in QM9 is not stored in a typical format (it uses an uncommon
+modification to the typical XYZ format), it is necessary to use the
+{\hyperref[\detokenize{converters:colabfit.tools.converters.FolderConverter}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{FolderConverter}}}}} class, with a custom
+\sphinxcode{\sphinxupquote{reader()}} function.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{k}{def} \PYG{n+nf}{reader}\PYG{p}{(}\PYG{n}{file\PYGZus{}path}\PYG{p}{)}\PYG{p}{:}
+    \PYG{c+c1}{\PYGZsh{} A function for returning a list of ASE a}
+
+    \PYG{n}{properties\PYGZus{}order} \PYG{o}{=} \PYG{p}{[}
+        \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{tag}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{index}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{A}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{B}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{C}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{mu}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{alpha}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{homo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{lumo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{gap}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{r2}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{zpve}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{U0}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{U}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{H}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{G}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Cv}\PYG{l+s+s1}{\PYGZsq{}}
+    \PYG{p}{]}
+
+    \PYG{n}{images} \PYG{o}{=} \PYG{p}{[}\PYG{p}{]}
+    \PYG{k}{with} \PYG{n+nb}{open}\PYG{p}{(}\PYG{n}{file\PYGZus{}path}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{r}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)} \PYG{k}{as} \PYG{n}{f}\PYG{p}{:}
+        \PYG{n}{lines} \PYG{o}{=} \PYG{p}{[}\PYG{n}{\PYGZus{}}\PYG{o}{.}\PYG{n}{strip}\PYG{p}{(}\PYG{p}{)} \PYG{k}{for} \PYG{n}{\PYGZus{}} \PYG{o+ow}{in} \PYG{n}{f}\PYG{o}{.}\PYG{n}{readlines}\PYG{p}{(}\PYG{p}{)}\PYG{p}{]}
+
+        \PYG{n}{na} \PYG{o}{=} \PYG{n+nb}{int}\PYG{p}{(}\PYG{n}{lines}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}\PYG{p}{)}
+        \PYG{n}{properties} \PYG{o}{=} \PYG{n}{lines}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{o}{.}\PYG{n}{split}\PYG{p}{(}\PYG{p}{)}
+
+        \PYG{n}{symbols} \PYG{o}{=} \PYG{p}{[}\PYG{p}{]}
+        \PYG{n}{positions} \PYG{o}{=} \PYG{p}{[}\PYG{p}{]}
+        \PYG{n}{partial\PYGZus{}charges} \PYG{o}{=} \PYG{p}{[}\PYG{p}{]}
+
+        \PYG{k}{for} \PYG{n}{line} \PYG{o+ow}{in} \PYG{n}{lines}\PYG{p}{[}\PYG{l+m+mi}{2}\PYG{p}{:}\PYG{l+m+mi}{2}\PYG{o}{+}\PYG{n}{na}\PYG{p}{]}\PYG{p}{:}
+            \PYG{n}{split} \PYG{o}{=} \PYG{n}{line}\PYG{o}{.}\PYG{n}{split}\PYG{p}{(}\PYG{p}{)}
+            \PYG{n}{split} \PYG{o}{=} \PYG{p}{[}\PYG{n}{\PYGZus{}}\PYG{o}{.}\PYG{n}{replace}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{*\PYGZca{}}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{e}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)} \PYG{k}{for} \PYG{n}{\PYGZus{}} \PYG{o+ow}{in} \PYG{n}{split}\PYG{p}{]}  \PYG{c+c1}{\PYGZsh{} Python\PYGZhy{}readable scientific notation}
+
+            \PYG{c+c1}{\PYGZsh{} Line order: symbol, x, y, z, charge}
+            \PYG{n}{symbols}\PYG{o}{.}\PYG{n}{append}\PYG{p}{(}\PYG{n}{split}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}\PYG{p}{)}
+            \PYG{n}{positions}\PYG{o}{.}\PYG{n}{append}\PYG{p}{(}\PYG{n}{split}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{:}\PYG{l+m+mi}{4}\PYG{p}{]}\PYG{p}{)}
+            \PYG{n}{partial\PYGZus{}charges}\PYG{o}{.}\PYG{n}{append}\PYG{p}{(}\PYG{n}{split}\PYG{p}{[}\PYG{o}{\PYGZhy{}}\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{p}{)}
+
+        \PYG{n}{positions} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{array}\PYG{p}{(}\PYG{n}{positions}\PYG{p}{)}
+        \PYG{n}{partial\PYGZus{}charges} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{array}\PYG{p}{(}\PYG{n}{partial\PYGZus{}charges}\PYG{p}{,} \PYG{n}{dtype}\PYG{o}{=}\PYG{n+nb}{float}\PYG{p}{)}
+
+        \PYG{n}{atoms} \PYG{o}{=} \PYG{n}{Atoms}\PYG{p}{(}\PYG{n}{symbols}\PYG{o}{=}\PYG{n}{symbols}\PYG{p}{,} \PYG{n}{positions}\PYG{o}{=}\PYG{n}{positions}\PYG{p}{)}
+
+        \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{mulliken\PYGZus{}partial\PYGZus{}charges}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{partial\PYGZus{}charges}
+
+        \PYG{n}{name} \PYG{o}{=} \PYG{n}{os}\PYG{o}{.}\PYG{n}{path}\PYG{o}{.}\PYG{n}{splitext}\PYG{p}{(}\PYG{n}{os}\PYG{o}{.}\PYG{n}{path}\PYG{o}{.}\PYG{n}{split}\PYG{p}{(}\PYG{n}{file\PYGZus{}path}\PYG{p}{)}\PYG{p}{[}\PYG{o}{\PYGZhy{}}\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{p}{)}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}
+
+        \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{name}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{name}
+
+        \PYG{k}{for} \PYG{n}{pname}\PYG{p}{,} \PYG{n}{val} \PYG{o+ow}{in} \PYG{n+nb}{zip}\PYG{p}{(}\PYG{n}{properties\PYGZus{}order}\PYG{p}{[}\PYG{l+m+mi}{2}\PYG{p}{:}\PYG{p}{]}\PYG{p}{,} \PYG{n}{properties}\PYG{p}{[}\PYG{l+m+mi}{2}\PYG{p}{:}\PYG{p}{]}\PYG{p}{)}\PYG{p}{:}
+            \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{n}{pname}\PYG{p}{]} \PYG{o}{=} \PYG{n+nb}{float}\PYG{p}{(}\PYG{n}{val}\PYG{p}{)}
+
+        \PYG{n}{frequencies} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{array}\PYG{p}{(}\PYG{n}{lines}\PYG{p}{[}\PYG{o}{\PYGZhy{}}\PYG{l+m+mi}{3}\PYG{p}{]}\PYG{o}{.}\PYG{n}{split}\PYG{p}{(}\PYG{p}{)}\PYG{p}{,} \PYG{n}{dtype}\PYG{o}{=}\PYG{n+nb}{float}\PYG{p}{)}
+        \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{frequencies}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{frequencies}
+
+        \PYG{n}{smiles} \PYG{o}{=} \PYG{n}{lines}\PYG{p}{[}\PYG{o}{\PYGZhy{}}\PYG{l+m+mi}{2}\PYG{p}{]}\PYG{o}{.}\PYG{n}{split}\PYG{p}{(}\PYG{p}{)}
+        \PYG{n}{inchi}  \PYG{o}{=} \PYG{n}{lines}\PYG{p}{[}\PYG{o}{\PYGZhy{}}\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{o}{.}\PYG{n}{split}\PYG{p}{(}\PYG{p}{)}
+
+        \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{SMILES}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}    \PYG{o}{=} \PYG{n}{smiles}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}
+        \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{SMILES\PYGZus{}relaxed}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]} \PYG{o}{=} \PYG{n}{smiles}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{]}
+        \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{InChI}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}     \PYG{o}{=} \PYG{n}{inchi}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}
+        \PYG{n}{atoms}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{InChI\PYGZus{}relaxed}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}  \PYG{o}{=} \PYG{n}{inchi}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{]}
+
+        \PYG{n}{images}\PYG{o}{.}\PYG{n}{append}\PYG{p}{(}\PYG{n}{atoms}\PYG{p}{)}
+
+    \PYG{k}{return} \PYG{n}{images}
+\end{sphinxVerbatim}
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{configurations} \PYG{o}{=} \PYG{n}{load\PYGZus{}data}\PYG{p}{(}
+    \PYG{n}{file\PYGZus{}path}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{qm9}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{n}{file\PYGZus{}format}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{folder}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{n}{name\PYGZus{}field}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{name}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}  \PYG{c+c1}{\PYGZsh{} key in Configuration.info to use as the Configuration name}
+    \PYG{n}{elements}\PYG{o}{=}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{H}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{C}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{N}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{O}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{F}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}    \PYG{c+c1}{\PYGZsh{} order matters for CFG files, but not others}
+    \PYG{n}{default\PYGZus{}name}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{qm9}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}  \PYG{c+c1}{\PYGZsh{} default name with `name\PYGZus{}field` not found}
+    \PYG{n}{reader}\PYG{o}{=}\PYG{n}{reader}\PYG{p}{,}
+    \PYG{n}{glob\PYGZus{}string}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{*.xyz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{n}{verbose}\PYG{o}{=}\PYG{k+kc}{True}
+\PYG{p}{)}
+\end{sphinxVerbatim}
+
+
+\subsection{Writing to Markdown}
+\label{\detokenize{qm9:writing-to-markdown}}
+\sphinxAtStartPar
+To avoid having to re\sphinxhyphen{}process the raw data using \sphinxcode{\sphinxupquote{reader}}, and to provide
+a cleaner storage format, {\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.to_markdown}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{to\_markdown()}}}}}
+can be used (see {\hyperref[\detokenize{usage:reading-writing-datasets-with-markdown}]{\sphinxcrossref{\DUrole{std,std-ref}{Reading/writing Datasets with Markdown}}}} for more
+details).
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{to\PYGZus{}markdown}\PYG{p}{(}
+    \PYG{n}{base\PYGZus{}folder}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{/content}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{n}{html\PYGZus{}file\PYGZus{}name}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{README.md}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{n}{data\PYGZus{}file\PYGZus{}name}\PYG{o}{=}\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{name}\PYG{o}{+}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{.extxyz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{n}{data\PYGZus{}format}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{xyz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+\PYG{p}{)}
+\end{sphinxVerbatim}
+
+
+\subsection{Cleaning the dataset}
+\label{\detokenize{qm9:cleaning-the-dataset}}
+\sphinxAtStartPar
+Using the {\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.plot_histograms}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{plot\_histograms()}}}}} and
+{\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.get_statistics}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{get\_statistics()}}}}} functions reveals that
+the QM9 dataset has some outlying data entries.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n+nb}{print}\PYG{p}{(}\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{get\PYGZus{}statistics}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{a}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}\PYG{p}{)}
+\PYG{n+nb}{print}\PYG{p}{(}\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{get\PYGZus{}statistics}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{b}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}\PYG{p}{)}
+\PYG{n+nb}{print}\PYG{p}{(}\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{get\PYGZus{}statistics}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{c}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}\PYG{p}{)}
+
+\PYG{c+c1}{\PYGZsh{} \PYGZob{}\PYGZsq{}average\PYGZsq{}: 9.814382088508797, \PYGZsq{}std\PYGZsq{}: 1809.4589082320583, \PYGZsq{}min\PYGZsq{}: 0.0, \PYGZsq{}max\PYGZsq{}: 619867.68314, \PYGZsq{}average\PYGZus{}abs\PYGZsq{}: 9.814382088508797\PYGZcb{}}
+\PYG{c+c1}{\PYGZsh{} \PYGZob{}\PYGZsq{}average\PYGZsq{}: 1.4060972645920002, \PYGZsq{}std\PYGZsq{}: 1.5837889998648804, \PYGZsq{}min\PYGZsq{}: 0.33712, \PYGZsq{}max\PYGZsq{}: 437.90386, \PYGZsq{}average\PYGZus{}abs\PYGZsq{}: 1.4060972645920002\PYGZcb{}}
+\PYG{c+c1}{\PYGZsh{} \PYGZob{}\PYGZsq{}average\PYGZsq{}: 1.1249210272988013, \PYGZsq{}std\PYGZsq{}: 1.0956136904779634, \PYGZsq{}min\PYGZsq{}: 0.33118, \PYGZsq{}max\PYGZsq{}: 282.94545, \PYGZsq{}average\PYGZus{}abs\PYGZsq{}: 1.1249210272988013\PYGZcb{}}
+\end{sphinxVerbatim}
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{plot\PYGZus{}histograms}\PYG{p}{(}\PYG{p}{[}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{a}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{b}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{c}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{mu}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{alpha}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{homo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{lumo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{r2}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{zpve}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{u0}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{u}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{h}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{g}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{cv}\PYG{l+s+s1}{\PYGZsq{}}
+\PYG{p}{]}\PYG{p}{)}
+\end{sphinxVerbatim}
+
+\noindent{\hspace*{\fill}\sphinxincludegraphics{{qm9_histograms}.png}\hspace*{\fill}}
+
+\sphinxAtStartPar
+The {\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.filter}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{filter()}}}}} function can be used to
+return a new dataset without the outlying data.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{clean} \PYG{o}{=} \PYG{n}{dataset}\PYG{o}{.}\PYG{n}{filter}\PYG{p}{(}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{data}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{k}{lambda} \PYG{n}{p}\PYG{p}{:} \PYG{p}{(}\PYG{n}{p}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{a}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{source\PYGZhy{}value}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]} \PYG{o}{\PYGZlt{}} \PYG{l+m+mi}{20}\PYG{p}{)} \PYG{o+ow}{and} \PYG{p}{(}\PYG{n}{p}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{b}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{source\PYGZhy{}value}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]} \PYG{o}{\PYGZlt{}} \PYG{l+m+mi}{10}\PYG{p}{)}\PYG{p}{,}
+    \PYG{n}{verbose}\PYG{o}{=}\PYG{k+kc}{True}
+\PYG{p}{)}
+\end{sphinxVerbatim}
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{clean}\PYG{o}{.}\PYG{n}{plot\PYGZus{}histograms}\PYG{p}{(}\PYG{p}{[}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{a}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{b}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{c}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{mu}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{alpha}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{homo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{lumo}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{r2}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{zpve}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{u0}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{u}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{h}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{g}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{cv}\PYG{l+s+s1}{\PYGZsq{}}
+\PYG{p}{]}\PYG{p}{)}
+\end{sphinxVerbatim}
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n+nb}{print}\PYG{p}{(}\PYG{n}{clean}\PYG{o}{.}\PYG{n}{get\PYGZus{}statistics}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{a}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}\PYG{p}{)}
+\PYG{n+nb}{print}\PYG{p}{(}\PYG{n}{clean}\PYG{o}{.}\PYG{n}{get\PYGZus{}statistics}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{b}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}\PYG{p}{)}
+\PYG{n+nb}{print}\PYG{p}{(}\PYG{n}{clean}\PYG{o}{.}\PYG{n}{get\PYGZus{}statistics}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{c}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}\PYG{p}{)}
+
+\PYG{c+c1}{\PYGZsh{} \PYGZob{}\PYGZsq{}average\PYGZsq{}: 3.407053427070018, \PYGZsq{}std\PYGZsq{}: 1.3368223663235594, \PYGZsq{}min\PYGZsq{}: 0.0, \PYGZsq{}max\PYGZsq{}: 19.99697, \PYGZsq{}average\PYGZus{}abs\PYGZsq{}: 3.407053427070018\PYGZcb{}}
+\PYG{c+c1}{\PYGZsh{} \PYGZob{}\PYGZsq{}average\PYGZsq{}: 1.3966863945821093, \PYGZsq{}std\PYGZsq{}: 0.45813797072575396, \PYGZsq{}min\PYGZsq{}: 0.33712, \PYGZsq{}max\PYGZsq{}: 9.93509, \PYGZsq{}average\PYGZus{}abs\PYGZsq{}: 1.3966863945821093\PYGZcb{}}
+\PYG{c+c1}{\PYGZsh{} \PYGZob{}\PYGZsq{}average\PYGZsq{}: 1.1177706236464617, \PYGZsq{}std\PYGZsq{}: 0.328798457356026, \PYGZsq{}min\PYGZsq{}: 0.33118, \PYGZsq{}max\PYGZsq{}: 6.46247, \PYGZsq{}average\PYGZus{}abs\PYGZsq{}: 1.1177706236464617\PYGZcb{}}
+\end{sphinxVerbatim}
+
+\noindent{\hspace*{\fill}\sphinxincludegraphics{{qm9_clean_histograms}.png}\hspace*{\fill}}
 
 
 \section{Si PRX GAP}
 \label{\detokenize{si_prx_gap:si-prx-gap}}\label{\detokenize{si_prx_gap::doc}}
 \sphinxAtStartPar
-TODO: same thing that you did for the QM9 one.
+This example will be used to highlight some of the more advanced features of the
+Dataset class using the popular \sphinxhref{https://www.repository.cam.ac.uk/handle/1810/317974}{Si GAP dataset}.
+It is suggested that you go through the {\hyperref[\detokenize{basic_example:basic-example}]{\sphinxcrossref{\DUrole{std,std-ref}{basic example}}}} first. The complete
+code will not be shown in this example (for the complete code, see the Jupyter
+notebook at \sphinxcode{\sphinxupquote{colabfit/examples/si\_prx\_gap.ipynb}}); instead, only the additional features will be
+discussed here.
+
+\sphinxAtStartPar
+Note that this example assumes that the raw data has already been downloaded
+using the following commands:
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{g+gp}{\PYGZdl{} }mkdir si\PYGZus{}prx\PYGZus{}gap
+\PYG{g+gp}{\PYGZdl{} }\PYG{n+nb}{cd} si\PYGZus{}prx\PYGZus{}gap \PYG{o}{\PYGZam{}\PYGZam{}} wget \PYGZhy{}O Si\PYGZus{}PRX\PYGZus{}GAP.zip https://www.repository.cam.ac.uk/bitstream/handle/1810/317974/Si\PYGZus{}PRX\PYGZus{}GAP.zip?sequence\PYG{o}{=}\PYG{l+m}{1}\PYG{p}{\PYGZam{}}\PYG{n+nv}{isAllowed}\PYG{o}{=}yield
+\PYG{g+gp}{\PYGZdl{} }\PYG{n+nb}{cd} si\PYGZus{}prx\PYGZus{}gap \PYG{o}{\PYGZam{}\PYGZam{}} unzip Si\PYGZus{}PRX\PYGZus{}GAP.zip
+\end{sphinxVerbatim}
+
+
+\subsection{Loading from a file}
+\label{\detokenize{si_prx_gap:loading-from-a-file}}
+\sphinxAtStartPar
+This example uses {\hyperref[\detokenize{dataset:colabfit.tools.dataset.load_data}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{load\_data()}}}}} to load the data
+from an existing Extended XYZ file. Note that the raw data includes the
+\sphinxcode{\sphinxupquote{config\_type}} field, which is used to generate the names of the loaded
+Configurations. A \sphinxcode{\sphinxupquote{default\_name}} is also provided to handle the
+configurations that do not have a \sphinxcode{\sphinxupquote{config\_type}} field.
+\sphinxcode{\sphinxupquote{verbose=True}} is used here since the dataset is large enough to warrant a
+progress bar.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{configurations} \PYG{o}{=} \PYG{n}{load\PYGZus{}data}\PYG{p}{(}
+        \PYG{n}{file\PYGZus{}path}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{./si\PYGZus{}prx\PYGZus{}gap/gp\PYGZus{}iter6\PYGZus{}sparse9k.xml.xyz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+        \PYG{n}{file\PYGZus{}format}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{xyz}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+        \PYG{n}{name\PYGZus{}field}\PYG{o}{=}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{config\PYGZus{}type}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}  \PYG{c+c1}{\PYGZsh{} key in Configuration.info to use as the Configuration name}
+        \PYG{n}{elements}\PYG{o}{=}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Si}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+        \PYG{n}{default\PYGZus{}name}\PYG{o}{=}\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{name}\PYG{p}{,}  \PYG{c+c1}{\PYGZsh{} default name with `name\PYGZus{}field` not found}
+        \PYG{n}{verbose}\PYG{o}{=}\PYG{k+kc}{True}
+\PYG{p}{)}
+\end{sphinxVerbatim}
+
+
+\subsection{Manually constructed ConfigurationSets}
+\label{\detokenize{si_prx_gap:manually-constructed-configurationsets}}
+\sphinxAtStartPar
+Since this dataset was manually constructed by its authors, a large amount of
+additional information has been provided to better identify the Configurations
+(see Table I. in \sphinxhref{https://journals.aps.org/prx/abstract/10.1103/PhysRevX.8.041048}{the original paper}).
+In order to retain this information, we define ConfigurationSets by regex
+matching on the Configuration names (see {\hyperref[\detokenize{usage:building-configuration-sets}]{\sphinxcrossref{\DUrole{std,std-ref}{Building configuration sets}}}} for
+more details).
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{configuration\PYGZus{}set\PYGZus{}regexes} \PYG{o}{=} \PYG{p}{\PYGZob{}}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{isolated\PYGZus{}atom}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Reference atom}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{bt}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Beta\PYGZhy{}tin}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{dia}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Diamond}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sh}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Simple hexagonal}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{hex\PYGZus{}diamond}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Hexagonal diamond}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{bcc}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Body\PYGZhy{}centered\PYGZhy{}cubic}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{bc8}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{BC8}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{fcc}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Face\PYGZhy{}centered\PYGZhy{}cubic}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{hcp}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Hexagonal\PYGZhy{}close\PYGZhy{}packed}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{st12}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{ST12}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{liq}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Liquid}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{amorph}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Amorphous}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface\PYGZus{}001}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Diamond surface (001)}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface\PYGZus{}110}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Diamond surface (110)}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface\PYGZus{}111}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Diamond surface (111)}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface\PYGZus{}111\PYGZus{}pandey}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Pandey reconstruction of diamond (111) surface}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface\PYGZus{}111\PYGZus{}3x3\PYGZus{}das}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Dimer\PYGZhy{}adatom\PYGZhy{}stacking\PYGZhy{}fault (DAS) reconstruction}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{111adatom}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Configurations with adatom on (111) surface}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{crack\PYGZus{}110\PYGZus{}1\PYGZhy{}10}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Small (110) crack tip}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{crack\PYGZus{}111\PYGZus{}1\PYGZhy{}10}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Small (111) crack tip}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{decohesion}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Decohesion of diamond\PYGZhy{}structure Si along various directions}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{divacancy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Diamond divacancy configurations}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{interstitial}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Diamond interstitial configurations}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{screw\PYGZus{}disloc}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Si screw dislocation core}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sp}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sp bonded configurations}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sp2}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sp2 bonded configurations}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{vacancy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{Diamond vacancy configurations}\PYG{l+s+s1}{\PYGZsq{}}
+\PYG{p}{\PYGZcb{}}
+\end{sphinxVerbatim}
+
+
+\subsection{Manually applied Configuration labels}
+\label{\detokenize{si_prx_gap:manually-applied-configuration-labels}}
+\sphinxAtStartPar
+Similarly, this additional knowledge about the types of Configurations in the
+dataset can be used to apply metadata labels to the Configurations, which is
+useful for enabling querying over the data by future users. See {\hyperref[\detokenize{usage:applying-configuration-labels}]{\sphinxcrossref{\DUrole{std,std-ref}{Applying Configuration labels}}}}
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{configuration\PYGZus{}label\PYGZus{}regexes} \PYG{o}{=} \PYG{p}{\PYGZob{}}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{isolated\PYGZus{}atom}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{isolated\PYGZus{}atom}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{bt}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{a5}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{dia}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{diamond}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sh}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sh}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{hex\PYGZus{}diamond}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sonsdaleite}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{bcc}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{bcc}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{bc8}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{bc8}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{fcc}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{fcc}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{hcp}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{hcp}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{st12}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{st12}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{liq}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{liquid}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{amorph}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{amorphous}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface\PYGZus{}001}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{001}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface\PYGZus{}110}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{110}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface\PYGZus{}111}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{111}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface\PYGZus{}111\PYGZus{}pandey}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{111}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface\PYGZus{}111\PYGZus{}3x3\PYGZus{}das}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{111}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{das}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{111adatom}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{surface}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{111}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{adatom}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{crack\PYGZus{}110\PYGZus{}1\PYGZhy{}10}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{crack}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{110}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{crack\PYGZus{}111\PYGZus{}1\PYGZhy{}10}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{crac}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{111}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{decohesion}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{diamond}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{decohesion}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{divacancy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{diamond}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{vacancy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{divacancy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{interstitial}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{diamond}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{interstitial}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{screw\PYGZus{}disloc}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{screw}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{dislocation}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sp}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sp}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sp2}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{sp2}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{vacancy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{:} \PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{diamond}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{vacancy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}
+\PYG{p}{\PYGZcb{}}
+\end{sphinxVerbatim}
+
+
+\subsection{Renaming Configuration fields}
+\label{\detokenize{si_prx_gap:renaming-configuration-fields}}
+\sphinxAtStartPar
+In order to ensure that {\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.parse_data}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{parse\_data()}}}}} is
+able to properly parse the data, the fields in \sphinxcode{\sphinxupquote{Configuration.info}} and
+\sphinxcode{\sphinxupquote{Configuration.arrays}} should match those used in
+\sphinxcode{\sphinxupquote{Dataset.property\_map}}. In the case of the Si GAP dataset, some of the
+data has incorrectly labeled energy/force/virial fields, where it uses
+“DFT\_*” instead of “dft\_*” (lowercase) like the rest of the Configurations. In
+order to fix this, we use the
+{\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.rename_configuration_field}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{rename\_configuration\_field()}}}}} function:
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{rename\PYGZus{}configuration\PYGZus{}field}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{DFT\PYGZus{}energy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{dft\PYGZus{}energy}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{rename\PYGZus{}configuration\PYGZus{}field}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{DFT\PYGZus{}force}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{dft\PYGZus{}force}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}
+\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{rename\PYGZus{}configuration\PYGZus{}field}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{DFT\PYGZus{}virial}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{dft\PYGZus{}virial}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}
+\end{sphinxVerbatim}
+
+
+\subsection{Filtering based on XC\sphinxhyphen{}functional}
+\label{\detokenize{si_prx_gap:filtering-based-on-xc-functional}}
+\sphinxAtStartPar
+In the Si GAP dataset, some of the data was computed using a PBE functional,
+and some was computed using a PW91 functional. This information is stored in the
+\sphinxcode{\sphinxupquote{xc\_functional}} field of the \sphinxcode{\sphinxupquote{Configuration.info}} array.
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n+nb}{set}\PYG{p}{(}\PYG{n}{dataset}\PYG{o}{.}\PYG{n}{get\PYGZus{}configuration\PYGZus{}field}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{xc\PYGZus{}functional}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}\PYG{p}{)}
+\PYG{c+c1}{\PYGZsh{} output: \PYGZob{}\PYGZsq{}PBE\PYGZsq{}, \PYGZsq{}PW91\PYGZsq{}\PYGZcb{}}
+\end{sphinxVerbatim}
+
+\sphinxAtStartPar
+A user may want to only work with subsets of the data that were computed with
+the exact same DFT settings. To facilitate this, we break the original Dataset
+into three separate datasets using the
+{\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.filter}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{filter()}}}}} function (see {\hyperref[\detokenize{usage:filtering-a-dataset}]{\sphinxcrossref{\DUrole{std,std-ref}{Filtering a Dataset}}}} for more details).
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{n}{no\PYGZus{}xc\PYGZus{}data} \PYG{o}{=} \PYG{n}{dataset}\PYG{o}{.}\PYG{n}{filter}\PYG{p}{(}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{configurations}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{k}{lambda} \PYG{n}{c}\PYG{p}{:} \PYG{n}{c}\PYG{o}{.}\PYG{n}{info}\PYG{o}{.}\PYG{n}{get}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{xc\PYGZus{}functional}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{k+kc}{None}\PYG{p}{)} \PYG{o+ow}{is} \PYG{k+kc}{None}
+\PYG{p}{)}
+
+\PYG{n}{pbe\PYGZus{}data} \PYG{o}{=} \PYG{n}{dataset}\PYG{o}{.}\PYG{n}{filter}\PYG{p}{(}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{configurations}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{k}{lambda} \PYG{n}{c}\PYG{p}{:} \PYG{n}{c}\PYG{o}{.}\PYG{n}{info}\PYG{o}{.}\PYG{n}{get}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{xc\PYGZus{}functional}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{k+kc}{None}\PYG{p}{)} \PYG{o}{==} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{PBE}\PYG{l+s+s1}{\PYGZsq{}}
+\PYG{p}{)}
+
+\PYG{n}{pw91\PYGZus{}data} \PYG{o}{=} \PYG{n}{dataset}\PYG{o}{.}\PYG{n}{filter}\PYG{p}{(}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{configurations}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{k}{lambda} \PYG{n}{c}\PYG{p}{:} \PYG{n}{c}\PYG{o}{.}\PYG{n}{info}\PYG{o}{.}\PYG{n}{get}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{xc\PYGZus{}functional}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,} \PYG{k+kc}{None}\PYG{p}{)} \PYG{o}{==} \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{PW91}\PYG{l+s+s1}{\PYGZsq{}}
+
+\PYG{p}{)}
+\end{sphinxVerbatim}
 
 
 \chapter{Usage}
-\label{\detokenize{usage:usage}}\label{\detokenize{usage::doc}}
+\label{\detokenize{usage:usage}}\label{\detokenize{usage::doc}}\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+have all of the special dictionaries described somewhere.
+
+\end{itemize}
+
+
+\section{Property map}
+\label{\detokenize{usage:property-map}}\begin{description}
+\item[{Note that the keys should be one of the following:}] \leavevmode\begin{enumerate}
+\sphinxsetlistlabels{\arabic}{enumi}{enumii}{}{.}%
+\item {} 
+\sphinxAtStartPar
+The name of an OpenKIM Property Definition from the \sphinxhref{https://openkim.org/properties}{list of approved OpenKIM Property Definitions}
+
+\item {} 
+\sphinxAtStartPar
+The name of a locally\sphinxhyphen{}defined property (see {\hyperref[\detokenize{usage:custom-properties}]{\sphinxcrossref{\DUrole{std,std-ref}{Custom properties}}}})
+
+\item {} 
+\sphinxAtStartPar
+The string \sphinxcode{\sphinxupquote{\textquotesingle{}default\textquotesingle{}}}. Note that \sphinxcode{\sphinxupquote{\textquotesingle{}default\textquotesingle{}}} means that an
+existing property will be used with support for basic fields like
+‘energy’, ‘forces’, and ‘stress’.
+
+\end{enumerate}
+
+\end{description}
+
+\sphinxAtStartPar
+‘field’ is used to specify the key for extracting the property from \sphinxcode{\sphinxupquote{Configuration.info()}} or \sphinxcode{\sphinxupquote{Configuartion.arrays()}}.
+{\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.parse_data}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{parse\_data()}}}}} will extract the fields
+provided in property\_map from the configuration, and store them as Property
+objects in the dataset.data list. If a custom property is used, the
+\sphinxcode{\sphinxupquote{custom\_definitions}} dictionary of a
+Dataset must be updated to either point to the local EDN file or a Python
+dictionary representation of the contents of the EDN file. See
+{\hyperref[\detokenize{usage:custom-properties}]{\sphinxcrossref{\DUrole{std,std-ref}{Custom properties}}}} for more details
+
+
+\section{Applying Configuration labels}
+\label{\detokenize{usage:applying-configuration-labels}}\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+Point to Si\_PRX\_GAP for an example of how to add configuration labels and
+build configuration sets.
+
+\end{itemize}
+
+
+\section{Custom properties}
+\label{\detokenize{usage:custom-properties}}\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+Point to the QM9 for an example of how to use custom properties
+
+\item {} 
+\sphinxAtStartPar
+Update the link in basic\_example to piont to this section
+
+\end{itemize}
+
+
+\section{Reading/writing Datasets with Markdown}
+\label{\detokenize{usage:reading-writing-datasets-with-markdown}}
 
 \section{Visualization}
 \label{\detokenize{usage:visualization}}
 
-\section{Filtering}
-\label{\detokenize{usage:filtering}}
+\section{Filtering a Dataset}
+\label{\detokenize{usage:filtering-a-dataset}}
 
 \section{Checking for subsets}
 \label{\detokenize{usage:checking-for-subsets}}
 
+\section{Data transformation}
+\label{\detokenize{usage:data-transformation}}
+
+\section{Train/test splits}
+\label{\detokenize{usage:train-test-splits}}
+
+\section{Loading data}
+\label{\detokenize{usage:loading-data}}\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+XYZ, CFG, JSON, HDF5
+
+\end{itemize}
+
+
+\section{Building configuration sets}
+\label{\detokenize{usage:building-configuration-sets}}
+
 \chapter{Classes}
-\label{\detokenize{classes:classes}}\label{\detokenize{classes:colabfit-tools}}\label{\detokenize{classes::doc}}\phantomsection\label{\detokenize{configuration:module-colabfit.tools.configuration}}\index{module@\spxentry{module}!colabfit.tools.configuration@\spxentry{colabfit.tools.configuration}}\index{colabfit.tools.configuration@\spxentry{colabfit.tools.configuration}!module@\spxentry{module}}
+\label{\detokenize{classes:classes}}\label{\detokenize{classes:colabfit-tools}}\label{\detokenize{classes::doc}}
+
+\section{Core classes}
+\label{\detokenize{core_classes:core-classes}}\label{\detokenize{core_classes::doc}}\phantomsection\label{\detokenize{configuration:module-colabfit.tools.configuration}}\index{module@\spxentry{module}!colabfit.tools.configuration@\spxentry{colabfit.tools.configuration}}\index{colabfit.tools.configuration@\spxentry{colabfit.tools.configuration}!module@\spxentry{module}}
 \sphinxAtStartPar
 A {\hyperref[\detokenize{configuration:colabfit.tools.configuration.Configuration}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{Configuration}}}}} stores all of the information about an atomic
 structure. The {\hyperref[\detokenize{configuration:colabfit.tools.configuration.Configuration}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{Configuration}}}}} class inherits from the \sphinxcode{\sphinxupquote{ase.Atoms}}
@@ -173,7 +956,7 @@ the {\hyperref[\detokenize{converters:colabfit.tools.converters.BaseConverter.lo
 \end{sphinxVerbatim}
 
 
-\section{Configuration}
+\subsection{Configuration}
 \label{\detokenize{configuration:configuration}}\label{\detokenize{configuration::doc}}\index{Configuration (class in colabfit.tools.configuration)@\spxentry{Configuration}\spxextra{class in colabfit.tools.configuration}}
 
 \begin{fulllineitems}
@@ -243,7 +1026,7 @@ A {\hyperref[\detokenize{property:colabfit.tools.property.Property}]{\sphinxcros
 {\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset.parse_data}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{parse\_data()}}}}} of a {\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{\sphinxcode{\sphinxupquote{Dataset()}}}}} object.
 
 
-\section{Property}
+\subsection{Property}
 \label{\detokenize{property:property}}\label{\detokenize{property::doc}}\index{Property (class in colabfit.tools.property)@\spxentry{Property}\spxextra{class in colabfit.tools.property}}
 
 \begin{fulllineitems}
@@ -560,7 +1343,7 @@ information such as the DFT software package, a description of the calculation,
 and an example file for running the calculation.
 
 
-\section{PropertySettings}
+\subsection{PropertySettings}
 \label{\detokenize{property_settings:propertysettings}}\label{\detokenize{property_settings::doc}}\index{PropertySettings (class in colabfit.tools.property\_settings)@\spxentry{PropertySettings}\spxextra{class in colabfit.tools.property\_settings}}
 
 \begin{fulllineitems}
@@ -686,7 +1469,7 @@ list of weak references to the object (if defined)
 
 \phantomsection\label{\detokenize{configuration_set:module-colabfit.tools.configuration_sets}}\index{module@\spxentry{module}!colabfit.tools.configuration\_sets@\spxentry{colabfit.tools.configuration\_sets}}\index{colabfit.tools.configuration\_sets@\spxentry{colabfit.tools.configuration\_sets}!module@\spxentry{module}}
 
-\section{ConfigurationSet}
+\subsection{ConfigurationSet}
 \label{\detokenize{configuration_set:configurationset}}\label{\detokenize{configuration_set::doc}}\index{ConfigurationSet (class in colabfit.tools.configuration\_sets)@\spxentry{ConfigurationSet}\spxextra{class in colabfit.tools.configuration\_sets}}
 
 \begin{fulllineitems}
@@ -849,9 +1632,763 @@ list of weak references to the object (if defined)
 
 \end{fulllineitems}
 
-\phantomsection\label{\detokenize{converters:module-colabfit.tools.converters}}\index{module@\spxentry{module}!colabfit.tools.converters@\spxentry{colabfit.tools.converters}}\index{colabfit.tools.converters@\spxentry{colabfit.tools.converters}!module@\spxentry{module}}
 
-\section{Converter}
+
+\subsection{Dataset}
+\label{\detokenize{dataset:dataset}}\label{\detokenize{dataset::doc}}\index{Dataset (class in colabfit.tools.dataset)@\spxentry{Dataset}\spxextra{class in colabfit.tools.dataset}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{class\DUrole{w}{  }}}\sphinxcode{\sphinxupquote{colabfit.tools.dataset.}}\sphinxbfcode{\sphinxupquote{Dataset}}}{\emph{\DUrole{n}{name}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\textquotesingle{}}}, \emph{\DUrole{n}{authors}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{links}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{description}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\textquotesingle{}}}, \emph{\DUrole{n}{configurations}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{data}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{property\_map}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{configuration\_label\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{configuration\_set\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{property\_settings\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}}{}~\index{\_\_hash\_\_ (colabfit.tools.dataset.Dataset attribute)@\spxentry{\_\_hash\_\_}\spxextra{colabfit.tools.dataset.Dataset attribute}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.__hash__}}\pysigline{\sphinxbfcode{\sphinxupquote{\_\_hash\_\_}}\sphinxbfcode{\sphinxupquote{\DUrole{w}{  }\DUrole{p}{=}\DUrole{w}{  }None}}}
+\end{fulllineitems}
+
+\index{\_\_init\_\_() (colabfit.tools.dataset.Dataset method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.__init__}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{\_\_init\_\_}}}{\emph{\DUrole{n}{name}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\textquotesingle{}}}, \emph{\DUrole{n}{authors}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{links}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{description}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\textquotesingle{}}}, \emph{\DUrole{n}{configurations}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{data}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{property\_map}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{configuration\_label\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{configuration\_set\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{property\_settings\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}}{}
+\end{fulllineitems}
+
+\index{add\_configurations() (colabfit.tools.dataset.Dataset method)@\spxentry{add\_configurations()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.add_configurations}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{add\_configurations}}}{\emph{\DUrole{n}{configurations}}}{}
+\end{fulllineitems}
+
+\index{aggregate\_metadata() (colabfit.tools.dataset.Dataset method)@\spxentry{aggregate\_metadata()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.aggregate_metadata}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{aggregate\_metadata}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\end{fulllineitems}
+
+\index{apply\_transformation() (colabfit.tools.dataset.Dataset method)@\spxentry{apply\_transformation()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.apply_transformation}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{apply\_transformation}}}{\emph{\DUrole{n}{field\_name}}, \emph{\DUrole{n}{tform}}}{}~\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{field\_name}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The property field name to applyl the transformation to
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{tform}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} A BaseTransform object or a lambda function. If a lambda
+function is supplied, it must accept a 2\sphinxhyphen{}tuple as input, where
+the first value will be the property field data, and the second
+value will be the list of configurations linked to the property.
+
+\end{itemize}
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{attach\_configuration\_labels() (colabfit.tools.dataset.Dataset method)@\spxentry{attach\_configuration\_labels()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.attach_configuration_labels}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{attach\_configuration\_labels}}}{\emph{\DUrole{n}{fxn}}, \emph{\DUrole{n}{labels}}, \emph{\DUrole{n}{regex}}}{}~\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{fxn}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} A function that is called for every item in
+\sphinxtitleref{self.configurations}, returning True if the PSO should be
+applied to the data entry.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{labels}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}\sphinxstyleliteralemphasis{\sphinxupquote{ or }}\sphinxstyleliteralemphasis{\sphinxupquote{list}}) \textendash{} The labels to be applied
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{regex}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The string that will be used for regex matching to identify
+the updated configurations in the future. \sphinxtitleref{regex} will be
+appended to the name of each matching configuration
+
+\end{itemize}
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{attach\_dataset() (colabfit.tools.dataset.Dataset method)@\spxentry{attach\_dataset()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.attach_dataset}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{attach\_dataset}}}{\emph{\DUrole{n}{dataset}}, \emph{\DUrole{n}{supersede\_existing}\DUrole{o}{=}\DUrole{default_value}{False}}}{}~\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{dataset}} ({\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{\sphinxstyleliteralemphasis{\sphinxupquote{Dataset}}}}}) \textendash{} The new dataset to be added
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{supersede\_existing}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, any new data that is being added will be used to
+overwrite existing duplicate data when calling clean() or
+merge(). This is important for preserving Property metadata.
+Default is False.
+
+\end{itemize}
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{attach\_property\_settings() (colabfit.tools.dataset.Dataset method)@\spxentry{attach\_property\_settings()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.attach_property_settings}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{attach\_property\_settings}}}{\emph{\DUrole{n}{fxn}}, \emph{\DUrole{n}{pso}}, \emph{\DUrole{n}{regex}}}{}~\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{fxn}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} A function that is called for every item in \sphinxtitleref{self.data},
+returning True if the PSO should be applied to the data entry.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{pso}} ({\hyperref[\detokenize{property_settings:colabfit.tools.property_settings.PropertySettings}]{\sphinxcrossref{\sphinxstyleliteralemphasis{\sphinxupquote{PropertySettings}}}}}) \textendash{} A property settings object
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{regex}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The string that will be used for regex matching to identify
+the updated data entries in the future. \sphinxtitleref{regex} will be
+appended to the name of each matching configuration
+
+\end{itemize}
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{check\_if\_is\_parent\_dataset() (colabfit.tools.dataset.Dataset method)@\spxentry{check\_if\_is\_parent\_dataset()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.check_if_is_parent_dataset}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{check\_if\_is\_parent\_dataset}}}{}{}
+\end{fulllineitems}
+
+\index{clean() (colabfit.tools.dataset.Dataset method)@\spxentry{clean()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.clean}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{clean}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\sphinxAtStartPar
+Uses hashing to compare the configurations of all properties and check
+for duplicate configurations.
+
+\end{fulllineitems}
+
+\index{clear\_config\_labels() (colabfit.tools.dataset.Dataset method)@\spxentry{clear\_config\_labels()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.clear_config_labels}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{clear\_config\_labels}}}{}{}
+\end{fulllineitems}
+
+\index{configuration\_label\_regexes (colabfit.tools.dataset.Dataset property)@\spxentry{configuration\_label\_regexes}\spxextra{colabfit.tools.dataset.Dataset property}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.configuration_label_regexes}}\pysigline{\sphinxbfcode{\sphinxupquote{property\DUrole{w}{  }}}\sphinxbfcode{\sphinxupquote{configuration\_label\_regexes}}}
+\end{fulllineitems}
+
+\index{configuration\_set\_regexes (colabfit.tools.dataset.Dataset property)@\spxentry{configuration\_set\_regexes}\spxextra{colabfit.tools.dataset.Dataset property}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.configuration_set_regexes}}\pysigline{\sphinxbfcode{\sphinxupquote{property\DUrole{w}{  }}}\sphinxbfcode{\sphinxupquote{configuration\_set\_regexes}}}
+\end{fulllineitems}
+
+\index{convert\_units() (colabfit.tools.dataset.Dataset method)@\spxentry{convert\_units()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.convert_units}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{convert\_units}}}{}{}
+\sphinxAtStartPar
+Converts the dataset units to the provided type (e.g., ‘OpenKIM’
+
+\end{fulllineitems}
+
+\index{dataset\_from\_config\_sets() (colabfit.tools.dataset.Dataset method)@\spxentry{dataset\_from\_config\_sets()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.dataset_from_config_sets}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{dataset\_from\_config\_sets}}}{\emph{\DUrole{n}{cs\_ids}}, \emph{\DUrole{n}{exclude}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\sphinxAtStartPar
+Returns a new dataset that only contains the specified configuration
+sets.
+\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{cs\_ids}} (\sphinxstyleliteralemphasis{\sphinxupquote{int}}\sphinxstyleliteralemphasis{\sphinxupquote{ or }}\sphinxstyleliteralemphasis{\sphinxupquote{list}}) \textendash{} The index of the configuration set(s) to use for building the
+new dataset. If \sphinxtitleref{self} is a parent dataset, then \sphinxtitleref{cs\_ids} shoud
+either be a 2\sphinxhyphen{}tuple or a list of 2\sphinxhyphen{}tuples (i, j), where the
+configuration sets will be indexed as
+\sphinxtitleref{dataset.data{[}i{]}.configuration\_sets{[}j{]}}.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{exclude}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If False, builds a new dataset using all of the configuration
+sets \_except\_ those specified by \sphinxtitleref{cs\_ids}. Default is False.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{verbose}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, prints progress. Default is False
+
+\end{itemize}
+
+\item[{Returns}] \leavevmode
+\sphinxAtStartPar
+The new dataset. If \sphinxtitleref{self} is a parent dataset, then the new
+dataset will also be a parent dataset.
+
+\item[{Return type}] \leavevmode
+\sphinxAtStartPar
+ds ({\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{Dataset}}})
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{define\_configuration\_set() (colabfit.tools.dataset.Dataset method)@\spxentry{define\_configuration\_set()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.define_configuration_set}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{define\_configuration\_set}}}{\emph{\DUrole{n}{fxn}}, \emph{\DUrole{n}{desc}}, \emph{\DUrole{n}{regex}}}{}~\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{fxn}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} A function that is called for every item in
+\sphinxtitleref{self.configurations}, returning True if the PSO should be
+applied to the data entry.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{desc}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The description of the new configuration set.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{regex}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The string that will be used for regex matching to identify
+the updated configurations in the future. \sphinxtitleref{regex} will be
+appended to the name of each matching configuration
+
+\end{itemize}
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{delete\_config\_label\_regex() (colabfit.tools.dataset.Dataset method)@\spxentry{delete\_config\_label\_regex()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.delete_config_label_regex}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{delete\_config\_label\_regex}}}{\emph{\DUrole{n}{regex}}}{}
+\end{fulllineitems}
+
+\index{filter() (colabfit.tools.dataset.Dataset method)@\spxentry{filter()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.filter}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{filter}}}{\emph{\DUrole{n}{filter\_type}}, \emph{\DUrole{n}{filter\_fxn}}, \emph{\DUrole{n}{copy}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\sphinxAtStartPar
+A helper function for filtering on a Dataset. A filter is specified by
+providing  a \sphinxtitleref{filter\_type} and a \sphinxtitleref{filter\_fxn}. In the case of a parent
+dataset, the filter is applied to each of the children individually.
+
+\sphinxAtStartPar
+Examples:
+
+\begin{sphinxVerbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{\PYGZsh{} Filter based on configuration name}
+\PYG{n}{regex} \PYG{o}{=} \PYG{n}{re}\PYG{o}{.}\PYG{n}{compile}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{example\PYGZus{}name.*}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}
+
+\PYG{n}{filtered\PYGZus{}dataset} \PYG{o}{=} \PYG{n}{dataset}\PYG{o}{.}\PYG{n}{filter}\PYG{p}{(}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{configurations}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{k}{lambda} \PYG{n}{c}\PYG{p}{:} \PYG{n}{regex}\PYG{o}{.}\PYG{n}{search}\PYG{p}{(}\PYG{n}{c}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{n}{ATOMS\PYGZus{}NAME\PYGZus{}FIELD}\PYG{p}{]}\PYG{p}{)}
+\PYG{p}{)}
+
+\PYG{c+c1}{\PYGZsh{} Filter based on maximum force component}
+\PYG{k+kn}{import} \PYG{n+nn}{numpy} \PYG{k}{as} \PYG{n+nn}{np}
+
+\PYG{n}{filtered\PYGZus{}dataset} \PYG{o}{=} \PYG{n}{dataset}\PYG{o}{.}\PYG{n}{filter}\PYG{p}{(}
+    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{data}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
+    \PYG{k}{lambda} \PYG{n}{p}\PYG{p}{:} \PYG{n}{np}\PYG{o}{.}\PYG{n}{max}\PYG{p}{(}\PYG{n}{np}\PYG{o}{.}\PYG{n}{abs}\PYG{p}{(}\PYG{n}{p}\PYG{o}{.}\PYG{n}{edn}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{unrelaxed\PYGZhy{}potential\PYGZhy{}forces}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{source\PYGZhy{}value}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{)}\PYG{p}{)} \PYG{o}{\PYGZlt{}} \PYG{l+m+mf}{1.0}
+\PYG{p}{)}
+\end{sphinxVerbatim}
+\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{filter\_type}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} 
+\sphinxAtStartPar
+One of ‘configurations’ or ‘data’.
+\begin{description}
+\item[{If \sphinxtitleref{filter\_type == ‘configurations’}:}] \leavevmode
+\sphinxAtStartPar
+Filters on configurations, and returns a dataset with only
+the configurations and their linked properties.
+
+\item[{If \sphinxtitleref{filter\_type == ‘data’}:}] \leavevmode
+\sphinxAtStartPar
+Filters on properties, and returns a dataset with only the
+properties and their linked configurations.
+
+\end{description}
+
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{filter\_fxn}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} A callable function to use as \sphinxtitleref{filter(filter\_fxn)}.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{copy}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, deep copies all dataset attributes before returning
+filtered results. Default is False.
+
+\end{itemize}
+
+\item[{Returns}] \leavevmode
+\sphinxAtStartPar
+A Dataset object constructed by applying the specified filter,
+extracting any objects linked to the filtered object, then
+copying over \sphinxtitleref{property\_map}, \sphinxtitleref{configuration\_label\_regexes},
+\sphinxtitleref{configuration\_set\_regexes}, and \sphinxtitleref{property\_settings\_regexes}.
+
+\item[{Return type}] \leavevmode
+\sphinxAtStartPar
+dataset ({\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{Dataset}}})
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{flatten() (colabfit.tools.dataset.Dataset method)@\spxentry{flatten()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.flatten}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{flatten}}}{}{}~\begin{description}
+\item[{Pseudocode:}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+convert everything to the same units
+
+\item {} 
+\sphinxAtStartPar
+merge authors/links
+
+\item {} \begin{description}
+\item[{warn if overlap (maybe this should be done in attach()?)}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+tell me which dataset has an overlap with which other (disjoint)
+
+\item {} 
+\sphinxAtStartPar
+optionally merge subset datasets
+
+\end{itemize}
+
+\end{description}
+
+\item {} 
+\sphinxAtStartPar
+check if conflicting CO labels, CS regexes, or PS regexes
+
+\end{itemize}
+
+\end{description}
+
+\end{fulllineitems}
+
+\index{from\_markdown() (colabfit.tools.dataset.Dataset class method)@\spxentry{from\_markdown()}\spxextra{colabfit.tools.dataset.Dataset class method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.from_markdown}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{classmethod\DUrole{w}{  }}}\sphinxbfcode{\sphinxupquote{from\_markdown}}}{\emph{\DUrole{n}{html\_file\_path}}, \emph{\DUrole{n}{convert\_units}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\sphinxAtStartPar
+Loads a Dataset from a markdown file.
+
+\end{fulllineitems}
+
+\index{get\_available\_configuration\_fields() (colabfit.tools.dataset.Dataset method)@\spxentry{get\_available\_configuration\_fields()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.get_available_configuration_fields}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{get\_available\_configuration\_fields}}}{}{}
+\end{fulllineitems}
+
+\index{get\_configuration\_field() (colabfit.tools.dataset.Dataset method)@\spxentry{get\_configuration\_field()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.get_configuration_field}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{get\_configuration\_field}}}{\emph{\DUrole{n}{field}}}{}
+\end{fulllineitems}
+
+\index{get\_data() (colabfit.tools.dataset.Dataset method)@\spxentry{get\_data()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.get_data}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{get\_data}}}{\emph{\DUrole{n}{property\_field}}, \emph{\DUrole{n}{cs\_ids}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{exclude}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{concatenate}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{ravel}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\sphinxAtStartPar
+Returns a list of properties obtained by looping over \sphinxtitleref{self.data} and
+extracting the desired field if it exists on the property.
+
+\sphinxAtStartPar
+Note that if the field does not exist on the property, that property
+will be skipped. This means that if there are multiple properties linked
+to a single configuration, \sphinxtitleref{len(get\_data(…))} will not be the same as
+\sphinxtitleref{len(self.configurations)}
+\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{property\_field}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The string key used to extract the property values from the
+Property objects
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{cs\_ids}} (\sphinxstyleliteralemphasis{\sphinxupquote{int}}\sphinxstyleliteralemphasis{\sphinxupquote{ or }}\sphinxstyleliteralemphasis{\sphinxupquote{list}}) \textendash{} 
+\sphinxAtStartPar
+The integers specifying the configuration sets to obtain the
+data from. Default is None, which returns data from all
+configuration sets.
+
+\sphinxAtStartPar
+If \sphinxtitleref{self} is a base dataset, then \sphinxtitleref{cs\_ids} should be a list of
+integers used for indexing \sphinxtitleref{self.configuration\_sets}.
+
+\sphinxAtStartPar
+If \sphinxtitleref{self} is a parent dataset, then \sphinxtitleref{cs\_ids} should be a list of
+2\sphinxhyphen{}tuples \sphinxtitleref{(i, j)} where a configuration set will be indexed
+using \sphinxtitleref{self.data{[}i{]}.configuration\_sets{[}j{]}}.
+
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{exclude}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} Only to be used when \sphinxtitleref{cs\_ids} is not None. If \sphinxtitleref{exclude==True},
+then data is only returned for the configuration sets that are
+\_not\_ in \sphinxtitleref{cs\_ids}.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{concatenate}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, calls np.concatenate() on the list before returning.
+Default is False.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{ravel}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, calls np.concatenate() on the list before returning.
+Default is False.
+
+\end{itemize}
+
+\end{description}\end{quote}
+
+\sphinxAtStartPar
+Returns a list of Numpy arrays that were constructed by calling
+{[}np.atleast\_1d(d{[}property\_field{]}{[}‘source\sphinxhyphen{}value’{]}) for d in self.data{]}
+
+\end{fulllineitems}
+
+\index{get\_statistics() (colabfit.tools.dataset.Dataset method)@\spxentry{get\_statistics()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.get_statistics}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{get\_statistics}}}{\emph{\DUrole{n}{property\_field}}}{}
+\sphinxAtStartPar
+Builds an list by extracting the values of \sphinxtitleref{property\_field} for
+each entry in the dataset, wrapping them in a numpy array, and
+concatenating them all together. Then returns statistics on the
+resultant array.
+\begin{quote}\begin{description}
+\item[{Returns}] \leavevmode
+\sphinxAtStartPar
+\begin{description}
+\item[{results (dict)::}] \leavevmode\begin{description}
+\item[{..code\sphinxhyphen{}block::}] \leavevmode
+\sphinxAtStartPar
+\{‘average’: np.average(data), ‘std’: np.std(data), ‘min’: np.min(data), ‘max’: np.max(data), ‘average\_abs’: np.average(np.abs(data))\}
+
+\end{description}
+
+\end{description}
+
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{isdisjoint() (colabfit.tools.dataset.Dataset method)@\spxentry{isdisjoint()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.isdisjoint}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{isdisjoint}}}{\emph{\DUrole{n}{other}}, \emph{\DUrole{n}{configurations\_only}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\end{fulllineitems}
+
+\index{issubset() (colabfit.tools.dataset.Dataset method)@\spxentry{issubset()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.issubset}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{issubset}}}{\emph{\DUrole{n}{other}}, \emph{\DUrole{n}{configurations\_only}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\end{fulllineitems}
+
+\index{issuperset() (colabfit.tools.dataset.Dataset method)@\spxentry{issuperset()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.issuperset}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{issuperset}}}{\emph{\DUrole{n}{other}}, \emph{\DUrole{n}{configurations\_only}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\end{fulllineitems}
+
+\index{merge() (colabfit.tools.dataset.Dataset method)@\spxentry{merge()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.merge}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{merge}}}{\emph{\DUrole{n}{other}}, \emph{\DUrole{n}{clean}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\sphinxAtStartPar
+Merges the new and current Datasets. Note that the current data
+supersedes any incoming data. This means that if incoming data points
+to an existing configuration, the incoming data is not added to the
+Dataset because it is assumed that the existing data pointing to the
+same configuration is the more important version.
+\begin{description}
+\item[{The following additional changes are made to the incoming data:}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+Configurations are renamed to prepend the name of their datasets
+
+\item {} 
+\sphinxAtStartPar
+All regexes are renamed as f”\textasciicircum{}\{other.name\}\_.*\{regex\}”
+
+\end{itemize}
+
+\end{description}
+\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{other}} ({\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{\sphinxstyleliteralemphasis{\sphinxupquote{Dataset}}}}}) \textendash{} The new dataset to be added to the existing one.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{clean}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, checks for duplicates after merging. Default is False.
+
+\end{itemize}
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{parse\_data() (colabfit.tools.dataset.Dataset method)@\spxentry{parse\_data()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.parse_data}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{parse\_data}}}{\emph{\DUrole{n}{convert\_units}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\sphinxAtStartPar
+Re\sphinxhyphen{}constructs \sphinxtitleref{self.data} by building a list of Property objects using
+\sphinxtitleref{self.property\_map} and \sphinxtitleref{self.configurations}. Modifies \sphinxtitleref{self.data} in
+place. If \sphinxtitleref{convert\_units==True}, then the units in \sphinxtitleref{self.property\_map}
+are also updated.
+
+\end{fulllineitems}
+
+\index{plot\_histograms() (colabfit.tools.dataset.Dataset method)@\spxentry{plot\_histograms()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.plot_histograms}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{plot\_histograms}}}{\emph{\DUrole{n}{fields}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{xscale}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}linear\textquotesingle{}}}, \emph{\DUrole{n}{yscale}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}linear\textquotesingle{}}}}{}
+\sphinxAtStartPar
+Generates histograms of the given fields.
+
+\end{fulllineitems}
+
+\index{print\_configuration\_sets() (colabfit.tools.dataset.Dataset method)@\spxentry{print\_configuration\_sets()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.print_configuration_sets}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{print\_configuration\_sets}}}{}{}
+\end{fulllineitems}
+
+\index{property\_settings\_regexes (colabfit.tools.dataset.Dataset property)@\spxentry{property\_settings\_regexes}\spxextra{colabfit.tools.dataset.Dataset property}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.property_settings_regexes}}\pysigline{\sphinxbfcode{\sphinxupquote{property\DUrole{w}{  }}}\sphinxbfcode{\sphinxupquote{property\_settings\_regexes}}}
+\end{fulllineitems}
+
+\index{refresh\_config\_labels() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_config\_labels()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.refresh_config_labels}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{refresh\_config\_labels}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\sphinxAtStartPar
+Re\sphinxhyphen{}applies labels to the \sphinxtitleref{ase.Atoms.info{[}ATOMS\_LABELS\_FIELD{]}} list.
+Note that this overwrites any existing labels on the configurations.
+
+\end{fulllineitems}
+
+\index{refresh\_config\_sets() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_config\_sets()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.refresh_config_sets}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{refresh\_config\_sets}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\sphinxAtStartPar
+Re\sphinxhyphen{}constructs the configuration sets.
+
+\end{fulllineitems}
+
+\index{refresh\_property\_map() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_property\_map()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.refresh_property_map}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{refresh\_property\_map}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\end{fulllineitems}
+
+\index{refresh\_property\_settings() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_property\_settings()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.refresh_property_settings}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{refresh\_property\_settings}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\sphinxAtStartPar
+Refresh property pointers to PSOs by matching on their linked co names
+
+\end{fulllineitems}
+
+\index{rename\_configuration\_field() (colabfit.tools.dataset.Dataset method)@\spxentry{rename\_configuration\_field()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.rename_configuration_field}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{rename\_configuration\_field}}}{\emph{\DUrole{n}{old\_name}}, \emph{\DUrole{n}{new\_name}}}{}
+\sphinxAtStartPar
+Renames fields in \sphinxcode{\sphinxupquote{Configuration.info}} and
+\sphinxcode{\sphinxupquote{Configuration.arrays}}.
+\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{old\_name}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} the original name of the field
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{new\_name}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} the new name of the field
+
+\end{itemize}
+
+\item[{Returns}] \leavevmode
+\sphinxAtStartPar
+None. Modifies configuration fields in\sphinxhyphen{}place.
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{rename\_property() (colabfit.tools.dataset.Dataset method)@\spxentry{rename\_property()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.rename_property}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{rename\_property}}}{\emph{\DUrole{n}{old\_name}}, \emph{\DUrole{n}{new\_name}}}{}
+\sphinxAtStartPar
+Renames old\_name field to new\_name in each Property
+
+\end{fulllineitems}
+
+\index{resync() (colabfit.tools.dataset.Dataset method)@\spxentry{resync()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.resync}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{resync}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
+\end{fulllineitems}
+
+\index{summary() (colabfit.tools.dataset.Dataset method)@\spxentry{summary()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.summary}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{summary}}}{}{}
+\end{fulllineitems}
+
+\index{to\_markdown() (colabfit.tools.dataset.Dataset method)@\spxentry{to\_markdown()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.to_markdown}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{to\_markdown}}}{\emph{\DUrole{n}{base\_folder}}, \emph{\DUrole{n}{html\_file\_name}}, \emph{\DUrole{n}{data\_file\_name}}, \emph{\DUrole{n}{data\_format}}, \emph{\DUrole{n}{name\_field}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\_name\textquotesingle{}}}}{}
+\sphinxAtStartPar
+Saves a Dataset and writes a properly formatted markdown file. In the
+case of a Dataset that has child Dataset objects, each child Dataset
+is written to a separate sub\sphinxhyphen{}folder.
+\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{base\_folder}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Top\sphinxhyphen{}level folder in which to save the markdown and data files
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{html\_file\_name}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Name of file to save markdown to
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{data\_file\_name}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Name of file to save configuration and properties to
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{data\_format}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Format to use for data file. Default is ‘xyz’
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{name\_field}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The name of the field that should be used to generate
+configuration names
+
+\end{itemize}
+
+\end{description}\end{quote}
+
+\end{fulllineitems}
+
+\index{train\_test\_split() (colabfit.tools.dataset.Dataset method)@\spxentry{train\_test\_split()}\spxextra{colabfit.tools.dataset.Dataset method}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.train_test_split}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{train\_test\_split}}}{\emph{\DUrole{n}{train\_frac}}}{}
+\end{fulllineitems}
+
+
+\end{fulllineitems}
+
+\phantomsection\label{\detokenize{dataset:module-colabfit.tools.dataset}}\index{module@\spxentry{module}!colabfit.tools.dataset@\spxentry{colabfit.tools.dataset}}\index{colabfit.tools.dataset@\spxentry{colabfit.tools.dataset}!module@\spxentry{module}}\index{load\_data() (in module colabfit.tools.dataset)@\spxentry{load\_data()}\spxextra{in module colabfit.tools.dataset}}
+
+\begin{fulllineitems}
+\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.load_data}}\pysiglinewithargsret{\sphinxcode{\sphinxupquote{colabfit.tools.dataset.}}\sphinxbfcode{\sphinxupquote{load\_data}}}{\emph{\DUrole{n}{file\_path}}, \emph{\DUrole{n}{file\_format}}, \emph{\DUrole{n}{name\_field}}, \emph{\DUrole{n}{elements}}, \emph{\DUrole{n}{default\_name}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\textquotesingle{}}}, \emph{\DUrole{n}{labels\_field}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{reader}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{glob\_string}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{o}{**}\DUrole{n}{kwargs}}}{}
+\sphinxAtStartPar
+Loads configurations as a list of ase.Atoms objects.
+\begin{quote}\begin{description}
+\item[{Parameters}] \leavevmode\begin{itemize}
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{file\_path}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Path to the file or folder containing the data
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{file\_format}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} A string for specifying the type of Converter to use when loading
+the configurations. Allowed values are ‘xyz’, ‘extxyz’, ‘cfg’, or
+‘folder’.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{name\_field}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Key name to use to access \sphinxtitleref{ase.Atoms.info{[}\textless{}name\_field\textgreater{}{]}} to
+obtain the name of a configuration one the atoms have been
+loaded from the data file. Note that if
+\sphinxtitleref{file\_format == ‘folder’}, \sphinxtitleref{name\_field} will be set to ‘name’.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{elements}} (\sphinxstyleliteralemphasis{\sphinxupquote{list}}) \textendash{} A list of strings of element types
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{default\_name}} (\sphinxstyleliteralemphasis{\sphinxupquote{list}}) \textendash{} Default name to be used if \sphinxtitleref{name\_field==None}.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{labels\_field}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Key name to use to access \sphinxtitleref{ase.Atoms.info{[}\textless{}labels\_field\textgreater{}{]}} to
+obtain the labels that should be applied to the configuration. This
+field should contain a comma\sphinxhyphen{}separated list of strings
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{reader}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} An optional function for loading configurations from a file. Only
+used for \sphinxtitleref{file\_format == ‘folder’}
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{glob\_string}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} A string to use with \sphinxtitleref{Path(file\_path).rglob(glob\_string)} to
+generate a list of files to be passed to \sphinxtitleref{self.reader}. Only used
+for \sphinxtitleref{file\_format == ‘folder’}.
+
+\item {} 
+\sphinxAtStartPar
+\sphinxstyleliteralstrong{\sphinxupquote{verbose}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, prints progress bar.
+
+\end{itemize}
+
+\end{description}\end{quote}
+
+\sphinxAtStartPar
+All other keyword arguments will be passed with
+\sphinxtitleref{converter.load(…, **kwargs)}
+
+\end{fulllineitems}
+
+
+
+\section{Additional tools}
+\label{\detokenize{additional_tools:additional-tools}}\label{\detokenize{additional_tools::doc}}\phantomsection\label{\detokenize{converters:module-colabfit.tools.converters}}\index{module@\spxentry{module}!colabfit.tools.converters@\spxentry{colabfit.tools.converters}}\index{colabfit.tools.converters@\spxentry{colabfit.tools.converters}!module@\spxentry{module}}
+
+\subsection{Converter}
 \label{\detokenize{converters:converter}}\label{\detokenize{converters::doc}}\index{BaseConverter (class in colabfit.tools.converters)@\spxentry{BaseConverter}\spxextra{class in colabfit.tools.converters}}
 
 \begin{fulllineitems}
@@ -985,561 +2522,9 @@ All additional kwargs will be passed to the reader function as
 
 \end{fulllineitems}
 
-\phantomsection\label{\detokenize{dataset:module-colabfit.tools.dataset}}\index{module@\spxentry{module}!colabfit.tools.dataset@\spxentry{colabfit.tools.dataset}}\index{colabfit.tools.dataset@\spxentry{colabfit.tools.dataset}!module@\spxentry{module}}
-
-\section{Dataset}
-\label{\detokenize{dataset:dataset}}\label{\detokenize{dataset::doc}}\index{Dataset (class in colabfit.tools.dataset)@\spxentry{Dataset}\spxextra{class in colabfit.tools.dataset}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{class\DUrole{w}{  }}}\sphinxcode{\sphinxupquote{colabfit.tools.dataset.}}\sphinxbfcode{\sphinxupquote{Dataset}}}{\emph{\DUrole{n}{name}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\textquotesingle{}}}, \emph{\DUrole{n}{authors}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{links}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{description}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\textquotesingle{}}}, \emph{\DUrole{n}{configurations}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{data}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{property\_map}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{configuration\_label\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{configuration\_set\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{property\_settings\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}}{}~\index{\_\_hash\_\_ (colabfit.tools.dataset.Dataset attribute)@\spxentry{\_\_hash\_\_}\spxextra{colabfit.tools.dataset.Dataset attribute}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.__hash__}}\pysigline{\sphinxbfcode{\sphinxupquote{\_\_hash\_\_}}\sphinxbfcode{\sphinxupquote{\DUrole{w}{  }\DUrole{p}{=}\DUrole{w}{  }None}}}
-\end{fulllineitems}
-
-\index{\_\_init\_\_() (colabfit.tools.dataset.Dataset method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.__init__}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{\_\_init\_\_}}}{\emph{\DUrole{n}{name}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\textquotesingle{}}}, \emph{\DUrole{n}{authors}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{links}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{description}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\textquotesingle{}}}, \emph{\DUrole{n}{configurations}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{data}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{property\_map}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{configuration\_label\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{configuration\_set\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{property\_settings\_regexes}\DUrole{o}{=}\DUrole{default_value}{None}}}{}
-\end{fulllineitems}
-
-\index{apply\_transformation() (colabfit.tools.dataset.Dataset method)@\spxentry{apply\_transformation()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.apply_transformation}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{apply\_transformation}}}{\emph{\DUrole{n}{field\_name}}, \emph{\DUrole{n}{tform}}}{}~\begin{quote}\begin{description}
-\item[{Parameters}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{field\_name}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The property field name to applyl the transformation to
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{tform}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} A BaseTransform object or a lambda function. If a lambda
-function is supplied, it must accept a 2\sphinxhyphen{}tuple as input, where
-the first value will be the property field data, and the second
-value will be the list of configurations linked to the property.
-
-\end{itemize}
-
-\end{description}\end{quote}
-
-\end{fulllineitems}
-
-\index{attach\_configuration\_labels() (colabfit.tools.dataset.Dataset method)@\spxentry{attach\_configuration\_labels()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.attach_configuration_labels}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{attach\_configuration\_labels}}}{\emph{\DUrole{n}{fxn}}, \emph{\DUrole{n}{labels}}, \emph{\DUrole{n}{regex}}}{}~\begin{quote}\begin{description}
-\item[{Parameters}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{fxn}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} A function that is called for every item in
-\sphinxtitleref{self.configurations}, returning True if the PSO should be
-applied to the data entry.
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{labels}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}\sphinxstyleliteralemphasis{\sphinxupquote{ or }}\sphinxstyleliteralemphasis{\sphinxupquote{list}}) \textendash{} The labels to be applied
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{regex}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The string that will be used for regex matching to identify
-the updated configurations in the future. \sphinxtitleref{regex} will be
-appended to the name of each matching configuration
-
-\end{itemize}
-
-\end{description}\end{quote}
-
-\end{fulllineitems}
-
-\index{attach\_dataset() (colabfit.tools.dataset.Dataset method)@\spxentry{attach\_dataset()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.attach_dataset}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{attach\_dataset}}}{\emph{\DUrole{n}{dataset}}, \emph{\DUrole{n}{supersede\_existing}\DUrole{o}{=}\DUrole{default_value}{False}}}{}~\begin{quote}\begin{description}
-\item[{Parameters}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{dataset}} ({\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{\sphinxstyleliteralemphasis{\sphinxupquote{Dataset}}}}}) \textendash{} The new dataset to be added
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{supersede\_existing}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, any new data that is being added will be used to
-overwrite existing duplicate data when calling clean() or
-merge(). This is important for preserving Property metadata.
-Default is False.
-
-\end{itemize}
-
-\end{description}\end{quote}
-
-\end{fulllineitems}
-
-\index{attach\_property\_settings() (colabfit.tools.dataset.Dataset method)@\spxentry{attach\_property\_settings()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.attach_property_settings}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{attach\_property\_settings}}}{\emph{\DUrole{n}{fxn}}, \emph{\DUrole{n}{pso}}, \emph{\DUrole{n}{regex}}}{}~\begin{quote}\begin{description}
-\item[{Parameters}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{fxn}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} A function that is called for every item in \sphinxtitleref{self.data},
-returning True if the PSO should be applied to the data entry.
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{pso}} ({\hyperref[\detokenize{property_settings:colabfit.tools.property_settings.PropertySettings}]{\sphinxcrossref{\sphinxstyleliteralemphasis{\sphinxupquote{PropertySettings}}}}}) \textendash{} A property settings object
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{regex}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The string that will be used for regex matching to identify
-the updated data entries in the future. \sphinxtitleref{regex} will be
-appended to the name of each matching configuration
-
-\end{itemize}
-
-\end{description}\end{quote}
-
-\end{fulllineitems}
-
-\index{clean() (colabfit.tools.dataset.Dataset method)@\spxentry{clean()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.clean}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{clean}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
-\sphinxAtStartPar
-Uses hashing to compare the configurations of all properties and check
-for duplicate configurations.
-
-\end{fulllineitems}
-
-\index{convert\_units() (colabfit.tools.dataset.Dataset method)@\spxentry{convert\_units()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.convert_units}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{convert\_units}}}{}{}
-\sphinxAtStartPar
-Converts the dataset units to the provided type (e.g., ‘OpenKIM’
-
-\end{fulllineitems}
-
-\index{dataset\_from\_config\_sets() (colabfit.tools.dataset.Dataset method)@\spxentry{dataset\_from\_config\_sets()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.dataset_from_config_sets}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{dataset\_from\_config\_sets}}}{\emph{\DUrole{n}{cs\_ids}}, \emph{\DUrole{n}{exclude}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
-\sphinxAtStartPar
-Returns a new dataset that only contains the specified configuration
-sets.
-\begin{quote}\begin{description}
-\item[{Parameters}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{cs\_ids}} (\sphinxstyleliteralemphasis{\sphinxupquote{int}}\sphinxstyleliteralemphasis{\sphinxupquote{ or }}\sphinxstyleliteralemphasis{\sphinxupquote{list}}) \textendash{} The index of the configuration set(s) to use for building the
-new dataset. If \sphinxtitleref{self} is a parent dataset, then \sphinxtitleref{cs\_ids} shoud
-either be a 2\sphinxhyphen{}tuple or a list of 2\sphinxhyphen{}tuples (i, j), where the
-configuration sets will be indexed as
-\sphinxtitleref{dataset.data{[}i{]}.configuration\_sets{[}j{]}}.
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{exclude}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If False, builds a new dataset using all of the configuration
-sets \_except\_ those specified by \sphinxtitleref{cs\_ids}. Default is False.
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{verbose}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, prints progress. Default is False
-
-\end{itemize}
-
-\item[{Returns}] \leavevmode
-\sphinxAtStartPar
-The new dataset. If \sphinxtitleref{self} is a parent dataset, then the new
-dataset will also be a parent dataset.
-
-\item[{Return type}] \leavevmode
-\sphinxAtStartPar
-ds ({\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{Dataset}}})
-
-\end{description}\end{quote}
-
-\end{fulllineitems}
-
-\index{define\_configuration\_set() (colabfit.tools.dataset.Dataset method)@\spxentry{define\_configuration\_set()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.define_configuration_set}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{define\_configuration\_set}}}{\emph{\DUrole{n}{fxn}}, \emph{\DUrole{n}{desc}}, \emph{\DUrole{n}{regex}}}{}~\begin{quote}\begin{description}
-\item[{Parameters}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{fxn}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} A function that is called for every item in
-\sphinxtitleref{self.configurations}, returning True if the PSO should be
-applied to the data entry.
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{desc}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The description of the new configuration set.
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{regex}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The string that will be used for regex matching to identify
-the updated configurations in the future. \sphinxtitleref{regex} will be
-appended to the name of each matching configuration
-
-\end{itemize}
-
-\end{description}\end{quote}
-
-\end{fulllineitems}
-
-\index{filter() (colabfit.tools.dataset.Dataset method)@\spxentry{filter()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.filter}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{filter}}}{\emph{\DUrole{n}{filter\_type}}, \emph{\DUrole{n}{filter\_fxn}}, \emph{\DUrole{n}{copy}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
-\sphinxAtStartPar
-A helper function for filtering on a Dataset. A filter is specified by
-providing  a \sphinxtitleref{filter\_type} and a \sphinxtitleref{filter\_fxn}. In the case of a parent
-dataset, the filter is applied to each of the children individually.
-
-\sphinxAtStartPar
-Examples:
-
-\begin{sphinxVerbatim}[commandchars=\\\{\}]
-\PYG{c+c1}{\PYGZsh{} Filter based on configuration name}
-\PYG{n}{regex} \PYG{o}{=} \PYG{n}{re}\PYG{o}{.}\PYG{n}{compile}\PYG{p}{(}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{example\PYGZus{}name.*}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{)}
-
-\PYG{n}{filtered\PYGZus{}dataset} \PYG{o}{=} \PYG{n}{dataset}\PYG{o}{.}\PYG{n}{filter}\PYG{p}{(}
-    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{configurations}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
-    \PYG{k}{lambda} \PYG{n}{c}\PYG{p}{:} \PYG{n}{regex}\PYG{o}{.}\PYG{n}{search}\PYG{p}{(}\PYG{n}{c}\PYG{o}{.}\PYG{n}{info}\PYG{p}{[}\PYG{n}{ATOMS\PYGZus{}NAME\PYGZus{}FIELD}\PYG{p}{]}\PYG{p}{)}
-\PYG{p}{)}
-
-\PYG{c+c1}{\PYGZsh{} Filter based on maximum force component}
-\PYG{k+kn}{import} \PYG{n+nn}{numpy} \PYG{k}{as} \PYG{n+nn}{np}
-
-\PYG{n}{filtered\PYGZus{}dataset} \PYG{o}{=} \PYG{n}{dataset}\PYG{o}{.}\PYG{n}{filter}\PYG{p}{(}
-    \PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{data}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{,}
-    \PYG{k}{lambda} \PYG{n}{p}\PYG{p}{:} \PYG{n}{np}\PYG{o}{.}\PYG{n}{max}\PYG{p}{(}\PYG{n}{np}\PYG{o}{.}\PYG{n}{abs}\PYG{p}{(}\PYG{n}{p}\PYG{o}{.}\PYG{n}{edn}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{unrelaxed\PYGZhy{}potential\PYGZhy{}forces}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{[}\PYG{l+s+s1}{\PYGZsq{}}\PYG{l+s+s1}{source\PYGZhy{}value}\PYG{l+s+s1}{\PYGZsq{}}\PYG{p}{]}\PYG{p}{)}\PYG{p}{)} \PYG{o}{\PYGZlt{}} \PYG{l+m+mf}{1.0}
-\PYG{p}{)}
-\end{sphinxVerbatim}
-\begin{quote}\begin{description}
-\item[{Parameters}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{filter\_type}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} 
-\sphinxAtStartPar
-One of ‘configurations’ or ‘data’.
-\begin{description}
-\item[{If \sphinxtitleref{filter\_type == ‘configurations’}:}] \leavevmode
-\sphinxAtStartPar
-Filters on configurations, and returns a dataset with only
-the configurations and their linked properties.
-
-\item[{If \sphinxtitleref{filter\_type == ‘data’}:}] \leavevmode
-\sphinxAtStartPar
-Filters on properties, and returns a dataset with only the
-properties and their linked configurations.
-
-\end{description}
-
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{filter\_fxn}} (\sphinxstyleliteralemphasis{\sphinxupquote{callable}}) \textendash{} A callable function to use as \sphinxtitleref{filter(filter\_fxn)}.
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{copy}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, deep copies all dataset attributes before returning
-filtered results. Default is False.
-
-\end{itemize}
-
-\item[{Returns}] \leavevmode
-\sphinxAtStartPar
-A Dataset object constructed by applying the specified filter,
-extracting any objects linked to the filtered object, then
-copying over \sphinxtitleref{property\_map}, \sphinxtitleref{configuration\_label\_regexes},
-\sphinxtitleref{configuration\_set\_regexes}, and \sphinxtitleref{property\_settings\_regexes}.
-
-\item[{Return type}] \leavevmode
-\sphinxAtStartPar
-dataset ({\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{Dataset}}})
-
-\end{description}\end{quote}
-
-\end{fulllineitems}
-
-\index{flatten() (colabfit.tools.dataset.Dataset method)@\spxentry{flatten()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.flatten}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{flatten}}}{}{}~\begin{description}
-\item[{Pseudocode:}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-convert everything to the same units
-
-\item {} 
-\sphinxAtStartPar
-merge authors/links
-
-\item {} \begin{description}
-\item[{warn if overlap (maybe this should be done in attach()?)}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-tell me which dataset has an overlap with which other (disjoint)
-
-\item {} 
-\sphinxAtStartPar
-optionally merge subset datasets
-
-\end{itemize}
-
-\end{description}
-
-\item {} 
-\sphinxAtStartPar
-check if conflicting CO labels, CS regexes, or PS regexes
-
-\end{itemize}
-
-\end{description}
-
-\end{fulllineitems}
-
-\index{from\_markdown() (colabfit.tools.dataset.Dataset class method)@\spxentry{from\_markdown()}\spxextra{colabfit.tools.dataset.Dataset class method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.from_markdown}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{classmethod\DUrole{w}{  }}}\sphinxbfcode{\sphinxupquote{from\_markdown}}}{\emph{\DUrole{n}{html\_file\_path}}, \emph{\DUrole{n}{convert\_units}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
-\sphinxAtStartPar
-Loads a Dataset from a markdown file.
-
-\end{fulllineitems}
-
-\index{get\_data() (colabfit.tools.dataset.Dataset method)@\spxentry{get\_data()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.get_data}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{get\_data}}}{\emph{\DUrole{n}{property\_field}}, \emph{\DUrole{n}{cs\_ids}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{exclude}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{concatenate}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{ravel}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
-\sphinxAtStartPar
-Returns a list of properties obtained by looping over \sphinxtitleref{self.data} and
-extracting the desired field if it exists on the property.
-
-\sphinxAtStartPar
-Note that if the field does not exist on the property, that property
-will be skipped. This means that if there are multiple properties linked
-to a single configuration, \sphinxtitleref{len(get\_data(…))} will not be the same as
-\sphinxtitleref{len(self.configurations)}
-\begin{quote}\begin{description}
-\item[{Parameters}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{property\_field}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The string key used to extract the property values from the
-Property objects
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{cs\_ids}} (\sphinxstyleliteralemphasis{\sphinxupquote{int}}\sphinxstyleliteralemphasis{\sphinxupquote{ or }}\sphinxstyleliteralemphasis{\sphinxupquote{list}}) \textendash{} 
-\sphinxAtStartPar
-The integers specifying the configuration sets to obtain the
-data from. Default is None, which returns data from all
-configuration sets.
-
-\sphinxAtStartPar
-If \sphinxtitleref{self} is a base dataset, then \sphinxtitleref{cs\_ids} should be a list of
-integers used for indexing \sphinxtitleref{self.configuration\_sets}.
-
-\sphinxAtStartPar
-If \sphinxtitleref{self} is a parent dataset, then \sphinxtitleref{cs\_ids} should be a list of
-2\sphinxhyphen{}tuples \sphinxtitleref{(i, j)} where a configuration set will be indexed
-using \sphinxtitleref{self.data{[}i{]}.configuration\_sets{[}j{]}}.
-
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{exclude}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} Only to be used when \sphinxtitleref{cs\_ids} is not None. If \sphinxtitleref{exclude==True},
-then data is only returned for the configuration sets that are
-\_not\_ in \sphinxtitleref{cs\_ids}.
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{concatenate}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, calls np.concatenate() on the list before returning.
-Default is False.
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{ravel}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, calls np.concatenate() on the list before returning.
-Default is False.
-
-\end{itemize}
-
-\end{description}\end{quote}
-
-\sphinxAtStartPar
-Returns a list of Numpy arrays that were constructed by calling
-{[}np.atleast\_1d(d{[}property\_field{]}{[}‘source\sphinxhyphen{}value’{]}) for d in self.data{]}
-
-\end{fulllineitems}
-
-\index{get\_statistics() (colabfit.tools.dataset.Dataset method)@\spxentry{get\_statistics()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.get_statistics}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{get\_statistics}}}{\emph{\DUrole{n}{property\_field}}}{}
-\sphinxAtStartPar
-Builds an list by extracting the values of \sphinxtitleref{property\_field} for
-each entry in the dataset, wrapping them in a numpy array, and
-concatenating them all together. Then returns statistics on the
-resultant array.
-\begin{quote}\begin{description}
-\item[{Returns}] \leavevmode
-\sphinxAtStartPar
-\begin{description}
-\item[{results (dict)::}] \leavevmode\begin{description}
-\item[{..code\sphinxhyphen{}block::}] \leavevmode
-\sphinxAtStartPar
-\{‘average’: np.average(data), ‘std’: np.std(data), ‘min’: np.min(data), ‘max’: np.max(data), ‘average\_abs’: np.average(np.abs(data))\}
-
-\end{description}
-
-\end{description}
-
-
-\end{description}\end{quote}
-
-\end{fulllineitems}
-
-\index{merge() (colabfit.tools.dataset.Dataset method)@\spxentry{merge()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.merge}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{merge}}}{\emph{\DUrole{n}{other}}, \emph{\DUrole{n}{clean}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
-\sphinxAtStartPar
-Merges the new and current Datasets. Note that the current data
-supersedes any incoming data. This means that if incoming data points
-to an existing configuration, the incoming data is not added to the
-Dataset because it is assumed that the existing data pointing to the
-same configuration is the more important version.
-\begin{description}
-\item[{The following additional changes are made to the incoming data:}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-Configurations are renamed to prepend the name of their datasets
-
-\item {} 
-\sphinxAtStartPar
-All regexes are renamed as f”\textasciicircum{}\{other.name\}\_.*\{regex\}”
-
-\end{itemize}
-
-\end{description}
-\begin{quote}\begin{description}
-\item[{Parameters}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{other}} ({\hyperref[\detokenize{dataset:colabfit.tools.dataset.Dataset}]{\sphinxcrossref{\sphinxstyleliteralemphasis{\sphinxupquote{Dataset}}}}}) \textendash{} The new dataset to be added to the existing one.
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{clean}} (\sphinxstyleliteralemphasis{\sphinxupquote{bool}}) \textendash{} If True, checks for duplicates after merging. Default is False.
-
-\end{itemize}
-
-\end{description}\end{quote}
-
-\end{fulllineitems}
-
-\index{parse\_data() (colabfit.tools.dataset.Dataset method)@\spxentry{parse\_data()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.parse_data}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{parse\_data}}}{\emph{\DUrole{n}{convert\_units}\DUrole{o}{=}\DUrole{default_value}{False}}, \emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
-\sphinxAtStartPar
-Re\sphinxhyphen{}constructs \sphinxtitleref{self.data} by building a list of Property objects using
-\sphinxtitleref{self.property\_map} and \sphinxtitleref{self.configurations}. Modifies \sphinxtitleref{self.data} in
-place. If \sphinxtitleref{convert\_units==True}, then the units in \sphinxtitleref{self.property\_map}
-are also updated.
-
-\end{fulllineitems}
-
-\index{plot\_histograms() (colabfit.tools.dataset.Dataset method)@\spxentry{plot\_histograms()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.plot_histograms}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{plot\_histograms}}}{\emph{\DUrole{n}{fields}\DUrole{o}{=}\DUrole{default_value}{None}}, \emph{\DUrole{n}{xscale}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}linear\textquotesingle{}}}, \emph{\DUrole{n}{yscale}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}linear\textquotesingle{}}}}{}
-\sphinxAtStartPar
-Generates histograms of the given fields.
-
-\end{fulllineitems}
-
-\index{refresh\_config\_labels() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_config\_labels()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.refresh_config_labels}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{refresh\_config\_labels}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
-\sphinxAtStartPar
-Re\sphinxhyphen{}applies labels to the \sphinxtitleref{ase.Atoms.info{[}ATOMS\_LABELS\_FIELD{]}} list.
-Note that this overwrites any existing labels on the configurations.
-
-\end{fulllineitems}
-
-\index{refresh\_config\_sets() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_config\_sets()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.refresh_config_sets}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{refresh\_config\_sets}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
-\sphinxAtStartPar
-Re\sphinxhyphen{}constructs the configuration sets.
-
-\end{fulllineitems}
-
-\index{refresh\_property\_settings() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_property\_settings()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.refresh_property_settings}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{refresh\_property\_settings}}}{\emph{\DUrole{n}{verbose}\DUrole{o}{=}\DUrole{default_value}{False}}}{}
-\sphinxAtStartPar
-Refresh property pointers to PSOs by matching on their linked co names
-
-\end{fulllineitems}
-
-\index{rename\_property() (colabfit.tools.dataset.Dataset method)@\spxentry{rename\_property()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.rename_property}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{rename\_property}}}{\emph{\DUrole{n}{old\_name}}, \emph{\DUrole{n}{new\_name}}}{}
-\sphinxAtStartPar
-Renames old\_name field to new\_name in each Property
-
-\end{fulllineitems}
-
-\index{to\_markdown() (colabfit.tools.dataset.Dataset method)@\spxentry{to\_markdown()}\spxextra{colabfit.tools.dataset.Dataset method}}
-
-\begin{fulllineitems}
-\phantomsection\label{\detokenize{dataset:colabfit.tools.dataset.Dataset.to_markdown}}\pysiglinewithargsret{\sphinxbfcode{\sphinxupquote{to\_markdown}}}{\emph{\DUrole{n}{base\_folder}}, \emph{\DUrole{n}{html\_file\_name}}, \emph{\DUrole{n}{data\_file\_name}}, \emph{\DUrole{n}{data\_format}}, \emph{\DUrole{n}{name\_field}\DUrole{o}{=}\DUrole{default_value}{\textquotesingle{}\_name\textquotesingle{}}}}{}
-\sphinxAtStartPar
-Saves a Dataset and writes a properly formatted markdown file. In the
-case of a Dataset that has child Dataset objects, each child Dataset
-is written to a separate sub\sphinxhyphen{}folder.
-\begin{quote}\begin{description}
-\item[{Parameters}] \leavevmode\begin{itemize}
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{base\_folder}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Top\sphinxhyphen{}level folder in which to save the markdown and data files
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{html\_file\_name}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Name of file to save markdown to
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{data\_file\_name}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Name of file to save configuration and properties to
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{data\_format}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} Format to use for data file. Default is ‘xyz’
-
-\item {} 
-\sphinxAtStartPar
-\sphinxstyleliteralstrong{\sphinxupquote{name\_field}} (\sphinxstyleliteralemphasis{\sphinxupquote{str}}) \textendash{} The name of the field that should be used to generate
-configuration names
-
-\end{itemize}
-
-\end{description}\end{quote}
-
-\end{fulllineitems}
-
-
-\end{fulllineitems}
-
 \phantomsection\label{\detokenize{transformations:module-colabfit.tools.transformations}}\index{module@\spxentry{module}!colabfit.tools.transformations@\spxentry{colabfit.tools.transformations}}\index{colabfit.tools.transformations@\spxentry{colabfit.tools.transformations}!module@\spxentry{module}}
 
-\section{Transform}
+\subsection{Transform}
 \label{\detokenize{transformations:transform}}\label{\detokenize{transformations::doc}}\index{BaseTransform (class in colabfit.tools.transformations)@\spxentry{BaseTransform}\spxextra{class in colabfit.tools.transformations}}
 
 \begin{fulllineitems}
