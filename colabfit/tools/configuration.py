@@ -75,22 +75,26 @@ class Configuration(Atoms):
 
     def __hash__(self):
         """
-        Generates a hash for :code:`self` by hashing its length, constraints,
+        Generates a hash for :code:`self` by hashing its length
         positions, (atomic) numbers, simulation cell, and periodic
-        boundary conditions
+        boundary conditions.
+
+        Note that the positions and cell vectors are rounded to 8 decimal places
+        before being compared
         """
-        constraints_hash = hash(tuple(
-            hash(tuple(self.info[c])) if c in self.info
-            else hash(np.array(self.arrays[c]).data.tobytes())
-            for c in self.info[ATOMS_CONSTRAINTS_FIELD]
-        ))
+
+        # constraints_hash = hash(tuple(
+        #     hash(tuple(self.info[c])) if c in self.info
+        #     else hash(np.array(self.arrays[c]).data.tobytes())
+        #     for c in self.info[ATOMS_CONSTRAINTS_FIELD]
+        # ))
 
         return hash((
             len(self),
-            constraints_hash,
-            hash(self.arrays['positions'].data.tobytes()),
+            # constraints_hash,
+            hash(np.round_(self.arrays['positions'], decimals=8).data.tobytes()),
             hash(self.arrays['numbers'].data.tobytes()),
-            hash(np.array(self.cell).data.tobytes()),
+            hash(np.round_(np.array(self.cell), decimals=8).data.tobytes()),
             hash(np.array(self.pbc).data.tobytes()),
         ))
 
