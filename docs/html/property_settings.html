@@ -48,15 +48,13 @@
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="core_classes.html">Core classes</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="configuration.html">Configuration</a></li>
-<li class="toctree-l3"><a class="reference internal" href="property.html">Property</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">PropertySettings</a></li>
-<li class="toctree-l3"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
-<li class="toctree-l3"><a class="reference internal" href="dataset.html">Dataset</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="additional_tools.html">Additional tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property.html">Property</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">PropertySettings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="converters.html">Converter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="transformations.html">Transform</a></li>
 </ul>
 </li>
 </ul>
@@ -76,7 +74,6 @@
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
           <li><a href="classes.html">Classes</a> &raquo;</li>
-          <li><a href="core_classes.html">Core classes</a> &raquo;</li>
       <li>PropertySettings</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/property_settings.rst.txt" rel="nofollow"> View page source</a>
@@ -87,13 +84,13 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <span class="target" id="module-colabfit.tools.property_settings"></span><p>It is best practice to attach a <a class="reference internal" href="#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a> object to a
+  <span class="target" id="module-colabfit.tools.property_settings"></span><section id="propertysettings">
+<h1>PropertySettings<a class="headerlink" href="#propertysettings" title="Permalink to this headline"></a></h1>
+<p>It is best practice to attach a <a class="reference internal" href="#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a> object to a
 <a class="reference internal" href="property.html#colabfit.tools.property.Property" title="colabfit.tools.property.Property"><code class="xref py py-class docutils literal notranslate"><span class="pre">Property</span></code></a> instance in order to better document
 the conditions under which the property was computed. This would often include
 information such as the DFT software package, a description of the calculation,
 and an example file for running the calculation.</p>
-<section id="propertysettings">
-<h1>PropertySettings<a class="headerlink" href="#propertysettings" title="Permalink to this headline"></a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.property_settings.PropertySettings">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.property_settings.</span></span><span class="sig-name descname"><span class="pre">PropertySettings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property_settings.PropertySettings" title="Permalink to this definition"></a></dt>

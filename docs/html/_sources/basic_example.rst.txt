@@ -32,8 +32,9 @@ Adding Configurations
 
 Load the configurations onto the Dataset by either manually constructing the
 Configurations and assigning them to the :attr:`configurations` attribute, or
-using :meth:`~colabfit.tools.dataset.load_data`, which calls a pre-made Converter and
-returns a list of Configuration objects.
+using :meth:`~colabfit.tools.dataset.load_data`, which calls a pre-made
+:class:`~colabfit.tools.converters.BaseConverter` and returns a list of
+:class:`~colabfit.tools.configuration.Configuration` objects.
 
 Manually
 ^^^^^^^^
@@ -139,7 +140,8 @@ Parsing the data
 ================
 
 Parse the properties by specifying a :code:`property_map`, which is a special
-dictionary on a Dataset. See :ref:`Property map` for more details.
+dictionary on a Dataset. See :ref:`Parsing data` for more
+details.
 
 
 .. code-block:: python

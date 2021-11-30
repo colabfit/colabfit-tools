@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Custom property definition example &mdash; ColabFit Tools Documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Usage" href="usage.html" />
+    <link rel="prev" title="Writing an input Markdown file" href="md_file_input.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> colabfit-tools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="examples.html">Examples</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="basic_example.html">Basic example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="md_file_input.html">Writing an input Markdown file</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Custom property definition example</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="classes.html">Classes</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">colabfit-tools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="examples.html">Examples</a> &raquo;</li>
+      <li>Custom property definition example</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/custom_property.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="custom-property-definition-example">
+<h1>Custom property definition example<a class="headerlink" href="#custom-property-definition-example" title="Permalink to this headline"></a></h1>
+<p>If you are working with properties that:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>Are not part of the core properties like “energy”, “force”, “stress”, and “charge”</p></li>
+<li><p>AND none of the existing properties available from the <a class="reference external" href="https://openkim.org/properties">OpenKIM Property List</a> fit your needs</p></li>
+</ol>
+</div></blockquote>
+<p>Then it will be necessary to write a custom property definition to make sure
+that a Dataset is able to properly read your data, and to provide future users
+of your data with good documentation of the computed values.</p>
+<p>Custom properties can be defined by writing an EDN file that has been formatted
+according to the
+<a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">KIM Properties Framework</a>,
+or by using a Python dictionary with the same format.</p>
+<p>An example EDN file (which could also be stored as a Python dictionary) is
+shown below, and can be modified to fit most use cases.</p>
+<div class="highlight-markdown notranslate"><div class="highlight"><pre><span></span>{
+  &quot;property-id&quot; &quot;my-custom-property&quot;
+
+  &quot;property-title&quot; &quot;A custom, user-provided Property Definition. See https://openkim.org/doc/schema/properties-framework/ for instructions on how to build these files.&quot;
+
+  &quot;property-description&quot; &quot;Some human-readable description&quot;
+
+  &quot;a-custom-field-name&quot; {
+    &quot;type&quot;         &quot;string&quot;
+    &quot;has-unit&quot;     false
+    &quot;extent&quot;       []
+    &quot;required&quot;     false
+    &quot;description&quot;  &quot;The description of the custom field&quot;
+  }
+  &quot;a-custom-1d-array&quot; {
+    &quot;type&quot;         &quot;float&quot;
+    &quot;has-unit&quot;     true
+    &quot;extent&quot;       [&quot;:&quot;]
+    &quot;required&quot;     true
+    &quot;description&quot;  &quot;This should be a 1D vector of floats&quot;
+  }
+  &quot;a-custom-per-atom-array&quot; {
+    &quot;type&quot;         &quot;float&quot;
+    &quot;has-unit&quot;     true
+    &quot;extent&quot;       [&quot;:&quot;,3]
+    &quot;required&quot;     true
+    &quot;description&quot;  &quot;This is a 2D array of floats, where the second dimension has a length of 3&quot;
+  }
+}
+</pre></div>
+</div>
+<p>Note that when using a custom property definition, the
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.custom_definitions" title="colabfit.tools.dataset.Dataset.custom_definitions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">custom_definitions</span></code></a> dictionary on a
+Dataset must be updated:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">custom_definitions</span><span class="p">[</span><span class="s1">&#39;my-custom-definition&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;/path/to/EDN/file&#39;</span>
+
+<span class="c1"># OR</span>
+
+<span class="n">my_custom_definition</span> <span class="o">=</span> <span class="o">...</span>  <span class="c1"># the dictionary version of an EDN file</span>
+<span class="n">dataset</span><span class="o">.</span><span class="n">custom_definitions</span><span class="p">[</span><span class="s1">&#39;my-custom-definition&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">my_custom_definition</span>
+</pre></div>
+</div>
+<p>A real-world example definition can be found in the <a class="reference internal" href="qm9.html#qm9-example"><span class="std std-ref">QM9 example</span></a></p>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="md_file_input.html" class="btn btn-neutral float-left" title="Writing an input Markdown file" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="usage.html" class="btn btn-neutral float-right" title="Usage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, ColabFit.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

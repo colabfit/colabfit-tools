@@ -18,14 +18,14 @@ of the `ColabFit project <https://colabfit.openkim.org/>`_ at the University of
 Minnesota.
 
 Despite the rapidly increasing popularity of data-driven interatomic
-potentials (DDIPs), training data for these models has historically been
-difficult to obtain and work with. Data is often stored in internally-developed
-formats, insufficiently documented, and not made readily available to the
-public.
+potentials (DDIPs), training data for these models have historically been
+difficult to obtain and work with. Datasets are often stored in
+internally-developed formats, insufficiently documented, and not made readily
+available to the public.
 
 :code:`colabfit_tools` aims to address these problems by defining a standard
 method for representing DDIP training datasets programatically, and providing
-software tools for manipulating these representations.
+software tools for manipulating and sharing these representations.
 
 .. toctree::
    :maxdepth: 2

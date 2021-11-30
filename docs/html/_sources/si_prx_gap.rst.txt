@@ -1,6 +1,6 @@
-==========
-Si PRX GAP
-==========
+==================
+Si PRX GAP example
+==================
 
 This example will be used to highlight some of the more advanced features of the
 Dataset class using the popular `Si GAP dataset <https://www.repository.cam.ac.uk/handle/1810/317974>`_.
@@ -47,8 +47,8 @@ Since this dataset was manually constructed by its authors, a large amount of
 additional information has been provided to better identify the Configurations
 (see Table I. in `the original paper <https://journals.aps.org/prx/abstract/10.1103/PhysRevX.8.041048>`_).
 In order to retain this information, we define ConfigurationSets by regex
-matching on the Configuration names (see :ref:`Building configuration sets` for
-more details).
+matching on the Configuration names (see
+:ref:`Building configuration sets` for more details).
 
 .. code-block:: python
 
@@ -87,8 +87,8 @@ Manually applied Configuration labels
 
 Similarly, this additional knowledge about the types of Configurations in the
 dataset can be used to apply metadata labels to the Configurations, which is
-useful for enabling querying over the data by future users. See :ref:`Applying
-Configuration labels`
+useful for enabling querying over the data by future users. See
+:ref:`Applying configuration labels` for more details.
 
 .. code-block:: python
 

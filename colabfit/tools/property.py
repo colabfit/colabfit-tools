@@ -58,7 +58,12 @@ class Property(dict):
     Attributes:
         edn (dict):
             A dictionary defining an OpenKIM Property Instance in EDN format.
-            For more details, see the `OpenKIM Property Framework <https://openkim.org/doc/schema/properties-framework/>`_ documentation.
+            For more details, see the `OpenKIM Property Framework <https://openkim.org/doc/schema/properties-framework/>`_
+            documentation. In most cases, this dictionary should not be manually
+            constructed by the user. Instead, an OpenKIM Property Definition
+            (see :ref:`Custom properties` for details) should be provided using
+            a :attr:`~colabfit.tools.dataset.Dataset.property_map`, which will
+            let :attr:`edn` be automatically constructed.
 
         property_map (dict):
             key = a string that can be used as a key like :code:`self.edn[key]`
