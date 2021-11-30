@@ -70,6 +70,7 @@ class DatasetParser(HTMLParser):
         if tag == 'table':
             self.data[self._header] = self._table
             self._table = None
+            self._loading_table = False
         elif tag == 'tr':
             self._loading_row = False
 
@@ -85,6 +86,7 @@ class DatasetParser(HTMLParser):
                     )
                 self._header = data
                 self.data[self._header] = []
+
             else:
                 # Add data to current block
                 if not self._loading_table:

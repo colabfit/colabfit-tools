@@ -24,7 +24,7 @@ from kim_property.create import KIM_PROPERTIES
 
 from colabfit import (
     ATOMS_CONSTRAINTS_FIELD, ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, EDN_KEY_MAP,
-    OPENKIM_PROPERTY_UNITS
+    OPENKIM_PROPERTY_UNITS, DEFAULT_PROPERTY_NAME
 )
 from colabfit.tools.configuration_sets import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
@@ -230,8 +230,8 @@ class Dataset:
     def property_map(self, property_map):
         """IMPORTANT: call :meth:`resync` after modifying"""
 
-        for pname, pdict in property_map.values():
-            for fname, fdict in pdict.values():
+        for pname, pdict in property_map.items():
+            for fname, fdict in pdict.items():
                 for key in ['field', 'units']:
                     if key not in fdict:
                         raise RuntimeError(
@@ -269,6 +269,11 @@ class Dataset:
         """IMPORTANT: call :meth:`resync` after modifying"""
 
         self._configuration_label_regexes = regex_dict
+
+        for regex, labels in regex_dict.items():
+            if isinstance(labels, str):
+                regex_dict[regex] = set([labels])
+
         # self.refresh_config_labels()
 
 
@@ -386,8 +391,8 @@ class Dataset:
 
 # Properties
 
-|Name|Field|Units
-|---|---|---|
+|Property|KIM field|ASE field|Units
+|---|---|---|---|
 {}
 
 # Property settings
@@ -429,6 +434,7 @@ class Dataset:
             html_file_name = os.path.join(base_folder, html_file_name)
 
             definition_files = {}
+            definition_files['default'] = DEFAULT_PROPERTY_NAME
             for pid, definition in self.custom_definitions.items():
                 if isinstance(definition, dict):
                     def_fpath = open(os.path.join(base_folder, '{}.edn'), 'w')
