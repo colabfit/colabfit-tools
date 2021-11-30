@@ -48,15 +48,16 @@
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="core_classes.html">Core classes</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="configuration.html">Configuration</a></li>
-<li class="toctree-l3"><a class="reference internal" href="property.html">Property</a></li>
-<li class="toctree-l3"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">ConfigurationSet</a></li>
-<li class="toctree-l3"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property.html">Property</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ConfigurationSet</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#basics-of-configuration-sets">Basics of Configuration Sets</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="additional_tools.html">Additional tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="converters.html">Converter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="transformations.html">Transform</a></li>
 </ul>
 </li>
 </ul>
@@ -76,7 +77,6 @@
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
           <li><a href="classes.html">Classes</a> &raquo;</li>
-          <li><a href="core_classes.html">Core classes</a> &raquo;</li>
       <li>ConfigurationSet</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/configuration_set.rst.txt" rel="nofollow"> View page source</a>
@@ -89,6 +89,18 @@
              
   <span class="target" id="module-colabfit.tools.configuration_sets"></span><section id="configurationset">
 <h1>ConfigurationSet<a class="headerlink" href="#configurationset" title="Permalink to this headline"></a></h1>
+<p>A ConfigurationSet defines a relationship between a group of Configurations.
+This is useful when organizing a Dataset and can help future users of the
+dataset better understand its contents.</p>
+<p>The most important functionality of a ConfigurationSet is provided by its
+<a class="reference internal" href="#colabfit.tools.configuration_sets.ConfigurationSet.aggregate" title="colabfit.tools.configuration_sets.ConfigurationSet.aggregate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate()</span></code></a> method,
+which accumulates critical information about its group of configurations.</p>
+<section id="basics-of-configuration-sets">
+<h2>Basics of Configuration Sets<a class="headerlink" href="#basics-of-configuration-sets" title="Permalink to this headline"></a></h2>
+<p>The most often use-case is for a ConfigurationSet to be built by specifying the
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.configuration_set_regexes" title="colabfit.tools.dataset.Dataset.configuration_set_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code></a> dictionary of
+a Dataset. For more details about how to build ConfigurationSets,
+see <a class="reference internal" href="usage.html#building-configuration-sets"><span class="std std-ref">Building configuration sets</span></a>.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.configuration_sets.ConfigurationSet">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.configuration_sets.</span></span><span class="sig-name descname"><span class="pre">ConfigurationSet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">configurations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration_sets.ConfigurationSet" title="Permalink to this definition"></a></dt>
@@ -206,8 +218,24 @@ a fraction of the total number of atoms in the collection</p>
 <dd><p>list of weak references to the object (if defined)</p>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.configuration_sets.ConfigurationSet.aggregate">
+<span class="sig-name descname"><span class="pre">aggregate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration_sets.ConfigurationSet.aggregate" title="Permalink to this definition"></a></dt>
+<dd><p>Aggregates critical information from <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.configurations</span></code>.</p>
+<p>Aggregated information:</p>
+<ul class="simple">
+<li><p>Number of configurations (<code class="xref py py-attr docutils literal notranslate"><span class="pre">n_configurations</span></code>)</p></li>
+<li><p>Total number of atoms (<a class="reference internal" href="#colabfit.tools.configuration_sets.ConfigurationSet.n_sites" title="colabfit.tools.configuration_sets.ConfigurationSet.n_sites"><code class="xref py py-attr docutils literal notranslate"><span class="pre">n_sites</span></code></a>)</p></li>
+<li><p>Configuration labels (<a class="reference internal" href="#colabfit.tools.configuration_sets.ConfigurationSet.labels" title="colabfit.tools.configuration_sets.ConfigurationSet.labels"><code class="xref py py-attr docutils literal notranslate"><span class="pre">labels</span></code></a>)</p></li>
+<li><p>Total counts of each label (<a class="reference internal" href="#colabfit.tools.configuration_sets.ConfigurationSet.labels_counts" title="colabfit.tools.configuration_sets.ConfigurationSet.labels_counts"><code class="xref py py-attr docutils literal notranslate"><span class="pre">labels_counts</span></code></a>)</p></li>
+<li><p>Chemical systems (<a class="reference internal" href="#colabfit.tools.configuration_sets.ConfigurationSet.chemical_systems" title="colabfit.tools.configuration_sets.ConfigurationSet.chemical_systems"><code class="xref py py-attr docutils literal notranslate"><span class="pre">chemical_systems</span></code></a>)</p></li>
+<li><p>Relative confcentrations of each element (<a class="reference internal" href="#colabfit.tools.configuration_sets.ConfigurationSet.elements_ratios" title="colabfit.tools.configuration_sets.ConfigurationSet.elements_ratios"><code class="xref py py-attr docutils literal notranslate"><span class="pre">elements_ratios</span></code></a>)</p></li>
+</ul>
 </dd></dl>
 
+</dd></dl>
+
+</section>
 </section>
 
 

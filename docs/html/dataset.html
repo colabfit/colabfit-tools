@@ -22,7 +22,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Additional tools" href="additional_tools.html" />
+    <link rel="next" title="Converter" href="converters.html" />
     <link rel="prev" title="ConfigurationSet" href="configuration_set.html" /> 
 </head>
 
@@ -48,15 +48,13 @@
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="core_classes.html">Core classes</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="configuration.html">Configuration</a></li>
-<li class="toctree-l3"><a class="reference internal" href="property.html">Property</a></li>
-<li class="toctree-l3"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
-<li class="toctree-l3"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">Dataset</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="additional_tools.html">Additional tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property.html">Property</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="converters.html">Converter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="transformations.html">Transform</a></li>
 </ul>
 </li>
 </ul>
@@ -76,7 +74,6 @@
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
           <li><a href="classes.html">Classes</a> &raquo;</li>
-          <li><a href="core_classes.html">Core classes</a> &raquo;</li>
       <li>Dataset</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/dataset.rst.txt" rel="nofollow"> View page source</a>
@@ -93,13 +90,260 @@
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.dataset.</span></span><span class="sig-name descname"><span class="pre">Dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">authors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">links</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configurations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configuration_label_regexes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configuration_set_regexes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_settings_regexes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.dataset.Dataset" title="Permalink to this definition"></a></dt>
 <dd><dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.name">
+<span class="sig-name descname"><span class="pre">name</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.name" title="Permalink to this definition"></a></dt>
+<dd><p>Name of the dataset</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.authors">
+<span class="sig-name descname"><span class="pre">authors</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.authors" title="Permalink to this definition"></a></dt>
+<dd><p>Authors of the dataset</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.links">
+<span class="sig-name descname"><span class="pre">links</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.links" title="Permalink to this definition"></a></dt>
+<dd><p>External links to associate with the dataset</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.description">
+<span class="sig-name descname"><span class="pre">description</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.description" title="Permalink to this definition"></a></dt>
+<dd><p>A description of the datast</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.configurations">
+<span class="sig-name descname"><span class="pre">configurations</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.configurations" title="Permalink to this definition"></a></dt>
+<dd><p>A list of Configuration objects.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.data">
+<span class="sig-name descname"><span class="pre">data</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.data" title="Permalink to this definition"></a></dt>
+<dd><p>A list of Property objects OR a list of Dataset objects.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.property_fields">
+<span class="sig-name descname"><span class="pre">property_fields</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.property_fields" title="Permalink to this definition"></a></dt>
+<dd><p>A list of strings specifying the property fields that can be
+accessed using things like get_data() and apply_transformation()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.property_counts">
+<span class="sig-name descname"><span class="pre">property_counts</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.property_counts" title="Permalink to this definition"></a></dt>
+<dd><p>A list of integers counting the number of instances of each property
+in <cite>property_fields</cite>. Matches the order of <cite>property_fields</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.configuration_sets">
+<span class="sig-name descname"><span class="pre">configuration_sets</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.configuration_sets" title="Permalink to this definition"></a></dt>
+<dd><p>List of ConfigurationSet objects defining groups of configurations</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.property_settings">
+<span class="sig-name descname"><span class="pre">property_settings</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.property_settings" title="Permalink to this definition"></a></dt>
+<dd><p>A list of ProprtySetting objects collected by taking the settings
+linked to by all entries in <cite>properties</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.configuration_labels">
+<span class="sig-name descname"><span class="pre">configuration_labels</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.configuration_labels" title="Permalink to this definition"></a></dt>
+<dd><p>A list of all configuration labels. Same as
+<cite>sorted(list(self.configuration_label_regexes.keys()))</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.configuration_labels_counts">
+<span class="sig-name descname"><span class="pre">configuration_labels_counts</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.configuration_labels_counts" title="Permalink to this definition"></a></dt>
+<dd><p>A list of integers indicating the number of occurrences of each
+configuration label. Matches the order of
+<cite>self.configuration_labels</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.custom_definitions">
+<span class="sig-name descname"><span class="pre">custom_definitions</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.custom_definitions" title="Permalink to this definition"></a></dt>
+<dd><p>key = the name of a locally-defined property</p>
+<p>value = the path to an EDN file containing the property definition</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.property_settings_labels">
+<span class="sig-name descname"><span class="pre">property_settings_labels</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.property_settings_labels" title="Permalink to this definition"></a></dt>
+<dd><p>A list of all property settings labels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.property_settings_labels_counts">
+<span class="sig-name descname"><span class="pre">property_settings_labels_counts</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.property_settings_labels_counts" title="Permalink to this definition"></a></dt>
+<dd><p>A list of integers indicating the number of occurrences of each
+property settings label. Matches the order of
+<cite>self.property_settings_labels</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.elements">
+<span class="sig-name descname"><span class="pre">elements</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.elements" title="Permalink to this definition"></a></dt>
+<dd><p>A list of strings of element names present in the dataset</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.elements_ratios">
+<span class="sig-name descname"><span class="pre">elements_ratios</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.elements_ratios" title="Permalink to this definition"></a></dt>
+<dd><p>A list of floats; the total concentration of each element, given as
+a fraction of the total number of atoms in the dataset</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.chemical_systems">
+<span class="sig-name descname"><span class="pre">chemical_systems</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.chemical_systems" title="Permalink to this definition"></a></dt>
+<dd><p>A list of strings of chemical systems present in the dataset</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.n_configurations">
+<span class="sig-name descname"><span class="pre">n_configurations</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.n_configurations" title="Permalink to this definition"></a></dt>
+<dd><p><cite>len(self.configurations)</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.n_sites">
+<span class="sig-name descname"><span class="pre">n_sites</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.n_sites" title="Permalink to this definition"></a></dt>
+<dd><p><cite>sum([len(co) for co in self.configurations])</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.methods">
+<span class="sig-name descname"><span class="pre">methods</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.methods" title="Permalink to this definition"></a></dt>
+<dd><p><cite>[data.methods for self.data]</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.n_properties">
+<span class="sig-name descname"><span class="pre">n_properties</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.n_properties" title="Permalink to this definition"></a></dt>
+<dd><p>Total number of properties in the dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.__hash__">
 <span class="sig-name descname"><span class="pre">__hash__</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#colabfit.tools.dataset.Dataset.__hash__" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">authors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">links</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configurations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configuration_label_regexes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configuration_set_regexes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_settings_regexes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.__init__" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -149,7 +393,9 @@ appended to the name of each matching configuration</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.attach_dataset">
 <span class="sig-name descname"><span class="pre">attach_dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">supersede_existing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.attach_dataset" title="Permalink to this definition"></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Attaches a child dataset. Use this method instead of directly modifying
+<a class="reference internal" href="#colabfit.tools.dataset.Dataset.data" title="colabfit.tools.dataset.Dataset.data"><code class="xref py py-attr docutils literal notranslate"><span class="pre">Dataset.data</span></code></a>.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>dataset</strong> (<a class="reference internal" href="#colabfit.tools.dataset.Dataset" title="colabfit.tools.dataset.Dataset"><em>Dataset</em></a>) – The new dataset to be added</p></li>
@@ -199,12 +445,21 @@ for duplicate configurations.</p>
 <dl class="py property">
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.configuration_label_regexes">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">configuration_label_regexes</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.configuration_label_regexes" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>A dictionary where the key is a string that will be compiled with
+<cite>re.compile()</cite>, and the value is a list of string labels. Note that
+whenever <a class="reference internal" href="#colabfit.tools.dataset.Dataset.resync" title="colabfit.tools.dataset.Dataset.resync"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Dataset.resync()</span></code></a> is called, the labels provided in this
+dictionary are re-applied to the matching Configurations.</p>
+</dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.configuration_set_regexes">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">configuration_set_regexes</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.configuration_set_regexes" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>A dictionary where the key is a string that will be compiled with
+<cite>re.compile()</cite>, and the value is a description of a
+<a class="reference internal" href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet" title="colabfit.tools.configuration_sets.ConfigurationSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">ConfigurationSet</span></code></a>. Note that
+whenever <a class="reference internal" href="#colabfit.tools.dataset.Dataset.resync" title="colabfit.tools.dataset.Dataset.resync"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Dataset.resync()</span></code></a> is called,
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">self.configuration_sets</span></code> sets will be reconstructed.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.convert_units">
@@ -320,22 +575,9 @@ copying over <cite>property_map</cite>, <cite>configuration_label_regexes</cite>
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.flatten">
 <span class="sig-name descname"><span class="pre">flatten</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.flatten" title="Permalink to this definition"></a></dt>
-<dd><dl class="simple">
-<dt>Pseudocode:</dt><dd><ul class="simple">
-<li><p>convert everything to the same units</p></li>
-<li><p>merge authors/links</p></li>
-<li><dl class="simple">
-<dt>warn if overlap (maybe this should be done in attach()?)</dt><dd><ul>
-<li><p>tell me which dataset has an overlap with which other (disjoint)</p></li>
-<li><p>optionally merge subset datasets</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p>check if conflicting CO labels, CS regexes, or PS regexes</p></li>
-</ul>
-</dd>
-</dl>
+<dd><p>Attempts to “flatten” a parent dataset by merging the Property and
+Configuration lists of all of its children.</p>
+<p>Author lists, reference links, and descriptions are also merged.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -455,9 +697,9 @@ same configuration is the more important version.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.parse_data">
 <span class="sig-name descname"><span class="pre">parse_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">convert_units</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.parse_data" title="Permalink to this definition"></a></dt>
-<dd><p>Re-constructs <cite>self.data</cite> by building a list of Property objects using
-<cite>self.property_map</cite> and <cite>self.configurations</cite>. Modifies <cite>self.data</cite> in
-place. If <cite>convert_units==True</cite>, then the units in <cite>self.property_map</cite>
+<dd><p>Re-constructs <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.data</span></code> by building a list of Property objects using
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">self.property_map</span></code> and <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.configurations</span></code>. Modifies <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.data</span></code> in
+place. If <code class="code docutils literal notranslate"><span class="pre">convert_units==True</span></code>, then the units in <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.property_map</span></code>
 are also updated.</p>
 </dd></dl>
 
@@ -473,9 +715,30 @@ are also updated.</p>
 <dd></dd></dl>
 
 <dl class="py property">
+<dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.property_map">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">property_map</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.property_map" title="Permalink to this definition"></a></dt>
+<dd><p>A dictionary with the following structure.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="o">&lt;</span><span class="n">property_name</span><span class="o">&gt;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="o">&lt;</span><span class="n">property_field</span><span class="o">&gt;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">key_for_info_or_arrays</span><span class="o">&gt;</span><span class="p">,</span>
+            <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">ase_readable_units</span><span class="o">&gt;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="usage.html#parsing-data"><span class="std std-ref">Parsing data</span></a> for more details.</p>
+</dd></dl>
+
+<dl class="py property">
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.property_settings_regexes">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">property_settings_regexes</span></span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.property_settings_regexes" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>A dictionary where the key is a string that will be compiled with
+<cite>re.compile()</cite>, and the value is the description of the
+configuration set. Note that whenever this dictionary is
+re-assigned, <cite>configuration_sets</cite> is re-constructed.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.refresh_config_labels">
@@ -557,7 +820,7 @@ configuration names</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.dataset.Dataset.train_test_split">
-<span class="sig-name descname"><span class="pre">train_test_split</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_frac</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.train_test_split" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">train_test_split</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_frac</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">copy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.dataset.Dataset.train_test_split" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -602,7 +865,7 @@ for <cite>file_format == ‘folder’</cite>.</p></li>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="configuration_set.html" class="btn btn-neutral float-left" title="ConfigurationSet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="additional_tools.html" class="btn btn-neutral float-right" title="Additional tools" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="converters.html" class="btn btn-neutral float-right" title="Converter" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

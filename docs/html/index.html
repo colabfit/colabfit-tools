@@ -81,13 +81,13 @@ exploring datasets for data-driven interatomic potentials. This package is part
 of the <a class="reference external" href="https://colabfit.openkim.org/">ColabFit project</a> at the University of
 Minnesota.</p>
 <p>Despite the rapidly increasing popularity of data-driven interatomic
-potentials (DDIPs), training data for these models has historically been
-difficult to obtain and work with. Data is often stored in internally-developed
-formats, insufficiently documented, and not made readily available to the
-public.</p>
+potentials (DDIPs), training data for these models have historically been
+difficult to obtain and work with. Datasets are often stored in
+internally-developed formats, insufficiently documented, and not made readily
+available to the public.</p>
 <p><code class="code docutils literal notranslate"><span class="pre">colabfit_tools</span></code> aims to address these problems by defining a standard
 method for representing DDIP training datasets programatically, and providing
-software tools for manipulating these representations.</p>
+software tools for manipulating and sharing these representations.</p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
@@ -97,31 +97,44 @@ software tools for manipulating these representations.</p>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="getting_started.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#first-steps">First steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="basic_example.html">Basic example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
-<li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="md_file_input.html">Writing an input Markdown file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="custom_property.html">Custom property definition example</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#property-map">Property map</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#applying-configuration-labels">Applying Configuration labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#synchronizing-a-dataset">Synchronizing a Dataset</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#custom-properties">Custom properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#regex-dictionaries">Regex dictionaries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#parsing-data">Parsing data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#applying-configuration-labels">Applying configuration labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#building-configuration-sets">Building configuration sets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#attaching-property-settings">Attaching property settings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#reading-writing-datasets-with-markdown">Reading/writing Datasets with Markdown</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#visualization">Visualization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#data-exploration">Data exploration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#filtering-a-dataset">Filtering a Dataset</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#checking-for-subsets">Checking for subsets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#data-transformation">Data transformation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#data-transformations">Data transformations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#building-parent-datasets">Building parent datasets</a></li>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#train-test-splits">Train/test splits</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#loading-data">Loading data</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#building-configuration-sets">Building configuration sets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#units">Units</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#supported-file-formats">Supported file formats</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="classes.html">Classes</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="core_classes.html">Core classes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="additional_tools.html">Additional tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property.html">Property</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="converters.html">Converter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="transformations.html">Transform</a></li>
 </ul>
 </li>
 </ul>

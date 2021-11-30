@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Si PRX GAP &mdash; ColabFit Tools Documentation</title>
+  <title>Si PRX GAP example &mdash; ColabFit Tools Documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
@@ -22,7 +22,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Usage" href="usage.html" />
+    <link rel="next" title="Writing an input Markdown file" href="md_file_input.html" />
     <link rel="prev" title="QM9 example" href="qm9.html" /> 
 </head>
 
@@ -48,7 +48,7 @@
 <li class="toctree-l1 current"><a class="reference internal" href="examples.html">Examples</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="basic_example.html">Basic example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Si PRX GAP</a><ul>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Si PRX GAP example</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#loading-from-a-file">Loading from a file</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#manually-constructed-configurationsets">Manually constructed ConfigurationSets</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#manually-applied-configuration-labels">Manually applied Configuration labels</a></li>
@@ -56,6 +56,8 @@
 <li class="toctree-l3"><a class="reference internal" href="#filtering-based-on-xc-functional">Filtering based on XC-functional</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="md_file_input.html">Writing an input Markdown file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="custom_property.html">Custom property definition example</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
@@ -77,7 +79,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
           <li><a href="examples.html">Examples</a> &raquo;</li>
-      <li>Si PRX GAP</li>
+      <li>Si PRX GAP example</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/si_prx_gap.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -87,8 +89,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="si-prx-gap">
-<h1>Si PRX GAP<a class="headerlink" href="#si-prx-gap" title="Permalink to this headline"></a></h1>
+  <section id="si-prx-gap-example">
+<h1>Si PRX GAP example<a class="headerlink" href="#si-prx-gap-example" title="Permalink to this headline"></a></h1>
 <p>This example will be used to highlight some of the more advanced features of the
 Dataset class using the popular <a class="reference external" href="https://www.repository.cam.ac.uk/handle/1810/317974">Si GAP dataset</a>.
 It is suggested that you go through the <a class="reference internal" href="basic_example.html#basic-example"><span class="std std-ref">basic example</span></a> first. The complete
@@ -128,8 +130,8 @@ progress bar.</p>
 additional information has been provided to better identify the Configurations
 (see Table I. in <a class="reference external" href="https://journals.aps.org/prx/abstract/10.1103/PhysRevX.8.041048">the original paper</a>).
 In order to retain this information, we define ConfigurationSets by regex
-matching on the Configuration names (see <a class="reference internal" href="usage.html#building-configuration-sets"><span class="std std-ref">Building configuration sets</span></a> for
-more details).</p>
+matching on the Configuration names (see
+<a class="reference internal" href="usage.html#building-configuration-sets"><span class="std std-ref">Building configuration sets</span></a> for more details).</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configuration_set_regexes</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s1">&#39;isolated_atom&#39;</span><span class="p">:</span> <span class="s1">&#39;Reference atom&#39;</span><span class="p">,</span>
     <span class="s1">&#39;bt&#39;</span><span class="p">:</span> <span class="s1">&#39;Beta-tin&#39;</span><span class="p">,</span>
@@ -166,7 +168,8 @@ more details).</p>
 <h2>Manually applied Configuration labels<a class="headerlink" href="#manually-applied-configuration-labels" title="Permalink to this headline"></a></h2>
 <p>Similarly, this additional knowledge about the types of Configurations in the
 dataset can be used to apply metadata labels to the Configurations, which is
-useful for enabling querying over the data by future users. See <a class="reference internal" href="usage.html#applying-configuration-labels"><span class="std std-ref">Applying Configuration labels</span></a></p>
+useful for enabling querying over the data by future users. See
+<a class="reference internal" href="usage.html#applying-configuration-labels"><span class="std std-ref">Applying configuration labels</span></a> for more details.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configuration_label_regexes</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s1">&#39;isolated_atom&#39;</span><span class="p">:</span> <span class="s1">&#39;isolated_atom&#39;</span><span class="p">,</span>
     <span class="s1">&#39;bt&#39;</span><span class="p">:</span> <span class="s1">&#39;a5&#39;</span><span class="p">,</span>
@@ -253,7 +256,7 @@ into three separate datasets using the
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="qm9.html" class="btn btn-neutral float-left" title="QM9 example" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="usage.html" class="btn btn-neutral float-right" title="Usage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="md_file_input.html" class="btn btn-neutral float-right" title="Writing an input Markdown file" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>
