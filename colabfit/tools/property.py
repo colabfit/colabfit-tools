@@ -463,10 +463,19 @@ class Property(dict):
         Hashes the Property by hashing its linked PropertySettings,
         Configurations, and EDN.
         """
+
+        hashed_values = []
+        for key, val in self.edn.items():
+            if key in _ignored_fields: continue
+
+            hashed_values.append(hash(
+                np.round_(np.array(val['source-value']), decimals=8).data.tobytes()
+            ))
+
         return hash((
             hash(self.settings),
             tuple([hash(c) for c in self.configurations]),
-            json.dumps(self.edn)
+            hash(tuple(hashed_values))
         ))
 
 
@@ -477,34 +486,40 @@ class Property(dict):
         - Properties point to settings with different calculation methods
         - Properties point to different configurations
         - OpenKIM EDN fields differ in any way
+
+        Note that comparison is performed by hashing
         """
 
-        if self.settings is not None:
-            if other.settings is None:
-                return False
+        h1 = hash(self)
+        h2 = hash(other)
 
-            if self.settings != other.settings:
-                return False
+        if h1 != h2:
+            print(self, other)
 
-        if set(self.configurations) != set(other.configurations):
-            self.configurations[0] == other.configurations[0]
-            return False
+        return hash(self) == hash(other)
 
-        for my_field, my_val in self.edn.items():
-            # Check if the field exists
-            if my_field not in other.edn:
-                return False
+        # if self.settings is not None:
+        #     if other.settings is None:
+        #         return False
 
-            # Compare value if it's not a field that should be ignored
-            if my_field not in _ignored_fields:
-                if my_val != other.edn[my_field]:
-                    return False
+        #     if self.settings != other.settings:
+        #         return False
 
-        return True
+        # if set(self.configurations) != set(other.configurations):
+        #     self.configurations[0] == other.configurations[0]
+        #     return False
 
+        # for my_field, my_val in self.edn.items():
+        #     # Check if the field exists
+        #     if my_field not in other.edn:
+        #         return False
 
-    def __neq__(self, other):
-        return not self.__eq__(other)
+        #     # Compare value if it's not a field that should be ignored
+        #     if my_field not in _ignored_fields:
+        #         if my_val != other.edn[my_field]:
+        #             return False
+
+        # return True
 
 
     def keys(self):
