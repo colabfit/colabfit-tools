@@ -437,9 +437,9 @@ class Dataset:
             definition_files['default'] = DEFAULT_PROPERTY_NAME
             for pid, definition in self.custom_definitions.items():
                 if isinstance(definition, dict):
-                    def_fpath = open(os.path.join(base_folder, '{}.edn'), 'w')
+                    def_fpath = os.path.join(base_folder, f'{pid}.edn')
 
-                    json.dump(definition, def_fpath)
+                    json.dump(definition, open(def_fpath, 'w'))
 
                     definition_files[pid] = def_fpath
                 else:
@@ -585,27 +585,22 @@ class Dataset:
         if data_info['Name field'] == 'None':
             data_info['Name field'] = None
 
-        dataset.configurations = load_data(
-            file_path=os.path.join(base_path, data_info['File'][1]),
-            file_format=data_info['Format'],
-            name_field=data_info['Name field'],
-            elements=elements,
-            default_name=parser.data['Name'],
-            verbose=verbose
-        )
-
         # Extract labels and trigger label refresh for configurations
+        labels = parser.get_data('Configuration labels')
         dataset.configuration_label_regexes = {
             l[0].replace('\|', '|'):
                 [_.strip() for _ in l[1].split(',')]
-                for l in parser.get_data('Configuration labels')[1:]
+                for l in labels[1:] if l
         }
 
         # Extract configuration sets and trigger CS refresh
+        config_sets = parser.get_data('Configuration sets')
+
         dataset.configuration_set_regexes = {
             l[0].replace('\|', '|'):
-                l[1]for l in parser.get_data('Configuration sets')[1:]
+                l[1]for l in config_sets[1:] if l
         }
+
         property_map = {}
         for prop in parser.get_data('Properties')[1:]:
             pid, kim_field, ase_field, units = prop
@@ -635,6 +630,15 @@ class Dataset:
             }
 
         dataset.property_map = property_map
+
+        dataset.configurations = load_data(
+            file_path=os.path.join(base_path, data_info['File'][1]),
+            file_format=data_info['Format'],
+            name_field=data_info['Name field'],
+            elements=elements,
+            default_name=parser.data['Name'],
+            verbose=verbose
+        )
 
         dataset.parse_data(convert_units=convert_units, verbose=verbose)
 
