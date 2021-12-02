@@ -1653,10 +1653,6 @@ class Dataset:
         return self.issubset(other) and other.issubset(self)
 
 
-    def __ne__(self, other):
-        return not self == other
-
-
     def get_available_configuration_fields(self):
         fields = {'info': set(), 'arrays': set()}
 

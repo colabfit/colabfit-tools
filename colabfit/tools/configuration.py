@@ -99,6 +99,9 @@ class Configuration(Atoms):
         ))
 
 
+    def __eq__(self, other):
+        return hash(self) == hash(other)
+
     def __str__(self):
         ase_str = super().__str__()
         return "Configuration(name='{}', {})".format(
