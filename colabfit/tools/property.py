@@ -192,7 +192,8 @@ class Property(dict):
         for key in self._edn:
             if key in _ignored_fields: continue
 
-            fields.append(EDN_KEY_MAP.get(key, key))
+            # fields.append(EDN_KEY_MAP.get(key, key))
+            fields.append(key)
 
         self._property_fields = fields
 
@@ -236,7 +237,7 @@ class Property(dict):
                 # Check if you need to spoof the property ID to trick OpenKIM
                 if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
                     # Invalid ID. Try spoofing it
-                    dummy_dict['property-id'] = 'tag:@,0000-00-00:property/' + definition['property-id']
+                    dummy_dict['property-id'] = 'tag:@,0000-00-00:property/' + dummy_dict['property-id']
                     warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
 
                 load_from_existing = dummy_dict['property-id'] in KIM_PROPERTIES
@@ -530,14 +531,25 @@ class Property(dict):
         """Overloaded :meth:`dict.__setitem__` for setting the values of :attr:`self.edn`"""
         edn_key = EDN_KEY_MAP.get(k, k)
 
-        self.edn[edn_key] = v
+        if k in self.edn:
+            self.edn[k] = v
+        elif edn_key in self.edn:
+            self.edn[edn_key] = v
+        else:
+            KeyError(
+                f"Field '{k}' not found in Property.edn. Returning None"
+            )
 
 
     def __getitem__(self, k):
         """Overloaded :meth:`dict.__getitem__` for getting the values of :attr:`self.edn`"""
         edn_key = EDN_KEY_MAP.get(k, k)
 
-        if edn_key not in self.edn:
+        if k in self.edn:
+            return self.edn[k]
+        elif edn_key in self.edn:
+            return self.edn[edn_key]
+        else:
             warnings.warn(
                 f"Field '{k}' not found in Property.edn. Returning None"
             )
@@ -545,20 +557,23 @@ class Property(dict):
             return None
 
 
-        return self.edn[edn_key]
-
-
     def get_data(self, k):
         """
+        First checks if :code:`k` is in :code:`self.edn`. If not, checks under
+        possible pseudonyms. If nothing exists, returns :code:`np.nan`
+
         Returns:
             data (np.array or np.nan):
                 :attr:`self[k]['source-value']` if :code:`k` is a valid key,
                 else :code:`np.nan`.
 
         """
+
         edn_key = EDN_KEY_MAP.get(k, k)
 
-        if edn_key in self.edn:
+        if k in self.edn:
+            return np.atleast_1d(self[k]['source-value'])
+        elif edn_key in self.edn:
             return np.atleast_1d(self[edn_key]['source-value'])
         else:
             return np.nan

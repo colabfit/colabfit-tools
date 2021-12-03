@@ -612,7 +612,7 @@ class Dataset:
             elif isinstance(pid, tuple):
                 pname = pid[0]
 
-                edn_path = os.path.join(base_path, pid[1])
+                edn_path = os.path.abspath(pid[1])
                 dataset.custom_definitions[pname] = edn_path
                 # dataset._custom_definitions[pname] = os.path.abspath(edn_path)
                 # dataset._custom_definitions[pname] = os.path.join(os.getcwd(), edn_path)
@@ -660,7 +660,7 @@ class Dataset:
 
         dataset.property_settings_regexes = ps_regexes
 
-        dataset.resync()
+        dataset.resync(verbose=verbose)
 
         return dataset
 
@@ -992,6 +992,9 @@ class Dataset:
                             definition = PROPERTY_NAME_TO_PROPERTY_ID[definition]
                         elif pid in self._definitions_added_to_kim:
                             # Recently added local definition with spoofing
+                            definition = pid
+                        elif os.path.isfile(pid):
+                            # Existing local file that hasn't been added
                             definition = pid
                         else:
                             # Completely new definition
@@ -1780,10 +1783,33 @@ class Dataset:
                     if _ not in cs_ids
                 ]
 
-            property_field = EDN_KEY_MAP.get(property_field, property_field)
+            # property_field = EDN_KEY_MAP.get(property_field, property_field)
 
-            tmp = [d.get_data(property_field) for d in self.data]
-            tmp = [t for t in tmp if t is not np.nan]
+            # Extract only the data from the given CSs
+            config_sets = []
+            for j, cs in enumerate(self.configuration_sets):
+                add = (j in cs_ids and not exclude) or (j not in cs_ids and exclude)
+                if add:
+                    config_sets.append(cs)
+
+            configurations = itertools.chain.from_iterable([
+                cs.configurations for cs in config_sets
+            ])
+
+            quickset = set(configurations)
+
+            tmp = []
+            for d in self.data:
+                add = True
+
+                for conf in d.configurations:
+                    if conf not in quickset:
+                        add = False
+
+                if add:
+                    v = d.get_data(property_field)
+                    if v is not np.nan:
+                        tmp.append(v)
 
             if concatenate:
                 tmp = np.concatenate(tmp)
@@ -1818,7 +1844,7 @@ class Dataset:
         }
 
 
-    def plot_histograms(self, fields=None, xscale='linear', yscale='linear'):
+    def plot_histograms(self, fields=None, cs_ids=None, xscale='linear', yscale='linear'):
         """
         Generates histograms of the given fields.
         """
@@ -1834,26 +1860,29 @@ class Dataset:
         fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
 
         for i, prop in enumerate(fields):
-            data = self.get_data(prop, ravel=True)
+            data = self.get_data(prop, cs_ids=cs_ids, ravel=True)
+
+            nbins = max(data.shape[0]//1000, 100)
 
             c = i % 3
             r = i // 3
 
             if nrows > 1:
                 fig.add_trace(
-                    go.Histogram(x=data, nbinsx=100),
+                    go.Histogram(x=data, nbinsx=nbins),
                     row=r+1, col=c+1,
                 )
             else:
                 fig.add_trace(
-                    go.Histogram(x=data, nbinsx=100),
+                    go.Histogram(x=data, nbinsx=nbins),
                     row=1, col=c+1
                 )
 
         fig.update_layout(showlegend=False)
         fig.update_xaxes(type=xscale)
         fig.update_yaxes(type=yscale)
-        fig.show()
+
+        return fig
 
 
     def dataset_from_config_sets(self, cs_ids, exclude=False, verbose=False):
@@ -1965,13 +1994,13 @@ class Dataset:
                     ds.configuration_set_regexes, ds.configuration_sets
                     )):
 
-                    print(f'DS={i}, CS={j} (n_configurations={cs.n_configurations}, n_sites={cs.n_sites}, regex="{regex}"): {cs.description}')
+                    print(f'DS={i}, CS={j} (n_configurations={cs.n_configurations}, n_sites={cs.n_sites}, regex="{regex}"):\n{cs.description}\n')
         else:
             for i, (regex, cs) in enumerate(zip(
                 self.configuration_set_regexes, self.configuration_sets
                 )):
 
-                print(f'CS={i} (n_configurations={cs.n_configurations}, n_sites={cs.n_sites}, regex="{regex}"): {cs.description}')
+                print(f'CS={i} (n_configurations={cs.n_configurations}, n_sites={cs.n_sites}, regex="{regex}"):\n{cs.description}\n')
 
 
     def train_test_split(self, train_frac, copy=False):
@@ -2136,6 +2165,7 @@ class Dataset:
                         if filter_fxn(c):
                             data.append(d)
                             configurations.add(c)
+                            break
 
         configurations = list(configurations)
 
@@ -2162,7 +2192,7 @@ class Dataset:
         ds.configuration_label_regexes = configuration_label_regexes
         ds.property_settings_regexes = property_settings_regexes
 
-        ds.resync()
+        ds.resync(verbose=verbose)
 
         return ds
 
