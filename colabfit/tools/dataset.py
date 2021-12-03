@@ -140,6 +140,8 @@ class Dataset:
         property_settings_regexes=None,
         ):
 
+        # almost ALL of this stuff should be stored in the mongoDB
+
         self.name           = name
         self.authors        = authors
         self.links          = links

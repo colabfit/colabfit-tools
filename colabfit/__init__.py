@@ -2,8 +2,15 @@ __version__ = "0.0.1"
 __author__  = "ColabFit"
 __credit__  = "University of Minnesota"
 
+_MONGO_DB = 'colabfit-database'
 
-ATOMS_ID_FIELD          = '_id'
+_CONFIG_COLLECTION = 'configurations'
+_CONSET_COLLECTION = 'configuration_sets'
+_PROP_COLLECTION = 'properties'
+_PROPSET_COLLECTION = 'properties'
+_DSETS_COLLECTION  = 'datasets'
+
+# ATOMS_ID_FIELD          = '_id'
 ATOMS_NAME_FIELD        = '_name'
 ATOMS_LABELS_FIELD      = '_labels'
 ATOMS_CONSTRAINTS_FIELD = '_constraints'

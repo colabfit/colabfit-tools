@@ -32,5 +32,6 @@ setup(
         'bson',
         'markdown',
         'plotly',
+        'montydb',
     ],
 )
