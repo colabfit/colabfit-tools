@@ -9,9 +9,8 @@ from colabfit.tools.configuration import Configuration
 
 
 class TestDatabase:
-    def test_adding_configurations(self):
-        database = Database('/tmp/test.hdf5', mode='w')
-
+    @staticmethod
+    def add_n(database, n):
         energies            = []
         stress              = []
         names               = []
@@ -22,7 +21,7 @@ class TestDatabase:
         nd_diff_shape_arr   = []
 
         images = []
-        for i in range(1, 101):
+        for i in range(1, n+1):
             atoms = Atoms(f'H{i}', positions=np.random.random((i, 3)))
 
             atoms.info['energy'] = np.random.random()
@@ -56,6 +55,27 @@ class TestDatabase:
             images.append(Configuration.from_ase(atoms))
 
         database.add_configurations(images)
+
+        return (
+            images,
+            energies, stress, names, nd_same_shape, nd_diff_shape,
+            forces, nd_same_shape_arr, nd_diff_shape_arr
+        )
+
+
+    def test_adding_configurations(self):
+        database = Database('/tmp/test.hdf5', mode='w')
+
+        returns = self.add_n(database, 2)
+
+        energies            = returns[1]
+        stress              = returns[2]
+        names               = returns[3]
+        nd_same_shape       = returns[4]
+        nd_diff_shape       = returns[5]
+        forces              = returns[6]
+        nd_same_shape_arr   = returns[7]
+        nd_diff_shape_arr   = returns[8]
 
         database.concatenate_group('configurations/info/energy')
         database.concatenate_group('configurations/info/stress')
@@ -112,3 +132,16 @@ class TestDatabase:
             np.testing.assert_allclose(a1, a2)
 
         os.remove('/tmp/test.hdf5')
+
+    
+    def test_get_one_configuration(self):
+        database = Database('/tmp/test.hdf5', mode='w')
+
+        images = self.add_n(database, 2)[0]
+
+        atoms = database.get_configuration(0)
+
+
+
+    def test_get_one_configuration_after_concat(self):
+        pass
