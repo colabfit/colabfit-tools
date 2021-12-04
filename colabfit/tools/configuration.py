@@ -1,9 +1,8 @@
 import numpy as np
 from ase import Atoms
-from bson import ObjectId
 
 from colabfit import (
-    ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
+    ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
     ATOMS_CONSTRAINTS_FIELD
 )
 
@@ -13,7 +12,6 @@ class Configuration(Atoms):
     A Configuration is an extension of an :class:`ase.Atoms` object that is
     guaranteed to have the following fields in its :attr:`info` dictionary:
 
-    - :attr:`~colabfit.ATOMS_ID_FIELD` = :code:"_id"
     - :attr:`~colabfit.ATOMS_NAME_FIELD` = :code:"_name"
     - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
     - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD` = :code:"_constraints"
@@ -25,8 +23,6 @@ class Configuration(Atoms):
         populates the additional required fields.
         """
         super().__init__(*args, **kwargs)
-
-        self.info[ATOMS_ID_FIELD] = ObjectId()
 
         if ATOMS_NAME_FIELD in self.info:
             self.info[ATOMS_NAME_FIELD] = str(self.info[ATOMS_NAME_FIELD])

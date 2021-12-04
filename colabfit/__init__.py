@@ -2,6 +2,8 @@ __version__ = "0.0.1"
 __author__  = "ColabFit"
 __credit__  = "University of Minnesota"
 
+MAX_STRING_LENGTH = 128
+STRING_DTYPE_SPECIFIER = f'S{MAX_STRING_LENGTH}'
 
 ATOMS_ID_FIELD          = '_id'
 ATOMS_NAME_FIELD        = '_name'
