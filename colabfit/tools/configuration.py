@@ -1,5 +1,7 @@
+import datetime
 import numpy as np
 from ase import Atoms
+from string import ascii_lowercase, ascii_uppercase
 
 from colabfit import (
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
@@ -17,10 +19,19 @@ class Configuration(Atoms):
     - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD` = :code:"_constraints"
     """
 
-    def __init__(self, labels=None, constraints=None, *args, **kwargs):
+    def __init__(
+        self, description='', labels=None, constraints=None, *args, **kwargs
+        ):
         """
         Constructs a Configuration. Calls :meth:`ase.Atoms.__init__()`, then
         populates the additional required fields.
+
+        Args:
+
+            description (str):
+                A human-readable description. Can also be a list of strings.
+
+            
         """
         super().__init__(*args, **kwargs)
 
@@ -45,6 +56,25 @@ class Configuration(Atoms):
 
         self.info[ATOMS_CONSTRAINTS_FIELD] = set(constraints)
 
+
+        # Additional fields for querying
+
+        atomic_symbols = self.get_chemical_symbols()
+        processed_fields = process_species_list(atomic_symbols)
+
+        self.info['_description'] = description
+        self.info['_last_modified'] = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        self.info['_elements'] = processed_fields['elements']
+        self.info['_nelements'] = processed_fields['nelements']
+        self.info['_elements_ratios'] = processed_fields['elements_ratios']
+        self.info['_chemical_formula_reduced'] = processed_fields['chemical_formula_reduced']
+        self.info['_chemical_formula_anonymous'] = processed_fields['chemical_formula_anonymous']
+        self.info['_chemical_formula_hill'] = self.get_chemical_formula()
+        self.info['_natoms'] = processed_fields['natoms']
+        # self.info['_species'] = processed_fields['species']
+        self.info['_dimension_types'] = self.get_pbc().astype(int)
+        self.info['_nperiodic_dimensions'] = sum(self.get_pbc())
+        self.info['_lattice_vectors'] = np.array(self.get_cell())
 
     @classmethod
     def from_ase(cls, atoms):
@@ -108,3 +138,70 @@ class Configuration(Atoms):
     # # Don't do this. It will cause a recursion error
     # def __repr__(self):
     #     return str(self)
+
+
+def process_species_list(atomic_species):
+    """Extracts useful metadata from a list of atomic species"""
+    natoms = len(atomic_species)
+    elements = sorted(list(set(atomic_species)))
+    nelements = len(elements)
+    elements_ratios = [
+        atomic_species.count(el)/natoms for el in elements
+    ]
+
+    species_counts = [atomic_species.count(sp) for sp in elements]
+
+    # Build per-element proportions
+    from math import gcd
+    from functools import reduce
+    def find_gcd(list):
+        x = reduce(gcd, list)
+        return x
+
+    count_gcd = find_gcd(species_counts)
+    species_proportions = [sc//count_gcd for sc in species_counts]
+
+    chemical_formula_reduced = ''
+    for elem, elem_prop in zip(elements, species_proportions):
+        chemical_formula_reduced += '{}{}'.format(
+            elem, '' if elem_prop == 1 else str(elem_prop)
+        )
+
+    # Replace elements with A, B, C, ...
+    species_proportions = sorted(species_proportions, reverse=True)
+
+    chemical_formula_anonymous = ''
+    for spec_idx, spec_count in enumerate(species_proportions):
+        # OPTIMADE uses A...Z, then Aa..Za, ..., up to Az...Zz
+
+        count1 = spec_idx // 26
+        count2 = spec_idx %  26
+
+        if count1 == 0:
+            anon_spec = ascii_uppercase[count2]
+        else:
+            anon_spec = ascii_uppercase[count1] + ascii_lowercase[count2]
+
+        chemical_formula_anonymous += anon_spec
+        if spec_count > 1:
+            chemical_formula_anonymous += str(spec_count)
+
+    species = []
+    for el in elements:
+        # https://github.com/Materials-Consortia/OPTIMADE/blob/develop/optimade.rst#7214species
+        species.append({
+            'name': el,
+            'chemical_symbols': [el],
+            'concentration': [1.0],
+        })
+
+    return {
+        'natoms': natoms,
+        'elements': elements,
+        'nelements': nelements,
+        'elements_ratios': elements_ratios,
+        'chemical_formula_anonymous': chemical_formula_anonymous,
+        'chemical_formula_reduced': chemical_formula_reduced,
+        'species': species,
+    }
+
