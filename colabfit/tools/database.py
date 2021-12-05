@@ -1,13 +1,24 @@
-import os
 import h5py
 import numpy as np
+from ase import Atoms
 
 from colabfit import (
-    MAX_STRING_LENGTH,
     STRING_DTYPE_SPECIFIER
 )
 from colabfit.tools.configuration import Configuration
 
+
+"""
+TODO:
+
+* How will you support fast queries? The old Mongo thing had specific fields
+  that it could query over
+    * Maybe I should add more default fields to a configuration:
+        elements, nelements, elements_ratios, chemical_formula_*,
+        dimension_types, nperiodic_dimensions, nsites
+* Does it make sense to make configuration stuff concatenatable? If each
+  configuration were just its own "document", it would be easier to query
+"""
 
 class Database(h5py.File):
     """
@@ -276,7 +287,7 @@ class Database(h5py.File):
 
                 if isinstance(v, str):
                     v = np.atleast_1d(v).astype(STRING_DTYPE_SPECIFIER)
-                if isinstance(v, set):
+                if isinstance(v, (set, list)):
                     # These should always be sets of strings
                     v = np.atleast_1d(list(v)).astype(STRING_DTYPE_SPECIFIER)
                 else:
@@ -486,8 +497,8 @@ class Database(h5py.File):
             ids = self.get_data('configurations/ids')[ids]
 
         for co_id in ids:
-            co = Configuration()
 
+            info = {}
             g = self['configurations/info']
             for field in g:
 
@@ -502,10 +513,11 @@ class Database(h5py.File):
                     except:
                         indexer = co_id
 
-                co.info[field] = self.get_data(
+                info[field] = self.get_data(
                     g[field], in_memory=True
                 )[indexer]
 
+            arrays = {}
             g = self['configurations/arrays']
             for field in g:
 
@@ -520,11 +532,16 @@ class Database(h5py.File):
                     except:
                         indexer = co_id
 
-                co.arrays[field] = self.get_data(
+                arrays[field] = self.get_data(
                     g[field], in_memory=True
                 )[indexer]
 
-            yield co
+            # Workaround because Configuration constructor needs info and arrays
+            atoms = Atoms()
+            atoms.info = info
+            atoms.arrays = arrays
+
+            yield Configuration.from_ase(atoms)
 
 
     def concatenate_configurations(self):
