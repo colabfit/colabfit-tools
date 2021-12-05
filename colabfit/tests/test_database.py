@@ -11,6 +11,7 @@ from colabfit.tools.configuration import Configuration
 class TestDatabase:
     @staticmethod
     def add_n(database, n):
+        images              = []
         energies            = []
         stress              = []
         names               = []
@@ -20,7 +21,6 @@ class TestDatabase:
         nd_same_shape_arr   = []
         nd_diff_shape_arr   = []
 
-        images = []
         for i in range(1, n+1):
             atoms = Atoms(f'H{i}', positions=np.random.random((i, 3)))
 
@@ -92,56 +92,70 @@ class TestDatabase:
             database.concatenate_group('configurations/arrays/nd-diff-shapes')
 
         np.testing.assert_allclose(
-            database['configurations/info/energy/data'],
+            database.get_data('configurations/info/energy'),
             np.hstack(energies)
         )
         np.testing.assert_allclose(
-            database['configurations/info/stress/data'],
+            database.get_data('configurations/info/stress'),
             np.hstack(stress)
         )
         decoded_names = [
-            _.decode('utf-8') for _ in database['configurations/info/name/data']
+            _.decode('utf-8')
+            for _ in database.get_data('configurations/info/name')
         ]
         assert decoded_names == names
         np.testing.assert_allclose(
-            database['configurations/info/nd-same-shape/data'],
+            database.get_data('configurations/info/nd-same-shape'),
             np.concatenate(nd_same_shape)
         )
-        data = [
-                _[()] for _ in
-                database['configurations/info/nd-diff-shapes/data'].values()
-            ]
-        
-        for a1, a2 in zip(data, nd_diff_shape):
+        data = database.get_data('configurations/info/nd-diff-shapes')
+        for a1, a2 in zip(data.values(), nd_diff_shape):
             np.testing.assert_allclose(a1, a2)
 
         np.testing.assert_allclose(
-            database['configurations/arrays/forces/data'],
+            database.get_data('configurations/arrays/forces'),
             np.concatenate(forces)
         )
         np.testing.assert_allclose(
-            database['configurations/arrays/nd-same-shape/data'],
+            database.get_data('configurations/arrays/nd-same-shape'),
             np.concatenate(nd_same_shape_arr)
         )
-        data = [
-                _[()] for _ in
-                database['configurations/arrays/nd-diff-shapes/data'].values()
-            ]
-        
-        for a1, a2 in zip(data, nd_diff_shape_arr):
+        data = database.get_data('configurations/arrays/nd-diff-shapes')
+        for a1, a2 in zip(data.values(), nd_diff_shape_arr):
             np.testing.assert_allclose(a1, a2)
 
         os.remove('/tmp/test.hdf5')
 
-    
-    def test_get_one_configuration(self):
+
+    def test_add_concat_add_concat(self):
+        database = Database('/tmp/test.hdf5', mode='w')
+
+        eng1 = self.add_n(database, 10)[1]
+        database.concatenate_group('configurations/info/energy')
+        eng1 += self.add_n(database, 10)[1]
+        database.concatenate_group('configurations/info/energy')
+
+        np.testing.assert_allclose(
+            database.get_data('configurations/info/energy/'),
+            np.hstack(eng1)
+        )
+
+
+    def test_get_configurations(self):
+        database = Database('/tmp/test.hdf5', mode='w')
+
+        images = self.add_n(database, 10)[0]
+
+        for atoms, img in zip(database.get_configurations('all'), images):
+            assert atoms == img
+
+
+    def test_get_configurations_after_concat(self):
         database = Database('/tmp/test.hdf5', mode='w')
 
         images = self.add_n(database, 2)[0]
 
-        atoms = database.get_configuration(0)
+        database.concatenate_configurations()
 
-
-
-    def test_get_one_configuration_after_concat(self):
-        pass
+        for atoms, img in zip(database.get_configurations('all'), images):
+            assert atoms == img

@@ -1,3 +1,4 @@
+import os
 import h5py
 import numpy as np
 
@@ -19,7 +20,7 @@ class Database(h5py.File):
     additional columns of IDs for mapping from the data to any linked entries
     (configurations, properties, configuration sets, or property settings).
 
-    The underlying PyTables filesystem has the following structure:
+    The underlying HDF5 filesystem has the following structure:
 
     C  = number of configurations
     I  = number of fields in :attr:`Configuration.info`
@@ -76,10 +77,10 @@ class Database(h5py.File):
                         /data in order to get the data corresponding to
                         config_id_1.
 
-                        Regardless of if 
+                        Regardless of if
 
                         If /info_field_1.attrs['concatenated'] == False:
-                            
+
                             Then /slices/config_id_1 will just be config_id_1.
 
                         If /info_field_1.attrs['concatenated'] == True:
@@ -93,7 +94,7 @@ class Database(h5py.File):
 
                             group = database['configurations/info/info_field_1']
                             data = group['data'][group['slices']]
-                
+
                         Some things to note:
 
                             * If the given info field CAN be concatenated as
@@ -340,10 +341,28 @@ class Database(h5py.File):
         """
         Attempt to concatenate all of the datasets in a group. Raise an
         exception if the datasets in the group have incompatible shapes.
+
+        Args:
+
+            group_name (str or group):
+                The name of a group in the database, or the group object
+
+            chunks (tuple):
+                An optional argument describing how to chunk the concatenated
+                array. Chunk shapes should be chosed based on the desired access
+                pattern. See `chunked storage <https://docs.h5py.org/en/stable/high/dataset.html#chunked-storage>_
+                in the h5py documentation for more details.
         """
 
         if isinstance(group, str):
             group = self[group]
+
+        if 'data' not in group:
+            raise InvalidGroupError(
+                "The group '{}' does not have a 'data' sub-group".format(
+                    group
+                )
+            )
 
         # Just initialize an array of the right size
         example = next(iter(group['data'].values()))
@@ -362,23 +381,30 @@ class Database(h5py.File):
         # TODO: need to figure out how to handle the case where the field has
         # already been concatenated before.
 
-        for ds in group['data'].values():
-            try:
-                # Handle IDs differently? or give them slices
+        if '_root_concatenated' in group['data']:
+            # Copy any already-concatenated data
+            ds = group['data/_root_concatenated']
+            stop = start + ds.shape[0]
+            data[start:stop] = ds
+            start += ds.shape[0]
 
+        for ds_name, ds in group['data'].items():
+            # if os.path.split(ds.name)[-1] != '_root_concatenated':
+            if ds_name == '_root_concatenated':
+                # This was added first
+                continue
+
+            try:
                 # Copy the data over
                 stop = start + ds.shape[0]
                 data[start:stop] = ds
 
                 if 'slices' in group:
                     # Some groups (like IDs) don't need to be sliced
+                    key = ds.name.split("/")[-1]
 
-                    if ds.name is not '_root_concatenated':
-                        # Ignore the one that's already been concatenated
-                        key = ds.name.split("/")[-1]
-
-                        del group[f'slices/{key}']
-                        group[f'slices/{key}'] = np.arange(start, stop)
+                    del group[f'slices/{key}']
+                    group[f'slices/{key}'] = np.arange(start, stop)
 
                 start += ds.shape[0]
             except Exception as e:
@@ -396,14 +422,48 @@ class Database(h5py.File):
         else:
             # Get rid of all of the old stuff
             del group['data']
-            group['data']['_root_concatenated'] = data
+            g = group.create_group('data', track_order=True)
+            g['_root_concatenated'] = data
             group.attrs['concatenated'] = True
+
+
+    def get_data(self, group, in_memory=False):
+        """
+        Returns all of the datasets in the 'data' sub-group of
+        :code:`<group_name>`.
+
+        Args:
+
+            group_name (str or group):
+                The name of a group in the database, or the group object
+
+            in_memory(bool):
+                If True, converts each of the datasets to a Numpy array before
+                returning.
+        """
+        if isinstance(group, str):
+            group = self[group]
+
+        if 'data' not in group:
+            raise InvalidGroupError(
+                "The group '{}' does not have a 'data' sub-group".format(
+                    group
+                )
+            )
+        else:
+            g = group['data']
+
+            if group.attrs['concatenated']:
+                return g['_root_concatenated'][()] if in_memory else g['_root_concatenated']
+            else:
+                return {k: ds[()] if in_memory else ds for k, ds in g.items()}
+                # return [ds[()] if in_memory else ds for ds in g.values()]
 
 
     def get_configuration(self, i):
         return self.get_configurations([i])
 
-    
+
     def get_configurations(self, ids):
         """
         A generator that returns in-memory Configuration objects one at a time
@@ -411,21 +471,74 @@ class Database(h5py.File):
 
         Args:
 
-            ids (list):
+            ids (list or 'all'):
                 A list of string IDs specifying which Configurations to return.
+                Can also be a list of integers, in which case they will be
+                converted to ids by calling
+                :code:`self.get_data('configurations/ids')[ids]. If 'all',
+                returns all of the configurations in the database.
         """
+
+        if ids == 'all':
+            ids = self.get_data('configurations/ids')
+
+        if isinstance(ids[0], int):
+            ids = self.get_data('configurations/ids')[ids]
 
         for co_id in ids:
             co = Configuration()
 
-            g = self['configuration/info']
+            g = self['configurations/info']
             for field in g:
-                if g[field].attrs['concatenated']:
-                    # It's all one big dataset
-                    pass
 
-                co.info[field] = g[f'{field}/data'][()]
-                co.info.setdefault(field, )
+                if g[field].attrs['concatenated']:
+                    # Data is a concatenated array of everything
+                    indexer = g[field]['slices'][co_id]
+                else:
+                    # Data is a dictionary with key=ID
+                    try:
+                        # Decode if bytes
+                        indexer = co_id.decode('utf-8')
+                    except:
+                        indexer = co_id
+
+                co.info[field] = self.get_data(
+                    g[field], in_memory=True
+                )[indexer]
+
+            g = self['configurations/arrays']
+            for field in g:
+
+                if g[field].attrs['concatenated']:
+                    # Data is a concatenated array of everything
+                    indexer = g[field]['slices'][co_id]
+                else:
+                    # Data is a dictionary with key=ID
+                    try:
+                        # Decode if bytes
+                        indexer = co_id.decode('utf-8')
+                    except:
+                        indexer = co_id
+
+                co.arrays[field] = self.get_data(
+                    g[field], in_memory=True
+                )[indexer]
+
+            yield co
+
+
+    def concatenate_configurations(self):
+        for field in self['configurations/info']:
+            try:
+                self.concatenate_group(self['configurations/info'][field])
+            except ConcatenationException as e:
+                pass
+
+        for field in self['configurations/arrays']:
+            try:
+                self.concatenate_group(self['configurations/arrays'][field])
+            except ConcatenationException as e:
+                pass
 
 
     def parse_data(self):
@@ -436,4 +549,7 @@ class Database(h5py.File):
         pass
 
 class ConcatenationException(Exception):
+    pass
+
+class InvalidGroupError(Exception):
     pass
