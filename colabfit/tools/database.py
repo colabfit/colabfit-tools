@@ -1,4 +1,5 @@
 import h5py
+import json
 import numpy as np
 from ase import Atoms
 
@@ -140,22 +141,25 @@ class Database(h5py.File):
                     definition
                         An OpenKIM Property Definition in dictionary format
 
+                /configuration_ids
+                    A list of tuples of Configuration IDs specifying the
+                    Configurations associated with each Property. As in
+                    /configurations/info/info_field_1/indices, the shape
+                    matches data.shape[0], so entries may be duplicated to
+                    match the number of rows.
+
+                /settings_ids
+                    A list of Property Settings IDs. As in
+                    /configuration_ids, entries may be duplicated to match
+                    the shape of data.shape[0]
+
                 /field_1
                     /data
                         As in /configurations/info/info_field_1/data
-                    /indices
-                        As in /configurations/info/info_field_1/indices, but
+                    /slices
+                        As in /configurations/info/info_field_1/slices, but
                         mapping to the Property IDs
-                    /configuration_ids
-                        A list of tuples of Configuration IDs specifying the
-                        Configurations associated with each Property. As in
-                        /configurations/info/info_field_1/indices, the shape
-                        matches data.shape[0], so entries may be duplicated to
-                        match the number of rows.
-                    /settings_ids
-                        A list of Property Settings IDs. As in
-                        /configuration_ids, entries may be duplicated to match
-                        the shape of data.shape[0]
+
                 .
                 .
                 .
@@ -236,33 +240,22 @@ class Database(h5py.File):
         """
         Adds the configurations into the database, concatenating each of the
         fields in their info/arrays dictionaries whenever possible.
+
+        TODO: it would be better if this were a generator that yielded the added
+        configuration IDs. The problem with this is that it would require
+        calling concatenate many times (or once, manually by the user)
+
+        Returns:
+
+            ids (list):
+                A list of strings of the added configurations. Useful for
+                indexing later.
         """
 
-        """
-        Things to worry about:
-
-        * This should work even if you can't hold all of the configurations in
-        memory at the same time
-
-        * Having to resize arrays might slow things down by a lot
-
-        Pseudocode:
-            For each configuration
-                For each of its info fields
-                    Attach the field as a new dataset in /configurations/info
-                For each of its arrays fields
-                    Attach the field as a new dataset in /configurations/arrays
-
-            If concatenate==True:
-                For each field in /configurations/info
-                    Try to concatenate_groups
-
-                For each field in /configurations/arrays
-                    Try to concatenate_groups
-        """
-
+        ids = []
         for atoms in configurations:
             config_id = str(hash(atoms))
+            ids.append(config_id)
 
             # Save the ID
             g = self[f'configurations/ids/data']
@@ -334,18 +327,21 @@ class Database(h5py.File):
         # IDs should always be concatenated
         self.concatenate_group(self['configurations/ids'])
 
-        if concatenate:
-            for g in self['configurations/info']:
-                try:
-                    self.concatenate_group(g)
-                except Exception as e:
-                    print(e)
+        # if concatenate:
+        #     for g in self['configurations/info']:
+        #         try:
+        #             self.concatenate_group(g)
+        #         except Exception as e:
+        #             #
+        #             pass
 
-            for g in self['configurations/arrays']:
-                    try:
-                        self.concatenate_group(g)
-                    except Exception as e:
-                        print(e)
+        #     for g in self['configurations/arrays']:
+        #             try:
+        #                 self.concatenate_group(g)
+        #             except Exception as e:
+        #                 print(e)
+
+        return ids
 
 
     def concatenate_group(self, group, chunks=None):
@@ -554,11 +550,65 @@ class Database(h5py.File):
         for field in self['configurations/arrays']:
             try:
                 self.concatenate_group(self['configurations/arrays'][field])
-            except ConcatenationException as e:
+            except ConcatenationException:
                 pass
 
 
-    def parse_data(self):
+    def add_property_definition(self, definition):
+        """
+        Args:
+
+            name (str):
+                The name of the property
+
+            definition (dict):
+                The map defining the property. See the example below, or the
+                `OpenKIM Properties Framework <https://openkim.org/doc/schema/properties-framework/>`_
+                for more details.
+
+        Example definition:
+
+        ..code-block:: python
+
+            qm9_property_definition = {
+                'property-id': 'qm9-property',
+                'property-title': 'A, B, C, mu, alpha, homo, lumo, gap, r2, zpve, U0, U, H, G, Cv',
+                'property-description': 'Geometries minimal in energy, corresponding harmonic frequencies, dipole moments, polarizabilities, along with energies, enthalpies, and free energies of atomization',
+                'a':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Rotational constant A'},
+                'b':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Rotational constant B'},
+                'c':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Rotational constant C'},
+                'mu':    {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Dipole moment'},
+                'alpha': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Isotropic polarizability'},
+                'homo':  {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Energy of Highest occupied molecular orbital (HOMO)'},
+                'lumo':  {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Energy of Lowest occupied molecular orbital (LUMO)'},
+                'gap':   {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Gap, difference between LUMO and HOMO'},
+                'r2':    {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Electronic spatial extent'},
+                'zpve':  {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Zero point vibrational energy'},
+                'u0':    {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Internal energy at 0 K'},
+                'u':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Internal energy at 298.15 K'},
+                'h':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Enthalpy at 298.15 K'},
+                'g':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Free energy at 298.15 K'},
+                'cv':    {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Heat capacity at 298.15 K'},
+                'smiles-relaxed':    {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'SMILES for relaxed geometry'},
+                'inchi-relaxed':     {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'InChI for relaxed geometry'},
+            }
+
+        """
+
+        group = self['properties'].require_group(definition['property-id'])
+        group.attrs['definition'] = json.dumps(definition)
+
+
+    def get_property_definition(self, name):
+        return json.loads(self[f'properties/{name}'].attrs['definition'])
+
+
+    def parse_data(self, property_name):
+        """
+        Notes:
+            * Maybe this should also take in an optional list of configuration
+            IDs
+        """
         # Move the data off of the Configurations and into the Properties
         # NOTE: this should just mean moving fields out of /configurations/info
         # or /configurations/arrays and into /properties/property_id_xxx
