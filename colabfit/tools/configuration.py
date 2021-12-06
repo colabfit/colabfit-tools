@@ -56,6 +56,12 @@ class Configuration(Atoms):
 
         self.info[ATOMS_CONSTRAINTS_FIELD] = set(constraints)
 
+        # Check for name conflicts in info/arrays; would cause bug in parsing
+        if set(self.info.keys()).intersection(set(self.arrays.keys())):
+            raise RuntimeError(
+                "The same key should not be used in both Configuration.info "\
+                "and Configuration.arrays"
+            )
 
         # Additional fields for querying
 

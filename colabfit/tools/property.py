@@ -18,7 +18,7 @@ from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
 
 from colabfit import (
-    DEFAULT_PROPERTY_NAME, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
+    DEFAULT_PROPERTY_NAME, STRING_DTYPE_SPECIFIER, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
 )
 
 # These are fields that are related to the geometry of the atomic structure
@@ -469,9 +469,22 @@ class Property(dict):
         for key, val in self.edn.items():
             if key in _ignored_fields: continue
 
-            hashed_values.append(hash(
-                np.round_(np.array(val['source-value']), decimals=8).data.tobytes()
-            ))
+            try:
+                hashval = hash(
+                    np.round_(np.array(val['source-value']), decimals=8).data.tobytes()
+                )
+            except:
+                try:
+                    hashval = hash(np.array(
+                        val['source-value'], dtype=STRING_DTYPE_SPECIFIER
+                        ).data.tobytes()
+                    )
+                except:
+                    raise PropertyHashError(
+                        "Could not hash key {}: {}".format(key, val)
+                    )
+
+            hashed_values.append(hashval)
 
         return hash((
             hash(self.settings),
@@ -625,3 +638,6 @@ def update_edn_with_conf(edn, conf):
         'source-unit': 'angstrom'
     }
 
+
+class PropertyHashError(Exception):
+    pass
