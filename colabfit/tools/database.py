@@ -221,12 +221,17 @@ class Database(h5py.File):
 
         # Build all the base groups
         g = self.create_group('configurations')
-        g.create_group('ids/data', track_order=True)
+        g_ids = g.create_group('ids')
+        g_ids.attrs['concatenated'] = False
+        g_ids.create_group('data', track_order=True)
+
         g.create_group('info')
         g.create_group('arrays')
 
         g = self.create_group('properties')
-        g.create_group('ids/data', track_order=True)
+        g_ids = g.create_group('ids')
+        g_ids.attrs['concatenate'] = False
+        g_ids.create_group('data', track_order=True)
 
         self.create_group('property_settings')
         self.create_group('configuration_sets')
@@ -236,26 +241,46 @@ class Database(h5py.File):
     def add_property_definition(self, definition):
         pass
 
-    def add_configurations(self, configurations, concatenate=False):
+    def add_configurations(self, configurations, generator=False):
         """
-        Adds the configurations into the database, concatenating each of the
-        fields in their info/arrays dictionaries whenever possible.
+        Adds the configurations into the database and returns the IDs of the
+        added configurations. Set :code:`generator=True` when the configurations
+        can't all fit in memory at the same time. NOTE: if `generator==True`,
+        then the configurations will only be added to the dataset once the
+        returned IDs have been iterated over
 
-        TODO: it would be better if this were a generator that yielded the added
-        configuration IDs. The problem with this is that it would require
-        calling concatenate many times (or once, manually by the user)
+
+        Args:
+
+            configurations (list or Configuration):
+                The list of configurations to be added.
+
+            generator (bool):
+                If true, this function becomes a generator which only adds the
+                configurations one at a time. This is useful if the
+                configurations can't all fit in memory at the same time. Default
+                is False.
 
         Returns:
 
             ids (list):
                 A list of strings of the added configurations. Useful for
                 indexing later.
+
         """
 
-        ids = []
+        if generator:
+            return self._add_configurations_gen(configurations)
+        else:
+            return self._add_configurations(configurations)
+
+
+    def _add_configurations_gen(self, configurations):
+        if isinstance(configurations, Configuration):
+            configurations = [configurations]
+
         for atoms in configurations:
             config_id = str(hash(atoms))
-            ids.append(config_id)
 
             # Save the ID
             g = self[f'configurations/ids/data']
@@ -324,22 +349,86 @@ class Database(h5py.File):
 
                 g.attrs['concatenated'] = False
 
-        # IDs should always be concatenated
-        self.concatenate_group(self['configurations/ids'])
+            yield config_id
 
-        # if concatenate:
-        #     for g in self['configurations/info']:
-        #         try:
-        #             self.concatenate_group(g)
-        #         except Exception as e:
-        #             #
-        #             pass
 
-        #     for g in self['configurations/arrays']:
-        #             try:
-        #                 self.concatenate_group(g)
-        #             except Exception as e:
-        #                 print(e)
+    def _add_configurations(self, configurations):
+        if isinstance(configurations, Configuration):
+            configurations = [configurations]
+
+        ids = []
+
+        for atoms in configurations:
+            config_id = str(hash(atoms))
+
+            # Save the ID
+            g = self[f'configurations/ids/data']
+            g.create_dataset(
+                name=config_id,
+                shape=1,
+                data=np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+            )
+
+            for k, v in atoms.info.items():
+                g = self['configurations/info'].require_group(k)
+                # Extract data and slices groups
+                if 'data' in g:
+                    g_data = g['data']
+                else:
+                    g_data = g.create_group('data', track_order=True)
+
+                if 'slices' in g:
+                    g_slices = g['slices']
+                else:
+                    g_slices = g.create_group('slices', track_order=True)
+
+                if isinstance(v, str):
+                    v = np.atleast_1d(v).astype(STRING_DTYPE_SPECIFIER)
+                if isinstance(v, (set, list)):
+                    # These should always be sets of strings
+                    v = np.atleast_1d(list(v)).astype(STRING_DTYPE_SPECIFIER)
+                else:
+                    v = np.atleast_1d(v)
+
+                # Add in info fields
+                g_data.create_dataset(
+                    name=config_id,
+                    shape=v.shape,
+                    dtype=v.dtype,
+                    data=v,
+                    maxshape=(None,)+v.shape[1:],
+                )
+
+                g_slices[config_id] = config_id
+
+                g.attrs['concatenated'] = False
+
+            for k, v in atoms.arrays.items():
+                g = self['configurations/arrays'].require_group(k)
+                if 'data' in g:
+                    g_data = g['data']
+                else:
+                    g_data = g.create_group('data', track_order=True)
+
+                if 'slices' in g:
+                    g_slices = g['slices']
+                else:
+                    g_slices = g.create_group('slices', track_order=True)
+
+                # Add in arrays fields
+                g_data.create_dataset(
+                    name=config_id,
+                    shape=v.shape,
+                    dtype=v.dtype,
+                    data=v,  # should already be an array
+                    maxshape=(None,)+v.shape[1:],
+                )
+
+                g_slices[config_id] = config_id
+
+                g.attrs['concatenated'] = False
+
+            ids.append(config_id)
 
         return ids
 
@@ -470,8 +559,7 @@ class Database(h5py.File):
     def get_configuration(self, i):
         return self.get_configurations([i])
 
-
-    def get_configurations(self, ids):
+    def get_configurations(self, ids, generator=False):
         """
         A generator that returns in-memory Configuration objects one at a time
         by loading the info/array fields
@@ -480,17 +568,29 @@ class Database(h5py.File):
 
             ids (list or 'all'):
                 A list of string IDs specifying which Configurations to return.
-                Can also be a list of integers, in which case they will be
-                converted to ids by calling
-                :code:`self.get_data('configurations/ids')[ids]. If 'all',
-                returns all of the configurations in the database.
+                If 'all', returns all of the configurations in the database.
+
+            generator (bool):
+                If true, this function becomes a generator which only returns
+                the configurations one at a time. This is useful if the
+                configurations can't all fit in memory at the same time. Default
+                is False.
+
+        Returns:
+
+            configurations (iterable):
+                A list or generator of the re-constructed configurations
         """
 
+        if generator:
+            return self._get_configurations_gen(ids)
+        else:
+            return self._get_configurations(ids)
+
+
+    def _get_configurations_gen(self, ids):
         if ids == 'all':
             ids = self.get_data('configurations/ids')
-
-        if isinstance(ids[0], int):
-            ids = self.get_data('configurations/ids')[ids]
 
         for co_id in ids:
 
@@ -538,6 +638,62 @@ class Database(h5py.File):
             atoms.arrays = arrays
 
             yield Configuration.from_ase(atoms)
+
+
+    def _get_configurations(self, ids):
+        if ids == 'all':
+            ids = self.get_data('configurations/ids')
+
+        configurations = []
+
+        for co_id in ids:
+
+            info = {}
+            g = self['configurations/info']
+            for field in g:
+
+                if g[field].attrs['concatenated']:
+                    # Data is a concatenated array of everything
+                    indexer = g[field]['slices'][co_id]
+                else:
+                    # Data is a dictionary with key=ID
+                    try:
+                        # Decode if bytes
+                        indexer = co_id.decode('utf-8')
+                    except:
+                        indexer = co_id
+
+                info[field] = self.get_data(
+                    g[field], in_memory=True
+                )[indexer]
+
+            arrays = {}
+            g = self['configurations/arrays']
+            for field in g:
+
+                if g[field].attrs['concatenated']:
+                    # Data is a concatenated array of everything
+                    indexer = g[field]['slices'][co_id]
+                else:
+                    # Data is a dictionary with key=ID
+                    try:
+                        # Decode if bytes
+                        indexer = co_id.decode('utf-8')
+                    except:
+                        indexer = co_id
+
+                arrays[field] = self.get_data(
+                    g[field], in_memory=True
+                )[indexer]
+
+            # Workaround because Configuration constructor needs info and arrays
+            atoms = Atoms()
+            atoms.info = info
+            atoms.arrays = arrays
+
+            configurations.append(Configuration.from_ase(atoms))
+
+        return configurations
 
 
     def concatenate_configurations(self):
