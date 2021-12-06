@@ -1,25 +1,18 @@
 import h5py
 import json
+import warnings
 import numpy as np
 from ase import Atoms
+from copy import deepcopy
+
+from kim_property.definition import check_property_definition
+from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 from colabfit import (
     STRING_DTYPE_SPECIFIER
 )
 from colabfit.tools.configuration import Configuration
-
-
-"""
-TODO:
-
-* How will you support fast queries? The old Mongo thing had specific fields
-  that it could query over
-    * Maybe I should add more default fields to a configuration:
-        elements, nelements, elements_ratios, chemical_formula_*,
-        dimension_types, nperiodic_dimensions, nsites
-* Does it make sense to make configuration stuff concatenatable? If each
-  configuration were just its own "document", it would be easier to query
-"""
+from colabfit.tools.property import Property
 
 class Database(h5py.File):
     """
@@ -55,81 +48,54 @@ class Database(h5py.File):
                 /data
                     An array of all Configuration IDs in the Database
 
-            /info
-                This is all of the content stored in the
-                :attr:`Configuration.info` dictionaries.
+            /atomic_numbers
+                .attrs
+                    concatenated
+                        A boolean indicating if /data has been concatenated or
+                        not.
+                /data
+                    The atomic numbers for all configurations in the database.
 
-                /info_field_1
-                    .attrs
-                        concatenated
-                            A boolean indicating if /data has been concatenated
-                            or not
-                    /data
-                        The :code:`<info_field_1>` data for all Configurations
-                        in the dataset.
+                    If :code:`concatenated==True`, then /data will contain
+                    multiple arrays, one per configuration.
 
-                        If possible, the data will be concatenated together
-                        using something similar to:
+                    If :code:`concatenated==True`, then /data will contain
+                    a single array that was generated using something like:
 
-                        ..code-block:: python
+                    ..code-block:: python
 
-                            np.concatenate(
-                                [c.info[<field_name>] for c in configurations],
-                                axis=0
-                            )
-
-                        In this case, /data will be a multi-dimensional array
-                        where the first dimension is along configurations.
-
-                        If the data cannot be concatenated together, then /data
-                        will be a group of individual arrays indexed by their
-                        corresponding configuration IDs
-                    /slices
+                        np.concatenate(
+                            # /data/<co_id> for co_id in /data
+                        )
+                /slices
                         A group where /slices/config_id_1 specifies how to slice
                         /data in order to get the data corresponding to
                         config_id_1.
 
-                        Regardless of if
-
-                        If /info_field_1.attrs['concatenated'] == False:
-
-                            Then /slices/config_id_1 will just be config_id_1.
-
-                        If /info_field_1.attrs['concatenated'] == True:
-
-                            Then /slices/config_id_1 will be an integer array.
-
-                        Regardless of if /data has been concatenated or not,
-                        the data for config_id_1 can be extracted using:
+                        The data can always be extracted using something like:
 
                         ..code-block:: python
 
-                            group = database['configurations/info/info_field_1']
-                            data = group['data'][group['slices']]
+                            slices = database['configurations/field/slices'][()]
 
-                        Some things to note:
+                            database.get_data(
+                                'configurations/atomic_numbers'
+                            )[()][slices]
 
-                            * If the given info field CAN be concatenated as
-                            described in /data, then the IDs in /slices
-                            will be duplicated based on how many rows each
-                            Configuration contributes.
-                            * If the given info field can't be concatenated as
-                            described in /data, then /data will be a simple
-                            list of arrays, so /slices will just map an
-                            entire array to a single Configuration.
-                            * This use of lists of IDs is favorable because it
-                            allows for quick filtering on /data and returning
-                            the names of all associated IDs.
-                .
-                .
-                .
-                /info_field_I
-            /arrays
-                This group is structured in the same way as /info, but is used
-                for the :attr:`Configuration.arrays` fields instead
+                        If :code:`concatenated==False`, then /slices/config_id_1
+                        will just be config_id_1.
+
+                        If :code:`concatenated==True`, then /slices/config_id_1
+                        will be an integer array specifying rows of /data
+            /positions
+                Same as /atomic_numbers, but for atomic positions
+            /cells
+                Same as /atomic_numbers, but for lattice vectors
+            /pbcs
+                Same as /atomic_numbers, but for periodic boundary conditions
             /constraints
                 This group is not supported yet. It will be added in the future,
-                and will have a similar structure to /info and /arrays
+                and will have a similar structure to the /atomic_numbers
         /properties
             This group stores all of the computed properties.
 
@@ -139,7 +105,8 @@ class Database(h5py.File):
             /property_1
                 .attrs
                     definition
-                        An OpenKIM Property Definition in dictionary format
+                        An OpenKIM Property Definition as a (serialized)
+                        dictionary
 
                 /configuration_ids
                     A list of tuples of Configuration IDs specifying the
@@ -172,8 +139,9 @@ class Database(h5py.File):
             The property settings.
 
             /property_settings_id_1
-                .attributes
-                    All of the fields of a PropertySettings object
+                .attrs
+                    All of the fields of a PropertySettings object (methods,
+                    files, ...)
             .
             .
             .
@@ -184,9 +152,8 @@ class Database(h5py.File):
             /configuration_set_id_1
                 /ids
                     A list of Configuration IDs that belong to the configuration
-                    set. Useful for indexing /configurations/info fields,
-                    /configurations/arrays fields, and /properties/property
-                    fields.
+                    set. Useful for indexing /configurations fields and
+                    /properties/property fields.
             .
             .
             .
@@ -221,12 +188,19 @@ class Database(h5py.File):
 
         # Build all the base groups
         g = self.create_group('configurations')
-        g_ids = g.create_group('ids')
-        g_ids.attrs['concatenated'] = False
-        g_ids.create_group('data', track_order=True)
 
-        g.create_group('info')
-        g.create_group('arrays')
+        for sub_group_name in [
+            'ids', 'atomic_numbers', 'positions', 'cells', 'pbcs'
+            ]:
+            sub_g = g.create_group(sub_group_name)
+            sub_g.attrs['concatenated'] = False
+            sub_g.create_group('data', track_order=True)
+
+            if sub_group_name != 'ids':
+                sub_g.create_group('slices')
+
+        # g.create_group('info')
+        # g.create_group('arrays')
 
         g = self.create_group('properties')
         g_ids = g.create_group('ids')
@@ -238,22 +212,67 @@ class Database(h5py.File):
         self.create_group('datasets')
 
 
-    def add_property_definition(self, definition):
-        pass
-
-    def add_configurations(self, configurations, generator=False):
+    def insert_data(
+        self,
+        configurations, property_map=None, generator=False
+        ):
         """
-        Adds the configurations into the database and returns the IDs of the
-        added configurations. Set :code:`generator=True` when the configurations
+        Inserts the configurations into the databas, and any specified
+        properties, and returns an iterable of 2-tuples, where the first entry
+        in each tuple is the ID of the inserted property, and the second entry
+        is the ID of the associated configuration.
+        
+        A configuration is added to the database by extracting four fields from
+        the Configuration object: atomic numbers, atomic positions, cell lattice
+        vectors, and cell periodic boundary conditions.
+
+        A property is added to the database by extracting the fields specified
+        by the property definition off of the configuration. Note that an error
+        will be thrown if the property hasn't been defined.
+        
+        Set :code:`generator=True` when the configurations
         can't all fit in memory at the same time. NOTE: if `generator==True`,
         then the configurations will only be added to the dataset once the
         returned IDs have been iterated over
 
+        # TODO: there should also be some way to add properties to existing
+        # configurations. Maybe insert_property()
 
         Args:
 
             configurations (list or Configuration):
                 The list of configurations to be added.
+
+            property_names (list or str):
+                The names of the properties that should be loaded off of the
+
+            property_map (dict):
+                A dictionary that is used to specify how to load a defined
+                property off of a configuration. Note that the top-level keys in
+                the map must be the names of properties that have been
+                previously defined using
+                :meth:`~colabfit.tools.database.Database.add_property_definition`.
+                
+                If None, only loads the configuration information (atomic
+                numbers, positions, lattice vectors, and periodic boundary
+                conditions).
+                
+                Example:
+
+                ..code-block:: python
+
+                    database.add_property_definition(...)
+
+                    property_map = {
+                        'property-name-1': {
+                            'property-field-1': {
+                                'field': 'ase-field-1',
+                                'units': 'units-1',
+                            }
+                        }
+                    }
+
+                    database.insert_data(configurations, property_map)
 
             generator (bool):
                 If true, this function becomes a generator which only adds the
@@ -263,174 +282,326 @@ class Database(h5py.File):
 
         Returns:
 
-            ids (list):
-                A list of strings of the added configurations. Useful for
-                indexing later.
-
+            additions (iterable):
+                An iterable of 2-tuples, where the first entry in each tuple is
+                the ID of the inserted property, and the second entry is the ID
+                of the associated configuration.
         """
 
+        if isinstance(configurations, Configuration):
+            configurations = [configurations]
+
+        if property_map is None:
+            property_map = {}
+
+        property_definitions = {
+            pname: self.get_property_definition(pname)
+            for pname in property_map
+        }
+
         if generator:
-            return self._add_configurations_gen(configurations)
+            return self._insert_data_gen(
+                configurations, property_definitions, property_map
+            )
         else:
-            return self._add_configurations(configurations)
+            return self._insert_data(
+                configurations, property_definitions, property_map
+            )
 
 
-    def _add_configurations_gen(self, configurations):
+    def _insert_data_gen(
+        self, configurations, property_definitions, property_map
+        ):
         if isinstance(configurations, Configuration):
             configurations = [configurations]
 
-        for atoms in configurations:
+        ignore_keys = {'property-id', 'property-title', 'property-description'}
+        expected_keys = {
+            pname: set(
+                property_definitions[pname].keys()
+            ) - ignore_keys
+            for pname in property_map
+        }
+
+        for ai, atoms in enumerate(configurations):
             config_id = str(hash(atoms))
 
             # Save the ID
-            g = self[f'configurations/ids/data']
+            g = self['configurations/ids/data']
             g.create_dataset(
                 name=config_id,
                 shape=1,
                 data=np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
             )
 
-            for k, v in atoms.info.items():
-                g = self['configurations/info'].require_group(k)
-                # Extract data and slices groups
-                if 'data' in g:
-                    g_data = g['data']
-                else:
-                    g_data = g.create_group('data', track_order=True)
+            # Save all fundamental information about the configuration
+            g = self['configurations/atomic_numbers']
+            g['data'].create_dataset(
+                name=config_id,
+                data=atoms.get_atomic_numbers(),
+            )
+            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
-                if 'slices' in g:
-                    g_slices = g['slices']
-                else:
-                    g_slices = g.create_group('slices', track_order=True)
+            g = self['configurations/positions']
+            g['data'].create_dataset(
+                name=config_id,
+                data=atoms.get_positions()
+            )
+            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
-                if isinstance(v, str):
-                    v = np.atleast_1d(v).astype(STRING_DTYPE_SPECIFIER)
-                if isinstance(v, (set, list)):
-                    # These should always be sets of strings
-                    v = np.atleast_1d(list(v)).astype(STRING_DTYPE_SPECIFIER)
-                else:
-                    v = np.atleast_1d(v)
+            g = self['configurations/cells']
+            g['data'].create_dataset(
+                name=config_id,
+                data=np.array(atoms.get_cell())
+            )
+            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
-                # Add in info fields
-                g_data.create_dataset(
-                    name=config_id,
-                    shape=v.shape,
-                    dtype=v.dtype,
-                    data=v,
-                    maxshape=(None,)+v.shape[1:],
+            g = self['configurations/pbcs']
+            g['data'].create_dataset(
+                name=config_id,
+                data=atoms.get_pbc().astype(int),
+            )
+            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+
+            # Try to load all of the specified properties
+            available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
+
+            for pname, pmap in property_map.items():
+
+                # Pre-check to avoid having to delete partially-added properties
+                missing_keys = expected_keys[pname] - available_keys
+                if missing_keys:
+                    warnings.warn(
+                        "Configuration {} is missing keys ({}) during "\
+                        "insert_data. Skipping".format(
+                            ai, missing_keys
+                        )
+                    )
+                    continue
+
+                prop = Property.from_definition(
+                    pname, property_definitions[pname],
+                    atoms, pmap
                 )
 
-                g_slices[config_id] = config_id
+                prop_id = str(hash(prop))
 
-                g.attrs['concatenated'] = False
+                # Add the data; group should already exist
+                for field in expected_keys[pname]:
+                    g = self[f'properties/{pname}/{field}']
 
-            for k, v in atoms.arrays.items():
-                g = self['configurations/arrays'].require_group(k)
-                if 'data' in g:
-                    g_data = g['data']
-                else:
-                    g_data = g.create_group('data', track_order=True)
+                    # Try to convert field into either a float or string array
+                    v = prop[field]['source-value']
 
-                if 'slices' in g:
-                    g_slices = g['slices']
-                else:
-                    g_slices = g.create_group('slices', track_order=True)
+                    if isinstance(v, str):
+                        v = np.atleast_1d(v).astype(STRING_DTYPE_SPECIFIER)
+                    if isinstance(v, set):
+                        # These should always be sets of strings
+                        v = np.atleast_1d(list(v)).astype(STRING_DTYPE_SPECIFIER)
+                    else:
+                        v = np.atleast_1d(v)
 
-                # Add in arrays fields
-                g_data.create_dataset(
-                    name=config_id,
-                    shape=v.shape,
-                    dtype=v.dtype,
-                    data=v,  # should already be an array
-                    maxshape=(None,)+v.shape[1:],
-                )
+                    g['data'].create_dataset(
+                        name=prop_id,
+                        data=v
+                    )
+                    g[f'slices/{prop_id}'] = np.array(
+                        prop_id, dtype=STRING_DTYPE_SPECIFIER
+                    )
 
-                g_slices[config_id] = config_id
-
-                g.attrs['concatenated'] = False
-
-            yield config_id
+                yield (prop_id, config_id)
 
 
-    def _add_configurations(self, configurations):
+    def _insert_data(self, configurations, property_definitions, property_map):
         if isinstance(configurations, Configuration):
             configurations = [configurations]
 
-        ids = []
+        ignore_keys = {'property-id', 'property-title', 'property-description'}
+        expected_keys = {
+            pname: set(
+                property_definitions[pname].keys()
+            ) - ignore_keys
+            for pname in property_map
+        }
 
-        for atoms in configurations:
+        additions = []
+
+        for ai, atoms in enumerate(configurations):
             config_id = str(hash(atoms))
 
             # Save the ID
-            g = self[f'configurations/ids/data']
+            g = self['configurations/ids/data']
             g.create_dataset(
                 name=config_id,
                 shape=1,
                 data=np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
             )
 
-            for k, v in atoms.info.items():
-                g = self['configurations/info'].require_group(k)
-                # Extract data and slices groups
-                if 'data' in g:
-                    g_data = g['data']
-                else:
-                    g_data = g.create_group('data', track_order=True)
+            # Save all fundamental information about the configuration
+            g = self['configurations/atomic_numbers']
+            g['data'].create_dataset(
+                name=config_id,
+                data=atoms.get_atomic_numbers(),
+            )
+            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
-                if 'slices' in g:
-                    g_slices = g['slices']
-                else:
-                    g_slices = g.create_group('slices', track_order=True)
+            g = self['configurations/positions']
+            g['data'].create_dataset(
+                name=config_id,
+                data=atoms.get_positions()
+            )
+            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
-                if isinstance(v, str):
-                    v = np.atleast_1d(v).astype(STRING_DTYPE_SPECIFIER)
-                if isinstance(v, (set, list)):
-                    # These should always be sets of strings
-                    v = np.atleast_1d(list(v)).astype(STRING_DTYPE_SPECIFIER)
-                else:
-                    v = np.atleast_1d(v)
+            g = self['configurations/cells']
+            g['data'].create_dataset(
+                name=config_id,
+                data=np.array(atoms.get_cell())
+            )
+            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
-                # Add in info fields
-                g_data.create_dataset(
-                    name=config_id,
-                    shape=v.shape,
-                    dtype=v.dtype,
-                    data=v,
-                    maxshape=(None,)+v.shape[1:],
+            g = self['configurations/pbcs']
+            g['data'].create_dataset(
+                name=config_id,
+                data=atoms.get_pbc().astype(int),
+            )
+            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+
+            # Try to load all of the specified properties
+            available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
+
+            for pname, pmap in property_map.items():
+
+                # Pre-check to avoid having to delete partially-added properties
+                missing_keys = expected_keys[pname] - available_keys
+                if missing_keys:
+                    warnings.warn(
+                        "Configuration {} is missing keys ({}) during "\
+                        "insert_data. Skipping".format(
+                            ai, missing_keys
+                        )
+                    )
+                    continue
+
+                prop = Property.from_definition(
+                    pname, property_definitions[pname],
+                    atoms, pmap
                 )
 
-                g_slices[config_id] = config_id
+                prop_id = str(hash(prop))
 
-                g.attrs['concatenated'] = False
+                # Add the data; group should already exist
+                for field in expected_keys[pname]:
+                    g = self[f'properties/{pname}/{field}']
 
-            for k, v in atoms.arrays.items():
-                g = self['configurations/arrays'].require_group(k)
-                if 'data' in g:
-                    g_data = g['data']
-                else:
-                    g_data = g.create_group('data', track_order=True)
+                    # Try to convert field into either a float or string array
+                    v = prop[field]['source-value']
 
-                if 'slices' in g:
-                    g_slices = g['slices']
-                else:
-                    g_slices = g.create_group('slices', track_order=True)
+                    if isinstance(v, str):
+                        v = np.atleast_1d(v).astype(STRING_DTYPE_SPECIFIER)
+                    if isinstance(v, set):
+                        # These should always be sets of strings
+                        v = np.atleast_1d(list(v)).astype(STRING_DTYPE_SPECIFIER)
+                    else:
+                        v = np.atleast_1d(v)
 
-                # Add in arrays fields
-                g_data.create_dataset(
-                    name=config_id,
-                    shape=v.shape,
-                    dtype=v.dtype,
-                    data=v,  # should already be an array
-                    maxshape=(None,)+v.shape[1:],
+                    g['data'].create_dataset(
+                        name=prop_id,
+                        data=v
+                    )
+                    g[f'slices/{prop_id}'] = np.array(
+                        prop_id, dtype=STRING_DTYPE_SPECIFIER
+                    )
+
+                g = self['properties/ids/data']
+                g.create_dataset(
+                    name=prop_id,
+                    shape=1,
+                    data=np.array(prop_id, dtype=STRING_DTYPE_SPECIFIER)
                 )
 
-                g_slices[config_id] = config_id
+                g = self[f'properties/{pname}/configuration_ids/data']
+                g.create_dataset(
+                    name=prop_id,
+                    shape=1,
+                    data=np.array(prop_id, dtype=STRING_DTYPE_SPECIFIER)
+                )
+                g[f'slices/{prop_id}'] = np.array(
+                    config_id, dtype=STRING_DTYPE_SPECIFIER
+                )
 
-                g.attrs['concatenated'] = False
+                # TODO: insert_property_settings(); update here
 
-            ids.append(config_id)
 
-        return ids
+                # yield (prop_id, config_id)
+                additions.append((prop_id, config_id))
+
+        return additions
+
+
+
+
+            # for k, v in atoms.info.items():
+            #     g = self['configurations/info'].require_group(k)
+            #     # Extract data and slices groups
+            #     if 'data' in g:
+            #         g_data = g['data']
+            #     else:
+            #         g_data = g.create_group('data', track_order=True)
+
+            #     if 'slices' in g:
+            #         g_slices = g['slices']
+            #     else:
+            #         g_slices = g.create_group('slices', track_order=True)
+
+            #     if isinstance(v, str):
+            #         v = np.atleast_1d(v).astype(STRING_DTYPE_SPECIFIER)
+            #     if isinstance(v, (set, list)):
+            #         # These should always be sets of strings
+            #         v = np.atleast_1d(list(v)).astype(STRING_DTYPE_SPECIFIER)
+            #     else:
+            #         v = np.atleast_1d(v)
+
+            #     # Add in info fields
+            #     g_data.create_dataset(
+            #         name=config_id,
+            #         shape=v.shape,
+            #         dtype=v.dtype,
+            #         data=v,
+            #         maxshape=(None,)+v.shape[1:],
+            #     )
+
+            #     g_slices[config_id] = config_id
+
+            #     g.attrs['concatenated'] = False
+
+            # for k, v in atoms.arrays.items():
+            #     g = self['configurations/arrays'].require_group(k)
+            #     if 'data' in g:
+            #         g_data = g['data']
+            #     else:
+            #         g_data = g.create_group('data', track_order=True)
+
+            #     if 'slices' in g:
+            #         g_slices = g['slices']
+            #     else:
+            #         g_slices = g.create_group('slices', track_order=True)
+
+            #     # Add in arrays fields
+            #     g_data.create_dataset(
+            #         name=config_id,
+            #         shape=v.shape,
+            #         dtype=v.dtype,
+            #         data=v,  # should already be an array
+            #         maxshape=(None,)+v.shape[1:],
+            #     )
+
+            #     g_slices[config_id] = config_id
+
+            #     g.attrs['concatenated'] = False
+
+        #     ids.append(config_id)
+
+        # return ids
 
 
     def concatenate_group(self, group, chunks=None):
@@ -461,7 +632,14 @@ class Database(h5py.File):
             )
 
         # Just initialize an array of the right size
-        example = next(iter(group['data'].values()))
+        try:
+            example = next(iter(group['data'].values()))
+        except StopIteration:
+            raise ConcatenationException(
+                "Group '{}/data' sub-group is empty. Make sure to consume the "\
+                "generator from insert_data() if you used "\
+                "generator=True.".format(group.name)
+            )
 
         n = sum((_.shape[0] for _ in group['data'].values()))
 
@@ -562,7 +740,7 @@ class Database(h5py.File):
     def get_configurations(self, ids, generator=False):
         """
         A generator that returns in-memory Configuration objects one at a time
-        by loading the info/array fields
+        by loading the atomic numbers, positions, cells, and PBCs.
 
         Args:
 
@@ -588,58 +766,6 @@ class Database(h5py.File):
             return self._get_configurations(ids)
 
 
-    def _get_configurations_gen(self, ids):
-        if ids == 'all':
-            ids = self.get_data('configurations/ids')
-
-        for co_id in ids:
-
-            info = {}
-            g = self['configurations/info']
-            for field in g:
-
-                if g[field].attrs['concatenated']:
-                    # Data is a concatenated array of everything
-                    indexer = g[field]['slices'][co_id]
-                else:
-                    # Data is a dictionary with key=ID
-                    try:
-                        # Decode if bytes
-                        indexer = co_id.decode('utf-8')
-                    except:
-                        indexer = co_id
-
-                info[field] = self.get_data(
-                    g[field], in_memory=True
-                )[indexer]
-
-            arrays = {}
-            g = self['configurations/arrays']
-            for field in g:
-
-                if g[field].attrs['concatenated']:
-                    # Data is a concatenated array of everything
-                    indexer = g[field]['slices'][co_id]
-                else:
-                    # Data is a dictionary with key=ID
-                    try:
-                        # Decode if bytes
-                        indexer = co_id.decode('utf-8')
-                    except:
-                        indexer = co_id
-
-                arrays[field] = self.get_data(
-                    g[field], in_memory=True
-                )[indexer]
-
-            # Workaround because Configuration constructor needs info and arrays
-            atoms = Atoms()
-            atoms.info = info
-            atoms.arrays = arrays
-
-            yield Configuration.from_ase(atoms)
-
-
     def _get_configurations(self, ids):
         if ids == 'all':
             ids = self.get_data('configurations/ids')
@@ -647,75 +773,84 @@ class Database(h5py.File):
         configurations = []
 
         for co_id in ids:
+            atoms = Atoms(
+                symbols=self.get_data(
+                    'configurations/atomic_numbers'
+                )[self[f'configurations/atomic_numbers/slices/{co_id}'][()]],
 
-            info = {}
-            g = self['configurations/info']
-            for field in g:
+                positions=self.get_data(
+                    'configurations/positions'
+                )[self[f'configurations/positions/slices/{co_id}'][()]],
 
-                if g[field].attrs['concatenated']:
-                    # Data is a concatenated array of everything
-                    indexer = g[field]['slices'][co_id]
-                else:
-                    # Data is a dictionary with key=ID
-                    try:
-                        # Decode if bytes
-                        indexer = co_id.decode('utf-8')
-                    except:
-                        indexer = co_id
+                cell=self.get_data(
+                    'configurations/cells'
+                )[self[f'configurations/cells/slices/{co_id}'][()]],
 
-                info[field] = self.get_data(
-                    g[field], in_memory=True
-                )[indexer]
-
-            arrays = {}
-            g = self['configurations/arrays']
-            for field in g:
-
-                if g[field].attrs['concatenated']:
-                    # Data is a concatenated array of everything
-                    indexer = g[field]['slices'][co_id]
-                else:
-                    # Data is a dictionary with key=ID
-                    try:
-                        # Decode if bytes
-                        indexer = co_id.decode('utf-8')
-                    except:
-                        indexer = co_id
-
-                arrays[field] = self.get_data(
-                    g[field], in_memory=True
-                )[indexer]
-
-            # Workaround because Configuration constructor needs info and arrays
-            atoms = Atoms()
-            atoms.info = info
-            atoms.arrays = arrays
+                pbc=self.get_data(
+                    'configurations/pbcs'
+                )[self[f'configurations/pbcs/slices/{co_id}'][()]],
+            )
 
             configurations.append(Configuration.from_ase(atoms))
 
         return configurations
 
 
+
+    def _get_configurations_gen(self, ids):
+        if ids == 'all':
+            ids = self.get_data('configurations/ids')
+
+        configurations = []
+
+        for co_id in ids:
+            atoms = Atoms(
+                symbols=self.get_data(
+                    'configurations/atomic_numbers'
+                )[self[f'configurations/atomic_numbers/slices/{co_id}'][()]],
+
+                positions=self.get_data(
+                    'configurations/positions'
+                )[self[f'configurations/positions/slices/{co_id}'][()]],
+
+                cell=self.get_data(
+                    'configurations/cells'
+                )[self[f'configurations/cells/slices/{co_id}'][()]],
+
+                pbc=self.get_data(
+                    'configurations/pbcs'
+                )[self[f'configurations/pbcs/slices/{co_id}'][()]],
+            )
+
+            yield Configuration.from_ase(atoms)
+
+
     def concatenate_configurations(self):
-        for field in self['configurations/info']:
-            try:
-                self.concatenate_group(self['configurations/info'][field])
-            except ConcatenationException as e:
-                pass
+        self.concatenate_group('configurations/atomic_numbers')
+        self.concatenate_group('configurations/positions')
+        self.concatenate_group('configurations/cells')
+        self.concatenate_group('configurations/pbcs')
 
-        for field in self['configurations/arrays']:
-            try:
-                self.concatenate_group(self['configurations/arrays'][field])
-            except ConcatenationException:
-                pass
+        # for field in self['configurations/info']:
+        #     try:
+        #         self.concatenate_group(self['configurations/info'][field])
+        #     except ConcatenationException as e:
+        #         pass
+
+        # for field in self['configurations/arrays']:
+        #     try:
+        #         self.concatenate_group(self['configurations/arrays'][field])
+        #     except ConcatenationException:
+        #         pass
 
 
-    def add_property_definition(self, definition):
+    def insert_property_definition(self, definition):
         """
-        Args:
+        Inserts a new property definition into the database. Checks that
+        definition is valid, then builds all necessary groups in
+        :code:`/root/properties`.
 
-            name (str):
-                The name of the property
+        Args:
 
             definition (dict):
                 The map defining the property. See the example below, or the
@@ -725,51 +860,70 @@ class Database(h5py.File):
         Example definition:
 
         ..code-block:: python
-
-            qm9_property_definition = {
-                'property-id': 'qm9-property',
-                'property-title': 'A, B, C, mu, alpha, homo, lumo, gap, r2, zpve, U0, U, H, G, Cv',
-                'property-description': 'Geometries minimal in energy, corresponding harmonic frequencies, dipole moments, polarizabilities, along with energies, enthalpies, and free energies of atomization',
-                'a':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Rotational constant A'},
-                'b':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Rotational constant B'},
-                'c':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Rotational constant C'},
-                'mu':    {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Dipole moment'},
-                'alpha': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Isotropic polarizability'},
-                'homo':  {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Energy of Highest occupied molecular orbital (HOMO)'},
-                'lumo':  {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Energy of Lowest occupied molecular orbital (LUMO)'},
-                'gap':   {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Gap, difference between LUMO and HOMO'},
-                'r2':    {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Electronic spatial extent'},
-                'zpve':  {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Zero point vibrational energy'},
-                'u0':    {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Internal energy at 0 K'},
-                'u':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Internal energy at 298.15 K'},
-                'h':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Enthalpy at 298.15 K'},
-                'g':     {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Free energy at 298.15 K'},
-                'cv':    {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Heat capacity at 298.15 K'},
-                'smiles-relaxed':    {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'SMILES for relaxed geometry'},
-                'inchi-relaxed':     {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'InChI for relaxed geometry'},
+            
+            property_definition = {
+                'property-id': 'default',
+                'property-title': 'A default property used for testing',
+                'property-description': 'A description of the property',
+                'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+                'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                'nd-diff-shape': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                'nd-diff-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
             }
-
         """
+
+        dummy_dict = deepcopy(definition)
+
+        # Spoof if necessary
+        if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
+            # Invalid ID. Try spoofing it
+            dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
+            dummy_dict['property-id'] += definition['property-id']
+            warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+
+        check_property_definition(dummy_dict)
 
         group = self['properties'].require_group(definition['property-id'])
         group.attrs['definition'] = json.dumps(definition)
+
+        ignore_fields = {
+            'property-id', 'property-title', 'property-description'
+        }
+
+        for subgroup in ['configuration_ids', 'settings_ids']:
+            g = group.create_group(subgroup)
+            g.create_group('data', track_order=True)
+            g.create_group('slices')
+            g.attrs['concatenated'] = False
+
+        for field in set(definition.keys()) - ignore_fields:
+            g = group.create_group(field)
+            g.create_group('data', track_order=True)
+            g.create_group('slices')
+            g.attrs['concatenated'] = False
 
 
     def get_property_definition(self, name):
         return json.loads(self[f'properties/{name}'].attrs['definition'])
 
 
-    def parse_data(self, property_name):
+    def insert_property_settings(self, pso_object):
         """
-        Notes:
-            * Maybe this should also take in an optional list of configuration
-            IDs
-        """
-        # Move the data off of the Configurations and into the Properties
-        # NOTE: this should just mean moving fields out of /configurations/info
-        # or /configurations/arrays and into /properties/property_id_xxx
+        Inserts a new property settings object into the database by creating
+        and populating the necessary groups in :code:`/root/property_settings`.
 
+        Args:
+
+            pso_object (PropertySettings)
+                The :class:`~colabfit.tools.property_settings.PropertySettings`
+                object to insert into the database.
+        """
         pass
+
 
 class ConcatenationException(Exception):
     pass
