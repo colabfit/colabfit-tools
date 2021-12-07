@@ -2,6 +2,7 @@ import os
 import h5py
 import json
 import warnings
+import datetime
 import numpy as np
 from ase import Atoms
 from copy import deepcopy
@@ -10,6 +11,8 @@ from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 from colabfit import (
+    ATOMS_LABELS_FIELD,
+    ATOMS_NAME_FIELD,
     STRING_DTYPE_SPECIFIER
 )
 from colabfit.tools.configuration import Configuration
@@ -50,6 +53,14 @@ class Database(h5py.File):
                 /data
                     An array of all Configuration IDs in the Database
 
+            /names
+                Same as /atomic_numbers, but for configuration names. Note that
+                a single configuration may have been given multiple names.
+            /labels
+                Same as /atomic_numbers, but for labels
+            /last_modified
+                Same as /atomic_numbers, but for datetime strings specifying
+                when the configuration was last modified.
             /atomic_numbers
                 .attrs
                     concatenated
@@ -97,7 +108,7 @@ class Database(h5py.File):
                 Same as /atomic_numbers, but for periodic boundary conditions
             /constraints
                 This group is not supported yet. It will be added in the future,
-                and will have a similar structure to the /atomic_numbers
+                and will have a similar structure to /atomic_numbers
         /properties
             This group stores all of the computed properties.
 
@@ -155,6 +166,9 @@ class Database(h5py.File):
             The configuration sets defining groups of configurations.
 
             /configuration_set_id_1
+                .attrs
+                    description: Human-readable description of the set
+
                 /ids
                     A list of Configuration IDs that belong to the configuration
                     set. Useful for indexing /configurations fields and
@@ -196,7 +210,8 @@ class Database(h5py.File):
         g = self.create_group('configurations')
 
         for sub_group_name in [
-            'ids', 'atomic_numbers', 'positions', 'cells', 'pbcs'
+            'ids', 'atomic_numbers', 'positions', 'cells', 'pbcs',
+            'names', 'labels', 'last_modified'
             ]:
             sub_g = g.create_group(sub_group_name)
             sub_g.attrs['concatenated'] = False
@@ -229,13 +244,21 @@ class Database(h5py.File):
         in each tuple is the ID of the inserted property, and the second entry
         is the ID of the associated configuration.
 
-        A configuration is added to the database by extracting four fields from
-        the Configuration object: atomic numbers, atomic positions, cell lattice
-        vectors, and cell periodic boundary conditions.
+        A configuration is added to the database by extracting seven fields from
+        the Configuration object:
+
+            * atomic numbers (:meth:`get_atomic_numbers`)
+            * atomic positions (:meth:`get_positions`)
+            * cell lattice vectors (:meth:`get_cell`)
+            * cell periodic boundary conditions (:meth:`get_pbc`)
+            * names (:attr:`info['_name'])
+            * labels (:attr:`info['_labels'])
+            * last_modified (:meth:`datetime.now`)
 
         A property is added to the database by extracting the fields specified
         by the property definition off of the configuration. Note that an error
-        will be thrown if the property hasn't been defined.
+        will be thrown if the property hasn't been defined yet using
+        :meth:`~colabfit.tools.database.Database.add_property_definition`.
 
         Set :code:`generator=True` when the configurations
         can't all fit in memory at the same time. NOTE: if `generator==True`,
@@ -244,6 +267,34 @@ class Database(h5py.File):
 
         # TODO: there should also be some way to add properties to existing
         # configurations. Maybe insert_property()
+
+        Example:
+
+        ..code-block:: python
+
+            database.add_property_definition(...)
+
+            property_map = {
+                'property-name-1': {
+                    'property-field-1': {
+                        'field': 'ase-field-1',
+                        'units': 'units-1',
+                    }
+                }
+            }
+
+            pso_id_1 = database.add_property_settings(
+                PropertySettings(...)
+            )
+
+            property_settings = {
+                'property-name': pso_id_1
+            }
+
+            database.insert_data(
+                configurations, property_map, property_settings
+            )
+
 
         Args:
 
@@ -260,34 +311,6 @@ class Database(h5py.File):
                 If None, only loads the configuration information (atomic
                 numbers, positions, lattice vectors, and periodic boundary
                 conditions).
-
-                Example:
-
-                ..code-block:: python
-
-                    database.add_property_definition(...)
-
-                    property_map = {
-                        'property-name-1': {
-                            'property-field-1': {
-                                'field': 'ase-field-1',
-                                'units': 'units-1',
-                            }
-                        }
-                    }
-
-                    pso_id_1 = database.add_property_settings(
-                        PropertySettings(...)
-                    )
-
-                    property_settings = {
-                        'property-name': pso_id_1
-                    }
-
-                    database.insert_data(
-                        configurations, property_map, property_settings
-                    )
-
             generator (bool):
                 If true, this function becomes a generator which only adds the
                 configurations one at a time. This is useful if the
@@ -345,6 +368,75 @@ class Database(h5py.File):
 
         for ai, atoms in enumerate(configurations):
             config_id = str(hash(atoms))
+
+            if config_id in g:  # Identical CO already exists in the dataset
+                # So just update /names, /labels, and /last_modified
+                for f2 in ['names', 'labels', 'last_modified']:
+                    g = self[f'configurations/{f2}/data']
+                    if g.attrs['concatenated']:
+                        raise ConcatenationException(
+                            "Trying to update a configuration after "\
+                            "concatenating is not allowed."
+                        )
+
+                # Now append to existing datasets
+                # Names
+                if atoms.info[ATOMS_NAME_FIELD]:
+                    data = self[f'configurations/names/data/{config_id}']
+                    data.resize((data.shape[0]+1,) + data.shape[1:])
+                    data[-1] = atoms.info[ATOMS_NAME_FIELD]
+
+                # Labels
+                data = self[f'configurations/labels/data/{config_id}']
+                labels = atoms.info[ATOMS_LABELS_FIELD]
+                data.resize(
+                    (data.shape[0]+len(labels),) + data.shape[1:]
+                )
+                data[-len(labels):] = list(labels)
+
+                # Last modified
+                data = self[f'configurations/names/data/{config_id}']
+                data = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+            else:
+                # Adding a new CO
+                # Names
+                if atoms.info[ATOMS_NAME_FIELD]:
+                    g = self['configurations/names']
+                    g['data'].create_dataset(
+                        name=config_id,
+                        shape=(1,),
+                        maxshape=(None,),
+                        dtype=STRING_DTYPE_SPECIFIER,
+                        data=atoms.info[ATOMS_NAME_FIELD]
+                    )
+                    g[f'slices/{config_id}'] = np.array(
+                        config_id, dtype=STRING_DTYPE_SPECIFIER
+                    )
+                # Labels
+                g = self['configurations/labels']
+                labels = list(atoms.info[ATOMS_LABELS_FIELD])
+                g['data'].create_dataset(
+                    name=config_id,
+                    shape=(len(labels),),
+                    maxshape=(None,),
+                    dtype=STRING_DTYPE_SPECIFIER,
+                    data=labels
+                )
+                g[f'slices/{config_id}'] = np.array(
+                    config_id, dtype=STRING_DTYPE_SPECIFIER
+                )
+                # Last modified
+                g = self['configurations/last_modified']
+                g['data'].create_dataset(
+                    name=config_id,
+                    shape=(1,),
+                    maxshape=(None,),
+                    dtype=STRING_DTYPE_SPECIFIER,
+                    data=datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                )
+                g[f'slices/{config_id}'] = np.array(
+                    config_id, dtype=STRING_DTYPE_SPECIFIER
+                )
 
             # Save the ID
             g = self['configurations/ids/data']
@@ -450,6 +542,16 @@ class Database(h5py.File):
         self, configurations,
         property_definitions, property_map, property_settings
         ):
+        """
+        TODO:
+
+        * Add support for duplicate configurations. If the CO ID already exists,
+        that means the COs are identical (since the ID is the hash), so all that
+        needs to be done is to update /names, /labels, and /last_modified.
+
+        * Add support for duplicate properties
+
+        """
         if isinstance(configurations, Configuration):
             configurations = [configurations]
 
@@ -466,42 +568,125 @@ class Database(h5py.File):
         for ai, atoms in enumerate(configurations):
             config_id = str(hash(atoms))
 
-            # Save the ID
             g = self['configurations/ids/data']
-            g.create_dataset(
-                name=config_id,
-                shape=1,
-                data=np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
-            )
 
-            # Save all fundamental information about the configuration
-            g = self['configurations/atomic_numbers']
-            g['data'].create_dataset(
-                name=config_id,
-                data=atoms.get_atomic_numbers(),
-            )
-            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+            if config_id in g:  # Identical CO already exists in the dataset
+                # So just update /names, /labels, and /last_modified
+                for f2 in ['names', 'labels', 'last_modified']:
+                    g = self[f'configurations/{f2}']
+                    if g.attrs['concatenated']:
+                        raise ConcatenationException(
+                            "Trying to update a configuration after "\
+                            "concatenating is not allowed."
+                        )
 
-            g = self['configurations/positions']
-            g['data'].create_dataset(
-                name=config_id,
-                data=atoms.get_positions()
-            )
-            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+                # Now append to existing datasets
+                # Names
+                data = self[f'configurations/names/data/{config_id}']
+                new_name = atoms.info[ATOMS_NAME_FIELD]
+                if new_name == '':
+                    new_name = []
+                else:
+                    new_name = [new_name]
+                names_set = set(new_name) - set(data.asstr()[()])
+                data.resize((data.shape[0]+len(names_set),) + data.shape[1:])
+                data[-len(names_set):] = np.array(
+                    list(names_set), dtype=STRING_DTYPE_SPECIFIER
+                )
 
-            g = self['configurations/cells']
-            g['data'].create_dataset(
-                name=config_id,
-                data=np.array(atoms.get_cell())
-            )
-            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+                # Labels
+                data = self[f'configurations/labels/data/{config_id}']
+                labels = atoms.info[ATOMS_LABELS_FIELD]
+                data.resize(
+                    (data.shape[0]+len(labels),) + data.shape[1:]
+                )
+                data[-len(labels):] = list(labels)
 
-            g = self['configurations/pbcs']
-            g['data'].create_dataset(
-                name=config_id,
-                data=atoms.get_pbc().astype(int),
-            )
-            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+                # Last modified
+                data = self[f'configurations/names/data/{config_id}']
+                data = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+            else:
+                # Adding a new CO
+                # Names
+                g = self['configurations/names']
+                name = atoms.info[ATOMS_NAME_FIELD]
+                if name == '':
+                    name = []
+                else:
+                    name = [name]
+                g['data'].create_dataset(
+                    name=config_id,
+                    shape=(len(name),),
+                    maxshape=(None,),
+                    dtype=STRING_DTYPE_SPECIFIER,
+                    data=name
+                )
+                g[f'slices/{config_id}'] = np.array(
+                    config_id, dtype=STRING_DTYPE_SPECIFIER
+                )
+                # Labels
+                g = self['configurations/labels']
+                labels = list(atoms.info[ATOMS_LABELS_FIELD])
+                g['data'].create_dataset(
+                    name=config_id,
+                    shape=(len(labels),),
+                    maxshape=(None,),
+                    dtype=STRING_DTYPE_SPECIFIER,
+                    data=labels
+                )
+                g[f'slices/{config_id}'] = np.array(
+                    config_id, dtype=STRING_DTYPE_SPECIFIER
+                )
+                # Last modified
+                g = self['configurations/last_modified']
+                g['data'].create_dataset(
+                    name=config_id,
+                    shape=(1,),
+                    maxshape=(None,),
+                    dtype=STRING_DTYPE_SPECIFIER,
+                    data=datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                )
+                g[f'slices/{config_id}'] = np.array(
+                    config_id, dtype=STRING_DTYPE_SPECIFIER
+                )
+
+                # Save the ID
+                g = self['configurations/ids/data']
+                g.create_dataset(
+                    name=config_id,
+                    shape=1,
+                    data=np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+                )
+
+                # Save all fundamental information about the configuration
+                g = self['configurations/atomic_numbers']
+                g['data'].create_dataset(
+                    name=config_id,
+                    data=atoms.get_atomic_numbers(),
+                )
+                g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+
+                g = self['configurations/positions']
+                g['data'].create_dataset(
+                    name=config_id,
+                    data=atoms.get_positions()
+                )
+                g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+
+                g = self['configurations/cells']
+                g['data'].create_dataset(
+                    name=config_id,
+                    data=np.array(atoms.get_cell())
+                )
+                g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+
+                g = self['configurations/pbcs']
+                g['data'].create_dataset(
+                    name=config_id,
+                    data=atoms.get_pbc().astype(int),
+                )
+                g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
             # Try to load all of the specified properties
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
@@ -525,6 +710,10 @@ class Database(h5py.File):
                 )
 
                 prop_id = str(hash(prop))
+
+                if prop_id in self['properties/ids/data']:
+                    additions.append((prop_id, config_id))
+                    continue
 
                 # Add the data; group should already exist
                 for field in expected_keys[pname]:
@@ -634,9 +823,6 @@ class Database(h5py.File):
         start = 0
         problem_adding = False
 
-        # TODO: need to figure out how to handle the case where the field has
-        # already been concatenated before.
-
         if '_root_concatenated' in group['data']:
             # Copy any already-concatenated data
             ds = group['data/_root_concatenated']
@@ -645,7 +831,6 @@ class Database(h5py.File):
             start += ds.shape[0]
 
         for ds_name, ds in group['data'].items():
-            # if os.path.split(ds.name)[-1] != '_root_concatenated':
             if ds_name == '_root_concatenated':
                 # This was added first
                 continue
@@ -747,6 +932,9 @@ class Database(h5py.File):
 
 
     def get_configuration(self, i):
+        """
+        Returns a single configuration by calling :meth:`get_configurations`
+        """
         return self.get_configurations([i])
 
     def get_configurations(self, ids, generator=False):
@@ -917,6 +1105,7 @@ class Database(h5py.File):
 
 
     def get_property_definition(self, name):
+        """Return the dictionary form of the property definition"""
         return json.loads(self[f'properties/{name}'].attrs['definition'])
 
 
@@ -954,6 +1143,7 @@ class Database(h5py.File):
 
 
     def get_property_settings(self, pso_id):
+        """Return the PropertySettings object with the given ID"""
         g = self[f'property_settings/{pso_id}']
 
         return PropertySettings(
@@ -962,6 +1152,17 @@ class Database(h5py.File):
             labels=json.loads(g.attrs['labels']),
             files=[(fname, ds.asstr()[()]) for fname, ds in g['files'].items()]
         )
+
+
+    def add_configuration_set(self, ids):
+        """Adds the configuration set of IDs to the database."""
+
+        """
+        TODO
+        * ConfigurationSets need a hash function which hashes their CO IDs, that
+        way we can check for CS duplicates.
+        """
+        pass
 
 class ConcatenationException(Exception):
     pass
