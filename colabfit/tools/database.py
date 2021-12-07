@@ -225,7 +225,7 @@ class Database(h5py.File):
 
         g = self.create_group('properties')
         g_ids = g.create_group('ids')
-        g_ids.attrs['concatenate'] = False
+        g_ids.attrs['concatenated'] = False
         g_ids.create_group('data', track_order=True)
 
         self.create_group('property_settings')
@@ -711,6 +711,10 @@ class Database(h5py.File):
 
                 prop_id = str(hash(prop))
 
+                # Check for duplicate property. Note that if even a single field
+                # is changed, it is considered a new property. This can lead to
+                # duplicate data (for the unchanged fields), but is still the
+                # desired behaviour.
                 if prop_id in self['properties/ids/data']:
                     additions.append((prop_id, config_id))
                     continue
@@ -745,8 +749,8 @@ class Database(h5py.File):
                     data=np.array(prop_id, dtype=STRING_DTYPE_SPECIFIER)
                 )
 
-                g = self[f'properties/{pname}/configuration_ids/data']
-                g.create_dataset(
+                g = self[f'properties/{pname}/configuration_ids']
+                g['data'].create_dataset(
                     name=prop_id,
                     shape=1,
                     data=np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
@@ -917,7 +921,7 @@ class Database(h5py.File):
             else:
                 if concatenate:
                     return np.concatenate([
-                        ds[()] if in_memory else ds for ds in g.values()
+                        ds[()] for ds in g.values()
                     ])
                 if ravel:
                     return np.concatenate([
@@ -1028,6 +1032,13 @@ class Database(h5py.File):
             )
 
             yield Configuration.from_ase(atoms)
+
+
+    def get_properties(self, ids):
+        """
+        This function should take a list of PR IDs, and re-construct the
+        properties from them.
+        """
 
 
     def concatenate_configurations(self):

@@ -483,6 +483,152 @@ class TestAddingConfigurations:
             for a1, a2 in zip(data.values(), nd_diff_shape_arr):
                 np.testing.assert_allclose(a1, a2)
 
+
+    def test_add_then_update_with_properties_with_change(self):
+        with tempfile.TemporaryFile() as tmpfile:
+
+            database = Database(tmpfile, mode='w')
+
+            returns = build_n(10)
+
+            images              = returns[0]
+            energies            = returns[1]
+            stress              = returns[2]
+            names               = returns[3]
+            nd_same_shape       = returns[4]
+            nd_diff_shape       = returns[5]
+            forces              = returns[6]
+            nd_same_shape_arr   = returns[7]
+            nd_diff_shape_arr   = returns[8]
+
+            database.insert_property_definition(
+                {
+                    'property-id': 'default',
+                    'property-title': 'A default property used for testing',
+                    'property-description': 'A description of the property',
+                    'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                    'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+                    'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                    'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                    'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                    'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+                }
+            )
+
+            property_map = {
+                'default': {
+                    'energy': {'field': 'energy', 'units': 'eV'},
+                    'stress': {'field': 'stress', 'units': 'GPa'},
+                    'name': {'field': 'name', 'units': None},
+                    'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                    'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                    'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                    'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                    'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                }
+            }
+
+            pso = PropertySettings(
+                method='VASP',
+                description='A basic test calculation',
+                files=[('dummy_name', 'dummy file contents')],
+            )
+
+            pso_id = database.insert_property_settings(pso)
+
+            database.insert_data(
+                images,
+                property_map=property_map,
+                property_settings={'default': pso_id}
+            )
+
+            for img in images:
+                img.info['energy'] += 100000
+
+            database.insert_data(
+                images,
+                property_map=property_map,
+                property_settings={'default': pso_id}
+            )
+
+            for img in images:
+                img.info['energy'] += 100000
+
+            database.insert_data(
+                images,
+                property_map=property_map,
+                property_settings={'default': pso_id}
+            )
+
+            database.concatenate_group('properties/default/energy')
+            database.concatenate_group('properties/default/stress')
+            database.concatenate_group('properties/default/name')
+            database.concatenate_group('properties/default/nd-same-shape')
+
+            database.concatenate_group('properties/default/forces')
+            database.concatenate_group('properties/default/nd-same-shape-arr')
+
+            with pytest.raises(ConcatenationException):
+                database.concatenate_group('properties/default/nd-diff-shapes')
+
+            with pytest.raises(ConcatenationException):
+                database.concatenate_group('properties/default/nd-diff-shapes-arr')
+
+            np.testing.assert_allclose(
+                database.get_data('properties/default/energy'),
+                np.concatenate([
+                    np.hstack(energies),
+                    np.hstack(energies)+100000,
+                    np.hstack(energies)+200000
+                ])
+            )
+            np.testing.assert_allclose(
+                database.get_data('properties/default/stress'),
+                np.concatenate([
+                    np.hstack(stress),
+                    np.hstack(stress),
+                    np.hstack(stress),
+                ])
+            )
+            decoded_names = [
+                _.decode('utf-8')
+                for _ in database.get_data('properties/default/name')
+            ]
+            assert decoded_names == names*3
+            np.testing.assert_allclose(
+                database.get_data('properties/default/nd-same-shape'),
+                np.concatenate([
+                    np.concatenate(nd_same_shape),
+                    np.concatenate(nd_same_shape),
+                    np.concatenate(nd_same_shape),
+                ])
+            )
+            data = database.get_data('properties/default/nd-diff-shapes')
+            for a1, a2 in zip(data.values(), nd_diff_shape*3):
+                np.testing.assert_allclose(a1, a2)
+
+            np.testing.assert_allclose(
+                database.get_data('properties/default/forces'),
+                np.concatenate([
+                    np.concatenate(forces),
+                    np.concatenate(forces),
+                    np.concatenate(forces),
+                ])
+            )
+            np.testing.assert_allclose(
+                database.get_data('properties/default/nd-same-shape-arr'),
+                np.concatenate([
+                    np.concatenate(nd_same_shape_arr),
+                    np.concatenate(nd_same_shape_arr),
+                    np.concatenate(nd_same_shape_arr),
+                ])
+            )
+            data = database.get_data('properties/default/nd-diff-shapes-arr')
+            for a1, a2 in zip(data.values(), nd_diff_shape_arr*3):
+                np.testing.assert_allclose(a1, a2)
+
     def test_adding_configurations_with_properties(self):
         with tempfile.TemporaryFile() as tmpfile:
 
