@@ -355,20 +355,51 @@ class TestAddingConfigurations:
                 np.testing.assert_allclose(a1, a2)
 
 
-    def test_add_concat_add_concat(self):
+    def test_config_add_concat_add_concat(self):
 
         with tempfile.TemporaryFile() as tmpfile:
 
             database = Database(tmpfile, mode='w')
 
-            eng1 = build_n(10)[1]
-            database.concatenate_group('configurations/info/energy')
-            eng1 += build_n(10)[1]
-            database.concatenate_group('configurations/info/energy')
+            images1 = build_n(10)[0]
+            atomic_numbers = [atoms.get_atomic_numbers() for atoms in images1]
+            positions = [atoms.get_positions() for atoms in images1]
+            cells = [atoms.get_cell() for atoms in images1]
+            pbcs = [atoms.get_pbc() for atoms in images1]
+            database.insert_data(images1)
+
+            database.concatenate_group('configurations/atomic_numbers')
+
+            images2 = build_n(10)[0]
+            atomic_numbers += [atoms.get_atomic_numbers() for atoms in images2]
+            positions += [atoms.get_positions() for atoms in images2]
+            cells += [atoms.get_cell() for atoms in images2]
+            pbcs += [atoms.get_pbc() for atoms in images2]
+            database.insert_data(images2)
+
+            database.concatenate_group('configurations/atomic_numbers')
 
             np.testing.assert_allclose(
-                database.get_data('configurations/info/energy/'),
-                np.hstack(eng1)
+                database.get_data('configurations/atomic_numbers'),
+                np.concatenate(atomic_numbers)
+            )
+            np.testing.assert_allclose(
+                database.get_data(
+                    'configurations/positions', concatenate=True, in_memory=True
+                ),
+                np.concatenate(positions)
+            )
+            np.testing.assert_allclose(
+                database.get_data(
+                    'configurations/cells', concatenate=True, in_memory=True
+                ),
+                np.concatenate(cells)
+            )
+            np.testing.assert_allclose(
+                database.get_data(
+                    'configurations/pbcs', concatenate=True, in_memory=True
+                ),
+                np.concatenate(pbcs)
             )
 
 
@@ -415,7 +446,8 @@ class TestAddingConfigurations:
 
             images = build_n(10)[0]
 
-            database.insert_data(images)
+            ids = database.insert_data(images, generator=True)
+            list(ids)  # consume generator
 
             database.concatenate_configurations()
 
@@ -435,7 +467,7 @@ class TestAddingConfigurations:
             returns = build_n(10)
 
             images = returns[0]
-            ids    = returns[-1]
+            ids    = [_[1] for _ in database.insert_data(images)]
 
             database.concatenate_configurations()
 
@@ -450,11 +482,15 @@ class TestAddingConfigurations:
             returns = build_n(10)
 
             images = returns[0]
-            ids    = returns[-1]
+            ids    = [
+                _[1] for _ in database.insert_data(images, generator=True)
+            ]
 
             database.concatenate_configurations()
 
-            for atoms, img in zip(database.get_configurations(ids), images):
+            for atoms, img in zip(
+                database.get_configurations(ids, generator=True), images
+                ):
                 assert atoms == img
 
 

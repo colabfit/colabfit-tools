@@ -429,6 +429,20 @@ class Database(h5py.File):
                         prop_id, dtype=STRING_DTYPE_SPECIFIER
                     )
 
+                # Attach property settings, if any were given
+                if pname in property_settings:
+                    settings_id = property_settings[pname]
+
+                    g = self[f'properties/{pname}/settings_ids/data']
+                    g.create_dataset(
+                        name=prop_id,
+                        shape=1,
+                        data=np.array(settings_id, dtype=STRING_DTYPE_SPECIFIER)
+                    )
+                    g[f'slices/{prop_id}'] = np.array(
+                        prop_id, dtype=STRING_DTYPE_SPECIFIER
+                    )
+
                 yield (prop_id, config_id)
 
 
@@ -572,72 +586,6 @@ class Database(h5py.File):
         return additions
 
 
-
-
-            # for k, v in atoms.info.items():
-            #     g = self['configurations/info'].require_group(k)
-            #     # Extract data and slices groups
-            #     if 'data' in g:
-            #         g_data = g['data']
-            #     else:
-            #         g_data = g.create_group('data', track_order=True)
-
-            #     if 'slices' in g:
-            #         g_slices = g['slices']
-            #     else:
-            #         g_slices = g.create_group('slices', track_order=True)
-
-            #     if isinstance(v, str):
-            #         v = np.atleast_1d(v).astype(STRING_DTYPE_SPECIFIER)
-            #     if isinstance(v, (set, list)):
-            #         # These should always be sets of strings
-            #         v = np.atleast_1d(list(v)).astype(STRING_DTYPE_SPECIFIER)
-            #     else:
-            #         v = np.atleast_1d(v)
-
-            #     # Add in info fields
-            #     g_data.create_dataset(
-            #         name=config_id,
-            #         shape=v.shape,
-            #         dtype=v.dtype,
-            #         data=v,
-            #         maxshape=(None,)+v.shape[1:],
-            #     )
-
-            #     g_slices[config_id] = config_id
-
-            #     g.attrs['concatenated'] = False
-
-            # for k, v in atoms.arrays.items():
-            #     g = self['configurations/arrays'].require_group(k)
-            #     if 'data' in g:
-            #         g_data = g['data']
-            #     else:
-            #         g_data = g.create_group('data', track_order=True)
-
-            #     if 'slices' in g:
-            #         g_slices = g['slices']
-            #     else:
-            #         g_slices = g.create_group('slices', track_order=True)
-
-            #     # Add in arrays fields
-            #     g_data.create_dataset(
-            #         name=config_id,
-            #         shape=v.shape,
-            #         dtype=v.dtype,
-            #         data=v,  # should already be an array
-            #         maxshape=(None,)+v.shape[1:],
-            #     )
-
-            #     g_slices[config_id] = config_id
-
-            #     g.attrs['concatenated'] = False
-
-        #     ids.append(config_id)
-
-        # return ids
-
-
     def concatenate_group(self, group, chunks=None):
         """
         Attempt to concatenate all of the datasets in a group. Raise an
@@ -735,7 +683,7 @@ class Database(h5py.File):
             group.attrs['concatenated'] = True
 
 
-    def get_data(self, group, in_memory=False):
+    def get_data(self, group, in_memory=False, concatenate=False, ravel=False):
         """
         Returns all of the datasets in the 'data' sub-group of
         :code:`<group_name>`.
@@ -745,12 +693,27 @@ class Database(h5py.File):
             group_name (str or group):
                 The name of a group in the database, or the group object
 
-            in_memory(bool):
+            in_memory (bool):
                 If True, converts each of the datasets to a Numpy array before
                 returning.
+
+            concatenate (bool):
+                If True, concatenates the data before returning. Only available
+                if :code:`in_memory==True`.
+
+            ravel (bool):
+                If True, concatenates and ravels the data before returning. Only
+                available if :code:`in_memory==True`.
         """
         if isinstance(group, str):
             group = self[group]
+
+        if concatenate or ravel:
+            if not in_memory:
+                raise ConcatenationException(
+                    "Cannot use concatenate=True or ravel=True without "\
+                    "in_memory=True"
+                )
 
         if 'data' not in group:
             raise InvalidGroupError(
@@ -762,10 +725,25 @@ class Database(h5py.File):
             g = group['data']
 
             if group.attrs['concatenated']:
+                if ravel:
+                    return g['_root_concatenated'][()].ravel() if in_memory else g['_root_concatenated']
+
                 return g['_root_concatenated'][()] if in_memory else g['_root_concatenated']
             else:
-                return {k: ds[()] if in_memory else ds for k, ds in g.items()}
-                # return [ds[()] if in_memory else ds for ds in g.values()]
+                if concatenate:
+                    return np.concatenate([
+                        ds[()] if in_memory else ds for ds in g.values()
+                    ])
+                if ravel:
+                    return np.concatenate([
+                        ds[()] if in_memory else ds for ds in g.values()
+                    ]).ravel()
+
+                return {
+                    # encode since /slices will have bytes
+                    k.encode('utf-8'): ds[()] if in_memory else ds
+                    for k, ds in g.items()
+                }
 
 
     def get_configuration(self, i):
@@ -802,7 +780,10 @@ class Database(h5py.File):
 
     def _get_configurations(self, ids):
         if ids == 'all':
-            ids = self.get_data('configurations/ids')
+            ids = [
+                ds.asstr()[0]
+                for ds in self.get_data('configurations/ids').values()
+            ]
 
         configurations = []
 
@@ -833,11 +814,13 @@ class Database(h5py.File):
 
     def _get_configurations_gen(self, ids):
         if ids == 'all':
-            ids = self.get_data('configurations/ids')
-
-        configurations = []
+            ids = [
+                ds.asstr()[0]
+                for ds in self.get_data('configurations/ids').values()
+            ]
 
         for co_id in ids:
+
             atoms = Atoms(
                 symbols=self.get_data(
                     'configurations/atomic_numbers'
@@ -860,22 +843,14 @@ class Database(h5py.File):
 
 
     def concatenate_configurations(self):
+        """
+        Concatenates the atomic_numbers, positions, cells, and pbcs groups in
+        /configurations.
+        """
         self.concatenate_group('configurations/atomic_numbers')
         self.concatenate_group('configurations/positions')
         self.concatenate_group('configurations/cells')
         self.concatenate_group('configurations/pbcs')
-
-        # for field in self['configurations/info']:
-        #     try:
-        #         self.concatenate_group(self['configurations/info'][field])
-        #     except ConcatenationException as e:
-        #         pass
-
-        # for field in self['configurations/arrays']:
-        #     try:
-        #         self.concatenate_group(self['configurations/arrays'][field])
-        #     except ConcatenationException:
-        #         pass
 
 
     def insert_property_definition(self, definition):
