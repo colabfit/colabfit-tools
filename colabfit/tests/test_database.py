@@ -7,6 +7,7 @@ from ase import Atoms
 
 from colabfit.tools.database import ConcatenationException, Database
 from colabfit.tools.configuration import Configuration
+from colabfit.tools.property_settings import PropertySettings
 
 def build_n(n):
     images              = []
@@ -292,7 +293,19 @@ class TestAddingConfigurations:
                 }
             }
 
-            database.insert_data(images, property_map=property_map)
+            pso = PropertySettings(
+                method='VASP',
+                description='A basic test calculation',
+                files=[('dummy_name', 'dummy file contents')],
+            )
+
+            pso_id = database.insert_property_settings(pso)
+
+            database.insert_data(
+                images,
+                property_map=property_map,
+                property_settings={'default': pso_id}
+            )
 
             database.concatenate_group('properties/default/energy')
             database.concatenate_group('properties/default/stress')
@@ -414,13 +427,13 @@ class TestAddingConfigurations:
                 count += 1
             assert count == 10
 
-     
+
     def test_get_using_returns(self):
         with tempfile.TemporaryFile() as tmpfile:
             database = Database(tmpfile, mode='w')
 
             returns = build_n(10)
-            
+
             images = returns[0]
             ids    = returns[-1]
 
@@ -429,13 +442,13 @@ class TestAddingConfigurations:
             for atoms, img in zip(database.get_configurations(ids), images):
                 assert atoms == img
 
-   
+
     def test_get_using_returns_gen(self):
         with tempfile.TemporaryFile() as tmpfile:
             database = Database(tmpfile, mode='w')
 
             returns = build_n(10)
-            
+
             images = returns[0]
             ids    = returns[-1]
 
@@ -462,7 +475,7 @@ class TestPropertyDefinitions:
     def test_definition_setter_getter(self):
         with tempfile.TemporaryFile() as tmpfile:
             database = Database(tmpfile, mode='w')
-            
+
             property_definition = {
                     'property-id': 'default',
                     'property-title': 'A default property used for testing',
@@ -480,3 +493,22 @@ class TestPropertyDefinitions:
             database.insert_property_definition(property_definition)
 
             assert database.get_property_definition('default') == property_definition
+
+
+    def test_settings_setter_getter(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = Database(tmpfile, mode='w')
+
+            dummy_file_contents = 'this is a dummy file\nwith nonsense contents'
+
+            pso = PropertySettings(
+                method='VASP',
+                description='A basic test calculation',
+                files=[('dummy_name', dummy_file_contents)],
+            )
+
+            pso_id = database.insert_property_settings(pso)
+
+            rebuilt_pso = database.get_property_settings(pso_id)
+
+            assert pso == rebuilt_pso
