@@ -1140,6 +1140,9 @@ class Database(h5py.File):
         """
         pso_id = str(hash(pso_object))
 
+        if pso_id in self['property_settings']:
+            return pso_id
+
         g = self['property_settings'].create_group(pso_id)
 
         g.attrs['method']       = pso_object.method

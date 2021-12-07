@@ -930,3 +930,23 @@ class TestPropertyDefinitions:
             rebuilt_pso = database.get_property_settings(pso_id)
 
             assert pso == rebuilt_pso
+
+
+    def test_settings_duplicate(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = Database(tmpfile, mode='w')
+
+            dummy_file_contents = 'this is a dummy file\nwith nonsense contents'
+
+            pso = PropertySettings(
+                method='VASP',
+                description='A basic test calculation',
+                files=[('dummy_name', dummy_file_contents)],
+            )
+
+            pso_id = database.insert_property_settings(pso)
+            pso_id = database.insert_property_settings(pso)
+
+            rebuilt_pso = database.get_property_settings(pso_id)
+
+            assert pso == rebuilt_pso
