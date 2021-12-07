@@ -1,3 +1,4 @@
+import os
 import h5py
 import json
 import warnings
@@ -13,6 +14,7 @@ from colabfit import (
 )
 from colabfit.tools.configuration import Configuration
 from colabfit.tools.property import Property
+from colabfit.tools.property_settings import PropertySettings
 
 class Database(h5py.File):
     """
@@ -110,15 +112,12 @@ class Database(h5py.File):
 
                 /configuration_ids
                     A list of tuples of Configuration IDs specifying the
-                    Configurations associated with each Property. As in
-                    /configurations/info/info_field_1/indices, the shape
-                    matches data.shape[0], so entries may be duplicated to
-                    match the number of rows.
+                    Configurations associated with each Property. Uses the
+                    /data, /slices form.
 
                 /settings_ids
-                    A list of Property Settings IDs. As in
-                    /configuration_ids, entries may be duplicated to match
-                    the shape of data.shape[0]
+                    A list of Property Settings IDs. Uses the /data, /slices
+                    form.
 
                 /field_1
                     /data
@@ -140,8 +139,14 @@ class Database(h5py.File):
 
             /property_settings_id_1
                 .attrs
-                    All of the fields of a PropertySettings object (methods,
-                    files, ...)
+                    method: VASP, QuantumEspresso, ...
+
+                    description: A description of the calculation
+
+                /files
+                    Any files associated with the property settings, stored as
+                    raw text strings. Uses the /data form, as in
+                    /configurations/ids.
             .
             .
             .
@@ -153,7 +158,8 @@ class Database(h5py.File):
                 /ids
                     A list of Configuration IDs that belong to the configuration
                     set. Useful for indexing /configurations fields and
-                    /properties/property fields.
+                    /properties/property fields. Uses the /data form, as in
+                    /configurations/ids.
             .
             .
             .
@@ -214,14 +220,15 @@ class Database(h5py.File):
 
     def insert_data(
         self,
-        configurations, property_map=None, generator=False
+        configurations, property_map=None, property_settings=None,
+        generator=False
         ):
         """
         Inserts the configurations into the databas, and any specified
         properties, and returns an iterable of 2-tuples, where the first entry
         in each tuple is the ID of the inserted property, and the second entry
         is the ID of the associated configuration.
-        
+
         A configuration is added to the database by extracting four fields from
         the Configuration object: atomic numbers, atomic positions, cell lattice
         vectors, and cell periodic boundary conditions.
@@ -229,7 +236,7 @@ class Database(h5py.File):
         A property is added to the database by extracting the fields specified
         by the property definition off of the configuration. Note that an error
         will be thrown if the property hasn't been defined.
-        
+
         Set :code:`generator=True` when the configurations
         can't all fit in memory at the same time. NOTE: if `generator==True`,
         then the configurations will only be added to the dataset once the
@@ -243,20 +250,17 @@ class Database(h5py.File):
             configurations (list or Configuration):
                 The list of configurations to be added.
 
-            property_names (list or str):
-                The names of the properties that should be loaded off of the
-
             property_map (dict):
                 A dictionary that is used to specify how to load a defined
                 property off of a configuration. Note that the top-level keys in
                 the map must be the names of properties that have been
                 previously defined using
                 :meth:`~colabfit.tools.database.Database.add_property_definition`.
-                
+
                 If None, only loads the configuration information (atomic
                 numbers, positions, lattice vectors, and periodic boundary
                 conditions).
-                
+
                 Example:
 
                 ..code-block:: python
@@ -272,7 +276,17 @@ class Database(h5py.File):
                         }
                     }
 
-                    database.insert_data(configurations, property_map)
+                    pso_id_1 = database.add_property_settings(
+                        PropertySettings(...)
+                    )
+
+                    property_settings = {
+                        'property-name': pso_id_1
+                    }
+
+                    database.insert_data(
+                        configurations, property_map, property_settings
+                    )
 
             generator (bool):
                 If true, this function becomes a generator which only adds the
@@ -294,6 +308,9 @@ class Database(h5py.File):
         if property_map is None:
             property_map = {}
 
+        if property_settings is None:
+            property_settings = {}
+
         property_definitions = {
             pname: self.get_property_definition(pname)
             for pname in property_map
@@ -301,16 +318,19 @@ class Database(h5py.File):
 
         if generator:
             return self._insert_data_gen(
-                configurations, property_definitions, property_map
+                configurations,
+                property_definitions, property_map, property_settings
             )
         else:
             return self._insert_data(
-                configurations, property_definitions, property_map
+                configurations,
+                property_definitions, property_map, property_settings
             )
 
 
     def _insert_data_gen(
-        self, configurations, property_definitions, property_map
+        self, configurations,
+        property_definitions, property_map, property_settings
         ):
         if isinstance(configurations, Configuration):
             configurations = [configurations]
@@ -412,7 +432,10 @@ class Database(h5py.File):
                 yield (prop_id, config_id)
 
 
-    def _insert_data(self, configurations, property_definitions, property_map):
+    def _insert_data(
+        self, configurations,
+        property_definitions, property_map, property_settings
+        ):
         if isinstance(configurations, Configuration):
             configurations = [configurations]
 
@@ -523,14 +546,25 @@ class Database(h5py.File):
                 g.create_dataset(
                     name=prop_id,
                     shape=1,
-                    data=np.array(prop_id, dtype=STRING_DTYPE_SPECIFIER)
+                    data=np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
                 )
                 g[f'slices/{prop_id}'] = np.array(
-                    config_id, dtype=STRING_DTYPE_SPECIFIER
+                    prop_id, dtype=STRING_DTYPE_SPECIFIER
                 )
 
-                # TODO: insert_property_settings(); update here
+                # Attach property settings, if any were given
+                if pname in property_settings:
+                    settings_id = property_settings[pname]
 
+                    g = self[f'properties/{pname}/settings_ids/data']
+                    g.create_dataset(
+                        name=prop_id,
+                        shape=1,
+                        data=np.array(settings_id, dtype=STRING_DTYPE_SPECIFIER)
+                    )
+                    g[f'slices/{prop_id}'] = np.array(
+                        prop_id, dtype=STRING_DTYPE_SPECIFIER
+                    )
 
                 # yield (prop_id, config_id)
                 additions.append((prop_id, config_id))
@@ -860,7 +894,7 @@ class Database(h5py.File):
         Example definition:
 
         ..code-block:: python
-            
+
             property_definition = {
                 'property-id': 'default',
                 'property-title': 'A default property used for testing',
@@ -921,9 +955,38 @@ class Database(h5py.File):
             pso_object (PropertySettings)
                 The :class:`~colabfit.tools.property_settings.PropertySettings`
                 object to insert into the database.
-        """
-        pass
 
+
+        Returns:
+
+            pso_id (str):
+                The ID of the inserted property settings object. Equals the hash
+                of the object.
+        """
+        pso_id = str(hash(pso_object))
+
+        g = self['property_settings'].create_group(pso_id)
+
+        g.attrs['method']       = pso_object.method
+        g.attrs['description']  = pso_object.description
+        g.attrs['labels']       = json.dumps(pso_object.labels)
+
+        g = g.create_group('files')
+        for (fname, contents) in pso_object.files:
+            g[fname] = contents
+
+        return pso_id
+
+
+    def get_property_settings(self, pso_id):
+        g = self[f'property_settings/{pso_id}']
+
+        return PropertySettings(
+            method=g.attrs['method'],
+            description=g.attrs['description'],
+            labels=json.loads(g.attrs['labels']),
+            files=[(fname, ds.asstr()[()]) for fname, ds in g['files'].items()]
+        )
 
 class ConcatenationException(Exception):
     pass
