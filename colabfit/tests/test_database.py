@@ -876,7 +876,7 @@ class TestAddingConfigurations:
                 assert atoms == img
 
 
-class TestPropertyDefinitions:
+class TestPropertyDefinitionsAndSettings:
 
     def test_invalid_definition(self):
         with tempfile.TemporaryFile() as tmpfile:
@@ -950,3 +950,28 @@ class TestPropertyDefinitions:
             rebuilt_pso = database.get_property_settings(pso_id)
 
             assert pso == rebuilt_pso
+
+class TestConfigurationSets:
+
+    def test_invalid_definition(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = Database(tmpfile, mode='w')
+
+            images = build_n(10)[0]
+
+            ids = [_[1] for _ in database.insert_data(images)]
+
+            cs_id = database.insert_configuration_set(
+                ids, description='A basic configuration set'
+            )
+
+            desc = database[f'configuration_sets/{cs_id}'].attrs['description']
+
+            assert desc == 'A basic configuration set'
+
+            rebuilt_ids = database.get_data(
+                f'configuration_sets/{cs_id}/ids',
+                ravel=True, in_memory=True, as_str=True
+            ).tolist()
+
+            assert rebuilt_ids == ids

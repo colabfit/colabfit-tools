@@ -691,6 +691,9 @@ class Database(h5py.File):
             # Try to load all of the specified properties
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
+            # Flag for tracking if we need to return (None, config_id)
+            returned_something = False
+
             for pname, pmap in property_map.items():
 
                 # Pre-check to avoid having to delete partially-added properties
@@ -775,6 +778,10 @@ class Database(h5py.File):
 
                 # yield (prop_id, config_id)
                 additions.append((prop_id, config_id))
+                returned_something = True
+
+            if not returned_something:
+                additions.append((None, config_id))
 
         return additions
 
@@ -872,7 +879,10 @@ class Database(h5py.File):
             group.attrs['concatenated'] = True
 
 
-    def get_data(self, group, in_memory=False, concatenate=False, ravel=False):
+    def get_data(
+        self, group, in_memory=False,
+        concatenate=False, ravel=False, as_str=False
+        ):
         """
         Returns all of the datasets in the 'data' sub-group of
         :code:`<group_name>`.
@@ -893,6 +903,10 @@ class Database(h5py.File):
             ravel (bool):
                 If True, concatenates and ravels the data before returning. Only
                 available if :code:`in_memory==True`.
+
+            as_str (bool):
+                If True, tries to call :code:`asstr()` to convert from an HDF5
+                bytes array to an array of strings
         """
         if isinstance(group, str):
             group = self[group]
@@ -914,24 +928,31 @@ class Database(h5py.File):
             g = group['data']
 
             if group.attrs['concatenated']:
-                if ravel:
-                    return g['_root_concatenated'][()].ravel() if in_memory else g['_root_concatenated']
+                data = g['_root_concatenated']
 
-                return g['_root_concatenated'][()] if in_memory else g['_root_concatenated']
-            else:
-                if concatenate:
-                    return np.concatenate([
-                        ds[()] for ds in g.values()
-                    ])
+                if as_str:
+                    data = data.asstr()
+                if in_memory:
+                    data = data[()]
                 if ravel:
-                    return np.concatenate([
-                        ds[()] if in_memory else ds for ds in g.values()
-                    ]).ravel()
+                    data = data.ravel()
+
+                return data
+            else:
+                keys, data = g.items()
+
+                if as_str:
+                    data = [_.asstr() for _ in data]
+
+                if concatenate:
+                    return np.concatenate(data)
+
+                if ravel:
+                    return np.concatenate(data).ravel()
 
                 return {
                     # encode since /slices will have bytes
-                    k.encode('utf-8'): ds[()] if in_memory else ds
-                    for k, ds in g.items()
+                    k.encode('utf-8'): ds for k, ds in zip(keys, data)
                 }
 
 
@@ -1032,13 +1053,6 @@ class Database(h5py.File):
             )
 
             yield Configuration.from_ase(atoms)
-
-
-    def get_properties(self, ids):
-        """
-        This function should take a list of PR IDs, and re-construct the
-        properties from them.
-        """
 
 
     def concatenate_configurations(self):
@@ -1168,18 +1182,60 @@ class Database(h5py.File):
         )
 
 
-    def add_configuration_set(self, ids):
-        """Adds the configuration set of IDs to the database."""
-
+    def get_properties(self, ids):
         """
-        TODO
-        * ConfigurationSets need a hash function which hashes their CO IDs, that
-        way we can check for CS duplicates.
+        This function should take a list of PR IDs, and re-construct the
+        properties from them.
         """
         pass
+
+
+    def insert_configuration_set(self, ids, description=''):
+        """
+        Inserts the configuration set of IDs to the database.
+
+        Args:
+
+            ids (list or str):
+                The IDs of the configurations to include in the configuartion
+                set.
+
+            description (str, optional):
+                A human-readable description of the configuration set.
+        """
+
+        if isinstance(ids, str):
+            ids = [ids]
+
+        cs_id = str(hash(tuple(ids)))
+
+        if cs_id in self['configuration_sets']:
+            return cs_id
+
+        for co_id in ids:
+            if co_id not in self['configurations/ids/data']:
+                raise MissingConfigurationError(
+                    "The configuration with ID '{}' is not in the "\
+                    "database".format(co_id)
+                )
+
+        g = self['configuration_sets'].create_group(cs_id)
+        g.attrs['description'] = description
+        g = g.create_group('ids')
+        g.attrs['concatenated'] = True
+        g = g.create_group('data', track_order=True)
+        g.create_dataset(
+            name='_root_concatenated',
+            data=np.array(ids, dtype=STRING_DTYPE_SPECIFIER)
+        )
+
+        return cs_id
 
 class ConcatenationException(Exception):
     pass
 
 class InvalidGroupError(Exception):
+    pass
+
+class MissingConfigurationError(Exception):
     pass
