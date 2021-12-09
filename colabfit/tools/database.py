@@ -21,6 +21,9 @@ from colabfit.tools.property_settings import PropertySettings
 
 class Database(h5py.File):
     """
+    TODO: it would be a lot better if all IDs were integers. Easier
+    storage and comparison.
+
     A Database extends a PyTables (HDF5) file, but provides additional
     functionality for construction, filtering, exploring, ...
 
@@ -369,10 +372,12 @@ class Database(h5py.File):
         for ai, atoms in enumerate(configurations):
             config_id = str(hash(atoms))
 
+            g = self['configurations/ids/data']
+
             if config_id in g:  # Identical CO already exists in the dataset
                 # So just update /names, /labels, and /last_modified
                 for f2 in ['names', 'labels', 'last_modified']:
-                    g = self[f'configurations/{f2}/data']
+                    g = self[f'configurations/{f2}']
                     if g.attrs['concatenated']:
                         raise ConcatenationException(
                             "Trying to update a configuration after "\
@@ -381,10 +386,17 @@ class Database(h5py.File):
 
                 # Now append to existing datasets
                 # Names
-                if atoms.info[ATOMS_NAME_FIELD]:
-                    data = self[f'configurations/names/data/{config_id}']
-                    data.resize((data.shape[0]+1,) + data.shape[1:])
-                    data[-1] = atoms.info[ATOMS_NAME_FIELD]
+                data = self[f'configurations/names/data/{config_id}']
+                new_name = atoms.info[ATOMS_NAME_FIELD]
+                if new_name == '':
+                    new_name = []
+                else:
+                    new_name = [new_name]
+                names_set = set(new_name) - set(data.asstr()[()])
+                data.resize((data.shape[0]+len(names_set),) + data.shape[1:])
+                data[-len(names_set):] = np.array(
+                    list(names_set), dtype=STRING_DTYPE_SPECIFIER
+                )
 
                 # Labels
                 data = self[f'configurations/labels/data/{config_id}']
@@ -397,21 +409,26 @@ class Database(h5py.File):
                 # Last modified
                 data = self[f'configurations/names/data/{config_id}']
                 data = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+
             else:
                 # Adding a new CO
                 # Names
-                if atoms.info[ATOMS_NAME_FIELD]:
-                    g = self['configurations/names']
-                    g['data'].create_dataset(
-                        name=config_id,
-                        shape=(1,),
-                        maxshape=(None,),
-                        dtype=STRING_DTYPE_SPECIFIER,
-                        data=atoms.info[ATOMS_NAME_FIELD]
-                    )
-                    g[f'slices/{config_id}'] = np.array(
-                        config_id, dtype=STRING_DTYPE_SPECIFIER
-                    )
+                g = self['configurations/names']
+                name = atoms.info[ATOMS_NAME_FIELD]
+                if name == '':
+                    name = []
+                else:
+                    name = [name]
+                g['data'].create_dataset(
+                    name=config_id,
+                    shape=(len(name),),
+                    maxshape=(None,),
+                    dtype=STRING_DTYPE_SPECIFIER,
+                    data=name
+                )
+                g[f'slices/{config_id}'] = np.array(
+                    config_id, dtype=STRING_DTYPE_SPECIFIER
+                )
                 # Labels
                 g = self['configurations/labels']
                 labels = list(atoms.info[ATOMS_LABELS_FIELD])
@@ -438,45 +455,48 @@ class Database(h5py.File):
                     config_id, dtype=STRING_DTYPE_SPECIFIER
                 )
 
-            # Save the ID
-            g = self['configurations/ids/data']
-            g.create_dataset(
-                name=config_id,
-                shape=1,
-                data=np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
-            )
+                # Save the ID
+                g = self['configurations/ids/data']
+                g.create_dataset(
+                    name=config_id,
+                    shape=1,
+                    data=np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+                )
 
-            # Save all fundamental information about the configuration
-            g = self['configurations/atomic_numbers']
-            g['data'].create_dataset(
-                name=config_id,
-                data=atoms.get_atomic_numbers(),
-            )
-            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+                # Save all fundamental information about the configuration
+                g = self['configurations/atomic_numbers']
+                g['data'].create_dataset(
+                    name=config_id,
+                    data=atoms.get_atomic_numbers(),
+                )
+                g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
-            g = self['configurations/positions']
-            g['data'].create_dataset(
-                name=config_id,
-                data=atoms.get_positions()
-            )
-            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+                g = self['configurations/positions']
+                g['data'].create_dataset(
+                    name=config_id,
+                    data=atoms.get_positions()
+                )
+                g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
-            g = self['configurations/cells']
-            g['data'].create_dataset(
-                name=config_id,
-                data=np.array(atoms.get_cell())
-            )
-            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+                g = self['configurations/cells']
+                g['data'].create_dataset(
+                    name=config_id,
+                    data=np.array(atoms.get_cell())
+                )
+                g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
-            g = self['configurations/pbcs']
-            g['data'].create_dataset(
-                name=config_id,
-                data=atoms.get_pbc().astype(int),
-            )
-            g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+                g = self['configurations/pbcs']
+                g['data'].create_dataset(
+                    name=config_id,
+                    data=atoms.get_pbc().astype(int),
+                )
+                g[f'slices/{config_id}'] = np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
 
             # Try to load all of the specified properties
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
+
+            # Flag for tracking if we need to return (None, config_id)
+            returned_something = False
 
             for pname, pmap in property_map.items():
 
@@ -497,6 +517,14 @@ class Database(h5py.File):
                 )
 
                 prop_id = str(hash(prop))
+
+                # Check for duplicate property. Note that if even a single field
+                # is changed, it is considered a new property. This can lead to
+                # duplicate data (for the unchanged fields), but is still the
+                # desired behaviour.
+                if prop_id in self['properties/ids/data']:
+                    yield (config_id, prop_id)
+                    continue
 
                 # Add the data; group should already exist
                 for field in expected_keys[pname]:
@@ -521,6 +549,23 @@ class Database(h5py.File):
                         prop_id, dtype=STRING_DTYPE_SPECIFIER
                     )
 
+                g = self['properties/ids/data']
+                g.create_dataset(
+                    name=prop_id,
+                    shape=1,
+                    data=np.array(prop_id, dtype=STRING_DTYPE_SPECIFIER)
+                )
+
+                g = self[f'properties/{pname}/configuration_ids']
+                g['data'].create_dataset(
+                    name=prop_id,
+                    shape=1,
+                    data=np.array(config_id, dtype=STRING_DTYPE_SPECIFIER)
+                )
+                g[f'slices/{prop_id}'] = np.array(
+                    prop_id, dtype=STRING_DTYPE_SPECIFIER
+                )
+
                 # Attach property settings, if any were given
                 if pname in property_settings:
                     settings_id = property_settings[pname]
@@ -535,7 +580,11 @@ class Database(h5py.File):
                         prop_id, dtype=STRING_DTYPE_SPECIFIER
                     )
 
-                yield (prop_id, config_id)
+                yield (config_id, prop_id)
+                returned_something = True
+
+            if not returned_something:
+                yield (config_id, None)
 
 
     def _insert_data(
@@ -719,7 +768,7 @@ class Database(h5py.File):
                 # duplicate data (for the unchanged fields), but is still the
                 # desired behaviour.
                 if prop_id in self['properties/ids/data']:
-                    additions.append((prop_id, config_id))
+                    additions.append((onfig_id, prop_id))
                     continue
 
                 # Add the data; group should already exist
@@ -777,11 +826,11 @@ class Database(h5py.File):
                     )
 
                 # yield (prop_id, config_id)
-                additions.append((prop_id, config_id))
+                additions.append((config_id, prop_id))
                 returned_something = True
 
             if not returned_something:
-                additions.append((None, config_id))
+                additions.append((config_id, None))
 
         return additions
 
@@ -939,16 +988,17 @@ class Database(h5py.File):
 
                 return data
             else:
-                keys, data = g.items()
+                keys = g.keys()
+                data = g.values()
 
                 if as_str:
                     data = [_.asstr() for _ in data]
 
-                if concatenate:
-                    return np.concatenate(data)
+                if concatenate or ravel:
+                    return np.concatenate(list(data))
 
                 if ravel:
-                    return np.concatenate(data).ravel()
+                    return data.ravel()
 
                 return {
                     # encode since /slices will have bytes
@@ -1209,12 +1259,14 @@ class Database(h5py.File):
 
         cs_id = str(hash(tuple(ids)))
 
+        # Check for duplicates
         if cs_id in self['configuration_sets']:
             return cs_id
 
+        # Make sure all of the configurations exist
         for co_id in ids:
             if co_id not in self['configurations/ids/data']:
-                raise MissingConfigurationError(
+                raise MissingEntryError(
                     "The configuration with ID '{}' is not in the "\
                     "database".format(co_id)
                 )
@@ -1231,11 +1283,99 @@ class Database(h5py.File):
 
         return cs_id
 
+
+    def insert_dataset(
+        self, cs_ids, pr_ids,
+        authors, links, description,
+        ):
+        """
+        Inserts a dataset into the database.
+
+        Args:
+
+            cs_ids (list or str):
+                The IDs of the configuration sets to link to the dataset.
+
+            pr_ids (list or str):
+                The IDs of the properties to link to the dataset
+
+            authors (list or str or None):
+                The names of the authors of the dataset. If None, then no
+                authors are added.
+
+            links (list or str or None):
+                External links (e.g., journal articles, Git repositories, ...)
+                to be associated with the dataset. If None, then no links are
+                added.
+
+            description (str or None):
+                A human-readable description of the dataset. If None, then not
+                description is added.
+        """
+
+        if isinstance(cs_ids, str):
+            cs_ids = [cs_ids]
+
+        if isinstance(pr_ids, str):
+            pr_ids = [pr_ids]
+
+        if isinstance(authors, str):
+            authors = [authors]
+
+        if isinstance(links, str):
+            links = [links]
+
+        ds_id = str(hash((
+            hash(tuple(cs_ids)), hash(tuple(pr_ids))
+        )))
+
+        # Check for duplicates
+        if ds_id in self['datasets']:
+            return ds_id
+
+        # Make sure all of the configuration sets and properties exist
+        for cs_id in cs_ids:
+            if cs_id not in self['configuration_sets']:
+                raise MissingEntryError(
+                    "The configuration set with ID '{}' is not in the "\
+                    "database".format(cs_id)
+                )
+
+        for pr_id in pr_ids:
+            if pr_id not in self['properties/ids/data']:
+                raise MissingEntryError(
+                    "The configuration set with ID '{}' is not in the "\
+                    "database".format(pr_id)
+                )
+
+        g = self['datasets'].create_group(ds_id)
+        g.attrs['authors'] = authors
+        g.attrs['links'] = links
+        g.attrs['description'] = description
+
+        g = g.create_group('configuration_set_ids')
+        g.attrs['concatenated'] = True
+        g = g.create_group('data', track_order=True)
+        g.create_dataset(
+            name='_root_concatenated',
+            data=np.array(cs_ids, dtype=STRING_DTYPE_SPECIFIER)
+        )
+
+        g = g.create_group('property_ids')
+        g.attrs['concatenated'] = True
+        g = g.create_group('data', track_order=True)
+        g.create_dataset(
+            name='_root_concatenated',
+            data=np.array(pr_ids, dtype=STRING_DTYPE_SPECIFIER)
+        )
+
+        return ds_id
+
 class ConcatenationException(Exception):
     pass
 
 class InvalidGroupError(Exception):
     pass
 
-class MissingConfigurationError(Exception):
+class MissingEntryError(Exception):
     pass
