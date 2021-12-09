@@ -953,13 +953,13 @@ class TestPropertyDefinitionsAndSettings:
 
 class TestConfigurationSets:
 
-    def test_invalid_definition(self):
+    def test_insert_cs(self):
         with tempfile.TemporaryFile() as tmpfile:
             database = Database(tmpfile, mode='w')
 
             images = build_n(10)[0]
 
-            ids = [_[1] for _ in database.insert_data(images)]
+            ids = [_[0] for _ in database.insert_data(images)]
 
             cs_id = database.insert_configuration_set(
                 ids, description='A basic configuration set'
@@ -975,3 +975,81 @@ class TestConfigurationSets:
             ).tolist()
 
             assert rebuilt_ids == ids
+
+            for im1, im2 in zip(
+                database.get_configurations(rebuilt_ids), images
+                ):
+                assert im1 == im2
+
+
+class TestDatasets:
+
+    def test_insert_ds(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = Database(tmpfile, mode='w')
+
+            images = build_n(10)[0]
+
+            database.insert_property_definition(
+                {
+                    'property-id': 'default',
+                    'property-title': 'A default property used for testing',
+                    'property-description': 'A description of the property',
+                    'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                    'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+                    'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                    'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                    'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                    'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+                }
+            )
+
+            property_map = {
+                'default': {
+                    'energy': {'field': 'energy', 'units': 'eV'},
+                    'stress': {'field': 'stress', 'units': 'GPa'},
+                    'name': {'field': 'name', 'units': None},
+                    'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                    'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                    'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                    'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                    'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                }
+            }
+
+            ids = database.insert_data(
+                images, property_map=property_map
+            )
+
+            co_ids1, pr_ids1 = list(zip(*ids))
+
+            cs_id1 = database.insert_configuration_set(
+                co_ids1, description='A basic configuration set'
+            )
+
+            images = build_n(10)[0]
+
+            for img in images:
+                img.info['energy'] += 100000
+
+            ids = database.insert_data(
+                images, property_map=property_map
+            )
+
+            co_ids2, pr_ids2 = list(zip(*ids))
+
+            cs_id2 = database.insert_configuration_set(
+                co_ids2, description='A basic configuration set'
+            )
+
+            ds_id = database.insert_dataset(
+                cs_ids=[cs_id1, cs_id2],
+                pr_ids=pr_ids1+pr_ids2,
+                authors='colabfit',
+                links='https://colabfit.openkim.org/',
+                description='An example dataset'
+            )
+
+            assert database[f'datasets/{ds_id}'].attrs['authors'] == ['colabfit']
