@@ -166,14 +166,13 @@ class HDF5Client(MongoClient):
                 {  # update document
                     '$setOnInsert': {
                         '_id': cid,
-                        # 'last_modified': config.info[ATOMS_LAST_MODIFIED_FIELD],
                         'elements': processed_fields['elements'],
                         'nelements': processed_fields['nelements'],
                         'elements_ratios': processed_fields['elements_ratios'],
                         'chemical_formula_reduced': processed_fields['chemical_formula_reduced'],
                         'chemical_formula_anonymous': processed_fields['chemical_formula_anonymous'],
                         'chemical_formula_hill': config.get_chemical_formula(),
-                        'natoms': len(config),
+                        'nsites': len(config),
                         'dimension_types': config.get_pbc().astype(int).tolist(),
                         'nperiodic_dimensions': int(sum(config.get_pbc())),
                         'lattice_vectors': np.array(config.get_cell()).tolist(),
@@ -195,6 +194,8 @@ class HDF5Client(MongoClient):
 
         # Now add all of the properties
         for pid in list(set(pr_ids)):
+            if pid is None: continue
+
             prop_type = self.database[f'properties/types/data/{pid}'][()].decode()
 
             settings_list = list(
@@ -461,3 +462,104 @@ class HDF5Client(MongoClient):
         /configurations.
         """
         self.database.concatenate_configurations()
+
+
+    def insert_configuration_set(self, ids, description=''):
+        """
+        Inserts the configuration set of IDs to the database.
+
+        Args:
+
+            ids (list or str):
+                The IDs of the configurations to include in the configuartion
+                set.
+
+            description (str, optional):
+                A human-readable description of the configuration set.
+        """
+
+        cs_id = self.database.insert_configuration_set(
+            ids=ids, description=description
+        )
+
+        aggregated_info = {
+            'nconfigurations': len(ids),
+            'nsites': 0,
+            'nelements': 0,
+            'elements': [],
+            'individual_elements_ratios': set(),
+            'total_elements_ratios': [],
+            'labels': [],
+            'labels_counts': [],
+            'chemical_formula_reduced': set(),
+            'chemical_formula_anonymous': set(),
+            'chemical_formula_hill': set(),
+            'nperiodic_dimensions': set(),
+            'dimension_types': set(),
+        }
+
+        for doc in self.configurations.find({'_id': {'$in': ids}}):
+            aggregated_info['nsites'] += doc['nsites']
+
+            for e, er in zip(doc['elements'], doc['elements_ratios']):
+                if e not in aggregated_info['elements']:
+                    aggregated_info['nelements'] += 1
+                    aggregated_info['elements'].append(e)
+                    aggregated_info['total_elements_ratios'].append(er*doc['nsites'])
+                else:
+                    idx = aggregated_info['elements'].index(e)
+                    aggregated_info['total_elements_ratios'][idx] += er*doc['nsites']
+
+                aggregated_info['individual_elements_ratios'].add(
+                    np.round_(er, decimals=2)
+                )
+
+            for l in doc['labels']:
+                if l not in aggregated_info['labels']:
+                    aggregated_info['labels'].append(l)
+                    aggregated_info['labels_counts'].append(1)
+                else:
+                    idx = aggregated_info['labels'].index(l)
+                    aggregated_info['labels_counts'][idx] += 1
+
+            aggregated_info['chemical_formula_reduced'].add(doc['chemical_formula_reduced'])
+            aggregated_info['chemical_formula_anonymous'].add(doc['chemical_formula_anonymous'])
+            aggregated_info['chemical_formula_hill'].add(doc['chemical_formula_hill'])
+
+            aggregated_info['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
+            aggregated_info['dimension_types'].add(tuple(doc['dimension_types']))
+
+        aggregated_info['total_elements_ratios'] = [
+            c/aggregated_info['nsites'] for c in aggregated_info['total_elements_ratios']
+        ]
+
+        aggregated_info['individual_elements_ratios'] = list(aggregated_info['individual_elements_ratios'])
+
+        aggregated_info['chemical_formula_reduced'] = list(aggregated_info['chemical_formula_reduced'])
+        aggregated_info['chemical_formula_anonymous'] = list(aggregated_info['chemical_formula_anonymous'])
+        aggregated_info['chemical_formula_hill'] = list(aggregated_info['chemical_formula_hill'])
+        aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
+        aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
+
+        self.configuration_sets.update_one(
+            {'_id': cs_id},
+            {
+                '$addToSet': {
+                    'relationships.configurations': {'$each': ids}
+                },
+                '$setOnInsert': {
+                    '_id': cs_id,
+                    'aggregated_info': aggregated_info
+                },
+                '$set': {
+                    'last_modified': self.database[f'configuration_sets/{cs_id}'].attrs['last_modified']
+                },
+            },
+            upsert=True
+        )
+
+        return cs_id
+
+    def get_configuration_set(self, cs_id):
+        """This should return an actual CS object"""
+        pass

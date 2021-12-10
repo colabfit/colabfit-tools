@@ -128,8 +128,9 @@ class TestClient:
                 pn = client.database[f'properties/default/forces/data/{pid}'].shape[0]
 
                 na = len(config)
-                assert config_doc['natoms'] == na
+                assert config_doc['nsites'] == na
                 assert pn == na
+
                 assert config_doc['chemical_formula_anonymous'] == 'A'
                 assert config_doc['chemical_formula_hill'] == config.get_chemical_formula()
                 assert config_doc['chemical_formula_reduced'] == 'H'
@@ -142,7 +143,7 @@ class TestClient:
                     np.array(config.get_cell())
                 )
                 assert config_doc['names'] == [f'config_{i}']
-                assert config_doc['natoms'] == len(config)
+                assert config_doc['nsites'] == len(config)
                 assert config_doc['nelements'] == 1
                 assert config_doc['nperiodic_dimensions'] == 0
                 assert {pid}.issubset(config_doc['relationships']['properties'])
@@ -153,3 +154,41 @@ class TestClient:
                 assert {pso_id}.issubset(prop_doc['relationships']['property_settings'])
                 
                 assert {pid}.issubset(pso_doc['relationships']['properties'])
+
+
+    def test_insert_cs(self):
+
+        with tempfile.TemporaryFile() as tmpfile:
+            client = HDF5Client(tmpfile, mode='w')
+
+            images = build_n(10)[0]
+
+            for i, img in enumerate(images):
+                img.info[ATOMS_NAME_FIELD].add(f'config_{i}')
+                img.info[ATOMS_LABELS_FIELD].add('a_label')
+
+            ids = client.insert_data(images)
+
+            co_ids = list(zip(*ids))[0]
+
+            cs_id = client.insert_configuration_set(co_ids)
+
+            cs_doc = next(client.configuration_sets.find({'_id': cs_id}))
+
+            agg_info = cs_doc['aggregated_info']
+
+            assert agg_info['nconfigurations'] == len(ids)
+            assert agg_info['nsites'] == sum(len(c) for c in images)
+            assert agg_info['nelements'] == 1
+            assert agg_info['elements'] == ['H']
+            assert agg_info['individual_elements_ratios'] == [1.0]
+            assert agg_info['total_elements_ratios'] == [1.0]
+            assert agg_info['labels'] == ['a_label']
+            assert agg_info['labels_counts'] == [len(ids)]
+            assert agg_info['chemical_formula_reduced'] == ['H']
+            assert agg_info['chemical_formula_anonymous'] == ['A']
+            assert set(agg_info['chemical_formula_hill']) == {
+                f'H{i+1}' if i > 0 else 'H' for i in range(len(ids))
+            }
+            assert agg_info['nperiodic_dimensions'] == [0]
+            assert agg_info['dimension_types'] == [[0,0,0]]
