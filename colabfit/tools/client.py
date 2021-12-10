@@ -190,10 +190,16 @@ class HDF5Client(MongoClient):
 
         # Now add all of the properties
         for pid in list(set(pr_ids)):
-            prop_type = self.database[f'properties/types/data/{pid}'][()]
+            prop_type = self.database[f'properties/types/data/{pid}'][()].decode()
 
-            if prop_type in property_settings:
-                labels = list(property_settings[prop_type].labels)
+            settings_list = list(
+                self.property_settings.find(
+                    {'_id': property_settings[prop_type]}
+                )
+            )
+
+            if settings_list:  # settings list is non-empty; found the doc
+                labels = settings_list[0]['labels']
             else:
                 labels = []
             # settings_id = self.database[f'properties/settings_ids/data/{pid}'][()]
@@ -207,7 +213,7 @@ class HDF5Client(MongoClient):
                     },
                     '$setOnInsert': {
                         '_id': pid,
-                        'type': prop_type.decode(),
+                        'type': prop_type,
                     },
                     '$set': {
                         'last_modified': self.database[f'properties/last_modified/data/{pid}'].asstr()[()]
@@ -298,11 +304,11 @@ class HDF5Client(MongoClient):
 
         pso_id = self.database.insert_property_settings(pso_object)
 
-        self.property_settings.update_one(
+        retval = self.property_settings.update_one(
             {'_id': pso_id},
             {
                 '$addToSet': {
-                    'labels': list(pso_object.labels)
+                    'labels': {'$each': list(pso_object.labels)}
                 },
                 '$setOnInsert': {
                     '_id': pso_id,
@@ -315,7 +321,8 @@ class HDF5Client(MongoClient):
                         } for ftup in pso_object.files
                     ],
                 }
-            }
+            },
+            upsert=True
         )
 
         return pso_id

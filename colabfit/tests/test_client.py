@@ -70,10 +70,6 @@ class TestClient:
 
             images = build_n(10)[0]
 
-            for i, img in enumerate(images):
-                img.info[ATOMS_NAME_FIELD].add(f'config_{i}')
-                img.info[ATOMS_LABELS_FIELD].add('a_label')
-
             client.insert_property_definition(
                 {
                     'property-id': 'default',
@@ -107,10 +103,15 @@ class TestClient:
                 method='VASP',
                 description='A basic test calculation',
                 files=[('dummy_name', 'dummy file contents')],
+                labels=['pso_label1', 'pso_label2']
             )
 
 
             pso_id = client.insert_property_settings(pso)
+
+            for i, img in enumerate(images):
+                img.info[ATOMS_NAME_FIELD].add(f'config_{i}')
+                img.info[ATOMS_LABELS_FIELD].add('a_label')
 
             ids = client.insert_data(
                 images,
@@ -118,12 +119,32 @@ class TestClient:
                 property_settings={'default': pso_id}
             )
 
-            for cid, pid in ids:
+            for i, ((cid, pid), config) in enumerate(zip(ids, images)):
                 config_doc = next(client.configurations.find({'_id': cid}))
                 prop_doc   = next(client.properties.find({'_id': pid}))
 
                 pn = client.database[f'properties/default/forces/data/{pid}'].shape[0]
 
-                # rzm: beef up testing; compare all stuff in Mongo and HDF5
+                na = len(config)
+                assert config_doc['natoms'] == na
+                assert pn == na
+                assert config_doc['chemical_formula_anonymous'] == 'A'
+                assert config_doc['chemical_formula_hill'] == config.get_chemical_formula()
+                assert config_doc['chemical_formula_reduced'] == 'H'
+                assert config_doc['dimension_types'] == [0, 0, 0]
+                assert config_doc['elements'] == ['H']
+                assert config_doc['elements_ratios'] == [1.0]
+                assert {'a_label'}.issubset(config_doc['labels'])
+                np.testing.assert_allclose(
+                    config_doc['lattice_vectors'],
+                    np.array(config.get_cell())
+                )
+                assert config_doc['names'] == [f'config_{i}']
+                assert config_doc['natoms'] == len(config)
+                assert config_doc['nelements'] == 1
+                assert config_doc['nperiodic_dimensions'] == 0
+                assert {pid}.issubset(config_doc['relationships'])
 
-                assert config_doc['natoms'] == pn
+                assert {'pso_label2', 'pso_label1'}.issubset(set(prop_doc['labels']))
+                assert prop_doc['type'] == 'default'
+                assert {cid}.issubset(prop_doc['relationships'])
