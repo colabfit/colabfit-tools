@@ -2,10 +2,13 @@ __version__ = "0.0.1"
 __author__  = "ColabFit"
 __credit__  = "University of Minnesota"
 
+HASH_SHIFT = 2**63
+
 MAX_STRING_LENGTH = 128
 STRING_DTYPE_SPECIFIER = f'S{MAX_STRING_LENGTH}'
 
 # _DBASE_COLLECTION           = '_databases'
+_DATABASE_NAME              = 'colabfit_database'
 _CONFIGS_COLLECTION         = '_configurations'
 _PROPS_COLLECTION           = '_properties'
 _PROPDEFS_COLLECTION        = '_property_definitions'

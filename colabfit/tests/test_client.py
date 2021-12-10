@@ -1,9 +1,12 @@
 import tempfile
 import numpy as np
+np.random.seed(42)
+import random
+random.seed(42)
 from ase import Atoms
 
 from colabfit.tools.configuration import Configuration
-from colabfit.tools.client import DatabaseClient
+from colabfit.tools.client import HDF5Client
 from colabfit.tools.property_settings import PropertySettings
 
 
@@ -62,7 +65,7 @@ class TestClient:
     def test_insert_data(self):
 
         with tempfile.TemporaryFile() as tmpfile:
-            client = DatabaseClient(tmpfile, mode='w')
+            client = HDF5Client(tmpfile, mode='w')
 
             images = build_n(10)[0]
 
@@ -110,4 +113,8 @@ class TestClient:
                 property_settings={'default': pso_id}
             )
 
-            assert False
+            for cid, pid in ids:
+                cn = next(client.configurations.find({'_id': cid}))['natoms']
+                pn = client.database[f'properties/default/forces/data/{pid}'].shape[0]
+
+                assert cn == pn

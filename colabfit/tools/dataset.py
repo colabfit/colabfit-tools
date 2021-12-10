@@ -10,6 +10,7 @@ import warnings
 import itertools
 import numpy as np
 from tqdm import tqdm
+from hashlib import sha512
 from bson import ObjectId
 from copy import deepcopy
 # import matplotlib.pyplot as plt
@@ -23,7 +24,9 @@ from kim_property.create import KIM_PROPERTIES
 # available_kim_properties = get_properties()
 
 from colabfit import (
-    ATOMS_CONSTRAINTS_FIELD, ATOMS_ID_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, EDN_KEY_MAP,
+    HASH_SHIFT,
+    ATOMS_CONSTRAINTS_FIELD, ATOMS_ID_FIELD, ATOMS_NAME_FIELD,
+    ATOMS_LABELS_FIELD, EDN_KEY_MAP,
     OPENKIM_PROPERTY_UNITS, DEFAULT_PROPERTY_NAME
 )
 from colabfit.tools.configuration_sets import ConfigurationSet
@@ -687,9 +690,11 @@ class Dataset:
                 disable=not verbose
                 ):
 
-                conf_hash = hash(tuple(sorted(
-                    hash(c) for c in data.configurations
-                )))
+                conf_hash = sha512()
+                for ch in sorted([hash(c) for c in data.configurations]):
+                    conf_hash.update(str(ch))
+
+                conf_hash = str(int(conf_hash.hexdigest()[:16], 16)-HASH_SHIFT)
 
                 if conf_hash not in duplicate_checker:
                     # Data with the same configurations doesn't exist yet

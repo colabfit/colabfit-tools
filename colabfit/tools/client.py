@@ -4,6 +4,7 @@ from getpass import getpass
 from pymongo import MongoClient
 
 from colabfit import (
+    _DATABASE_NAME,
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
@@ -11,13 +12,12 @@ from colabfit import (
 from colabfit.tools.hdf5_backend import HDF5Backend
 from colabfit.tools.configuration import process_species_list
 
-# class DatabaseClient(MontyClient):
-class DatabaseClient(MongoClient):
+class HDF5Client(MongoClient):
     """
-    A DatabaseClient serves as an interface to the underlying HDF5 database, and
+    A HDF5Client serves as an interface to the underlying HDF5 database, and
     provides additinal functionality like filtering and optimized queries.
 
-    The DatabaseClient is a client to a Mongo/Monty database which stores
+    The HDF5Client is a client to a Mongo/Monty database which stores
     pointers to the contents of the HDF5 database. This allows the data to be
     stored in an efficient format for I/O, while still providing the advanced
     querying functionality of a Mongo database.
@@ -46,7 +46,7 @@ class DatabaseClient(MongoClient):
 
     Attributes:
 
-        database (Database):
+        database (HDF5Backend):
             The underlying HDF5 database
     """
     def __init__(self, database_path, mode='r', client_repo=None, **kwargs):
@@ -77,11 +77,11 @@ class DatabaseClient(MongoClient):
         super().__init__(
             'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
         )
-        self.configurations         = self.db[_CONFIGS_COLLECTION]
-        self.properties             = self.db[_PROPS_COLLECTION]
-        self.property_definitions   = self.db[_PROPDEFS_COLLECTION]
-        self.property_settings      = self.db[_PROPSETTINGS_COLLECTION]
-        self.configuration_sets     = self.db[_CONFIGSETS_COLLECTION]
+        self.configurations         = self[_DATABASE_NAME][_CONFIGS_COLLECTION]
+        self.properties             = self[_DATABASE_NAME][_PROPS_COLLECTION]
+        self.property_definitions   = self[_DATABASE_NAME][_PROPDEFS_COLLECTION]
+        self.property_settings      = self[_DATABASE_NAME][_PROPSETTINGS_COLLECTION]
+        self.configuration_sets     = self[_DATABASE_NAME][_CONFIGSETS_COLLECTION]
 
         self.database = HDF5Backend(name=database_path, mode=mode)
 
@@ -137,13 +137,15 @@ class DatabaseClient(MongoClient):
         )
 
         # TODO: this kind of defeats the purpose of a generator version
-
         co_ids, pr_ids = list(zip(*ids))
 
+        # TODO: bug; set(co_ids) is messing up order
+
         # Add all of the configurations into the Mongo server
+        unique_co_ids = list(set(co_ids))
         for cid, config in zip(
-            list(set(co_ids)),
-            self.database.get_configurations(co_ids, generator=generator)
+            unique_co_ids,
+            self.database.get_configurations(unique_co_ids, generator=generator)
             ):
 
             atomic_symbols = config.get_chemical_symbols()
@@ -163,7 +165,7 @@ class DatabaseClient(MongoClient):
                     },
                     '$setOnInsert': {
                         '_id': cid,
-                        'last_modified': config.info[ATOMS_LAST_MODIFIED_FIELD],
+                        # 'last_modified': config.info[ATOMS_LAST_MODIFIED_FIELD],
                         'elements': processed_fields['elements'],
                         'nelements': processed_fields['nelements'],
                         'elements_ratios': processed_fields['elements_ratios'],
@@ -171,9 +173,12 @@ class DatabaseClient(MongoClient):
                         'chemical_formula_anonymous': processed_fields['chemical_formula_anonymous'],
                         'chemical_formula_hill': config.get_chemical_formula(),
                         'natoms': len(config),
-                        'dimension_types': config.get_pbc().astype(int),
-                        'nperiodic_dimensions': sum(config.get_pbc()),
+                        'dimension_types': config.get_pbc().astype(int).tolist(),
+                        'nperiodic_dimensions': int(sum(config.get_pbc())),
                         'lattice_vectors': np.array(config.get_cell()).tolist(),
+                    },
+                    '$set': {
+                        'last_modified': self.database[f'configurations/last_modified/data/{cid}'].asstr()[()]
                     }
                 },
                 upsert=True,  # overwrite if exists already
@@ -184,21 +189,25 @@ class DatabaseClient(MongoClient):
             prop_type = self.database[f'properties/types/data/{pid}'][()]
 
             if prop_type in property_settings:
-                labels = property_settings[prop_type].labels
+                labels = list(property_settings[prop_type].labels)
             else:
-                labels = set()
+                labels = []
             # settings_id = self.database[f'properties/settings_ids/data/{pid}'][()]
             # settings = self.database.get_property_settings(settings_id)['settings']
 
             self.properties.update_one(
                 {'_id': pid},
                 {
-                    '_id': pid,
-                    'type': prop_type,
                     '$addToSet': {
                         'labels': labels,
                     },
-                    'last_modified': self.database[f'properties/last_modified/{pid}'][()]
+                    '$setOnInsert': {
+                        '_id': pid,
+                        'type': prop_type,
+                    },
+                    '$set': {
+                        'last_modified': self.database[f'properties/last_modified/data/{pid}'].asstr()[()]
+                    }
                 },
                 upsert=True
             )

@@ -1,5 +1,6 @@
 import itertools
 import numpy as np
+from hashlib import sha512
 
 from colabfit import ATOMS_LABELS_FIELD
 
