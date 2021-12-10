@@ -8,7 +8,7 @@ from ase import Atoms
 from colabfit import (
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
 )
-from colabfit.tools.database import ConcatenationException, Database
+from colabfit.tools.hdf5_backend import ConcatenationException, HDF5Backend
 from colabfit.tools.configuration import Configuration
 from colabfit.tools.property_settings import PropertySettings
 
@@ -68,7 +68,7 @@ class TestAddingConfigurations:
     def test_adding_configurations_no_properties(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             returns = build_n(10)
 
@@ -110,7 +110,7 @@ class TestAddingConfigurations:
     def test_add_then_update_nochange_config(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             returns = build_n(10)
 
@@ -161,7 +161,7 @@ class TestAddingConfigurations:
     def test_add_then_update_with_changes_config(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             returns = build_n(10)
 
@@ -231,7 +231,7 @@ class TestAddingConfigurations:
     def test_adding_configurations_no_properties_gen(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             returns = build_n(10)
 
@@ -275,7 +275,7 @@ class TestAddingConfigurations:
     def test_adding_configurations_with_properties_gen(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             returns = build_n(2)
 
@@ -375,7 +375,7 @@ class TestAddingConfigurations:
     def test_add_then_update_with_properties_nochange(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             returns = build_n(10)
 
@@ -489,7 +489,7 @@ class TestAddingConfigurations:
     def test_add_then_update_with_properties_with_change(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             returns = build_n(10)
 
@@ -634,7 +634,7 @@ class TestAddingConfigurations:
     def test_adding_configurations_with_properties(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             returns = build_n(10)
 
@@ -743,7 +743,7 @@ class TestAddingConfigurations:
 
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             images1 = build_n(10)[0]
             atomic_numbers = [atoms.get_atomic_numbers() for atoms in images1]
@@ -790,7 +790,7 @@ class TestAddingConfigurations:
     def test_get_configurations(self):
 
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             images = build_n(10)[0]
 
@@ -808,7 +808,7 @@ class TestAddingConfigurations:
     def test_get_configurations_after_concat(self):
 
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             images = build_n(10)[0]
 
@@ -826,7 +826,7 @@ class TestAddingConfigurations:
     def test_get_configurations_after_concat_gen(self):
 
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             images = build_n(10)[0]
 
@@ -846,12 +846,12 @@ class TestAddingConfigurations:
 
     def test_get_using_returns(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             returns = build_n(10)
 
             images = returns[0]
-            ids    = [_[1] for _ in database.insert_data(images)]
+            ids    = [_[0] for _ in database.insert_data(images)]
 
             database.concatenate_configurations()
 
@@ -861,13 +861,13 @@ class TestAddingConfigurations:
 
     def test_get_using_returns_gen(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             returns = build_n(10)
 
             images = returns[0]
             ids    = [
-                _[1] for _ in database.insert_data(images, generator=True)
+                _[0] for _ in database.insert_data(images, generator=True)
             ]
 
             database.concatenate_configurations()
@@ -882,7 +882,7 @@ class TestPropertyDefinitionsAndSettings:
 
     def test_invalid_definition(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             property_definition = {
                 'property-id': 'this should throw an error',
@@ -894,7 +894,7 @@ class TestPropertyDefinitionsAndSettings:
 
     def test_definition_setter_getter(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             property_definition = {
                     'property-id': 'default',
@@ -917,7 +917,7 @@ class TestPropertyDefinitionsAndSettings:
 
     def test_settings_setter_getter(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             dummy_file_contents = 'this is a dummy file\nwith nonsense contents'
 
@@ -936,7 +936,7 @@ class TestPropertyDefinitionsAndSettings:
 
     def test_settings_duplicate(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             dummy_file_contents = 'this is a dummy file\nwith nonsense contents'
 
@@ -951,13 +951,13 @@ class TestPropertyDefinitionsAndSettings:
 
             rebuilt_pso = database.get_property_settings(pso_id)
 
-            assert pso == rebuilt_pso
+            assert pso == rebuilt_pso['settings']
 
 class TestConfigurationSets:
 
     def test_insert_cs(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             images = build_n(10)[0]
 
@@ -988,7 +988,7 @@ class TestDatasets:
 
     def test_insert_ds(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = Database(tmpfile, mode='w')
+            database = HDF5Backend(tmpfile, mode='w')
 
             images = build_n(10)[0]
 
