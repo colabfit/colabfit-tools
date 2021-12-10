@@ -63,7 +63,7 @@ def build_n(n):
 
 
 class TestClient:
-    def test_insert_data(self):
+    def test_insert_pso_definition_data(self):
 
         with tempfile.TemporaryFile() as tmpfile:
             client = HDF5Client(tmpfile, mode='w')

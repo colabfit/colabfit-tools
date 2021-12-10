@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 from getpass import getpass
 # from montydb import MontyClient
@@ -128,6 +129,12 @@ class HDF5Client(MongoClient):
                 is False.
         """
 
+        if generator:
+            warnings.warn(
+                "The generator version of insert_data has not been "\
+                "implemented yet; just using the in-memory version"
+            )
+
         # Tuples of (config_id, property_id) or (config_id, None)
         ids = self.database.insert_data(
             configurations=configurations,
@@ -138,8 +145,6 @@ class HDF5Client(MongoClient):
 
         # TODO: this kind of defeats the purpose of a generator version
         co_ids, pr_ids = list(zip(*ids))
-
-        # TODO: bug; set(co_ids) is messing up order
 
         # Add all of the configurations into the Mongo server
         unique_co_ids = list(set(co_ids))
@@ -326,3 +331,65 @@ class HDF5Client(MongoClient):
         )
 
         return pso_id
+
+
+    def concatenate_group(self, group, chunks=None):
+        """
+        Attempt to concatenate all of the datasets in a group. Raise an
+        exception if the datasets in the group have incompatible shapes.
+
+        Args:
+
+            group_name (str or group):
+                The name of a group in the database, or the group object
+
+            chunks (tuple):
+                An optional argument describing how to chunk the concatenated
+                array. Chunk shapes should be chosed based on the desired access
+                pattern. See `chunked storage <https://docs.h5py.org/en/stable/high/dataset.html#chunked-storage>_
+                in the h5py documentation for more details.
+        """
+
+        self.database.concatenate_group(group=group, chunks=chunks)
+
+
+    def get_data(
+        self, group,
+        ids=None,
+        in_memory=False,
+        concatenate=False, ravel=False, as_str=False
+        ):
+        """
+        Returns all of the datasets in the 'data' sub-group of
+        :code:`<group_name>`.
+
+        Args:
+
+            group_name (str or group):
+                The name of a group in the database, or the group object
+
+            ids (list):
+                The list of IDs to return the data for. If None, returns the
+                data for the entire group.
+
+            in_memory (bool):
+                If True, converts each of the datasets to a Numpy array before
+                returning.
+
+            concatenate (bool):
+                If True, concatenates the data before returning. Only available
+                if :code:`in_memory==True`.
+
+            ravel (bool):
+                If True, concatenates and ravels the data before returning. Only
+                available if :code:`in_memory==True`.
+
+            as_str (bool):
+                If True, tries to call :code:`asstr()` to convert from an HDF5
+                bytes array to an array of strings
+        """
+
+        return self.database.get_data(
+            group=group, ids=ids, in_memory=in_memory, concatenate=concatenate,
+            ravel=ravel, as_str=as_str
+        )

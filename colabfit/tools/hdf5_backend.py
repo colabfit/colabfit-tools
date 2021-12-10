@@ -975,7 +975,7 @@ class HDF5Backend(h5py.File):
 
 
     def get_data(
-        self, group, in_memory=False,
+        self, group, ids=None, in_memory=False,
         concatenate=False, ravel=False, as_str=False
         ):
         """
@@ -986,6 +986,10 @@ class HDF5Backend(h5py.File):
 
             group_name (str or group):
                 The name of a group in the database, or the group object
+
+            ids (list):
+                The list of IDs to return the data for. If None, returns the
+                data for the entire group.
 
             in_memory (bool):
                 If True, converts each of the datasets to a Numpy array before
@@ -1025,6 +1029,12 @@ class HDF5Backend(h5py.File):
             if group.attrs['concatenated']:
                 data = g['_root_concatenated']
 
+                if ids:
+                    slices = np.concatenate(
+                        group[f'slices/{k}'][()] for k in ids
+                    )
+                    data = data[slices]
+
                 if as_str:
                     data = data.asstr()
                 if in_memory:
@@ -1034,8 +1044,8 @@ class HDF5Backend(h5py.File):
 
                 return data
             else:
-                keys = g.keys()
-                data = g.values()
+                keys = ids if ids is not None else g.keys()
+                data = [g[k] for k in keys]
 
                 if as_str:
                     data = [_.asstr() for _ in data]
