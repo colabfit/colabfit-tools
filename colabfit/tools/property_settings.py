@@ -29,7 +29,12 @@ class PropertySettings:
     ):
 
         if files is None: files = []
-        if labels is None: labels = []
+        if labels is None:
+            labels = set()
+        elif isinstance(labels, str):
+            labels = set([labels])
+        else:
+            labels = set(labels)
 
         self.method         = method
         self.files          = files

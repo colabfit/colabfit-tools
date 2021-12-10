@@ -36,9 +36,15 @@ class Configuration(Atoms):
         super().__init__(*args, **kwargs)
 
         if ATOMS_NAME_FIELD in self.info:
-            self.info[ATOMS_NAME_FIELD] = str(self.info[ATOMS_NAME_FIELD])
+            v = self.info[ATOMS_NAME_FIELD]
+            if isinstance(v, str):
+                v = set([v])
+            else:
+                v = set(v)
+
+            self.info[ATOMS_NAME_FIELD] = v
         else:
-            self.info[ATOMS_NAME_FIELD] = ""
+            self.info[ATOMS_NAME_FIELD] = []
 
         if ATOMS_LABELS_FIELD not in self.info:
             if labels is None:
@@ -63,24 +69,24 @@ class Configuration(Atoms):
                 "and Configuration.arrays"
             )
 
-        # Additional fields for querying
+        # # Additional fields for querying
 
-        atomic_symbols = self.get_chemical_symbols()
-        processed_fields = process_species_list(atomic_symbols)
+        # atomic_symbols = self.get_chemical_symbols()
+        # processed_fields = process_species_list(atomic_symbols)
 
-        self.info['_description'] = description
-        self.info['_last_modified'] = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-        self.info['_elements'] = processed_fields['elements']
-        self.info['_nelements'] = processed_fields['nelements']
-        self.info['_elements_ratios'] = processed_fields['elements_ratios']
-        self.info['_chemical_formula_reduced'] = processed_fields['chemical_formula_reduced']
-        self.info['_chemical_formula_anonymous'] = processed_fields['chemical_formula_anonymous']
-        self.info['_chemical_formula_hill'] = self.get_chemical_formula()
-        self.info['_natoms'] = processed_fields['natoms']
-        # self.info['_species'] = processed_fields['species']
-        self.info['_dimension_types'] = self.get_pbc().astype(int)
-        self.info['_nperiodic_dimensions'] = sum(self.get_pbc())
-        self.info['_lattice_vectors'] = np.array(self.get_cell())
+        # self.info['_description'] = description
+        # self.info['_last_modified'] = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        # self.info['_elements'] = processed_fields['elements']
+        # self.info['_nelements'] = processed_fields['nelements']
+        # self.info['_elements_ratios'] = processed_fields['elements_ratios']
+        # self.info['_chemical_formula_reduced'] = processed_fields['chemical_formula_reduced']
+        # self.info['_chemical_formula_anonymous'] = processed_fields['chemical_formula_anonymous']
+        # self.info['_chemical_formula_hill'] = self.get_chemical_formula()
+        # self.info['_natoms'] = processed_fields['natoms']
+        # # self.info['_species'] = processed_fields['species']
+        # self.info['_dimension_types'] = self.get_pbc().astype(int)
+        # self.info['_nperiodic_dimensions'] = sum(self.get_pbc())
+        # self.info['_lattice_vectors'] = np.array(self.get_cell())
 
     @classmethod
     def from_ase(cls, atoms):
