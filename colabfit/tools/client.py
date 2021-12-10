@@ -8,7 +8,7 @@ from colabfit import (
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
 )
-from colabfit.tools.database import Database
+from colabfit.tools.hdf5_backend import HDF5Backend
 from colabfit.tools.configuration import process_species_list
 
 # class DatabaseClient(MontyClient):
@@ -83,7 +83,7 @@ class DatabaseClient(MongoClient):
         self.property_settings      = self.db[_PROPSETTINGS_COLLECTION]
         self.configuration_sets     = self.db[_CONFIGSETS_COLLECTION]
 
-        self.database = Database(name=database_path, mode=mode)
+        self.database = HDF5Backend(name=database_path, mode=mode)
 
 
     def insert_data(
@@ -218,7 +218,7 @@ class DatabaseClient(MongoClient):
 
         return ids
 
-    
+
     def insert_property_definition(self, definition):
         """
         Inserts a new property definition into the database. Checks that

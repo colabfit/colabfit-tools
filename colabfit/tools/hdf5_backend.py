@@ -20,12 +20,12 @@ from colabfit.tools.configuration import Configuration
 from colabfit.tools.property import Property
 from colabfit.tools.property_settings import PropertySettings
 
-class Database(h5py.File):
+class HDF5Backend(h5py.File):
     """
-    A Database extends a PyTables (HDF5) file, but provides additional
+    A HDF5Backend extends a PyTables (HDF5) file, but provides additional
     functionality for construction, filtering, exploring, ...
 
-    In general, a Database works by grouping the data (coordinates, lattice
+    In general, a HDF5Backend works by grouping the data (coordinates, lattice
     vectors, property fields, ...), maintaining columns of IDs to identify which
     data corresponds to each Configuration/Property/etc., and providing
     additional columns of IDs for mapping from the data to any linked entries
@@ -37,13 +37,13 @@ class Database(h5py.File):
     I  = number of fields in :attr:`Configuration.info`
     A  = number of fields in :attr:`Configuration.arrays`
 
-    P  = number of properties defined for the Database
+    P  = number of properties defined for the database
     Fp = number of fields for a given property
 
-    S  = number of property settings definitions in the Database
+    S  = number of property settings definitions in the database
 
-    G  = number of configuration sets in the Database
-    D  = number of datasets in the Database
+    G  = number of configuration sets in the database
+    D  = number of datasets in the database
 
     /root
         /configurations
@@ -52,7 +52,7 @@ class Database(h5py.File):
 
             /ids
                 /data
-                    An array of all Configuration IDs in the Database
+                    An array of all Configuration IDs in the database
 
             /names
                 Same as /atomic_numbers, but for configuration names. Note that
@@ -299,7 +299,7 @@ class Database(h5py.File):
         A property is added to the database by extracting the fields specified
         by the property definition off of the configuration. Note that an error
         will be thrown if the property hasn't been defined yet using
-        :meth:`~colabfit.tools.database.Database.add_property_definition`.
+        :meth:`~colabfit.tools.database.HDF5Backend.add_property_definition`.
 
         Set :code:`generator=True` when the configurations
         can't all fit in memory at the same time. NOTE: if `generator==True`,
@@ -348,7 +348,7 @@ class Database(h5py.File):
                 property off of a configuration. Note that the top-level keys in
                 the map must be the names of properties that have been
                 previously defined using
-                :meth:`~colabfit.tools.database.Database.add_property_definition`.
+                :meth:`~colabfit.tools.database.HDF5Backend.add_property_definition`.
 
                 If None, only loads the configuration information (atomic
                 numbers, positions, lattice vectors, and periodic boundary
@@ -358,7 +358,7 @@ class Database(h5py.File):
                 key = property name (same as top-level keys in property_map).
                 val = property settings ID that has been previously entered into
                 the database using
-                :meth:`~colabfit.tools.database.Database.insert_property_settings`
+                :meth:`~colabfit.tools.database.HDF5Backend.insert_property_settings`
 
             generator (bool):
                 If true, this function becomes a generator which only adds the
@@ -391,7 +391,7 @@ class Database(h5py.File):
                 )
 
         property_definitions = {
-            pname: self.get_property_definition(pname)
+            pname: self.get_property_definition(pname)['definition']
             for pname in property_map
         }
 
@@ -440,12 +440,8 @@ class Database(h5py.File):
                 # Now append to existing datasets
                 # Names
                 data = self[f'configurations/names/data/{config_id}']
-                new_name = atoms.info[ATOMS_NAME_FIELD]
-                if new_name == '':
-                    new_name = []
-                else:
-                    new_name = [new_name]
-                names_set = set(new_name) - set(data.asstr()[()])
+                new_names = atoms.info[ATOMS_NAME_FIELD]
+                names_set = new_names - set(data.asstr()[()])
                 data.resize((data.shape[0]+len(names_set),) + data.shape[1:])
                 data[-len(names_set):] = np.array(
                     list(names_set), dtype=STRING_DTYPE_SPECIFIER
@@ -467,17 +463,13 @@ class Database(h5py.File):
                 # Adding a new CO
                 # Names
                 g = self['configurations/names']
-                name = atoms.info[ATOMS_NAME_FIELD]
-                if name == '':
-                    name = []
-                else:
-                    name = [name]
+                names = list(atoms.info[ATOMS_NAME_FIELD])
                 g['data'].create_dataset(
                     name=config_id,
-                    shape=(len(name),),
+                    shape=(len(names),),
                     maxshape=(None,),
                     dtype=STRING_DTYPE_SPECIFIER,
-                    data=name
+                    data=names
                 )
                 g[f'slices/{config_id}'] = np.array(
                     config_id, dtype=STRING_DTYPE_SPECIFIER
@@ -658,7 +650,10 @@ class Database(h5py.File):
         if isinstance(configurations, Configuration):
             configurations = [configurations]
 
-        ignore_keys = {'property-id', 'property-title', 'property-description'}
+        ignore_keys = {
+            'property-id', 'property-title', 'property-description',
+            'last_modified', 'definition'
+        }
         expected_keys = {
             pname: set(
                 property_definitions[pname].keys()
@@ -865,8 +860,8 @@ class Database(h5py.File):
                 if pname in property_settings:
                     settings_id = property_settings[pname]
 
-                    g = self[f'properties/settings_ids/{pname}/data']
-                    g.create_dataset(
+                    g = self[f'properties/settings_ids']
+                    g['data'].create_dataset(
                         name=prop_id,
                         shape=1,
                         data=np.array(settings_id, dtype=STRING_DTYPE_SPECIFIER)
