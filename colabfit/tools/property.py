@@ -5,6 +5,7 @@ import warnings
 import itertools
 import numpy as np
 from copy import deepcopy
+from hashlib import sha512
 
 import kim_edn
 from kim_property.instance import check_property_instances
@@ -18,7 +19,9 @@ from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
 
 from colabfit import (
-    DEFAULT_PROPERTY_NAME, STRING_DTYPE_SPECIFIER, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
+    HASH_SHIFT,
+    DEFAULT_PROPERTY_NAME, STRING_DTYPE_SPECIFIER, UNITS,
+    OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
 )
 
 # These are fields that are related to the geometry of the atomic structure
@@ -465,32 +468,43 @@ class Property(dict):
         Configurations, and EDN.
         """
 
+        _hash = sha512()
+
         hashed_values = []
         for key, val in self.edn.items():
             if key in _ignored_fields: continue
 
             try:
-                hashval = hash(
-                    np.round_(np.array(val['source-value']), decimals=8).data.tobytes()
-                )
+                hashval =  np.round_(
+                    np.array(val['source-value']), decimals=8
+                ).data.tobytes()
             except:
                 try:
-                    hashval = hash(np.array(
+                    hashval = np.array(
                         val['source-value'], dtype=STRING_DTYPE_SPECIFIER
-                        ).data.tobytes()
-                    )
+                    ).data.tobytes()
                 except:
                     raise PropertyHashError(
                         "Could not hash key {}: {}".format(key, val)
                     )
 
-            hashed_values.append(hashval)
+            # hashed_values.append(hashval)
+            _hash.update(hashval)
 
-        return hash((
-            hash(self.settings),
-            tuple([hash(c) for c in self.configurations]),
-            hash(tuple(hashed_values))
-        ))
+        _hash.update(
+            str(hash(self.settings)).encode('utf-8')
+            if self.settings is not None else b''
+        )
+        for c in self.configurations:
+            _hash.update(str(hash(c)).encode('utf-8'))
+
+        return int(_hash.hexdigest()[:16], 16)-HASH_SHIFT
+
+        # return sha512((
+        #     sha512(self.settings),
+        #     tuple([sha512(c) for c in self.configurations]),
+        #     sha512(tuple(hashed_values))
+        # ))
 
 
     def __eq__(self, other):
@@ -506,9 +520,6 @@ class Property(dict):
 
         h1 = hash(self)
         h2 = hash(other)
-
-        if h1 != h2:
-            print(self, other)
 
         return hash(self) == hash(other)
 

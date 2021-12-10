@@ -6,11 +6,13 @@ import datetime
 import numpy as np
 from ase import Atoms
 from copy import deepcopy
+from hashlib import sha512
 
 from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 from colabfit import (
+    HASH_SHIFT,
     ATOMS_LABELS_FIELD,
     ATOMS_LAST_MODIFIED_FIELD,
     ATOMS_NAME_FIELD,
@@ -57,11 +59,14 @@ class HDF5Backend(h5py.File):
             /names
                 Same as /atomic_numbers, but for configuration names. Note that
                 a single configuration may have been given multiple names.
+
             /labels
                 Same as /atomic_numbers, but for labels
+
             /last_modified
                 Same as /atomic_numbers, but for datetime strings specifying
                 when the configuration was last modified.
+
             /atomic_numbers
                 .attrs
                     concatenated
@@ -731,17 +736,9 @@ class HDF5Backend(h5py.File):
                     config_id, dtype=STRING_DTYPE_SPECIFIER
                 )
                 # Last modified
-                g = self['configurations/last_modified']
-                g['data'].create_dataset(
-                    name=config_id,
-                    shape=(1,),
-                    maxshape=(None,),
-                    dtype=STRING_DTYPE_SPECIFIER,
-                    data=datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                )
-                g[f'slices/{config_id}'] = np.array(
-                    config_id, dtype=STRING_DTYPE_SPECIFIER
-                )
+                now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                self[f'configurations/last_modified/data/{config_id}'] = now
+                self[f'configurations/last_modified/slices/{config_id}'] = config_id
 
                 # Save the ID
                 g = self['configurations/ids/data']
@@ -872,6 +869,7 @@ class HDF5Backend(h5py.File):
 
                 now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                 self[f'properties/last_modified/data/{prop_id}'] = now
+                self[f'properties/last_modified/slices/{prop_id}'] = prop_id
 
                 # yield (prop_id, config_id)
                 additions.append((config_id, prop_id))
@@ -1127,7 +1125,7 @@ class HDF5Backend(h5py.File):
 
             atoms.info[ATOMS_LAST_MODIFIED_FIELD] = self.get_data(
                 'configurations/last_modified'
-            )[self[f'configurations/last_modified/slices/{co_id}'][()]].asstr()[0]
+            )[self[f'configurations/last_modified/slices/{co_id}'][()]].asstr()[()]
 
             configurations.append(Configuration.from_ase(atoms))
 
@@ -1340,7 +1338,11 @@ class HDF5Backend(h5py.File):
         if isinstance(ids, str):
             ids = [ids]
 
-        cs_id = str(hash(tuple(ids)))
+        cs_hash = sha512()
+        for i in sorted(ids):
+            cs_hash.update(str(i).encode('utf-8'))
+
+        cs_id = str(int(cs_hash.hexdigest()[:16], 16)-HASH_SHIFT)
 
         # Check for duplicates
         if cs_id in self['configuration_sets']:
@@ -1411,9 +1413,13 @@ class HDF5Backend(h5py.File):
         if isinstance(links, str):
             links = [links]
 
-        ds_id = str(hash((
-            hash(tuple(cs_ids)), hash(tuple(pr_ids))
-        )))
+        ds_hash = sha512()
+        for ci in sorted(cs_ids):
+            ds_hash.update(str(ci).encode('utf-8'))
+        for pi in sorted(pr_ids):
+            ds_hash.update(str(pi).encode('utf-8'))
+
+        ds_id = str(int(ds_hash.hexdigest()[:16], 16)-HASH_SHIFT)
 
         # Check for duplicates
         if ds_id in self['datasets']:

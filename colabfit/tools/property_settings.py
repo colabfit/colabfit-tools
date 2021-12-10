@@ -1,3 +1,8 @@
+import json
+from hashlib import sha512
+
+from colabfit import HASH_SHIFT
+
 class PropertySettings:
     """
     This class is used to store information useful for reproducing a Property.
@@ -49,17 +54,22 @@ class PropertySettings:
 
 
     def __hash__(self,):
-        """Hashes method, description, and file contents. Not labels"""
+        """
+        Hashes method, description, and file contents. Not labels. Returns a
+        string
+        """
+
+        _hash = sha512()
 
         file_hashes = []
         for (fname, contents) in self.files:
-            file_hashes.append(hash(contents))
+            file_hashes.append(_hash.update(contents.encode('utf-8')))
 
-        return hash((
-            self.method,
-            self.description,
-            hash(tuple(file_hashes)),
-        ))
+        _hash.update(self.method.encode('utf-8'))
+        _hash.update(self.description.encode('utf-8'))
+
+        # convert a base-16 int string to an int, take first 16 digits and shift
+        return int(_hash.hexdigest()[:16], 16)-HASH_SHIFT
 
 
     def __eq__(self, other):
