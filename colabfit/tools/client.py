@@ -158,11 +158,7 @@ class HDF5Client(MongoClient):
             # Add if doesn't exist, else update (since last-modified changed)
             self.configurations.update_one(
                 {'_id': cid},  # filter
-                {  # update
-                    '$addToSet': {
-                        'names': list(config.info[ATOMS_NAME_FIELD]),
-                        'labels': list(config.info[ATOMS_LABELS_FIELD]),
-                    },
+                {  # update document
                     '$setOnInsert': {
                         '_id': cid,
                         # 'last_modified': config.info[ATOMS_LAST_MODIFIED_FIELD],
@@ -178,7 +174,15 @@ class HDF5Client(MongoClient):
                         'lattice_vectors': np.array(config.get_cell()).tolist(),
                     },
                     '$set': {
-                        'last_modified': self.database[f'configurations/last_modified/data/{cid}'].asstr()[()]
+                        'last_modified': self.database[f'configurations/last_modified/data/{cid}'].asstr()[()],
+                    },
+                    '$addToSet': {
+                        'names': {
+                            '$each': list(config.info[ATOMS_NAME_FIELD])
+                        },
+                        'labels': {
+                            '$each': list(config.info[ATOMS_LABELS_FIELD])
+                        },
                     }
                 },
                 upsert=True,  # overwrite if exists already
@@ -199,11 +203,11 @@ class HDF5Client(MongoClient):
                 {'_id': pid},
                 {
                     '$addToSet': {
-                        'labels': labels,
+                        'labels': {'$each': labels},
                     },
                     '$setOnInsert': {
                         '_id': pid,
-                        'type': prop_type,
+                        'type': prop_type.decode(),
                     },
                     '$set': {
                         'last_modified': self.database[f'properties/last_modified/data/{pid}'].asstr()[()]

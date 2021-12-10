@@ -45,7 +45,7 @@ class Configuration(Atoms):
 
             self.info[ATOMS_NAME_FIELD] = v
         else:
-            self.info[ATOMS_NAME_FIELD] = []
+            self.info[ATOMS_NAME_FIELD] = set()
 
         if ATOMS_LABELS_FIELD not in self.info:
             if labels is None:
