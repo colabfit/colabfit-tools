@@ -134,7 +134,7 @@ class TestAddingConfigurations:
                 assert len(co_data) == 0
 
             for co_data in database.get_data('configurations/last_modified').values():
-                assert len(co_data) == 1
+                assert co_data.shape == ()
 
             database.concatenate_group('configurations/atomic_numbers')
             database.concatenate_group('configurations/positions')
@@ -178,7 +178,7 @@ class TestAddingConfigurations:
             database.insert_data(images)
 
             for img in images:
-                img.info[ATOMS_NAME_FIELD].append('change')
+                img.info[ATOMS_NAME_FIELD].add('change')
                 img.info[ATOMS_LABELS_FIELD].add('another_label')
 
             database.insert_data(images)
@@ -190,7 +190,7 @@ class TestAddingConfigurations:
                 assert n[()] == b'another_label'
 
             for img in images:
-                img.info[ATOMS_NAME_FIELD].append('change2')
+                img.info[ATOMS_NAME_FIELD].add('change2')
                 img.info[ATOMS_LABELS_FIELD] = {'another_label2'}
 
             database.insert_data(images)
