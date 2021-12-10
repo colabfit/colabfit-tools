@@ -5,6 +5,7 @@ import random
 random.seed(42)
 from ase import Atoms
 
+from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
 from colabfit.tools.configuration import Configuration
 from colabfit.tools.client import HDF5Client
 from colabfit.tools.property_settings import PropertySettings
@@ -69,6 +70,10 @@ class TestClient:
 
             images = build_n(10)[0]
 
+            for i, img in enumerate(images):
+                img.info[ATOMS_NAME_FIELD].add(f'config_{i}')
+                img.info[ATOMS_LABELS_FIELD].add('a_label')
+
             client.insert_property_definition(
                 {
                     'property-id': 'default',
@@ -114,7 +119,11 @@ class TestClient:
             )
 
             for cid, pid in ids:
-                cn = next(client.configurations.find({'_id': cid}))['natoms']
+                config_doc = next(client.configurations.find({'_id': cid}))
+                prop_doc   = next(client.properties.find({'_id': pid}))
+
                 pn = client.database[f'properties/default/forces/data/{pid}'].shape[0]
 
-                assert cn == pn
+                # rzm: beef up testing; compare all stuff in Mongo and HDF5
+
+                assert config_doc['natoms'] == pn
