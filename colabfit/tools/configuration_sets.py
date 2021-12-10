@@ -33,8 +33,11 @@ class ConfigurationSet:
         chemical_systems (list):
             A list of strings of chemical systems present in the collection
 
-        n_sites (int):
+        nsites (int):
             The total number of atoms in the collection
+
+        nconfigurations (int):
+            The total number of configurations
 
     """
 
@@ -58,15 +61,15 @@ class ConfigurationSet:
 
         Aggregated information:
 
-        * Number of configurations (:attr:`n_configurations`)
-        * Total number of atoms (:attr:`n_sites`)
+        * Number of configurations (:attr:`nconfigurations`)
+        * Total number of atoms (:attr:`nsites`)
         * Configuration labels (:attr:`labels`)
         * Total counts of each label (:attr:`labels_counts`)
         * Chemical systems (:attr:`chemical_systems`)
-        * Relative confcentrations of each element (:attr:`elements_ratios`)
+        * Relative concentrations of each element (:attr:`elements_ratios`)
         """
 
-        self.n_configurations =  len(self.configurations)
+        self.nconfigurations =  len(self.configurations)
 
         # for conf in self.configurations[:3]:
         #     print(self.description, conf.info[ATOMS_LABELS_FIELD])
@@ -88,7 +91,7 @@ class ConfigurationSet:
             atoms_elements
         ))))
 
-        self.n_sites = 0
+        self.nsites = 0
         elements_ratios = np.zeros((len(self.configurations), len(self.elements)))
         labels_counts = np.zeros((len(self.labels)))
 
@@ -103,10 +106,10 @@ class ConfigurationSet:
             for l in conf.info[ATOMS_LABELS_FIELD]:
                 labels_counts[self.labels.index(l)] += 1
 
-            self.n_sites += natoms
+            self.nsites += natoms
 
         self.elements_ratios = np.sum(elements_ratios, axis=0)
-        self.elements_ratios /= self.n_sites
+        self.elements_ratios /= self.nsites
         self.elements_ratios = self.elements_ratios.tolist()
 
         self.labels_counts = labels_counts
@@ -115,8 +118,8 @@ class ConfigurationSet:
     def __str__(self):
         return 'ConfigurationSet('\
             'labels={}, elements={}, '\
-                'elements_ratios={}, chemical_systems={}, n_sites={},'\
-                    ' n_configurations={}, description="{}")'.format(
+                'elements_ratios={}, chemical_systems={}, nsites={},'\
+                    ' nconfigurations={}, description="{}")'.format(
                         {l: c for l,c in zip(
                             self.labels,
                             self.labels_counts
@@ -124,8 +127,8 @@ class ConfigurationSet:
                         self.elements,
                         self.elements_ratios,
                         self.chemical_systems,
-                        self.n_sites,
-                        self.n_configurations,
+                        self.nsites,
+                        self.nconfigurations,
                         self.description
                     )
 

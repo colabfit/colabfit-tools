@@ -1377,7 +1377,7 @@ class HDF5Backend(h5py.File):
         )
 
         now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-        g.attrs['last_modified']    = now
+        self[f'configuration_sets/{cs_id}'].attrs['last_modified'] = now
 
         return cs_id
 
