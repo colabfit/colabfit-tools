@@ -12,6 +12,7 @@ from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 from colabfit import (
     ATOMS_LABELS_FIELD,
+    ATOMS_LAST_MODIFIED_FIELD,
     ATOMS_NAME_FIELD,
     STRING_DTYPE_SPECIFIER
 )
@@ -21,9 +22,6 @@ from colabfit.tools.property_settings import PropertySettings
 
 class Database(h5py.File):
     """
-    TODO: it would be a lot better if all IDs were integers. Easier
-    storage and comparison.
-
     A Database extends a PyTables (HDF5) file, but provides additional
     functionality for construction, filtering, exploring, ...
 
@@ -118,20 +116,31 @@ class Database(h5py.File):
             /ids
                 As in /configurations/ids, but for the Property IDs
 
+            /types
+                As in /ids, but the type of the property (e.g., "property_1")
+
+            /settings_ids
+                A list of Property Settings IDs. Uses the /data, /slices
+                form.
+
+            /last_modified
+                Same as configurations/atomic_numbers, but for datetime strings
+                specifying when the configuration was last modified.
+
             /property_1
                 .attrs
-                    definition
+                    definition:
                         An OpenKIM Property Definition as a (serialized)
                         dictionary
+
+                    last_modified:
+                        A datetime string specifying when the object was
+                        modified last.
 
                 /configuration_ids
                     A list of tuples of Configuration IDs specifying the
                     Configurations associated with each Property. Uses the
                     /data, /slices form.
-
-                /settings_ids
-                    A list of Property Settings IDs. Uses the /data, /slices
-                    form.
 
                 /field_1
                     /data
@@ -155,7 +164,15 @@ class Database(h5py.File):
                 .attrs
                     method: VASP, QuantumEspresso, ...
 
-                    description: A description of the calculation
+                    description:
+                        A description of the calculation
+
+                    last_modified:
+                        A datetime string specifying when the object was
+                        modified last.
+
+                    labels:
+                        Labels applied to the property settings
 
                 /files
                     Any files associated with the property settings, stored as
@@ -170,8 +187,12 @@ class Database(h5py.File):
 
             /configuration_set_id_1
                 .attrs
-                    description: Human-readable description of the set
+                    description:
+                        Human-readable description of the set
 
+                    last_modified:
+                        A datetime string specifying when the object was
+                        modified last.
                 /ids
                     A list of Configuration IDs that belong to the configuration
                     set. Useful for indexing /configurations fields and
@@ -184,17 +205,25 @@ class Database(h5py.File):
         /datasets
             /dataset_1
                 .attrs
-                    authors
+                    authors:
                         A list of author names
-                    links
+
+                    links:
                         A list of external links (e.g., journal articles, Git
                         repos, ...)
-                    description
+
+                    description:
                         A human-readable description of the dataset
-                    configuration_set_ids
+
+                    configuration_set_ids:
                         The list of configuration set IDs
-                    property_ids
+
+                    property_ids:
                         The list of property IDs
+
+                    last_modified:
+                        A datetime string specifying when the object was
+                        modified last.
     """
 
     def __init__(self, name, mode='r', **kwargs):
@@ -227,9 +256,18 @@ class Database(h5py.File):
         # g.create_group('arrays')
 
         g = self.create_group('properties')
+
         g_ids = g.create_group('ids')
         g_ids.attrs['concatenated'] = False
         g_ids.create_group('data', track_order=True)
+
+        g_types = g.create_group('types')
+        g_types.attrs['concatenated'] = False
+        g_types.create_group('data', track_order=True)
+
+        g_settings = g.create_group('settings_ids')
+        g_settings.attrs['concatenated'] = False
+        g_settings.create_group('data', track_order=True)
 
         self.create_group('property_settings')
         self.create_group('configuration_sets')
@@ -268,8 +306,9 @@ class Database(h5py.File):
         then the configurations will only be added to the dataset once the
         returned IDs have been iterated over
 
-        # TODO: there should also be some way to add properties to existing
-        # configurations. Maybe insert_property()
+        Note that new properties can be added to existing configurations by
+        passing the same configurations to insert_data(), but using a new
+        property map.
 
         Example:
 
@@ -314,6 +353,13 @@ class Database(h5py.File):
                 If None, only loads the configuration information (atomic
                 numbers, positions, lattice vectors, and periodic boundary
                 conditions).
+
+            property_settings (dict)
+                key = property name (same as top-level keys in property_map).
+                val = property settings ID that has been previously entered into
+                the database using
+                :meth:`~colabfit.tools.database.Database.insert_property_settings`
+
             generator (bool):
                 If true, this function becomes a generator which only adds the
                 configurations one at a time. This is useful if the
@@ -336,6 +382,13 @@ class Database(h5py.File):
 
         if property_settings is None:
             property_settings = {}
+
+        for settings_id in property_settings.values():
+            if settings_id not in self['property_settings']:
+                raise MissingEntryError(
+                    "The property settings object with ID '{}' does"\
+                    " not exist in the database".format(settings_id)
+                )
 
         property_definitions = {
             pname: self.get_property_definition(pname)
@@ -570,7 +623,8 @@ class Database(h5py.File):
                 if pname in property_settings:
                     settings_id = property_settings[pname]
 
-                    g = self[f'properties/{pname}/settings_ids/data']
+                    # TODO: doesn't support multiple settings per prop
+                    g = self[f'properties/settings_ids/data']
                     g.create_dataset(
                         name=prop_id,
                         shape=1,
@@ -632,12 +686,8 @@ class Database(h5py.File):
                 # Now append to existing datasets
                 # Names
                 data = self[f'configurations/names/data/{config_id}']
-                new_name = atoms.info[ATOMS_NAME_FIELD]
-                if new_name == '':
-                    new_name = []
-                else:
-                    new_name = [new_name]
-                names_set = set(new_name) - set(data.asstr()[()])
+                new_names = atoms.info[ATOMS_NAME_FIELD]
+                names_set = set(new_names) - set(data.asstr()[()])
                 data.resize((data.shape[0]+len(names_set),) + data.shape[1:])
                 data[-len(names_set):] = np.array(
                     list(names_set), dtype=STRING_DTYPE_SPECIFIER
@@ -659,17 +709,15 @@ class Database(h5py.File):
                 # Adding a new CO
                 # Names
                 g = self['configurations/names']
-                name = atoms.info[ATOMS_NAME_FIELD]
-                if name == '':
-                    name = []
-                else:
-                    name = [name]
+                names = list(
+                    atoms.info[ATOMS_NAME_FIELD]
+                )
                 g['data'].create_dataset(
                     name=config_id,
-                    shape=(len(name),),
+                    shape=(len(names),),
                     maxshape=(None,),
                     dtype=STRING_DTYPE_SPECIFIER,
-                    data=name
+                    data=names
                 )
                 g[f'slices/{config_id}'] = np.array(
                     config_id, dtype=STRING_DTYPE_SPECIFIER
@@ -768,7 +816,7 @@ class Database(h5py.File):
                 # duplicate data (for the unchanged fields), but is still the
                 # desired behaviour.
                 if prop_id in self['properties/ids/data']:
-                    additions.append((onfig_id, prop_id))
+                    additions.append((config_id, prop_id))
                     continue
 
                 # Add the data; group should already exist
@@ -801,6 +849,8 @@ class Database(h5py.File):
                     data=np.array(prop_id, dtype=STRING_DTYPE_SPECIFIER)
                 )
 
+                g = self[f'properties/types/data/{prop_id}'] = pname
+
                 g = self[f'properties/{pname}/configuration_ids']
                 g['data'].create_dataset(
                     name=prop_id,
@@ -815,7 +865,7 @@ class Database(h5py.File):
                 if pname in property_settings:
                     settings_id = property_settings[pname]
 
-                    g = self[f'properties/{pname}/settings_ids/data']
+                    g = self[f'properties/settings_ids/{pname}/data']
                     g.create_dataset(
                         name=prop_id,
                         shape=1,
@@ -824,6 +874,9 @@ class Database(h5py.File):
                     g[f'slices/{prop_id}'] = np.array(
                         prop_id, dtype=STRING_DTYPE_SPECIFIER
                     )
+
+                now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                self[f'properties/last_modified/data/{prop_id}'] = now
 
                 # yield (prop_id, config_id)
                 additions.append((config_id, prop_id))
@@ -1010,7 +1063,7 @@ class Database(h5py.File):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
-        return self.get_configurations([i])
+        return self.get_configurations([i])[0]
 
     def get_configurations(self, ids, generator=False):
         """
@@ -1068,6 +1121,18 @@ class Database(h5py.File):
                     'configurations/pbcs'
                 )[self[f'configurations/pbcs/slices/{co_id}'][()]],
             )
+
+            atoms.info[ATOMS_NAME_FIELD] = set(self.get_data(
+                'configurations/names'
+            )[self[f'configurations/names/slices/{co_id}'][()]].asstr())
+
+            atoms.info[ATOMS_LABELS_FIELD] = set(self.get_data(
+                'configurations/labels'
+            )[self[f'configurations/labels/slices/{co_id}'][()]].asstr())
+
+            atoms.info[ATOMS_LAST_MODIFIED_FIELD] = self.get_data(
+                'configurations/last_modified'
+            )[self[f'configurations/last_modified/slices/{co_id}'][()]].asstr()[0]
 
             configurations.append(Configuration.from_ase(atoms))
 
@@ -1162,6 +1227,9 @@ class Database(h5py.File):
         group = self['properties'].require_group(definition['property-id'])
         group.attrs['definition'] = json.dumps(definition)
 
+        now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        group.attrs['last_modified'] = now
+
         ignore_fields = {
             'property-id', 'property-title', 'property-description'
         }
@@ -1180,8 +1248,18 @@ class Database(h5py.File):
 
 
     def get_property_definition(self, name):
-        """Return the dictionary form of the property definition"""
-        return json.loads(self[f'properties/{name}'].attrs['definition'])
+        """
+        Returns:
+            A dictionary with two keys:
+                'last_modified': a datetime string
+                'definition': the dictionary form of the property definition
+        """
+        return {
+            'last_modified': self[f'properties/{name}'].attrs['last_modified'],
+            'definition': json.loads(
+                self[f'properties/{name}'].attrs['definition']
+            )
+        }
 
 
     def insert_property_settings(self, pso_object):
@@ -1209,9 +1287,11 @@ class Database(h5py.File):
 
         g = self['property_settings'].create_group(pso_id)
 
-        g.attrs['method']       = pso_object.method
-        g.attrs['description']  = pso_object.description
-        g.attrs['labels']       = json.dumps(pso_object.labels)
+        now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        g.attrs['last_modified']    = now
+        g.attrs['method']           = pso_object.method
+        g.attrs['description']      = pso_object.description
+        g.attrs['labels']           = json.dumps(list(pso_object.labels))
 
         g = g.create_group('files')
         for (fname, contents) in pso_object.files:
@@ -1221,15 +1301,23 @@ class Database(h5py.File):
 
 
     def get_property_settings(self, pso_id):
-        """Return the PropertySettings object with the given ID"""
+        """
+        Returns:
+            A dictionary with two keys:
+                'last_modified': a datetime string
+                'settings': the PropertySettings object with the given ID
+        """
         g = self[f'property_settings/{pso_id}']
 
-        return PropertySettings(
-            method=g.attrs['method'],
-            description=g.attrs['description'],
-            labels=json.loads(g.attrs['labels']),
-            files=[(fname, ds.asstr()[()]) for fname, ds in g['files'].items()]
-        )
+        return {
+            'last_modified': g.attrs['last_modified'],
+            'settings': PropertySettings(
+                method=g.attrs['method'],
+                description=g.attrs['description'],
+                labels=set(json.loads(g.attrs['labels'])),
+                files=[(fname, ds.asstr()[()]) for fname, ds in g['files'].items()]
+            )
+        }
 
 
     def get_properties(self, ids):
@@ -1280,6 +1368,9 @@ class Database(h5py.File):
             name='_root_concatenated',
             data=np.array(ids, dtype=STRING_DTYPE_SPECIFIER)
         )
+
+        now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        g.attrs['last_modified']    = now
 
         return cs_id
 
@@ -1368,6 +1459,9 @@ class Database(h5py.File):
             name='_root_concatenated',
             data=np.array(pr_ids, dtype=STRING_DTYPE_SPECIFIER)
         )
+
+        now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        g.attrs['last_modified']    = now
 
         return ds_id
 

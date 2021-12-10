@@ -178,7 +178,7 @@ class TestAddingConfigurations:
             database.insert_data(images)
 
             for img in images:
-                img.info[ATOMS_NAME_FIELD] += 'change'
+                img.info[ATOMS_NAME_FIELD].append('change')
                 img.info[ATOMS_LABELS_FIELD].add('another_label')
 
             database.insert_data(images)
@@ -190,7 +190,7 @@ class TestAddingConfigurations:
                 assert n[()] == b'another_label'
 
             for img in images:
-                img.info[ATOMS_NAME_FIELD] = 'change2'
+                img.info[ATOMS_NAME_FIELD].append('change2')
                 img.info[ATOMS_LABELS_FIELD] = {'another_label2'}
 
             database.insert_data(images)
@@ -202,6 +202,8 @@ class TestAddingConfigurations:
             for n in database.get_data('configurations/labels').values():
                 assert n[0] == b'another_label'
                 assert n[1] == b'another_label2'
+
+            database.get_configuration(next(iter(database['configurations/ids/data'].keys()))).info['_name']
 
             database.concatenate_group('configurations/atomic_numbers')
             database.concatenate_group('configurations/positions')
@@ -910,7 +912,7 @@ class TestPropertyDefinitionsAndSettings:
 
             database.insert_property_definition(property_definition)
 
-            assert database.get_property_definition('default') == property_definition
+            assert database.get_property_definition('default')['definition'] == property_definition
 
 
     def test_settings_setter_getter(self):
@@ -927,7 +929,7 @@ class TestPropertyDefinitionsAndSettings:
 
             pso_id = database.insert_property_settings(pso)
 
-            rebuilt_pso = database.get_property_settings(pso_id)
+            rebuilt_pso = database.get_property_settings(pso_id)['settings']
 
             assert pso == rebuilt_pso
 

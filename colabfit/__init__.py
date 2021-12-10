@@ -5,10 +5,18 @@ __credit__  = "University of Minnesota"
 MAX_STRING_LENGTH = 128
 STRING_DTYPE_SPECIFIER = f'S{MAX_STRING_LENGTH}'
 
-ATOMS_ID_FIELD          = '_id'
-ATOMS_NAME_FIELD        = '_name'
-ATOMS_LABELS_FIELD      = '_labels'
-ATOMS_CONSTRAINTS_FIELD = '_constraints'
+# _DBASE_COLLECTION           = '_databases'
+_CONFIGS_COLLECTION         = '_configurations'
+_PROPS_COLLECTION           = '_properties'
+_PROPDEFS_COLLECTION        = '_property_definitions'
+_PROPSETTINGS_COLLECTION    = '_property_settings'
+_CONFIGSETS_COLLECTION       = '_configuration_sets'
+
+ATOMS_ID_FIELD              = '_id'
+ATOMS_NAME_FIELD            = '_name'
+ATOMS_LABELS_FIELD          = '_labels'
+ATOMS_LAST_MODIFIED_FIELD   = '_last_modified'
+ATOMS_CONSTRAINTS_FIELD     = '_constraints'
 
 DEFAULT_PROPERTY_NAME = 'configuration-nonorthogonal-periodic-3d-cell-fixed-particles-fixed'
 
