@@ -205,16 +205,27 @@ class HDF5Client(MongoClient):
 
             if settings_list:  # settings list is non-empty; found the doc
                 labels = settings_list[0]['labels']
+
+                # PSO -> PR pointer
+                self.property_settings.update_one(
+                    {'_id': property_settings[prop_type]},
+                    {
+                        '$addToSet': {'relationships.properties': pid}
+                    }
+                )
             else:
                 labels = []
-            # settings_id = self.database[f'properties/settings_ids/data/{pid}'][()]
-            # settings = self.database.get_property_settings(settings_id)['settings']
 
             self.properties.update_one(
                 {'_id': pid},
                 {
                     '$addToSet': {
                         'labels': {'$each': labels},
+                        # PR -> PSO pointer
+                        'relationships.property_settings': {
+                            '$each': [property_settings[prop_type]]
+                            if prop_type in property_settings else []
+                        }
                     },
                     '$setOnInsert': {
                         '_id': pid,
@@ -230,14 +241,16 @@ class HDF5Client(MongoClient):
         # Now update all of the relationships
         for cid, pid in zip(co_ids, pr_ids):
 
+            # CO -> PR pointer
             self.configurations.update_one(
                 {'_id': cid},
-                {'$addToSet': {'relationships': pid}}
+                {'$addToSet': {'relationships.properties': pid}}
             )
 
+            # PR -> CO pointer
             self.properties.update_one(
                 {'_id': pid},
-                {'$addToSet': {'relationships': cid}}
+                {'$addToSet': {'relationships.configurations': cid}}
             )
 
         return ids
@@ -288,6 +301,10 @@ class HDF5Client(MongoClient):
         )
 
 
+    def get_property_definition(self, name):
+        return self.property_definitions.find({'_id': name})
+
+
     def insert_property_settings(self, pso_object):
         """
         Inserts a new property settings object into the database by creating
@@ -309,7 +326,7 @@ class HDF5Client(MongoClient):
 
         pso_id = self.database.insert_property_settings(pso_object)
 
-        retval = self.property_settings.update_one(
+        self.property_settings.update_one(
             {'_id': pso_id},
             {
                 '$addToSet': {
@@ -331,6 +348,16 @@ class HDF5Client(MongoClient):
         )
 
         return pso_id
+
+
+    def get_property_settings(self, pso_id):
+        """
+        Returns:
+            A dictionary with two keys:
+                'last_modified': a datetime string
+                'settings': the PropertySettings object with the given ID
+        """
+        return self.database.get_property_settings(pso_id=pso_id)
 
 
     def concatenate_group(self, group, chunks=None):
@@ -393,3 +420,44 @@ class HDF5Client(MongoClient):
             group=group, ids=ids, in_memory=in_memory, concatenate=concatenate,
             ravel=ravel, as_str=as_str
         )
+
+
+    def get_configuration(self, i):
+        """
+        Returns a single configuration by calling :meth:`get_configurations`
+        """
+        return self.database.get_configuration(i)
+
+
+    def get_configurations(self, ids, generator=False):
+        """
+        A generator that returns in-memory Configuration objects one at a time
+        by loading the atomic numbers, positions, cells, and PBCs.
+
+        Args:
+
+            ids (list or 'all'):
+                A list of string IDs specifying which Configurations to return.
+                If 'all', returns all of the configurations in the database.
+
+            generator (bool):
+                If true, this function becomes a generator which only returns
+                the configurations one at a time. This is useful if the
+                configurations can't all fit in memory at the same time. Default
+                is False.
+
+        Returns:
+
+            configurations (iterable):
+                A list or generator of the re-constructed configurations
+        """
+
+        return self.database.get_configurations(ids=ids, generator=generator)
+
+
+    def concatenate_configurations(self):
+        """
+        Concatenates the atomic_numbers, positions, cells, and pbcs groups in
+        /configurations.
+        """
+        self.database.concatenate_configurations()

@@ -119,6 +119,8 @@ class TestClient:
                 property_settings={'default': pso_id}
             )
 
+            pso_doc = next(client.property_settings.find({'_id': pso_id}))
+
             for i, ((cid, pid), config) in enumerate(zip(ids, images)):
                 config_doc = next(client.configurations.find({'_id': cid}))
                 prop_doc   = next(client.properties.find({'_id': pid}))
@@ -143,8 +145,11 @@ class TestClient:
                 assert config_doc['natoms'] == len(config)
                 assert config_doc['nelements'] == 1
                 assert config_doc['nperiodic_dimensions'] == 0
-                assert {pid}.issubset(config_doc['relationships'])
+                assert {pid}.issubset(config_doc['relationships']['properties'])
 
                 assert {'pso_label2', 'pso_label1'}.issubset(set(prop_doc['labels']))
                 assert prop_doc['type'] == 'default'
-                assert {cid}.issubset(prop_doc['relationships'])
+                assert {cid}.issubset(prop_doc['relationships']['configurations'])
+                assert {pso_id}.issubset(prop_doc['relationships']['property_settings'])
+                
+                assert {pid}.issubset(pso_doc['relationships']['properties'])
