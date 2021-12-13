@@ -7,11 +7,12 @@ from pymongo import MongoClient
 from colabfit import (
     _DATABASE_NAME,
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
-    _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION,
+    _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
 )
 from colabfit.tools.hdf5_backend import HDF5Backend
 from colabfit.tools.configuration import process_species_list
+from colabfit.tools.configuration_set import ConfigurationSet
 
 class HDF5Client(MongoClient):
     """
@@ -23,6 +24,68 @@ class HDF5Client(MongoClient):
     stored in an efficient format for I/O, while still providing the advanced
     querying functionality of a Mongo database.
 
+    The Mongo database has the following structure
+
+    /configurations
+        _id
+        names
+        labels
+        elements
+        nelements
+        elements_ratios
+        chemical_formula_reduced
+        chemical_formula_anonymous
+        chemical_formula_hill
+        nsites
+        dimension_types
+        nperiodic_dimensions
+        latice_vectors
+        last_modified
+        relationships
+            properties
+            configuration_sets
+
+    /properties
+        _id
+        type
+        labels
+        last_modified
+        relationships
+            property_settings
+            configurations
+
+    /property_settings
+        _id
+        method
+        decription
+        labels
+        files   
+            file_name
+            file_contents
+        relationships
+            properties
+
+    /configuration_sets
+        _id
+        aggregated_info
+            nconfigurations
+            nsites
+            nelements
+            elements
+            individual_elements_ratios
+            total_elements_ratios
+            labels
+            labels_counts
+            chemical_formula_reduced
+            chemical_formula_anonymous
+            chemical_formula_hill
+            nperiodic_dimensions
+            dimension_types
+        relationships
+            configurations
+            datasets
+
+    /datasets
 
     Brainstorming:
 
@@ -80,9 +143,10 @@ class HDF5Client(MongoClient):
         )
         self.configurations         = self[_DATABASE_NAME][_CONFIGS_COLLECTION]
         self.properties             = self[_DATABASE_NAME][_PROPS_COLLECTION]
-        self.property_definitions   = self[_DATABASE_NAME][_PROPDEFS_COLLECTION]
+        # self.property_definitions   = self[_DATABASE_NAME][_PROPDEFS_COLLECTION]
         self.property_settings      = self[_DATABASE_NAME][_PROPSETTINGS_COLLECTION]
         self.configuration_sets     = self[_DATABASE_NAME][_CONFIGSETS_COLLECTION]
+        self.datasets               = self[_DATABASE_NAME][_DATASETS_COLLECTION]
 
         self.database = HDF5Backend(name=database_path, mode=mode)
 
@@ -224,6 +288,7 @@ class HDF5Client(MongoClient):
                         'labels': {'$each': labels},
                         # PR -> PSO pointer
                         'relationships.property_settings': {
+                            # hack for handling possibly empty case
                             '$each': [property_settings[prop_type]]
                             if prop_type in property_settings else []
                         }
@@ -291,19 +356,20 @@ class HDF5Client(MongoClient):
 
         self.database.insert_property_definition(definition)
 
-        self.property_definitions.update_one(
-            {'_id': definition['property-id']},
-            {
-                '$setOnInsert': {
-                    '_id': definition['property-id'],
-                    'definition': definition
-                }
-            }
-        )
+        # self.property_definitions.update_one(
+        #     {'_id': definition['property-id']},
+        #     {
+        #         '$setOnInsert': {
+        #             '_id': definition['property-id'],
+        #             'definition': definition
+        #         }
+        #     }
+        # )
 
 
     def get_property_definition(self, name):
-        return self.property_definitions.find({'_id': name})
+        # return self.property_definitions.find({'_id': name})
+        return self.database.get_property_definition(name)
 
 
     def insert_property_settings(self, pso_object):
@@ -482,12 +548,76 @@ class HDF5Client(MongoClient):
             ids=ids, description=description
         )
 
+        aggregated_info = self.aggregate_configuration_info(ids)
+
+        self.configuration_sets.update_one(
+            {'_id': cs_id},
+            {
+                '$addToSet': {
+                    'relationships.configurations': {'$each': ids}
+                },
+                '$setOnInsert': {
+                    '_id': cs_id,
+                    'description': description,
+                    'aggregated_info': aggregated_info
+                },
+                '$set': {
+                    'last_modified': self.database[f'configuration_sets/{cs_id}'].attrs['last_modified']
+                },
+            },
+            upsert=True
+        )
+
+        # Add the backwards relationships CO->CS
+        for cid in ids:
+            self.configurations.update_one(
+                {'_id': cid},
+                {
+                    '$addToSet': {
+                        'relationships.configuration_sets': cs_id
+                    }
+                }
+            )
+
+        return cs_id
+
+    
+    def aggregate_configuration_info(self, ids):
+        """
+        Gathers the following information from a collection of configurations:
+
+        * :code:`nconfigurations`: the total number of configurations
+        * :code:`nsites`: the total number of sites
+        * :code:`nelements`: the total number of unique element types 
+        * :code:`elements`: the element types
+        * :code:`individual_elements_ratios`: a set of elements ratios generated
+          by looping over each configuration, extracting its concentration of
+          each element, and adding the tuple of concentrations to the set
+        * :code:`total_elements_ratios`: the ratio of the total count of atoms
+            of each element type over :code:`nsites`
+        * :code:`labels`: the union of all configuration labels
+        * :code:`labels_counts`: the total count of each label
+        * :code:`chemical_formula_reduced`: the set of all reduced chemical
+            formulae
+        * :code:`chemical_formula_anonymous`: the set of all anonymous chemical
+            formulae
+        * :code:`chemical_formula_hill`: the set of all hill chemical formulae
+        * :code:`nperiodic_dimensions`: the set of all numbers of periodic
+            dimensions
+        * :code:`dimension_types`: the set of all periodic boundary choices
+
+        Returns:
+
+            aggregated_info (dict):
+                All of the aggregated info
+        """
+
         aggregated_info = {
             'nconfigurations': len(ids),
             'nsites': 0,
             'nelements': 0,
             'elements': [],
-            'individual_elements_ratios': set(),
+            'individual_elements_ratios': [],
             'total_elements_ratios': [],
             'labels': [],
             'labels_counts': [],
@@ -506,13 +636,15 @@ class HDF5Client(MongoClient):
                     aggregated_info['nelements'] += 1
                     aggregated_info['elements'].append(e)
                     aggregated_info['total_elements_ratios'].append(er*doc['nsites'])
+                    aggregated_info['individual_elements_ratios'].append(set(
+                        [np.round_(er, decimals=2)]
+                    ))
                 else:
                     idx = aggregated_info['elements'].index(e)
                     aggregated_info['total_elements_ratios'][idx] += er*doc['nsites']
-
-                aggregated_info['individual_elements_ratios'].add(
-                    np.round_(er, decimals=2)
-                )
+                    aggregated_info['individual_elements_ratios'][idx].add(
+                        np.round_(er, decimals=2)
+                    )
 
             for l in doc['labels']:
                 if l not in aggregated_info['labels']:
@@ -529,6 +661,10 @@ class HDF5Client(MongoClient):
             aggregated_info['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
             aggregated_info['dimension_types'].add(tuple(doc['dimension_types']))
 
+        aggregated_info['individual_elements_ratios'] = [
+            list(_) for _ in aggregated_info['individual_elements_ratios']
+        ]
+
         aggregated_info['total_elements_ratios'] = [
             c/aggregated_info['nsites'] for c in aggregated_info['total_elements_ratios']
         ]
@@ -541,25 +677,104 @@ class HDF5Client(MongoClient):
         aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
         aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
 
+        return aggregated_info
+
+
+    def get_configuration_set(self, cs_id, resync=False):
+        """
+        This should return an actual CS object. What IS a ConfigurationSet?
+
+        Maybe this function could do the syncing?
+
+        Args:
+        
+            cs_ids (str):
+                The ID of the configuration set to return
+
+            resync (bool):
+                If True, re-aggregates the configuration set information before
+                returning. Default is False.
+
+        Returns:
+
+            A dictionary with two keys:
+                'last_modified': a datetime string
+                'configuration_set': the configuration set object
+        """
+
+
+        if resync:
+            self.resync_configuration_set(cs_id)
+
+        cs_doc = self.configuration_sets.find({'_id': cs_id})
+
+        return {
+            'last_modified': cs_doc['last_modified'],
+            'configuration_set': ConfigurationSet(
+                configuration_ids=cs_doc['relationships']['configurations'],
+                description=cs_doc['description'],
+                aggregated_info=cs_doc['aggregated_info']
+            )
+        }
+
+
+    def resync_configuration_set(self, cs_id):
+        """
+        Re-synchronizes the configuration set by re-aggregating the information
+        from the configurations.
+
+        Args:
+
+            cs_id (str):
+                The ID of the configuration set to update
+
+        Returns:
+
+            None; updates the configuration set document in-place
+
+        """
+
+        co_ids = self.database[f'configuration_sets/{cs_id}/ids'].keys()
+
+        aggregated_info = self.aggregate_configuration_info(co_ids)
+
         self.configuration_sets.update_one(
             {'_id': cs_id},
-            {
-                '$addToSet': {
-                    'relationships.configurations': {'$each': ids}
-                },
-                '$setOnInsert': {
-                    '_id': cs_id,
-                    'aggregated_info': aggregated_info
-                },
-                '$set': {
-                    'last_modified': self.database[f'configuration_sets/{cs_id}'].attrs['last_modified']
-                },
-            },
-            upsert=True
+            {'$set': {'aggregated_info': aggregated_info}}
         )
 
-        return cs_id
 
-    def get_configuration_set(self, cs_id):
-        """This should return an actual CS object"""
+    def resync_property(self, pr_id):
+        """
+        Re-synchronizes the property by pulling up labels from any attached
+        property settings.
+
+        Args:
+
+            pr_id (str):
+                The ID of the property to update
+
+        Returns:
+
+            None; updates the property document in-place
+        """
+        pass
+
+
+    def resync_dataset(self, ds_id):
+        """
+        Re-synchronizes the dataset by aggregating all necessary data from
+        properties and configuration sets. Note that this also calls
+        :meth:`colabfit.tools.client.resync_configuration_set` and
+        :meth:`colabfit.tools.client.resync_property` for each attached object.
+
+        Args:
+
+            ds_id (str):
+                The ID of the dataset to update
+
+        Returns:
+
+            None; updates the dataset document in-place
+        """
         pass

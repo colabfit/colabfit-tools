@@ -29,7 +29,7 @@ from colabfit import (
     ATOMS_LABELS_FIELD, EDN_KEY_MAP,
     OPENKIM_PROPERTY_UNITS, DEFAULT_PROPERTY_NAME
 )
-from colabfit.tools.configuration_sets import ConfigurationSet
+from colabfit.tools.configuration_sets_old import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.property import (
     Property, PropertyParsingError
