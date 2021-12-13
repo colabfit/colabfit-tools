@@ -195,6 +195,9 @@ class HDF5Backend(h5py.File):
                     description:
                         Human-readable description of the set
 
+                    configuration_ids:
+                        The list of configuration IDs in the configuration set
+
                     last_modified:
                         A datetime string specifying when the object was
                         modified last.
@@ -1004,8 +1007,12 @@ class HDF5Backend(h5py.File):
                 If True, tries to call :code:`asstr()` to convert from an HDF5
                 bytes array to an array of strings
         """
+
         if isinstance(group, str):
             group = self[group]
+
+        if isinstance(ids, str):
+            ids = [ids]
 
         if concatenate or ravel:
             if not in_memory:
@@ -1048,7 +1055,7 @@ class HDF5Backend(h5py.File):
                     data = [_.asstr() for _ in data]
 
                 if concatenate or ravel:
-                    return np.concatenate(list(data))
+                    return np.concatenate([_[()] for _ in data])
 
                 if ravel:
                     return data.ravel()
@@ -1365,13 +1372,15 @@ class HDF5Backend(h5py.File):
 
         g = self['configuration_sets'].create_group(cs_id)
         g.attrs['description'] = description
-        g = g.create_group('ids')
-        g.attrs['concatenated'] = True
-        g = g.create_group('data', track_order=True)
-        g.create_dataset(
-            name='_root_concatenated',
-            data=np.array(ids, dtype=STRING_DTYPE_SPECIFIER)
-        )
+        # g = g.create_group('ids')
+        # g.attrs['concatenated'] = True
+        # g = g.create_group('data', track_order=True)
+        # g.create_dataset(
+        #     name='_root_concatenated',
+        #     data=np.array(ids, dtype=STRING_DTYPE_SPECIFIER)
+        # )
+
+        g.attrs['configuration_ids'] = ids
 
         now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
         self[f'configuration_sets/{cs_id}'].attrs['last_modified'] = now
@@ -1452,24 +1461,26 @@ class HDF5Backend(h5py.File):
         g.attrs['links'] = links
         g.attrs['description'] = description
 
-        g = g.create_group('configuration_set_ids')
-        g.attrs['concatenated'] = True
-        g = g.create_group('data', track_order=True)
-        g.create_dataset(
-            name='_root_concatenated',
-            data=np.array(cs_ids, dtype=STRING_DTYPE_SPECIFIER)
-        )
+        g.attrs['configuration_set_ids'] = cs_ids
+        # g = g.create_group('configuration_set_ids')
+        # g.attrs['concatenated'] = True
+        # g = g.create_group('data', track_order=True)
+        # g.create_dataset(
+        #     name='_root_concatenated',
+        #     data=np.array(cs_ids, dtype=STRING_DTYPE_SPECIFIER)
+        # )
 
-        g = g.create_group('property_ids')
-        g.attrs['concatenated'] = True
-        g = g.create_group('data', track_order=True)
-        g.create_dataset(
-            name='_root_concatenated',
-            data=np.array(pr_ids, dtype=STRING_DTYPE_SPECIFIER)
-        )
+        g.attrs['property_ids'] = pr_ids
+        # g = g.create_group('property_ids')
+        # g.attrs['concatenated'] = True
+        # g = g.create_group('data', track_order=True)
+        # g.create_dataset(
+        #     name='_root_concatenated',
+        #     data=np.array(pr_ids, dtype=STRING_DTYPE_SPECIFIER)
+        # )
 
         now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-        g.attrs['last_modified']    = now
+        self[f'datasets/{ds_id}'].attrs['last_modified']    = now
 
         return ds_id
 
