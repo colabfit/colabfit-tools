@@ -1,4 +1,5 @@
 import warnings
+import itertools
 import numpy as np
 from getpass import getpass
 # from montydb import MontyClient
@@ -48,8 +49,11 @@ class HDF5Client(MongoClient):
     /properties
         _id
         type
-        labels
         last_modified
+        aggregated_info
+            (from property settings)
+            labels
+            labels_counts
         relationships
             property_settings
             configurations
@@ -67,7 +71,9 @@ class HDF5Client(MongoClient):
 
     /configuration_sets
         _id
+        last_modified
         aggregated_info
+            (from configurations)
             nconfigurations
             nsites
             nelements
@@ -86,6 +92,31 @@ class HDF5Client(MongoClient):
             datasets
 
     /datasets
+        _id
+        last_modified
+        aggregated_info
+            (from configuration sets)
+            nconfigurations
+            nsites
+            nelements
+            elements
+            individual_elements_ratios
+            total_elements_ratios
+            configuration_labels
+            configuration_labels_counts
+            chemical_formula_reduced
+            chemical_formula_anonymous
+            chemical_formula_hill
+            nperiodic_dimensions
+            dimension_types
+
+            (from properties)
+                types
+                property_labels
+                property_labels_counts
+        relationships
+            properties
+            configuration_sets
 
     Brainstorming:
 
@@ -113,7 +144,7 @@ class HDF5Client(MongoClient):
         database (HDF5Backend):
             The underlying HDF5 database
     """
-    def __init__(self, database_path, mode='r', client_repo=None, **kwargs):
+    def __init__(self, database_path, mode='r', **kwargs):
         """
         Args:
 
@@ -148,7 +179,12 @@ class HDF5Client(MongoClient):
         self.configuration_sets     = self[_DATABASE_NAME][_CONFIGSETS_COLLECTION]
         self.datasets               = self[_DATABASE_NAME][_DATASETS_COLLECTION]
 
-        self.database = HDF5Backend(name=database_path, mode=mode)
+        if 'driver' not in kwargs:
+            kwargs['driver'] = None
+
+        self.database = HDF5Backend(
+            name=database_path, mode=mode, driver=kwargs['driver']
+        )
 
 
     def insert_data(
@@ -285,7 +321,7 @@ class HDF5Client(MongoClient):
                 {'_id': pid},
                 {
                     '$addToSet': {
-                        'labels': {'$each': labels},
+                        # 'labels': {'$each': labels},
                         # PR -> PSO pointer
                         'relationships.property_settings': {
                             # hack for handling possibly empty case
@@ -559,9 +595,9 @@ class HDF5Client(MongoClient):
                 '$setOnInsert': {
                     '_id': cs_id,
                     'description': description,
-                    'aggregated_info': aggregated_info
                 },
                 '$set': {
+                    'aggregated_info': aggregated_info,
                     'last_modified': self.database[f'configuration_sets/{cs_id}'].attrs['last_modified']
                 },
             },
@@ -580,104 +616,6 @@ class HDF5Client(MongoClient):
             )
 
         return cs_id
-
-    
-    def aggregate_configuration_info(self, ids):
-        """
-        Gathers the following information from a collection of configurations:
-
-        * :code:`nconfigurations`: the total number of configurations
-        * :code:`nsites`: the total number of sites
-        * :code:`nelements`: the total number of unique element types 
-        * :code:`elements`: the element types
-        * :code:`individual_elements_ratios`: a set of elements ratios generated
-          by looping over each configuration, extracting its concentration of
-          each element, and adding the tuple of concentrations to the set
-        * :code:`total_elements_ratios`: the ratio of the total count of atoms
-            of each element type over :code:`nsites`
-        * :code:`labels`: the union of all configuration labels
-        * :code:`labels_counts`: the total count of each label
-        * :code:`chemical_formula_reduced`: the set of all reduced chemical
-            formulae
-        * :code:`chemical_formula_anonymous`: the set of all anonymous chemical
-            formulae
-        * :code:`chemical_formula_hill`: the set of all hill chemical formulae
-        * :code:`nperiodic_dimensions`: the set of all numbers of periodic
-            dimensions
-        * :code:`dimension_types`: the set of all periodic boundary choices
-
-        Returns:
-
-            aggregated_info (dict):
-                All of the aggregated info
-        """
-
-        aggregated_info = {
-            'nconfigurations': len(ids),
-            'nsites': 0,
-            'nelements': 0,
-            'elements': [],
-            'individual_elements_ratios': [],
-            'total_elements_ratios': [],
-            'labels': [],
-            'labels_counts': [],
-            'chemical_formula_reduced': set(),
-            'chemical_formula_anonymous': set(),
-            'chemical_formula_hill': set(),
-            'nperiodic_dimensions': set(),
-            'dimension_types': set(),
-        }
-
-        for doc in self.configurations.find({'_id': {'$in': ids}}):
-            aggregated_info['nsites'] += doc['nsites']
-
-            for e, er in zip(doc['elements'], doc['elements_ratios']):
-                if e not in aggregated_info['elements']:
-                    aggregated_info['nelements'] += 1
-                    aggregated_info['elements'].append(e)
-                    aggregated_info['total_elements_ratios'].append(er*doc['nsites'])
-                    aggregated_info['individual_elements_ratios'].append(set(
-                        [np.round_(er, decimals=2)]
-                    ))
-                else:
-                    idx = aggregated_info['elements'].index(e)
-                    aggregated_info['total_elements_ratios'][idx] += er*doc['nsites']
-                    aggregated_info['individual_elements_ratios'][idx].add(
-                        np.round_(er, decimals=2)
-                    )
-
-            for l in doc['labels']:
-                if l not in aggregated_info['labels']:
-                    aggregated_info['labels'].append(l)
-                    aggregated_info['labels_counts'].append(1)
-                else:
-                    idx = aggregated_info['labels'].index(l)
-                    aggregated_info['labels_counts'][idx] += 1
-
-            aggregated_info['chemical_formula_reduced'].add(doc['chemical_formula_reduced'])
-            aggregated_info['chemical_formula_anonymous'].add(doc['chemical_formula_anonymous'])
-            aggregated_info['chemical_formula_hill'].add(doc['chemical_formula_hill'])
-
-            aggregated_info['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
-            aggregated_info['dimension_types'].add(tuple(doc['dimension_types']))
-
-        aggregated_info['individual_elements_ratios'] = [
-            list(_) for _ in aggregated_info['individual_elements_ratios']
-        ]
-
-        aggregated_info['total_elements_ratios'] = [
-            c/aggregated_info['nsites'] for c in aggregated_info['total_elements_ratios']
-        ]
-
-        aggregated_info['individual_elements_ratios'] = list(aggregated_info['individual_elements_ratios'])
-
-        aggregated_info['chemical_formula_reduced'] = list(aggregated_info['chemical_formula_reduced'])
-        aggregated_info['chemical_formula_anonymous'] = list(aggregated_info['chemical_formula_anonymous'])
-        aggregated_info['chemical_formula_hill'] = list(aggregated_info['chemical_formula_hill'])
-        aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
-        aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
-
-        return aggregated_info
 
 
     def get_configuration_set(self, cs_id, resync=False):
@@ -734,7 +672,7 @@ class HDF5Client(MongoClient):
 
         """
 
-        co_ids = self.database[f'configuration_sets/{cs_id}/ids'].keys()
+        co_ids = list(self.database[f'configuration_sets/{cs_id}'].attrs['configuration_ids'])
 
         aggregated_info = self.aggregate_configuration_info(co_ids)
 
@@ -744,21 +682,31 @@ class HDF5Client(MongoClient):
         )
 
 
-    def resync_property(self, pr_id):
+    def resync_property(self, pid):
         """
         Re-synchronizes the property by pulling up labels from any attached
         property settings.
 
         Args:
 
-            pr_id (str):
+            pid (str):
                 The ID of the property to update
 
         Returns:
 
             None; updates the property document in-place
         """
-        pass
+        pso_ids = self.database.get_data(
+            'properties/settings_ids', ids=pid, as_str=True,
+            in_memory=True, ravel=True
+        ).tolist()
+
+        aggregated_info = self.aggregate_property_settings_info(pso_ids)
+
+        self.properties.update_one(
+            {'_id': pid},
+            {'$set': {'aggregated_info': aggregated_info}}
+        )
 
 
     def resync_dataset(self, ds_id):
@@ -776,5 +724,489 @@ class HDF5Client(MongoClient):
         Returns:
 
             None; updates the dataset document in-place
+        """
+
+        cs_ids = self.database[f'datasets/{ds_id}'].attrs['configuration_set_ids'].tolist()
+        pr_ids = self.database[f'datasets/{ds_id}'].attrs['property_ids'].tolist()
+
+        for csid in cs_ids:
+            self.resync_configuration_set(csid)
+        
+        for pid in pr_ids:
+            self.resync_property(pid)
+
+        aggregated_info = {}
+        for k,v in self.aggregate_configuration_set_info(cs_ids).items():
+            if k == 'labels':
+                k = 'configuration_labels'
+            elif k == 'labels_counts':
+                k = 'configuration_labels_counts'
+            
+            aggregated_info[k] = v
+
+        for k,v in self.aggregate_property_info(pr_ids).items():
+            if k == 'labels':
+                k = 'property_labels'
+            elif k == 'labels_counts':
+                k = 'property_labels_counts'
+            
+            aggregated_info[k] = v
+
+        self.datasets.update_one(
+            {'_id': ds_id},
+            {'$set': {'aggregated_info': aggregated_info}}
+        )
+
+    
+    def aggregate_configuration_info(self, ids):
+        """
+        Gathers the following information from a collection of configurations:
+
+        * :code:`nconfigurations`: the total number of configurations
+        * :code:`nsites`: the total number of sites
+        * :code:`nelements`: the total number of unique element types 
+        * :code:`elements`: the element types
+        * :code:`individual_elements_ratios`: a set of elements ratios generated
+          by looping over each configuration, extracting its concentration of
+          each element, and adding the tuple of concentrations to the set
+        * :code:`total_elements_ratios`: the ratio of the total count of atoms
+            of each element type over :code:`nsites`
+        * :code:`labels`: the union of all configuration labels
+        * :code:`labels_counts`: the total count of each label
+        * :code:`chemical_formula_reduced`: the set of all reduced chemical
+            formulae
+        * :code:`chemical_formula_anonymous`: the set of all anonymous chemical
+            formulae
+        * :code:`chemical_formula_hill`: the set of all hill chemical formulae
+        * :code:`nperiodic_dimensions`: the set of all numbers of periodic
+            dimensions
+        * :code:`dimension_types`: the set of all periodic boundary choices
+
+        Returns:
+
+            aggregated_info (dict):
+                All of the aggregated info
+        """
+
+        aggregated_info = {
+            'nconfigurations': len(ids),
+            'nsites': 0,
+            'nelements': 0,
+            'elements': [],
+            'individual_elements_ratios': [],
+            'total_elements_ratios': [],
+            'labels': [],
+            'labels_counts': [],
+            'chemical_formula_reduced': set(),
+            'chemical_formula_anonymous': set(),
+            'chemical_formula_hill': set(),
+            'nperiodic_dimensions': set(),
+            'dimension_types': set(),
+        }
+
+        # TODO: I could convert this to only using HDF5 operations instead.
+
+        # aggregated_info['nconfigurations'] = len(ids)
+
+        # atomic_numbers = self.database.get_data(
+        #     'configurations/atomic_numbers',
+        #     ids=ids
+        # )
+
+        # for cid in ids:
+        #     sl = self.database[f'configurations/atomic_numbers/slices/{cid}'][()]
+
+        #     aggregated_info['nsites'] += atomic_numbers[sl].shape[0]
+        #     aggregated_info['elements'] = aggregated_info.union(set(np.unique(
+        #         atomic_numbers[sl]
+        #     )))
+
+        # aggregated_info['nelements'] = len(aggregated_info['elements'])
+
+        # elements = set().union(*[np.unique(a) for a in self.database.])
+
+        for doc in self.configurations.find({'_id': {'$in': ids}}):
+            aggregated_info['nsites'] += doc['nsites']
+
+            for e, er in zip(doc['elements'], doc['elements_ratios']):
+                if e not in aggregated_info['elements']:
+                    aggregated_info['nelements'] += 1
+                    aggregated_info['elements'].append(e)
+                    aggregated_info['total_elements_ratios'].append(er*doc['nsites'])
+                    aggregated_info['individual_elements_ratios'].append(set(
+                        [np.round_(er, decimals=2)]
+                    ))
+                else:
+                    idx = aggregated_info['elements'].index(e)
+                    aggregated_info['total_elements_ratios'][idx] += er*doc['nsites']
+                    aggregated_info['individual_elements_ratios'][idx].add(
+                        np.round_(er, decimals=2)
+                    )
+
+            for l in doc['labels']:
+                if l not in aggregated_info['labels']:
+                    aggregated_info['labels'].append(l)
+                    aggregated_info['labels_counts'].append(1)
+                else:
+                    idx = aggregated_info['labels'].index(l)
+                    aggregated_info['labels_counts'][idx] += 1
+
+            aggregated_info['chemical_formula_reduced'].add(doc['chemical_formula_reduced'])
+            aggregated_info['chemical_formula_anonymous'].add(doc['chemical_formula_anonymous'])
+            aggregated_info['chemical_formula_hill'].add(doc['chemical_formula_hill'])
+
+            aggregated_info['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
+            aggregated_info['dimension_types'].add(tuple(doc['dimension_types']))
+
+        aggregated_info['individual_elements_ratios'] = [
+            list(_) for _ in aggregated_info['individual_elements_ratios']
+        ]
+
+        aggregated_info['total_elements_ratios'] = [
+            c/aggregated_info['nsites'] for c in aggregated_info['total_elements_ratios']
+        ]
+
+        aggregated_info['individual_elements_ratios'] = list(aggregated_info['individual_elements_ratios'])
+
+        aggregated_info['chemical_formula_reduced'] = list(aggregated_info['chemical_formula_reduced'])
+        aggregated_info['chemical_formula_anonymous'] = list(aggregated_info['chemical_formula_anonymous'])
+        aggregated_info['chemical_formula_hill'] = list(aggregated_info['chemical_formula_hill'])
+        aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
+        aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
+
+        return aggregated_info
+
+
+    def aggregate_property_settings_info(self, pso_ids):
+        """
+        Aggregates the following information from a list of property settings:
+
+            * labels
+
+        Args:
+
+            pso_ids (list or str):
+                The IDs of the properties to aggregate the information from
+
+        Returns:
+
+            aggregated_info (dict):
+                All of the aggregated info
+        """
+
+        if isinstance(pso_ids, str):
+            pso_ids = [pso_ids]
+
+        aggregated_info = {
+            'labels': [],
+        }
+
+        for doc in self.property_settings.find({'_id': {'$in': pso_ids}}):
+            for l in doc['labels']:
+                if l not in aggregated_info['labels']:
+                    aggregated_info['labels'].append(l)
+
+        return aggregated_info
+
+
+    def aggregate_property_info(self, pr_ids, resync=False):
+        """
+        Aggregates the following information from a list of properties:
+
+            * types
+            * labels
+            * labels_counts
+
+        Args:
+
+            pr_ids (list or str):
+                The IDs of the configurations to aggregate information from
+
+            resync (bool):
+                If True, re-synchronizes the property before aggregating the
+                information. Default is False.
+
+
+        Returns:
+
+            aggregated_info (dict):
+                All of the aggregated info
+        """
+
+        if isinstance(pr_ids, str):
+            pr_ids = [pr_ids]
+
+        if resync:
+            for pid in pr_ids:
+                self.resync_property(pid)
+        
+        aggregated_info = {
+            'types': set(),
+            'labels': [],
+            'labels_counts': []
+        }
+
+        for doc in self.properties.find({'_id': {'$in': pr_ids}}):
+            aggregated_info['types'].add(doc['type'])
+
+            for l in doc['aggregated_info']['labels']:
+                if l not in aggregated_info['labels']:
+                    aggregated_info['labels'].append(l)
+                    aggregated_info['labels_counts'].append(1)
+                else:
+                    idx = aggregated_info['labels'].index(l)
+                    aggregated_info['labels_counts'][idx] += 1
+
+        aggregated_info['types'] = list(aggregated_info['types'])
+        return aggregated_info
+
+
+    def aggregate_configuration_set_info(self, cs_ids, resync=False):
+        """
+        Aggregates the following information from a list of configuration sets:
+
+            * nconfigurations
+            * nsites
+            * nelements
+            * elements
+            * individual_elements_ratios
+            * total_elements_ratios
+            * labels
+            * labels_counts
+            * chemical_formula_reduced
+            * chemical_formula_anonymous
+            * chemical_formula_hill
+            * nperiodic_dimensions
+            * dimension_types
+
+        Args:
+
+            cs_ids (list or str):
+                The IDs of the configurations to aggregate information from
+
+            resync (bool):
+                If True, re-synchronizes each configuration set before
+                aggregating the information. Default is False.
+
+        Returns:
+
+            aggregated_info (dict):
+                All of the aggregated info
+        """
+
+        # TODO: if the CSs overlap, they'll double count COs...
+
+        if isinstance(cs_ids, str):
+            cs_ids = [cs_ids]
+
+        if resync:
+            for csid in cs_ids:
+                self.resync_configuration_set(csid)
+
+        co_ids = list(set(itertools.chain.from_iterable(
+            self.database[f'configuration_sets/{csid}'].attrs['configuration_ids'][()]
+            for csid in cs_ids
+        )))
+
+        return self.aggregate_configuration_info(co_ids)
+
+        # aggregated_info = {
+        #     'nconfigurations': len(co_ids),
+        #     'nsites': 0,
+        #     'nelements': 0,
+        #     'elements': [],
+        #     'individual_elements_ratios': [],
+        #     'total_elements_ratios': [],
+        #     'labels': [],
+        #     'labels_counts': [],
+        #     'chemical_formula_reduced': set(),
+        #     'chemical_formula_anonymous': set(),
+        #     'chemical_formula_hill': set(),
+        #     'nperiodic_dimensions': set(),
+        #     'dimension_types': set(),
+        # }
+
+
+        # for doc in self.configuration_sets.find({'_id': {'$in': cs_ids}}):
+
+        #     agg = doc['aggregated_info']
+
+        #     aggregated_info['nconfigurations'] += agg['nconfigurations']
+        #     aggregated_info['nsites'] += agg['nsites']
+
+        #     for e, er, ier in zip(
+        #         agg['elements'], agg['total_elements_ratios'],
+        #         agg['individual_elements_ratios']
+        #         ):
+        #         if e not in aggregated_info['elements']:
+        #             aggregated_info['nelements'] += 1
+        #             aggregated_info['elements'].append(e)
+        #             aggregated_info['total_elements_ratios'].append(er*agg['nsites'])
+        #             aggregated_info['individual_elements_ratios'].append(
+        #                 set(ier)
+        #             )
+        #         else:
+        #             idx = aggregated_info['elements'].index(e)
+        #             aggregated_info['total_elements_ratios'][idx] += er*agg['nsites']
+                    
+        #             old = aggregated_info['individual_elements_ratios'][idx]
+        #             new = old.union(set(agg['individual_elements_ratios'][idx]))
+        #             aggregated_info['individual_elements_ratios'][idx] = new
+
+        #     for l in agg['labels']:
+        #         if l not in aggregated_info['labels']:
+        #             aggregated_info['labels'].append(l)
+        #             aggregated_info['labels_counts'].append(1)
+        #         else:
+        #             idx = aggregated_info['labels'].index(l)
+        #             aggregated_info['labels_counts'][idx] += 1
+                
+
+        #     for n in ['reduced', 'anonymous', 'hill']:
+        #         t = 'chemical_formula_'+n
+
+        #         old = aggregated_info[t]
+        #         new = old.union(set(agg[t]))
+
+        #         aggregated_info[t] = new
+
+
+        #     old = aggregated_info['nperiodic_dimensions']
+        #     new = old.union(set(agg['nperiodic_dimensions']))
+        #     aggregated_info['nperiodic_dimensions'] = new
+
+        #     old = aggregated_info['dimension_types']
+        #     new = old.union(set(tuple(_) for _ in agg['dimension_types']))
+        #     aggregated_info['dimension_types'] = new
+
+        # aggregated_info['individual_elements_ratios'] = [list(_) for _ in aggregated_info['individual_elements_ratios']]
+        # aggregated_info['chemical_formula_reduced'] = list(aggregated_info['chemical_formula_reduced'])
+        # aggregated_info['chemical_formula_anonymous'] = list(aggregated_info['chemical_formula_anonymous'])
+        # aggregated_info['chemical_formula_hill'] = list(aggregated_info['chemical_formula_hill'])
+        # aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
+        # aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
+
+        # return aggregated_info
+
+
+    def insert_dataset(
+        self, cs_ids, pr_ids,
+        authors=None,
+        links=None,
+        description='',
+        resync=False,
+        ):
+        """
+        Inserts a dataset into the database.
+
+        Args:
+
+            cs_ids (list or str):
+                The IDs of the configuration sets to link to the dataset.
+
+            pr_ids (list or str):
+                The IDs of the properties to link to the dataset
+
+            authors (list or str or None):
+                The names of the authors of the dataset. If None, then no
+                authors are added.
+
+            links (list or str or None):
+                External links (e.g., journal articles, Git repositories, ...)
+                to be associated with the dataset. If None, then no links are
+                added.
+
+            description (str or None):
+                A human-readable description of the dataset. If None, then not
+                description is added.
+
+            resync (bool):
+                If True, re-synchronizes the configuration sets and properties
+                before adding to the dataset. Default is False.
+
+        Returns:
+
+            ds_id (str):
+                The ID of the inserted dataset
+        """
+        ds_id = self.database.insert_dataset(
+            cs_ids=cs_ids,
+            pr_ids=pr_ids,
+            authors=authors,
+            links=links,
+            description=description
+        )
+
+        aggregated_info = {}
+        for k,v in self.aggregate_configuration_set_info(cs_ids, resync=resync).items():
+            if k == 'labels':
+                k = 'configuration_labels'
+            elif k == 'labels_counts':
+                k = 'configuration_labels_counts'
+            
+            aggregated_info[k] = v
+
+        for k,v in self.aggregate_property_info(pr_ids, resync=resync).items():
+            if k == 'labels':
+                k = 'property_labels'
+            elif k == 'labels_counts':
+                k = 'property_labels_counts'
+            
+            aggregated_info[k] = v
+
+        self.datasets.update_one(
+            {'_id': ds_id},
+            {
+                '$addToSet': {
+                    'relationships.configuration_sets': {'$each': cs_ids},
+                    'relationships.properties': {'$each': pr_ids},
+                },
+                '$setOnInsert': {
+                    '_id': ds_id,
+                    'authors': authors,
+                    'links': links,
+                    'description': description,
+                },
+                '$set': {
+                    'aggregated_info': aggregated_info,
+                    'last_modified': self.database[f'datasets/{ds_id}'].attrs['last_modified']
+                },
+            },
+            upsert=True
+        )
+
+        # Add the backwards relationships CS->DS
+        for csid in cs_ids:
+            self.configuration_sets.update_one(
+                {'_id': csid},
+                {
+                    '$addToSet': {
+                        'relationships.configuration_sets': ds_id
+                    }
+                }
+            )
+
+        # Add the backwards relationships PR->DS
+        for pid in pr_ids:
+            self.properties.update_one(
+                {'_id': pid},
+                {
+                    '$addToSet': {
+                        'relationships.configuration_sets': ds_id
+                    }
+                }
+            )
+
+        return ds_id
+
+
+    def aggregate_dataset_info(self, ds_ids):
+        """
+        Aggregates information from a list of datasets.
+
+        NOTE: this will face all of the same challenges as
+        aggregate_configuration_set_info()
+
+            * you need to find the overlap of COs and PRs.
         """
         pass

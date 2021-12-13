@@ -194,3 +194,118 @@ class TestClient:
             }
             assert agg_info['nperiodic_dimensions'] == [0]
             assert agg_info['dimension_types'] == [[0,0,0]]
+
+
+    def test_insert_ds_same_cs(self):
+
+        with tempfile.TemporaryFile() as tmpfile:
+            client = HDF5Client(tmpfile, mode='w')
+
+            client.insert_property_definition(
+                {
+                    'property-id': 'default',
+                    'property-title': 'A default property used for testing',
+                    'property-description': 'A description of the property',
+                    'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                    'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+                    'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                    'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                    'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                    'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+                }
+            )
+
+            property_map = {
+                'default': {
+                    'energy': {'field': 'energy', 'units': 'eV'},
+                    'stress': {'field': 'stress', 'units': 'GPa'},
+                    'name': {'field': 'name', 'units': None},
+                    'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                    'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                    'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                    'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                    'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                }
+            }
+
+            pso = PropertySettings(
+                method='VASP',
+                description='A basic test calculation',
+                files=[('dummy_name', 'dummy file contents')],
+                labels=['pso_label1', 'pso_label2']
+            )
+
+            pso_id = client.insert_property_settings(pso)
+
+            images = build_n(10)[0]
+
+            for i, img in enumerate(images):
+                img.info[ATOMS_NAME_FIELD].add(f'config_{i}')
+                img.info[ATOMS_LABELS_FIELD].add('a_label')
+
+            ids = client.insert_data(
+                images,
+                property_map=property_map,
+                property_settings={'default': pso_id}
+            )
+
+            co_ids1, pr_ids1 = list(zip(*ids))
+
+            cs_id1 = client.insert_configuration_set(co_ids1, 'a description1')
+
+            images = build_n(10)[0]
+
+            for i, img in enumerate(images):
+                img.info[ATOMS_NAME_FIELD].add(f'second_config_{i}')
+                img.info[ATOMS_LABELS_FIELD].add('a_second_label')
+
+                img.info['energy'] += 100000
+
+            ids = client.insert_data(
+                images,
+                property_map=property_map,
+                property_settings={'default': pso_id}
+            )
+
+            co_ids2, pr_ids2 = list(zip(*ids))
+
+            cs_id2 = client.insert_configuration_set(co_ids2, 'a description2')
+
+            ds_id = client.insert_dataset(
+                cs_ids=[cs_id1, cs_id2],
+                pr_ids=pr_ids1+pr_ids2,
+                authors=['colabfit'],
+                links=['https://colabfit.org'],
+                description='an example dataset',
+                resync=True
+            )
+
+            ds_doc = next(client.datasets.find({'_id': ds_id}))
+
+            assert ds_doc['authors'] == ['colabfit']
+            assert ds_doc['links'] == ['https://colabfit.org']
+            assert ds_doc['description'] == 'an example dataset'
+            assert len(ds_doc['relationships']['configuration_sets']) == 2
+            assert len(ds_doc['relationships']['properties']) == 20
+
+            agg = ds_doc['aggregated_info']
+
+            assert agg['nconfigurations'] == 20
+            assert agg['nsites'] == 110
+            assert agg['nelements'] == 1
+            assert agg['elements'] == ['H']
+            assert agg['individual_elements_ratios'] == [[1.0]]
+            assert agg['total_elements_ratios'] == [1.0]
+            assert {'a_label', 'a_second_label'}.issubset(agg['configuration_labels'])
+            assert agg['chemical_formula_reduced'] == ['H']
+            assert agg['chemical_formula_anonymous'] == ['A']
+            assert set(agg['chemical_formula_hill']) == {
+                f'H{i+1}' if i > 0 else 'H' for i in range(len(ids))
+            }
+            assert agg['nperiodic_dimensions'] == [0]
+            assert agg['dimension_types'] == [[0,0,0]]
+
+            assert agg['types'] == ['default']
+            assert set(agg['property_labels']) == {'pso_label1', 'pso_label2'}
