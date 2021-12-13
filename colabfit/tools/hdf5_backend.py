@@ -124,6 +124,11 @@ class HDF5Backend(h5py.File):
             /types
                 As in /ids, but the type of the property (e.g., "property_1")
 
+            /configuration_ids
+                A list of tuples of Configuration IDs specifying the
+                Configurations associated with each Property. Uses the
+                /data, /slices form.
+
             /settings_ids
                 A list of Property Settings IDs. Uses the /data, /slices
                 form.
@@ -141,11 +146,6 @@ class HDF5Backend(h5py.File):
                     last_modified:
                         A datetime string specifying when the object was
                         modified last.
-
-                /configuration_ids
-                    A list of tuples of Configuration IDs specifying the
-                    Configurations associated with each Property. Uses the
-                    /data, /slices form.
 
                 /field_1
                     /data
@@ -270,6 +270,10 @@ class HDF5Backend(h5py.File):
         g_types.attrs['concatenated'] = False
         g_types.create_group('data', track_order=True)
 
+        g_settings = g.create_group('configuration_ids')
+        g_settings.attrs['concatenated'] = False
+        g_settings.create_group('data', track_order=True)
+
         g_settings = g.create_group('settings_ids')
         g_settings.attrs['concatenated'] = False
         g_settings.create_group('data', track_order=True)
@@ -314,6 +318,9 @@ class HDF5Backend(h5py.File):
         Note that new properties can be added to existing configurations by
         passing the same configurations to insert_data(), but using a new
         property map.
+
+        Adding two different configurations with the same property can be used
+        to add one property attached to multiple configurations.
 
         Example:
 
@@ -642,16 +649,6 @@ class HDF5Backend(h5py.File):
         self, configurations,
         property_definitions, property_map, property_settings
         ):
-        """
-        TODO:
-
-        * Add support for duplicate configurations. If the CO ID already exists,
-        that means the COs are identical (since the ID is the hash), so all that
-        needs to be done is to update /names, /labels, and /last_modified.
-
-        * Add support for duplicate properties
-
-        """
         if isinstance(configurations, Configuration):
             configurations = [configurations]
 
@@ -843,7 +840,7 @@ class HDF5Backend(h5py.File):
 
                 g = self[f'properties/types/data/{prop_id}'] = pname
 
-                g = self[f'properties/{pname}/configuration_ids']
+                g = self[f'properties/configuration_ids']
                 g['data'].create_dataset(
                     name=prop_id,
                     shape=1,

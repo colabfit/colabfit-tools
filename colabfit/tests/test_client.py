@@ -171,17 +171,19 @@ class TestClient:
 
             co_ids = list(zip(*ids))[0]
 
-            cs_id = client.insert_configuration_set(co_ids)
+            cs_id = client.insert_configuration_set(co_ids, 'a description')
 
             cs_doc = next(client.configuration_sets.find({'_id': cs_id}))
 
             agg_info = cs_doc['aggregated_info']
 
+            assert cs_doc['description'] == 'a description'
+
             assert agg_info['nconfigurations'] == len(ids)
             assert agg_info['nsites'] == sum(len(c) for c in images)
             assert agg_info['nelements'] == 1
             assert agg_info['elements'] == ['H']
-            assert agg_info['individual_elements_ratios'] == [1.0]
+            assert agg_info['individual_elements_ratios'] == [[1.0]]
             assert agg_info['total_elements_ratios'] == [1.0]
             assert agg_info['labels'] == ['a_label']
             assert agg_info['labels_counts'] == [len(ids)]
