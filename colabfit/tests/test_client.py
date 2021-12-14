@@ -196,7 +196,7 @@ class TestClient:
             assert agg_info['dimension_types'] == [[0,0,0]]
 
 
-    def test_insert_ds_same_cs(self):
+    def test_insert_ds_diff_cs(self):
 
         with tempfile.TemporaryFile() as tmpfile:
             client = HDF5Client(tmpfile, mode='w')

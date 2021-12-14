@@ -1,9 +1,9 @@
-import os
 import h5py
 import json
 import warnings
 import datetime
 import numpy as np
+from tqdm import tqdm
 from ase import Atoms
 from copy import deepcopy
 from hashlib import sha512
@@ -289,7 +289,7 @@ class HDF5Backend(h5py.File):
     def insert_data(
         self,
         configurations, property_map=None, property_settings=None,
-        generator=False
+        generator=False, verbose=False
         ):
         """
         Inserts the configurations into the databas, and any specified
@@ -381,6 +381,9 @@ class HDF5Backend(h5py.File):
                 configurations can't all fit in memory at the same time. Default
                 is False.
 
+            verbose (bool):
+                If True, prints progress bar
+
         Returns:
 
             additions (iterable):
@@ -413,12 +416,14 @@ class HDF5Backend(h5py.File):
         if generator:
             return self._insert_data_gen(
                 configurations,
-                property_definitions, property_map, property_settings
+                property_definitions, property_map, property_settings,
+                verbose=verbose
             )
         else:
             return self._insert_data(
                 configurations,
-                property_definitions, property_map, property_settings
+                property_definitions, property_map, property_settings,
+                verbose=verbose
             )
 
 
@@ -564,9 +569,9 @@ class HDF5Backend(h5py.File):
                 missing_keys = expected_keys[pname] - available_keys
                 if missing_keys:
                     warnings.warn(
-                        "Configuration {} is missing keys ({}) during "\
-                        "insert_data. Skipping".format(
-                            ai, missing_keys
+                        "Configuration {} is missing keys {} during "\
+                        "insert_data. Available keys: {}. Skipping".format(
+                            ai, available_keys, missing_keys
                         )
                     )
                     continue
@@ -650,7 +655,7 @@ class HDF5Backend(h5py.File):
 
     def _insert_data(
         self, configurations,
-        property_definitions, property_map, property_settings
+        property_definitions, property_map, property_settings, verbose
         ):
         if isinstance(configurations, Configuration):
             configurations = [configurations]
@@ -661,14 +666,20 @@ class HDF5Backend(h5py.File):
         }
         expected_keys = {
             pname: set(
-                property_definitions[pname].keys()
-            ) - ignore_keys
+                property_map[pname][f]['field']
+                for f in property_definitions[pname].keys() - ignore_keys
+                # property_definitions[pname].keys()
+            )
             for pname in property_map
         }
 
         additions = []
 
-        for ai, atoms in enumerate(configurations):
+        for ai, atoms in tqdm(
+            enumerate(configurations),
+            desc='Inserting data',
+            disable=not verbose
+            ):
             config_id = str(hash(atoms))
 
             g = self['configurations/ids/data']
@@ -785,13 +796,14 @@ class HDF5Backend(h5py.File):
 
             for pname, pmap in property_map.items():
 
+
                 # Pre-check to avoid having to delete partially-added properties
                 missing_keys = expected_keys[pname] - available_keys
                 if missing_keys:
                     warnings.warn(
-                        "Configuration {} is missing keys ({}) during "\
-                        "insert_data. Skipping".format(
-                            ai, missing_keys
+                        "Configuration {} is missing keys {} during "\
+                        "insert_data. Available keys: {}. Skipping".format(
+                            ai, missing_keys, available_keys
                         )
                     )
                     continue
@@ -812,7 +824,7 @@ class HDF5Backend(h5py.File):
                     continue
 
                 # Add the data; group should already exist
-                for field in expected_keys[pname]:
+                for field in property_definitions[pname].keys()-ignore_keys:
                     g = self[f'properties/{pname}/{field}']
 
                     # Try to convert field into either a float or string array
