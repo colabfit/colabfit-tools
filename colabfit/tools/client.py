@@ -14,6 +14,7 @@ from colabfit import (
 from colabfit.tools.hdf5_backend import HDF5Backend
 from colabfit.tools.configuration import process_species_list
 from colabfit.tools.configuration_set import ConfigurationSet
+from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 
 class HDF5Client(MongoClient):
     """
@@ -1210,3 +1211,102 @@ class HDF5Client(MongoClient):
             * you need to find the overlap of COs and PRs.
         """
         pass
+
+
+def load_data(
+    file_path,
+    file_format,
+    name_field,
+    elements,
+    default_name='',
+    labels_field=None,
+    reader=None,
+    glob_string=None,
+    verbose=False,
+    **kwargs,
+    ):
+    """
+    Loads configurations as a list of ase.Atoms objects.
+
+    Args:
+        file_path (str):
+            Path to the file or folder containing the data
+
+        file_format (str):
+            A string for specifying the type of Converter to use when loading
+            the configurations. Allowed values are 'xyz', 'extxyz', 'cfg', or
+            'folder'.
+
+        name_field (str):
+            Key name to use to access `ase.Atoms.info[<name_field>]` to
+            obtain the name of a configuration one the atoms have been
+            loaded from the data file. Note that if
+            `file_format == 'folder'`, `name_field` will be set to 'name'.
+
+        elements (list):
+            A list of strings of element types
+
+        default_name (list):
+            Default name to be used if `name_field==None`.
+
+        labels_field (str):
+            Key name to use to access `ase.Atoms.info[<labels_field>]` to
+            obtain the labels that should be applied to the configuration. This
+            field should contain a comma-separated list of strings
+
+        reader (callable):
+            An optional function for loading configurations from a file. Only
+            used for `file_format == 'folder'`
+
+        glob_string (str):
+            A string to use with `Path(file_path).rglob(glob_string)` to
+            generate a list of files to be passed to `self.reader`. Only used
+            for `file_format == 'folder'`.
+
+        verbose (bool):
+            If True, prints progress bar.
+
+    All other keyword arguments will be passed with
+    `converter.load(..., **kwargs)`
+    """
+
+    if file_format == 'folder':
+        if reader is None:
+            raise RuntimeError(
+                "Must provide a `reader` function when `file_format=='folder'`"
+            )
+
+        if glob_string is None:
+            raise RuntimeError(
+                "Must provide `glob_string` when `file_format=='folder'`"
+            )
+
+
+        converter = FolderConverter(reader)
+
+        return converter.load(
+            file_path,
+            name_field=name_field,
+            elements=elements,
+            default_name=default_name,
+            labels_field=labels_field,
+            glob_string=glob_string,
+            verbose=verbose,
+            **kwargs,
+        )
+
+
+    if file_format in ['xyz', 'extxyz']:
+        converter = EXYZConverter()
+    elif file_format == 'cfg':
+        converter = CFGConverter()
+
+    return converter.load(
+        file_path,
+        name_field=name_field,
+        elements=elements,
+        default_name=default_name,
+        labels_field=labels_field,
+        verbose=verbose,
+    )
+
