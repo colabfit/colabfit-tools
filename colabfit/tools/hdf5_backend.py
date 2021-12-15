@@ -448,13 +448,11 @@ class HDF5Backend(h5py.File):
             for pname in property_map
         }
 
-        for ai, atoms in tqdm(
-            enumerate(configurations),
+        for ai, atoms in enumerate(tqdm(
+            configurations,
             desc='Inserting data in HDF5 backend',
             disable=not verbose
-            ):
-            if ai == 1000:
-                return
+            )):
             config_id = str(hash(atoms))
 
             g = self['configurations/ids/data']
@@ -687,11 +685,11 @@ class HDF5Backend(h5py.File):
 
         additions = []
 
-        for ai, atoms in tqdm(
-            enumerate(configurations),
+        for ai, atoms in enumerate(tqdm(
+            configurations,
             desc='Inserting data',
             disable=not verbose
-            ):
+            )):
             config_id = str(hash(atoms))
 
             g = self['configurations/ids/data']

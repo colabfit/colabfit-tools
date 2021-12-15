@@ -152,7 +152,7 @@ class TestClient:
 
                 # assert {'pso_label2', 'pso_label1'}.issubset(
                 #     set(prop_doc['aggregated_fields']['labels'])
-                # )
+                )
                 assert prop_doc['type'] == 'default'
                 assert {cid}.issubset(prop_doc['relationships']['configurations'])
                 assert {pso_id}.issubset(prop_doc['relationships']['property_settings'])
