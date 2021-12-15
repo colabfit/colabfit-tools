@@ -23,25 +23,25 @@ class ConfigurationSet:
             A dictionary of information that was aggregated from all of the
             attached configurations. Contains the following information:
 
-                * :code:`nconfigurations`: the total number of configurations
-                * :code:`nsites`: the total number of sites
-                * :code:`nelements`: the total number of unique element types 
-                * :code:`elements`: the element types
-                * :code:`individual_elements_ratios`: a set of elements ratios generated
+                * nconfigurations: the total number of configurations
+                * nsites: the total number of sites
+                * nelements: the total number of unique element types
+                * elements: the element types
+                * individual_elements_ratios: a set of elements ratios generated
                 by looping over each configuration, extracting its concentration of
                 each element, and adding the tuple of concentrations to the set
-                * :code:`total_elements_ratios`: the ratio of the total count of atoms
-                    of each element type over :code:`nsites`
-                * :code:`labels`: the union of all configuration labels
-                * :code:`labels_counts`: the total count of each label
-                * :code:`chemical_formula_reduced`: the set of all reduced chemical
+                * total_elements_ratios: the ratio of the total count of atoms
+                    of each element type over nsites
+                * labels: the union of all configuration labels
+                * labels_counts: the total count of each label
+                * chemical_formula_reduced: the set of all reduced chemical
                     formulae
-                * :code:`chemical_formula_anonymous`: the set of all anonymous chemical
+                * chemical_formula_anonymous: the set of all anonymous chemical
                     formulae
-                * :code:`chemical_formula_hill`: the set of all hill chemical formulae
-                * :code:`nperiodic_dimensions`: the set of all numbers of periodic
+                * chemical_formula_hill: the set of all hill chemical formulae
+                * nperiodic_dimensions: the set of all numbers of periodic
                     dimensions
-                * :code:`dimension_types`: the set of all periodic boundary choices
+                * dimension_types: the set of all periodic boundary choices
     """
 
     def __init__(self, configuration_ids, description, aggregated_info):

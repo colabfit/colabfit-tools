@@ -175,8 +175,10 @@ class Configuration(Atoms):
     #     return str(self)
 
 
-def process_species_list(atomic_species):
+def process_species_list(atoms):
     """Extracts useful metadata from a list of atomic species"""
+    atomic_species = atoms.get_chemical_symbols()
+
     natoms = len(atomic_species)
     elements = sorted(list(set(atomic_species)))
     nelements = len(elements)

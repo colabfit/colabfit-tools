@@ -247,43 +247,42 @@ class HDF5Backend(h5py.File):
         super().__init__(name=name, mode=mode, **kwargs)
 
         # Build all the base groups
-        g = self.create_group('configurations')
+        if 'configurations' not in self:
+            g = self.create_group('configurations')
 
-        for sub_group_name in [
-            'ids', 'atomic_numbers', 'positions', 'cells', 'pbcs',
-            'names', 'labels', 'last_modified'
-            ]:
-            sub_g = g.create_group(sub_group_name)
-            sub_g.attrs['concatenated'] = False
-            sub_g.create_group('data', track_order=True)
+            for sub_group_name in [
+                'ids', 'atomic_numbers', 'positions', 'cells', 'pbcs',
+                'names', 'labels', 'last_modified'
+                ]:
+                sub_g = g.create_group(sub_group_name)
+                sub_g.attrs['concatenated'] = False
+                sub_g.create_group('data', track_order=True)
 
-            if sub_group_name != 'ids':
-                sub_g.create_group('slices')
+                if sub_group_name != 'ids':
+                    sub_g.create_group('slices')
 
-        # g.create_group('info')
-        # g.create_group('arrays')
+        if 'properties' not in self:
+            g = self.create_group('properties')
 
-        g = self.create_group('properties')
+            g_ids = g.create_group('ids')
+            g_ids.attrs['concatenated'] = False
+            g_ids.create_group('data', track_order=True)
 
-        g_ids = g.create_group('ids')
-        g_ids.attrs['concatenated'] = False
-        g_ids.create_group('data', track_order=True)
+            g_types = g.create_group('types')
+            g_types.attrs['concatenated'] = False
+            g_types.create_group('data', track_order=True)
 
-        g_types = g.create_group('types')
-        g_types.attrs['concatenated'] = False
-        g_types.create_group('data', track_order=True)
+            g_settings = g.create_group('configuration_ids')
+            g_settings.attrs['concatenated'] = False
+            g_settings.create_group('data', track_order=True)
 
-        g_settings = g.create_group('configuration_ids')
-        g_settings.attrs['concatenated'] = False
-        g_settings.create_group('data', track_order=True)
+            g_settings = g.create_group('settings_ids')
+            g_settings.attrs['concatenated'] = False
+            g_settings.create_group('data', track_order=True)
 
-        g_settings = g.create_group('settings_ids')
-        g_settings.attrs['concatenated'] = False
-        g_settings.create_group('data', track_order=True)
-
-        self.create_group('property_settings')
-        self.create_group('configuration_sets')
-        self.create_group('datasets')
+        for n in  ['property_settings', 'configuration_sets', 'datasets']:
+            if n not in self:
+                self.create_group(n)
 
 
     def insert_data(
@@ -429,20 +428,30 @@ class HDF5Backend(h5py.File):
 
     def _insert_data_gen(
         self, configurations,
-        property_definitions, property_map, property_settings
+        property_definitions, property_map, property_settings,
+        verbose=False
         ):
         if isinstance(configurations, Configuration):
             configurations = [configurations]
 
-        ignore_keys = {'property-id', 'property-title', 'property-description'}
+        ignore_keys = {
+            'property-id', 'property-title', 'property-description',
+            'last_modified', 'definition'
+        }
         expected_keys = {
             pname: set(
-                property_definitions[pname].keys()
-            ) - ignore_keys
+                property_map[pname][f]['field']
+                for f in property_definitions[pname].keys() - ignore_keys
+                # property_definitions[pname].keys()
+            )
             for pname in property_map
         }
 
-        for ai, atoms in enumerate(configurations):
+        for ai, atoms in tqdm(
+            enumerate(configurations),
+            desc='Inserting data in HDF5 backend',
+            disable=not verbose
+            ):
             config_id = str(hash(atoms))
 
             g = self['configurations/ids/data']
@@ -461,7 +470,7 @@ class HDF5Backend(h5py.File):
                 # Names
                 data = self[f'configurations/names/data/{config_id}']
                 new_names = atoms.info[ATOMS_NAME_FIELD]
-                names_set = new_names - set(data.asstr()[()])
+                names_set = set(new_names) - set(data.asstr()[()])
                 data.resize((data.shape[0]+len(names_set),) + data.shape[1:])
                 data[-len(names_set):] = np.array(
                     list(names_set), dtype=STRING_DTYPE_SPECIFIER
@@ -483,7 +492,9 @@ class HDF5Backend(h5py.File):
                 # Adding a new CO
                 # Names
                 g = self['configurations/names']
-                names = list(atoms.info[ATOMS_NAME_FIELD])
+                names = list(
+                    atoms.info[ATOMS_NAME_FIELD]
+                )
                 g['data'].create_dataset(
                     name=config_id,
                     shape=(len(names),),
@@ -508,17 +519,9 @@ class HDF5Backend(h5py.File):
                     config_id, dtype=STRING_DTYPE_SPECIFIER
                 )
                 # Last modified
-                g = self['configurations/last_modified']
-                g['data'].create_dataset(
-                    name=config_id,
-                    shape=(1,),
-                    maxshape=(None,),
-                    dtype=STRING_DTYPE_SPECIFIER,
-                    data=datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                )
-                g[f'slices/{config_id}'] = np.array(
-                    config_id, dtype=STRING_DTYPE_SPECIFIER
-                )
+                now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                self[f'configurations/last_modified/data/{config_id}'] = now
+                self[f'configurations/last_modified/slices/{config_id}'] = config_id
 
                 # Save the ID
                 g = self['configurations/ids/data']
@@ -565,13 +568,14 @@ class HDF5Backend(h5py.File):
 
             for pname, pmap in property_map.items():
 
+
                 # Pre-check to avoid having to delete partially-added properties
                 missing_keys = expected_keys[pname] - available_keys
                 if missing_keys:
                     warnings.warn(
                         "Configuration {} is missing keys {} during "\
                         "insert_data. Available keys: {}. Skipping".format(
-                            ai, available_keys, missing_keys
+                            ai, missing_keys, available_keys
                         )
                     )
                     continue
@@ -592,7 +596,7 @@ class HDF5Backend(h5py.File):
                     continue
 
                 # Add the data; group should already exist
-                for field in expected_keys[pname]:
+                for field in property_definitions[pname].keys()-ignore_keys:
                     g = self[f'properties/{pname}/{field}']
 
                     # Try to convert field into either a float or string array
@@ -621,7 +625,9 @@ class HDF5Backend(h5py.File):
                     data=np.array(prop_id, dtype=STRING_DTYPE_SPECIFIER)
                 )
 
-                g = self[f'properties/{pname}/configuration_ids']
+                g = self[f'properties/types/data/{prop_id}'] = pname
+
+                g = self[f'properties/configuration_ids']
                 g['data'].create_dataset(
                     name=prop_id,
                     shape=1,
@@ -635,9 +641,8 @@ class HDF5Backend(h5py.File):
                 if pname in property_settings:
                     settings_id = property_settings[pname]
 
-                    # TODO: doesn't support multiple settings per prop
-                    g = self[f'properties/settings_ids/data']
-                    g.create_dataset(
+                    g = self[f'properties/settings_ids']
+                    g['data'].create_dataset(
                         name=prop_id,
                         shape=1,
                         data=np.array(settings_id, dtype=STRING_DTYPE_SPECIFIER)
@@ -646,6 +651,11 @@ class HDF5Backend(h5py.File):
                         prop_id, dtype=STRING_DTYPE_SPECIFIER
                     )
 
+                now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                self[f'properties/last_modified/data/{prop_id}'] = now
+                self[f'properties/last_modified/slices/{prop_id}'] = prop_id
+
+                # yield (prop_id, config_id)
                 yield (config_id, prop_id)
                 returned_something = True
 
@@ -1066,11 +1076,11 @@ class HDF5Backend(h5py.File):
                 if as_str:
                     data = [_.asstr() for _ in data]
 
-                if concatenate or ravel:
+                if concatenate:
                     return np.concatenate([_[()] for _ in data])
 
                 if ravel:
-                    return data.ravel()
+                    return np.concatenate([_[()] for _ in data]).ravel()
 
                 return {
                     # encode since /slices will have bytes
@@ -1084,7 +1094,7 @@ class HDF5Backend(h5py.File):
         """
         return self.get_configurations([i])[0]
 
-    def get_configurations(self, ids, generator=False):
+    def get_configurations(self, ids, generator=False, verbose=False):
         """
         A generator that returns in-memory Configuration objects one at a time
         by loading the atomic numbers, positions, cells, and PBCs.
@@ -1101,6 +1111,9 @@ class HDF5Backend(h5py.File):
                 configurations can't all fit in memory at the same time. Default
                 is False.
 
+            verbose (bool):
+                If True, prints progress bar
+
         Returns:
 
             configurations (iterable):
@@ -1108,12 +1121,12 @@ class HDF5Backend(h5py.File):
         """
 
         if generator:
-            return self._get_configurations_gen(ids)
+            return self._get_configurations_gen(ids, verbose=verbose)
         else:
-            return self._get_configurations(ids)
+            return self._get_configurations(ids, verbose=verbose)
 
 
-    def _get_configurations(self, ids):
+    def _get_configurations(self, ids, verbose=False):
         if ids == 'all':
             ids = [
                 ds.asstr()[0]
@@ -1122,36 +1135,51 @@ class HDF5Backend(h5py.File):
 
         configurations = []
 
-        for co_id in ids:
+        for co_id in tqdm(
+            ids,
+            desc='Loading configurations',
+            disable=not verbose
+            ):
+            # atoms = Atoms(
+            #     symbols=self.get_data(
+            #         'configurations/atomic_numbers'
+            #     )[self[f'configurations/atomic_numbers/slices/{co_id}'][()]],
+
+            #     positions=self.get_data(
+            #         'configurations/positions'
+            #     )[self[f'configurations/positions/slices/{co_id}'][()]],
+
+            #     cell=self.get_data(
+            #         'configurations/cells'
+            #     )[self[f'configurations/cells/slices/{co_id}'][()]],
+
+            #     pbc=self.get_data(
+            #         'configurations/pbcs'
+            #     )[self[f'configurations/pbcs/slices/{co_id}'][()]],
+            # )
+
+            # atoms.info[ATOMS_NAME_FIELD] = set(self.get_data(
+            #     'configurations/names'
+            # )[self[f'configurations/names/slices/{co_id}'][()]].asstr())
+
+            # atoms.info[ATOMS_LABELS_FIELD] = set(self.get_data(
+            #     'configurations/labels'
+            # )[self[f'configurations/labels/slices/{co_id}'][()]].asstr())
+
+            # atoms.info[ATOMS_LAST_MODIFIED_FIELD] = self.get_data(
+            #     'configurations/last_modified'
+            # )[self[f'configurations/last_modified/slices/{co_id}'][()]].asstr()[()]
+
             atoms = Atoms(
-                symbols=self.get_data(
-                    'configurations/atomic_numbers'
-                )[self[f'configurations/atomic_numbers/slices/{co_id}'][()]],
-
-                positions=self.get_data(
-                    'configurations/positions'
-                )[self[f'configurations/positions/slices/{co_id}'][()]],
-
-                cell=self.get_data(
-                    'configurations/cells'
-                )[self[f'configurations/cells/slices/{co_id}'][()]],
-
-                pbc=self.get_data(
-                    'configurations/pbcs'
-                )[self[f'configurations/pbcs/slices/{co_id}'][()]],
+                symbols=self[f'configurations/atomic_numbers/data/{co_id}'],
+                positions=self[f'configurations/positions/data/{co_id}'],
+                cell=self[f'configurations/cells/data/{co_id}'],
+                pbc=self[f'configurations/pbcs/data/{co_id}'],
             )
 
-            atoms.info[ATOMS_NAME_FIELD] = set(self.get_data(
-                'configurations/names'
-            )[self[f'configurations/names/slices/{co_id}'][()]].asstr())
-
-            atoms.info[ATOMS_LABELS_FIELD] = set(self.get_data(
-                'configurations/labels'
-            )[self[f'configurations/labels/slices/{co_id}'][()]].asstr())
-
-            atoms.info[ATOMS_LAST_MODIFIED_FIELD] = self.get_data(
-                'configurations/last_modified'
-            )[self[f'configurations/last_modified/slices/{co_id}'][()]].asstr()[()]
+            atoms.info[ATOMS_NAME_FIELD] = set(self[f'configurations/names/data/{co_id}'].asstr()[()])
+            atoms.info[ATOMS_LABELS_FIELD] = set(self[f'configurations/labels/data/{co_id}'].asstr()[()])
+            atoms.info[ATOMS_LAST_MODIFIED_FIELD] = self[f'configurations/last_modified/data/{co_id}'].asstr()[()]
 
             configurations.append(Configuration.from_ase(atoms))
 
@@ -1159,32 +1187,58 @@ class HDF5Backend(h5py.File):
 
 
 
-    def _get_configurations_gen(self, ids):
+    def _get_configurations_gen(self, ids, verbose=False):
         if ids == 'all':
             ids = [
                 ds.asstr()[0]
                 for ds in self.get_data('configurations/ids').values()
             ]
 
-        for co_id in ids:
+        for co_id in tqdm(
+            ids,
+            desc='Loading configurations',
+            disable=not verbose
+            ):
+            # atoms = Atoms(
+            #     symbols=self.get_data(
+            #         'configurations/atomic_numbers'
+            #     )[self[f'configurations/atomic_numbers/slices/{co_id}'][()]],
+
+            #     positions=self.get_data(
+            #         'configurations/positions'
+            #     )[self[f'configurations/positions/slices/{co_id}'][()]],
+
+            #     cell=self.get_data(
+            #         'configurations/cells'
+            #     )[self[f'configurations/cells/slices/{co_id}'][()]],
+
+            #     pbc=self.get_data(
+            #         'configurations/pbcs'
+            #     )[self[f'configurations/pbcs/slices/{co_id}'][()]],
+            # )
+
+            # atoms.info[ATOMS_NAME_FIELD] = set(self.get_data(
+            #     'configurations/names'
+            # )[self[f'configurations/names/slices/{co_id}'][()]].asstr())
+
+            # atoms.info[ATOMS_LABELS_FIELD] = set(self.get_data(
+            #     'configurations/labels'
+            # )[self[f'configurations/labels/slices/{co_id}'][()]].asstr())
+
+            # atoms.info[ATOMS_LAST_MODIFIED_FIELD] = self.get_data(
+            #     'configurations/last_modified'
+            # )[self[f'configurations/last_modified/slices/{co_id}'][()]].asstr()[()]
 
             atoms = Atoms(
-                symbols=self.get_data(
-                    'configurations/atomic_numbers'
-                )[self[f'configurations/atomic_numbers/slices/{co_id}'][()]],
-
-                positions=self.get_data(
-                    'configurations/positions'
-                )[self[f'configurations/positions/slices/{co_id}'][()]],
-
-                cell=self.get_data(
-                    'configurations/cells'
-                )[self[f'configurations/cells/slices/{co_id}'][()]],
-
-                pbc=self.get_data(
-                    'configurations/pbcs'
-                )[self[f'configurations/pbcs/slices/{co_id}'][()]],
+                symbols=self[f'configurations/atomic_numbers/data/{co_id}'][()],
+                positions=self[f'configurations/positions/data/{co_id}'][()],
+                cell=self[f'configurations/cells/data/{co_id}'][()],
+                pbc=self[f'configurations/pbcs/data/{co_id}'][()],
             )
+
+            atoms.info[ATOMS_NAME_FIELD] = set(self[f'configurations/names/data/{co_id}'].asstr()[()])
+            atoms.info[ATOMS_LABELS_FIELD] = set(self[f'configurations/labels/data/{co_id}'].asstr()[()])
+            atoms.info[ATOMS_LAST_MODIFIED_FIELD] = self[f'configurations/last_modified/data/{co_id}'].asstr()[()]
 
             yield Configuration.from_ase(atoms)
 
@@ -1395,7 +1449,7 @@ class HDF5Backend(h5py.File):
         g.attrs['configuration_ids'] = ids
 
         now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-        self[f'configuration_sets/{cs_id}'].attrs['last_modified'] = now
+        g.attrs['last_modified'] = now
 
         return cs_id
 
