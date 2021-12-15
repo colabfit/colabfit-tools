@@ -961,7 +961,7 @@ class TestAddingConfigurations:
             images = returns[0]
             ids    = [_[0] for _ in database.insert_data(images)]
 
-            database.concatenate_configurations()
+            # database.concatenate_configurations()
 
             for atoms, img in zip(database.get_configurations(ids), images):
                 assert atoms == img
@@ -978,7 +978,7 @@ class TestAddingConfigurations:
                 _[0] for _ in database.insert_data(images, generator=True)
             ]
 
-            database.concatenate_configurations()
+            # database.concatenate_configurations()
 
             for atoms, img in zip(
                 database.get_configurations(ids, generator=True), images
@@ -1079,10 +1079,12 @@ class TestConfigurationSets:
 
             assert desc == 'A basic configuration set'
 
-            rebuilt_ids = database.get_data(
-                f'configuration_sets/{cs_id}/ids',
-                ravel=True, in_memory=True, as_str=True
-            ).tolist()
+            rebuilt_ids = database[f'configuration_sets/{cs_id}'].attrs['configuration_ids'][()].tolist()
+
+            # rebuilt_ids = database.get_data(
+            #     f'configuration_sets/{cs_id}/ids',
+            #     ravel=True, in_memory=True, as_str=True
+            # ).tolist()
 
             assert rebuilt_ids == ids
 

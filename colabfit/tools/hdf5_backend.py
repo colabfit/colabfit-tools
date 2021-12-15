@@ -426,7 +426,7 @@ class HDF5Backend(h5py.File):
             )
 
 
-    @profile
+    # @profile
     def _insert_data_gen(
         self, configurations,
         property_definitions, property_map, property_settings,
@@ -1130,10 +1130,12 @@ class HDF5Backend(h5py.File):
 
     def _get_configurations(self, ids, verbose=False):
         if ids == 'all':
-            ids = [
-                ds.asstr()[0]
-                for ds in self.get_data('configurations/ids').values()
-            ]
+            # ids = [
+            #     ds.asstr()[0]
+            #     for ds in self.get_data('configurations/ids').values()
+            # ]
+
+            ids = list(self['configurations/ids/data'].keys())
 
         configurations = []
 
