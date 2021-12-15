@@ -547,6 +547,9 @@ class Property(dict):
         # return True
 
 
+    def todict(self):
+        return self.edn
+
     def keys(self):
         """Overloaded dictionary function for getting the keys of :attr:`self.edn`"""
         return self.edn.keys()
