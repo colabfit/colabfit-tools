@@ -240,16 +240,16 @@ class HDF5Client(MongoClient):
         all_processed_fields = (process_species_list(c) for c in configurations)
 
         # Add all of the configurations into the Mongo server
-        unique_co_ids = list(set(co_ids))
-        for cid, config, processed_fields in tqdm(
+        for config, processed_fields in tqdm(
             zip(
-                unique_co_ids,
                 configurations,
                 all_processed_fields,
             ),
             desc='Adding configurations to Mongo',
             disable=not verbose
             ):
+
+            cid = str(hash(config))
 
             # NOTE: when using update(), you can't have strings that start with
             # the same words (e.g., 'elements', and 'elements_ratios')
