@@ -1,9 +1,13 @@
 import warnings
 import itertools
 import numpy as np
+from tqdm import tqdm
 from getpass import getpass
 # from montydb import MontyClient
 from pymongo import MongoClient
+# import plotly.graph_objects as go
+# from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt
 
 from colabfit import (
     _DATABASE_NAME,
@@ -15,6 +19,7 @@ from colabfit.tools.hdf5_backend import HDF5Backend
 from colabfit.tools.configuration import process_species_list
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
+from colabfit.tools.dataset import Dataset
 
 class HDF5Client(MongoClient):
     """
@@ -64,7 +69,7 @@ class HDF5Client(MongoClient):
         method
         decription
         labels
-        files   
+        files
             file_name
             file_contents
         relationships
@@ -119,33 +124,12 @@ class HDF5Client(MongoClient):
             properties
             configuration_sets
 
-    Brainstorming:
-
-    * The Mongo database will need wrappers to all of the Database functions
-        * insert_data
-        * concatenate_group
-    * In fact, shouldn't almost ALL of the Database functions be "hidden",
-      except for maybe:
-        * concatenate_group
-        * get_data
-
-    * The client should be able to "attach()" to multiple databases.
-        * In which case all of the Client functions would need to take in an
-        additional argument specifying _which_ database to operate on.
-
-    * Maybe let's start off with just one database?
-    * Because the Client should theoretically work on many databases, I think it
-      makes the most sense that a user ONLY be expected to use the Client
-      functions
-        * So all of the Database functions SHOULD be wrapped
-
-
     Attributes:
 
         database (HDF5Backend):
             The underlying HDF5 database
     """
-    def __init__(self, database_path, mode='r', **kwargs):
+    def __init__(self, database_path, mode='r', drop_mongo=False, **kwargs):
         """
         Args:
 
@@ -155,11 +139,8 @@ class HDF5Client(MongoClient):
             mode (str):
                 'r', 'w', 'a', or 'w+'
 
-            client_repo (str):
-                A directory path for on-disk storage of the Mongo/Monty
-                database, or the URI for an existing
-                client, or None. If None, the Mongo/Monty database is stored
-                entirely in memory.
+            drop_mongo (bool, default=False):
+                If True, deletes the existing Mongo database.
         """
         # if client_repo is None:
         #     client_repo = ":memory:"
@@ -173,6 +154,10 @@ class HDF5Client(MongoClient):
         super().__init__(
             'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
         )
+
+        if drop_mongo:
+            self.drop_database(_DATABASE_NAME)
+
         self.configurations         = self[_DATABASE_NAME][_CONFIGS_COLLECTION]
         self.properties             = self[_DATABASE_NAME][_PROPS_COLLECTION]
         # self.property_definitions   = self[_DATABASE_NAME][_PROPDEFS_COLLECTION]
@@ -190,7 +175,7 @@ class HDF5Client(MongoClient):
 
     def insert_data(
         self, configurations, property_map=None, property_settings=None,
-        generator=False
+        generator=False, verbose=True
         ):
         """
         A wrapper to Database.insert_data() which also adds important queryable
@@ -241,21 +226,25 @@ class HDF5Client(MongoClient):
             configurations=configurations,
             property_map=property_map,
             property_settings=property_settings,
-            generator=generator
+            generator=generator, verbose=verbose
         )
 
         # TODO: this kind of defeats the purpose of a generator version
         co_ids, pr_ids = list(zip(*ids))
 
+        all_processed_fields = (process_species_list(c) for c in configurations)
+
         # Add all of the configurations into the Mongo server
         unique_co_ids = list(set(co_ids))
-        for cid, config in zip(
-            unique_co_ids,
-            self.database.get_configurations(unique_co_ids, generator=generator)
+        for cid, config, processed_fields in tqdm(
+            zip(
+                unique_co_ids,
+                configurations,
+                all_processed_fields,
+            ),
+            desc='Adding configurations to Mongo',
+            disable=not verbose
             ):
-
-            atomic_symbols = config.get_chemical_symbols()
-            processed_fields = process_species_list(atomic_symbols)
 
             # NOTE: when using update(), you can't have strings that start with
             # the same words (e.g., 'elements', and 'elements_ratios')
@@ -294,7 +283,11 @@ class HDF5Client(MongoClient):
             )
 
         # Now add all of the properties
-        for pid in list(set(pr_ids)):
+        for pid in tqdm(
+            list(set(pr_ids)),
+            desc='Adding properties to Mongo',
+            disable=not verbose
+            ):
             if pid is None: continue
 
             prop_type = self.database[f'properties/types/data/{pid}'][()].decode()
@@ -342,7 +335,11 @@ class HDF5Client(MongoClient):
             )
 
         # Now update all of the relationships
-        for cid, pid in zip(co_ids, pr_ids):
+        for cid, pid in tqdm(
+            zip(co_ids, pr_ids),
+            desc='Adding CO<->PR relationships to Mongo',
+            disable=not verbose
+            ):
 
             # CO -> PR pointer
             self.configurations.update_one(
@@ -356,7 +353,7 @@ class HDF5Client(MongoClient):
                 {'$addToSet': {'relationships.configurations': cid}}
             )
 
-        return ids
+        return list(zip(co_ids, pr_ids))
 
 
     def insert_property_definition(self, definition):
@@ -526,14 +523,14 @@ class HDF5Client(MongoClient):
         )
 
 
-    def get_configuration(self, i):
+    def get_configuration(self, i, verbose=False):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
         return self.database.get_configuration(i)
 
 
-    def get_configurations(self, ids, generator=False):
+    def get_configurations(self, ids, generator=False, verbose=False):
         """
         A generator that returns in-memory Configuration objects one at a time
         by loading the atomic numbers, positions, cells, and PBCs.
@@ -550,13 +547,18 @@ class HDF5Client(MongoClient):
                 configurations can't all fit in memory at the same time. Default
                 is False.
 
+            verbose (bool):
+                If True, prints progress bar
+
         Returns:
 
             configurations (iterable):
                 A list or generator of the re-constructed configurations
         """
 
-        return self.database.get_configurations(ids=ids, generator=generator)
+        return self.database.get_configurations(
+            ids=ids, generator=generator, verbose=verbose
+        )
 
 
     def concatenate_configurations(self):
@@ -621,12 +623,10 @@ class HDF5Client(MongoClient):
 
     def get_configuration_set(self, cs_id, resync=False):
         """
-        This should return an actual CS object. What IS a ConfigurationSet?
-
-        Maybe this function could do the syncing?
+        Returns the configuration set with the given ID.
 
         Args:
-        
+
             cs_ids (str):
                 The ID of the configuration set to return
 
@@ -645,7 +645,7 @@ class HDF5Client(MongoClient):
         if resync:
             self.resync_configuration_set(cs_id)
 
-        cs_doc = self.configuration_sets.find({'_id': cs_id})
+        cs_doc = next(self.configuration_sets.find({'_id': cs_id}))
 
         return {
             'last_modified': cs_doc['last_modified'],
@@ -732,7 +732,7 @@ class HDF5Client(MongoClient):
 
         for csid in cs_ids:
             self.resync_configuration_set(csid)
-        
+
         for pid in pr_ids:
             self.resync_property(pid)
 
@@ -742,7 +742,7 @@ class HDF5Client(MongoClient):
                 k = 'configuration_labels'
             elif k == 'labels_counts':
                 k = 'configuration_labels_counts'
-            
+
             aggregated_info[k] = v
 
         for k,v in self.aggregate_property_info(pr_ids).items():
@@ -750,7 +750,7 @@ class HDF5Client(MongoClient):
                 k = 'property_labels'
             elif k == 'labels_counts':
                 k = 'property_labels_counts'
-            
+
             aggregated_info[k] = v
 
         self.datasets.update_one(
@@ -758,14 +758,14 @@ class HDF5Client(MongoClient):
             {'$set': {'aggregated_info': aggregated_info}}
         )
 
-    
+
     def aggregate_configuration_info(self, ids):
         """
         Gathers the following information from a collection of configurations:
 
         * :code:`nconfigurations`: the total number of configurations
         * :code:`nsites`: the total number of sites
-        * :code:`nelements`: the total number of unique element types 
+        * :code:`nelements`: the total number of unique element types
         * :code:`elements`: the element types
         * :code:`individual_elements_ratios`: a set of elements ratios generated
           by looping over each configuration, extracting its concentration of
@@ -940,7 +940,7 @@ class HDF5Client(MongoClient):
         if resync:
             for pid in pr_ids:
                 self.resync_property(pid)
-        
+
         aggregated_info = {
             'types': set(),
             'labels': [],
@@ -1049,7 +1049,7 @@ class HDF5Client(MongoClient):
         #         else:
         #             idx = aggregated_info['elements'].index(e)
         #             aggregated_info['total_elements_ratios'][idx] += er*agg['nsites']
-                    
+
         #             old = aggregated_info['individual_elements_ratios'][idx]
         #             new = old.union(set(agg['individual_elements_ratios'][idx]))
         #             aggregated_info['individual_elements_ratios'][idx] = new
@@ -1061,7 +1061,7 @@ class HDF5Client(MongoClient):
         #         else:
         #             idx = aggregated_info['labels'].index(l)
         #             aggregated_info['labels_counts'][idx] += 1
-                
+
 
         #     for n in ['reduced', 'anonymous', 'hill']:
         #         t = 'chemical_formula_'+n
@@ -1144,7 +1144,7 @@ class HDF5Client(MongoClient):
                 k = 'configuration_labels'
             elif k == 'labels_counts':
                 k = 'configuration_labels_counts'
-            
+
             aggregated_info[k] = v
 
         for k,v in self.aggregate_property_info(pr_ids, resync=resync).items():
@@ -1152,7 +1152,7 @@ class HDF5Client(MongoClient):
                 k = 'property_labels'
             elif k == 'labels_counts':
                 k = 'property_labels_counts'
-            
+
             aggregated_info[k] = v
 
         self.datasets.update_one(
@@ -1201,6 +1201,46 @@ class HDF5Client(MongoClient):
         return ds_id
 
 
+    def get_dataset(self, ds_id, resync=False):
+        """
+        Returns the dataset with the given ID.
+
+        Args:
+
+            ds_ids (str):
+                The ID of the dataset to return
+
+            resync (bool):
+                If True, re-aggregates the configuration set and property
+                information before returning. Default is False.
+
+        Returns:
+
+            A dictionary with two keys:
+                'last_modified': a datetime string
+                'dataset': the dataset object
+        """
+
+
+        if resync:
+            self.resync_dataset(ds_id)
+
+        ds_doc = next(self.datasets.find({'_id': ds_id}))
+
+        return {
+            'last_modified': ds_doc['last_modified'],
+            'dataset': Dataset(
+                configuration_set_ids=ds_doc['relationships']['configuration_sets'],
+                property_ids=ds_doc['relationships']['properties'],
+                authors=ds_doc['authors'],
+                links=ds_doc['links'],
+                description=ds_doc['description'],
+                aggregated_info=ds_doc['aggregated_info']
+            )
+        }
+
+
+
     def aggregate_dataset_info(self, ds_ids):
         """
         Aggregates information from a list of datasets.
@@ -1211,6 +1251,134 @@ class HDF5Client(MongoClient):
             * you need to find the overlap of COs and PRs.
         """
         pass
+
+
+    def apply_configuration_labels(self, query, labels, verbose=False):
+        """
+        Applies the given labels to all configurations that match the query.
+
+        Args:
+
+            query (dict):
+                A Mongo-style query for filtering the configurations. For
+                example: :code:`query = {'nsites': {'$lt': 100}}`.
+
+            labels (set or str):
+                A set of labels to apply to the matching configurations.
+
+            verbose (bool):
+                If True, prints progress bar.
+
+        Pseudocode:
+            * Get the IDs of the configurations that match the query
+            * Use updateMany to update the MongoDB
+            * Iterate over the HDF5 entries.
+        """
+
+        if isinstance(labels, str):
+            labels = {labels}
+
+        for cdoc in tqdm(
+            self.configurations.find(query, {'_id': 1}),
+            desc='Applying configuration labels',
+            disable=not verbose
+            ):
+            cid = cdoc['_id']
+
+            self.configurations.update_one(
+                {'_id': cid},
+                {'$addToSet': {'labels': {'$each': list(labels)}}}
+            )
+
+            self.database
+            data = self.database[f'configurations/labels/data/{cid}']
+            new_labels = set(data.asstr()[()]).union(labels)
+            data.resize(
+                (len(new_labels),) + data.shape[1:]
+            )
+            data[:] = list(new_labels)
+
+
+    def plot_histograms(self, fields=None, ids=None, xscale='linear', yscale='linear'):
+        """
+        Generates histograms of the given fields.
+
+        Args:
+
+            fields (list or str):
+                The names of the fields to plot
+
+            ids (list or str):
+                The IDs of the objects to plot the data for
+        """
+
+        if fields is None:
+            fields = self.property_fields
+        elif isinstance(fields, str):
+            fields = [fields]
+
+        nfields = len(fields)
+
+        nrows = max(1, int(np.ceil(nfields/3)))
+        ncols = max(3, nfields%3)
+
+        # fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(4*ncols, 2*nrows))
+        axes = np.atleast_2d(axes)
+
+        for i, prop in enumerate(fields):
+            data = self.get_data(prop, in_memory=True, ravel=True)
+
+            nbins = max(data.shape[0]//1000, 100)
+
+            c = i % 3
+            r = i // 3
+
+            ax = axes[r][c]
+            _ = ax.hist(data, bins=nbins)
+
+        #     if nrows > 1:
+        #         fig.add_trace(
+        #             go.Histogram(x=data, nbinsx=nbins),
+        #             row=r+1, col=c+1,
+        #         )
+        #     else:
+        #         fig.add_trace(
+        #             go.Histogram(x=data, nbinsx=nbins),
+        #             row=1, col=c+1
+        #         )
+
+        # fig.update_layout(showlegend=False)
+        # fig.update_xaxes(type=xscale)
+        # fig.update_yaxes(type=yscale)
+        plt.tight_layout()
+
+
+    def get_statistics(self, field):
+        """
+        Returns the average, standard deviation, minimum, maximum, and average
+        absolute value of all entries for the given field .
+
+        Args:
+
+            field (str):
+                The name of the field to get statistics for.
+
+        Returns:
+            results (dict)::
+                ..code-block::
+                    {'average': np.average(data), 'std': np.std(data), 'min': np.min(data), 'max': np.max(data), 'average_abs': np.average(np.abs(data))}
+        """
+
+        data = self.get_data(field, in_memory=True, ravel=True)
+
+        return {
+            'average': np.average(data),
+            'std': np.std(data),
+            'min': np.min(data),
+            'max': np.max(data),
+            'average_abs': np.average(np.abs(data)),
+        }
 
 
 def load_data(
