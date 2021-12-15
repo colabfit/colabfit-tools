@@ -141,6 +141,10 @@ class HDF5Client(MongoClient):
 
             drop_mongo (bool, default=False):
                 If True, deletes the existing Mongo database.
+
+            kwargs (dict):
+                All remaining keyword arguments will be passed to the
+                HDF5Backend constructor.
         """
         # if client_repo is None:
         #     client_repo = ":memory:"
@@ -165,11 +169,12 @@ class HDF5Client(MongoClient):
         self.configuration_sets     = self[_DATABASE_NAME][_CONFIGSETS_COLLECTION]
         self.datasets               = self[_DATABASE_NAME][_DATASETS_COLLECTION]
 
-        if 'driver' not in kwargs:
-            kwargs['driver'] = None
+        # if 'driver' not in kwargs:
+        #     kwargs['driver'] = None
 
         self.database = HDF5Backend(
-            name=database_path, mode=mode, driver=kwargs['driver']
+            name=database_path, mode=mode, #driver=kwargs['driver'],
+            **kwargs
         )
 
 

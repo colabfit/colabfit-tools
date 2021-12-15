@@ -426,6 +426,7 @@ class HDF5Backend(h5py.File):
             )
 
 
+    @profile
     def _insert_data_gen(
         self, configurations,
         property_definitions, property_map, property_settings,
@@ -452,6 +453,8 @@ class HDF5Backend(h5py.File):
             desc='Inserting data in HDF5 backend',
             disable=not verbose
             ):
+            if ai == 1000:
+                return
             config_id = str(hash(atoms))
 
             g = self['configurations/ids/data']
@@ -567,7 +570,6 @@ class HDF5Backend(h5py.File):
             returned_something = False
 
             for pname, pmap in property_map.items():
-
 
                 # Pre-check to avoid having to delete partially-added properties
                 missing_keys = expected_keys[pname] - available_keys
