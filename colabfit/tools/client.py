@@ -1,3 +1,4 @@
+import datetime
 import warnings
 import itertools
 import numpy as np
@@ -15,8 +16,8 @@ from colabfit import (
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
 )
-from colabfit.tools.hdf5_backend import HDF5Backend
-from colabfit.tools.configuration import process_species_list
+from colabfit.tools.configuration import Configuration, process_species_list
+from colabfit.tools.property import Property
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.dataset import Dataset
@@ -35,6 +36,7 @@ class HDF5Client(MongoClient):
 
     /configurations
         _id
+        configuration
         names
         labels
         elements
@@ -169,14 +171,6 @@ class HDF5Client(MongoClient):
         self.configuration_sets     = self[_DATABASE_NAME][_CONFIGSETS_COLLECTION]
         self.datasets               = self[_DATABASE_NAME][_DATASETS_COLLECTION]
 
-        # if 'driver' not in kwargs:
-        #     kwargs['driver'] = None
-
-        self.database = HDF5Backend(
-            name=database_path, mode=mode, #driver=kwargs['driver'],
-            **kwargs
-        )
-
 
     def insert_data(
         self, configurations, property_map=None, property_settings=None,
@@ -226,139 +220,151 @@ class HDF5Client(MongoClient):
                 "implemented yet; just using the in-memory version"
             )
 
-        # Tuples of (config_id, property_id) or (config_id, None)
-        ids = self.database.insert_data(
-            configurations=configurations,
-            property_map=property_map,
-            property_settings=property_settings,
-            generator=generator, verbose=verbose
-        )
+        if isinstance(configurations, Configuration):
+            configurations = [configurations]
 
-        # TODO: this kind of defeats the purpose of a generator version
-        co_ids, pr_ids = list(zip(*ids))
+        if property_map is None:
+            property_map = {}
 
-        all_processed_fields = (process_species_list(c) for c in configurations)
+        if property_settings is None:
+            property_settings = {}
+
+        for settings_id in property_settings.values():
+            if settings_id not in self['property_settings']:
+                raise MissingEntryError(
+                    "The property settings object with ID '{}' does"\
+                    " not exist in the database".format(settings_id)
+                )
+
+        property_definitions = {
+            pname: self.get_property_definition(pname)['definition']
+            for pname in property_map
+        }
+
+        ignore_keys = {
+            'property-id', 'property-title', 'property-description',
+            'last_modified', 'definition'
+        }
+
+        expected_keys = {
+            pname: set(
+                property_map[pname][f]['field']
+                for f in property_definitions[pname].keys() - ignore_keys
+                # property_definitions[pname].keys()
+            )
+            for pname in property_map
+        }
 
         # Add all of the configurations into the Mongo server
-        for config, processed_fields in tqdm(
-            zip(
-                configurations,
-                all_processed_fields,
-            ),
-            desc='Adding configurations to Mongo',
-            disable=not verbose
+        ai = 1
+        for atoms in tqdm(
+            configurations,
+            desc='Adding configurations to Database',
+            disable=not verbose,
             ):
 
-            cid = str(hash(config))
+            cid = str(hash(atoms))
 
-            # NOTE: when using update(), you can't have strings that start with
-            # the same words (e.g., 'elements', and 'elements_ratios')
-            # see here: https://stackoverflow.com/questions/50947772/updating-the-path-x-would-create-a-conflict-at-x
+            processed_fields = process_species_list(atoms)
 
             # Add if doesn't exist, else update (since last-modified changed)
+
             self.configurations.update_one(
                 {'_id': cid},  # filter
                 {  # update document
                     '$setOnInsert': {
                         '_id': cid,
+                        'configuration': atoms.todict(),
                         'elements': processed_fields['elements'],
                         'nelements': processed_fields['nelements'],
                         'elements_ratios': processed_fields['elements_ratios'],
                         'chemical_formula_reduced': processed_fields['chemical_formula_reduced'],
                         'chemical_formula_anonymous': processed_fields['chemical_formula_anonymous'],
-                        'chemical_formula_hill': config.get_chemical_formula(),
-                        'nsites': len(config),
-                        'dimension_types': config.get_pbc().astype(int).tolist(),
-                        'nperiodic_dimensions': int(sum(config.get_pbc())),
-                        'lattice_vectors': np.array(config.get_cell()).tolist(),
+                        'chemical_formula_hill': atoms.get_chemical_formula(),
+                        'nsites': len(atoms),
+                        'dimension_types': atoms.get_pbc().astype(int).tolist(),
+                        'nperiodic_dimensions': int(sum(atoms.get_pbc())),
+                        'lattice_vectors': np.array(atoms.get_cell()).tolist(),
                     },
                     '$set': {
-                        'last_modified': self.database[f'configurations/last_modified/data/{cid}'].asstr()[()],
+                        'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                     },
                     '$addToSet': {
                         'names': {
-                            '$each': list(config.info[ATOMS_NAME_FIELD])
+                            '$each': list(atoms.info[ATOMS_NAME_FIELD])
                         },
                         'labels': {
-                            '$each': list(config.info[ATOMS_LABELS_FIELD])
+                            '$each': list(atoms.info[ATOMS_LABELS_FIELD])
                         },
                     }
                 },
                 upsert=True,  # overwrite if exists already
             )
 
-        # Now add all of the properties
-        for pid in tqdm(
-            list(set(pr_ids)),
-            desc='Adding properties to Mongo',
-            disable=not verbose
-            ):
-            if pid is None: continue
+            available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
-            prop_type = self.database[f'properties/types/data/{pid}'][()].decode()
+            pid = None
 
-            settings_list = list(
-                self.property_settings.find(
-                    {'_id': property_settings[prop_type]}
+            for pname, pmap in property_map.items():
+
+                # Pre-check to avoid having to delete partially-added properties
+                missing_keys = expected_keys[pname] - available_keys
+                if missing_keys:
+                    warnings.warn(
+                        "Configuration {} is missing keys {} during "\
+                        "insert_data. Available keys: {}. Skipping".format(
+                            ai, missing_keys, available_keys
+                        )
+                    )
+                    continue
+
+                prop = Property.from_definition(
+                    pname, property_definitions[pname],
+                    atoms, pmap
                 )
-            )
 
-            if settings_list:  # settings list is non-empty; found the doc
-                labels = settings_list[0]['labels']
+                pid = str(hash(prop))
 
-                # PSO -> PR pointer
-                self.property_settings.update_one(
-                    {'_id': property_settings[prop_type]},
+                # Attach property settings, if any were given
+                settings_id = property_settings[pname] if pname in property_settings else None
+
+            # TODO: resync PSO labels to PR
+                self.properties.update_one(
+                    {'_id': pid},
                     {
-                        '$addToSet': {'relationships.properties': pid}
-                    }
-                )
-            else:
-                labels = []
-
-            self.properties.update_one(
-                {'_id': pid},
-                {
-                    '$addToSet': {
-                        # 'labels': {'$each': labels},
-                        # PR -> PSO pointer
-                        'relationships.property_settings': {
-                            # hack for handling possibly empty case
-                            '$each': [property_settings[prop_type]]
-                            if prop_type in property_settings else []
+                        '$addToSet': {
+                            # 'labels': {'$each': labels},
+                            # PR -> PSO pointer
+                            'relationships.property_settings': {
+                                # hack for handling possibly empty case
+                                '$each': [settings_id] if settings_id  else []
+                            },
+                            'relationships.configurations': cid,
+                        },
+                        '$setOnInsert': {
+                            '_id': pid,
+                            'type': pname,
+                        },
+                        '$set': {
+                            'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                         }
                     },
-                    '$setOnInsert': {
-                        '_id': pid,
-                        'type': prop_type,
-                    },
-                    '$set': {
-                        'last_modified': self.database[f'properties/last_modified/data/{pid}'].asstr()[()]
-                    }
-                },
-                upsert=True
-            )
+                    upsert=True
+                )
 
-        # Now update all of the relationships
-        for cid, pid in tqdm(
-            zip(co_ids, pr_ids),
-            desc='Adding CO<->PR relationships to Mongo',
-            disable=not verbose
-            ):
+                self.configurations.update_one(
+                    {'_id': cid},
+                    {'$addToSet': {'relationships.properties': pid}},
+                    upsert=True
+                )
 
-            # CO -> PR pointer
-            self.configurations.update_one(
-                {'_id': cid},
-                {'$addToSet': {'relationships.properties': pid}}
-            )
+                yield (cid, pid)
 
-            # PR -> CO pointer
-            self.properties.update_one(
-                {'_id': pid},
-                {'$addToSet': {'relationships.configurations': cid}}
-            )
+            if not pid:
+                # Only yield if something wasn't yielded earlier
+                yield (cid, pid)
 
-        return list(zip(co_ids, pr_ids))
+            ai += 1
 
 
     def insert_property_definition(self, definition):
@@ -393,22 +399,19 @@ class HDF5Client(MongoClient):
             }
         """
 
-        self.database.insert_property_definition(definition)
-
-        # self.property_definitions.update_one(
-        #     {'_id': definition['property-id']},
-        #     {
-        #         '$setOnInsert': {
-        #             '_id': definition['property-id'],
-        #             'definition': definition
-        #         }
-        #     }
-        # )
+        self.property_definitions.update_one(
+            {'_id': definition['property-id']},
+            {
+                '$setOnInsert': {
+                    '_id': definition['property-id'],
+                    'definition': definition
+                }
+            }
+        )
 
 
     def get_property_definition(self, name):
-        # return self.property_definitions.find({'_id': name})
-        return self.database.get_property_definition(name)
+        return self.property_definitions.find({'_id': name})
 
 
     def insert_property_settings(self, pso_object):
@@ -1483,3 +1486,11 @@ def load_data(
         verbose=verbose,
     )
 
+class ConcatenationException(Exception):
+    pass
+
+class InvalidGroupError(Exception):
+    pass
+
+class MissingEntryError(Exception):
+    pass

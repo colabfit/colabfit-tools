@@ -7,8 +7,13 @@
 import os
 import numpy as np
 
+from mpi4py import MPI
+
 from ase import Atoms
 
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 # # Initialize the `HDF5Client`
 
@@ -17,7 +22,9 @@ from ase import Atoms
 
 from colabfit.tools.client import HDF5Client
 
-client = HDF5Client('qm9_example.hdf5', 'w', driver='core', drop_mongo=True,
+client = HDF5Client('profiling_qm9.hdf5', 'w', driver='mpio',
+        comm=comm,
+        drop_mongo=True,
         libver='latest')
 
 
