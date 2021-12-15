@@ -4,14 +4,12 @@ import itertools
 import numpy as np
 from tqdm import tqdm
 from getpass import getpass
-# from montydb import MontyClient
 from pymongo import MongoClient
 # import plotly.graph_objects as go
 # from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 
 from colabfit import (
-    _DATABASE_NAME,
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
@@ -22,21 +20,19 @@ from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.dataset import Dataset
 
-class HDF5Client(MongoClient):
+class MongoDatabase(MongoClient):
     """
-    A HDF5Client serves as an interface to the underlying HDF5 database, and
+    A MongoDatabase stores all of the data in Mongo documents, and
     provides additinal functionality like filtering and optimized queries.
-
-    The HDF5Client is a client to a Mongo/Monty database which stores
-    pointers to the contents of the HDF5 database. This allows the data to be
-    stored in an efficient format for I/O, while still providing the advanced
-    querying functionality of a Mongo database.
 
     The Mongo database has the following structure
 
     /configurations
         _id
-        configuration
+        atomic_numbers
+        positions
+        cell
+        pbc
         names
         labels
         elements
@@ -55,16 +51,17 @@ class HDF5Client(MongoClient):
             configuration_sets
 
     /properties
-        _id
-        type
-        last_modified
-        aggregated_info
-            (from property settings)
-            labels
-            labels_counts
-        relationships
-            property_settings
-            configurations
+        /property_name_1
+            _id
+            each field in the property definition
+            last_modified
+            aggregated_info
+                (from property settings)
+                labels
+                labels_counts
+            relationships
+                property_settings
+                configurations
 
     /property_settings
         _id
@@ -128,29 +125,39 @@ class HDF5Client(MongoClient):
 
     Attributes:
 
-        database (HDF5Backend):
-            The underlying HDF5 database
+        database_name (str):
+            The name of the Mongo database
+
+        configurations (Collection):
+            A Mongo collection of configuration documents
+
+        properties (Collection):
+            A Mongo collection of property documents
+
+        property_definitions (Collection):
+            A Mongo collection of property definitions
+
+        property_settings (Collection):
+            A Mongo collection of property setting documents
+
+        configuration_sets (Collection):
+            A Mongo collection of configuration set documents
+
+        datasets (Collection):
+            A Mongo collection of dataset documents
+
     """
-    def __init__(self, database_path, mode='r', drop_mongo=False, **kwargs):
+    def __init__(self, database_name, drop=False):
         """
         Args:
 
-            database_path (str):
-                The path to the database
+            database_name (str):
+                The name of the database
 
-            mode (str):
-                'r', 'w', 'a', or 'w+'
-
-            drop_mongo (bool, default=False):
+            drop (bool, default=False):
                 If True, deletes the existing Mongo database.
 
-            kwargs (dict):
-                All remaining keyword arguments will be passed to the
-                HDF5Backend constructor.
         """
-        # if client_repo is None:
-        #     client_repo = ":memory:"
-
         # super().__init__(repository=client_repo, **kwargs)
         # user = input("mongodb username: ")
         # pwrd = getpass("mongodb password: ")
@@ -161,15 +168,17 @@ class HDF5Client(MongoClient):
             'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
         )
 
-        if drop_mongo:
-            self.drop_database(_DATABASE_NAME)
+        self.database_name = database_name
 
-        self.configurations         = self[_DATABASE_NAME][_CONFIGS_COLLECTION]
-        self.properties             = self[_DATABASE_NAME][_PROPS_COLLECTION]
-        # self.property_definitions   = self[_DATABASE_NAME][_PROPDEFS_COLLECTION]
-        self.property_settings      = self[_DATABASE_NAME][_PROPSETTINGS_COLLECTION]
-        self.configuration_sets     = self[_DATABASE_NAME][_CONFIGSETS_COLLECTION]
-        self.datasets               = self[_DATABASE_NAME][_DATASETS_COLLECTION]
+        if drop:
+            self.drop_database(database_name)
+
+        self.configurations         = self[database_name][_CONFIGS_COLLECTION]
+        self.properties             = self[database_name][_PROPS_COLLECTION]
+        self.property_definitions   = self[database_name][_PROPDEFS_COLLECTION]
+        self.property_settings      = self[database_name][_PROPSETTINGS_COLLECTION]
+        self.configuration_sets     = self[database_name][_CONFIGSETS_COLLECTION]
+        self.datasets               = self[database_name][_DATASETS_COLLECTION]
 
 
     def insert_data(
@@ -207,18 +216,41 @@ class HDF5Client(MongoClient):
                 the database using
                 :meth:`~colabfit.tools.database.Database.insert_property_settings`
 
-            generator (bool):
-                If true, this function becomes a generator which only adds the
-                configurations one at a time. This is useful if the
-                configurations can't all fit in memory at the same time. Default
-                is False.
+            generator (bool, default=False):
+                If True, returns a generator of the results; otherwise returns
+                a list.
+
+            verbose (bool, default=False):
+                If True, prints a progress bar
+
+        Returns:
+
+            ids (list):
+                A list of (config_id, property_id) tuples of the inserted data.
+                If no properties were inserted, then property_id will be None.
+
         """
 
         if generator:
-            warnings.warn(
-                "The generator version of insert_data has not been "\
-                "implemented yet; just using the in-memory version"
+            return self._insert_data(
+                configurations=configurations,
+                property_map=property_map,
+                property_settings=property_settings,
+                verbose=verbose
             )
+        else:
+            return list(self._insert_data(
+                configurations=configurations,
+                property_map=property_map,
+                property_settings=property_settings,
+                verbose=verbose
+            ))
+
+
+    def _insert_data(
+        self, configurations, property_map=None, property_settings=None,
+        verbose=True
+        ):
 
         if isinstance(configurations, Configuration):
             configurations = [configurations]
@@ -230,7 +262,7 @@ class HDF5Client(MongoClient):
             property_settings = {}
 
         for settings_id in property_settings.values():
-            if settings_id not in self['property_settings']:
+            if not self.property_settings.count_documents({'_id': settings_id}):
                 raise MissingEntryError(
                     "The property settings object with ID '{}' does"\
                     " not exist in the database".format(settings_id)
@@ -274,7 +306,10 @@ class HDF5Client(MongoClient):
                 {  # update document
                     '$setOnInsert': {
                         '_id': cid,
-                        'configuration': atoms.todict(),
+                        'atomic_numbers': atoms.get_atomic_numbers().tolist(),
+                        'positions': atoms.get_positions().tolist(),
+                        'cell': np.array(atoms.get_cell()).tolist(),
+                        'pbc': atoms.get_pbc().astype(int).tolist(),
                         'elements': processed_fields['elements'],
                         'nelements': processed_fields['nelements'],
                         'elements_ratios': processed_fields['elements_ratios'],
@@ -328,8 +363,27 @@ class HDF5Client(MongoClient):
                 # Attach property settings, if any were given
                 settings_id = property_settings[pname] if pname in property_settings else None
 
+                if settings_id:
+                    self.property_settings.update_one(
+                        {'_id': settings_id},
+                        {'$addToSet': {'relationships.properties': pid}}
+                    )
+
             # TODO: resync PSO labels to PR
-                self.properties.update_one(
+                setOnInsert = {}
+                for k in property_map[pname]:
+                    setOnInsert[k] = {
+                        'source-value': np.atleast_1d(
+                            prop[k]['source-value']
+                        ).tolist()
+                    }
+
+                    if 'source-unit' in prop[k]:
+                        setOnInsert[k]['source-unit'] = prop[k]['source-unit']
+
+                setOnInsert['_id'] = pid
+
+                self.properties[pname].update_one(
                     {'_id': pid},
                     {
                         '$addToSet': {
@@ -341,10 +395,7 @@ class HDF5Client(MongoClient):
                             },
                             'relationships.configurations': cid,
                         },
-                        '$setOnInsert': {
-                            '_id': pid,
-                            'type': pname,
-                        },
+                        '$setOnInsert': setOnInsert,
                         '$set': {
                             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                         }
@@ -352,6 +403,7 @@ class HDF5Client(MongoClient):
                     upsert=True
                 )
 
+                # Add the backwards arrow
                 self.configurations.update_one(
                     {'_id': cid},
                     {'$addToSet': {'relationships.properties': pid}},
@@ -406,12 +458,13 @@ class HDF5Client(MongoClient):
                     '_id': definition['property-id'],
                     'definition': definition
                 }
-            }
+            },
+            upsert=True
         )
 
 
     def get_property_definition(self, name):
-        return self.property_definitions.find({'_id': name})
+        return next(self.property_definitions.find({'_id': name}))
 
 
     def insert_property_settings(self, pso_object):
@@ -433,7 +486,7 @@ class HDF5Client(MongoClient):
                 of the object.
         """
 
-        pso_id = self.database.insert_property_settings(pso_object)
+        pso_id = str(hash(pso_object))
 
         self.property_settings.update_one(
             {'_id': pso_id},
@@ -460,57 +513,41 @@ class HDF5Client(MongoClient):
 
 
     def get_property_settings(self, pso_id):
-        """
-        Returns:
-            A dictionary with two keys:
-                'last_modified': a datetime string
-                'settings': the PropertySettings object with the given ID
-        """
-        return self.database.get_property_settings(pso_id=pso_id)
-
-
-    def concatenate_group(self, group, chunks=None):
-        """
-        Attempt to concatenate all of the datasets in a group. Raise an
-        exception if the datasets in the group have incompatible shapes.
-
-        Args:
-
-            group_name (str or group):
-                The name of a group in the database, or the group object
-
-            chunks (tuple):
-                An optional argument describing how to chunk the concatenated
-                array. Chunk shapes should be chosed based on the desired access
-                pattern. See `chunked storage <https://docs.h5py.org/en/stable/high/dataset.html#chunked-storage>_
-                in the h5py documentation for more details.
-        """
-
-        self.database.concatenate_group(group=group, chunks=chunks)
+        return next(self.property_settings.find({'_id': pso_id}))
 
 
     def get_data(
-        self, group,
+        self, collection_name, keys,
         ids=None,
-        in_memory=False,
-        concatenate=False, ravel=False, as_str=False
+        concatenate=False, ravel=False
         ):
         """
-        Returns all of the datasets in the 'data' sub-group of
-        :code:`<group_name>`.
+        Queries the database and returns the fields specified by `keys`. Returns
+        the results in memory.
+
+        Example:
+
+        ..code-block:: python
+
+            database.get_data(
+                collection_name='properties/property_name_1',
+                keys=['energy', 'forces'],
+            )
 
         Args:
 
-            group_name (str or group):
-                The name of a group in the database, or the group object
+            collection_name (str):
+                The name of a collection in the database. Can include nested
+                collections using path-like strings (e.g.,
+                'properties/property_name_1').
+
+            keys (list or str):
+                A keys for indexing the returned objects from
+                the Mongo cursor.
 
             ids (list):
                 The list of IDs to return the data for. If None, returns the
-                data for the entire group.
-
-            in_memory (bool):
-                If True, converts each of the datasets to a Numpy array before
-                returning.
+                data for the entire collection.
 
             concatenate (bool):
                 If True, concatenates the data before returning. Only available
@@ -520,22 +557,56 @@ class HDF5Client(MongoClient):
                 If True, concatenates and ravels the data before returning. Only
                 available if :code:`in_memory==True`.
 
-            as_str (bool):
-                If True, tries to call :code:`asstr()` to convert from an HDF5
-                bytes array to an array of strings
-        """
+        Returns:
 
-        return self.database.get_data(
-            group=group, ids=ids, in_memory=in_memory, concatenate=concatenate,
-            ravel=ravel, as_str=as_str
-        )
+            data (dict):
+                key = k for k in keys. val = in-memory data
+        """
+        if ids is None:
+            query = {}
+        else:
+            if isinstance(ids, str):
+                ids = [ids]
+
+            query = {'_id': {'$in': ids}}
+
+        if isinstance(keys, str):
+            keys = [keys]
+
+        collection = self[self.database_name]
+        for cname in collection_name.split('/'):
+            collection = collection[cname]
+
+        cursor = collection.find(query, {k: 1 for k in keys})
+
+        data = {k: [] for k in keys}
+
+        for doc in cursor:
+            for k in keys:
+                if isinstance(doc[k], dict):
+                    data[k].append(doc[k]['source-value'])
+                else:
+                    data[k].append(doc[k])
+
+        if concatenate or ravel:
+            for k,v in data.items():
+                data[k] = np.concatenate(v)
+
+        if ravel:
+            for k,v in data.items():
+                data[k] = v.ravel()
+
+        if len(data) == 1:
+            return data[keys[0]]
+        else:
+            return data
 
 
     def get_configuration(self, i, verbose=False):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
-        return self.database.get_configuration(i)
+        return self.get_configurations([i])
 
 
     def get_configurations(self, ids, generator=False, verbose=False):
@@ -564,9 +635,15 @@ class HDF5Client(MongoClient):
                 A list or generator of the re-constructed configurations
         """
 
-        return self.database.get_configurations(
-            ids=ids, generator=generator, verbose=verbose
+        return (
+            Configuration(
+                symbols=co_doc['atomic_numbers'],
+                positions=co_doc['positions'],
+                cell=co_doc['cell'],
+                pbc=co_doc['pbc'],
+            ) for co_doc in self.configurations.find({'_id': {'$in': ids}})
         )
+
 
 
     def concatenate_configurations(self):

@@ -65,48 +65,6 @@ def build_n(n):
 
 class TestAddingConfigurations:
 
-    def test_adding_configurations_no_properties(self):
-        with tempfile.TemporaryFile() as tmpfile:
-
-            database = HDF5Backend(tmpfile, mode='w')
-
-            returns = build_n(10)
-
-            images              = returns[0]
-            energies            = returns[1]
-            stress              = returns[2]
-            names               = returns[3]
-            nd_same_shape       = returns[4]
-            nd_diff_shape       = returns[5]
-            forces              = returns[6]
-            nd_same_shape_arr   = returns[7]
-            nd_diff_shape_arr   = returns[8]
-
-            database.insert_data(images)
-
-            database.concatenate_group('configurations/atomic_numbers')
-            database.concatenate_group('configurations/positions')
-            database.concatenate_group('configurations/cells')
-            database.concatenate_group('configurations/pbcs')
-
-            np.testing.assert_allclose(
-                database.get_data('configurations/atomic_numbers'),
-                np.concatenate([_.get_atomic_numbers() for _ in images])
-            )
-            np.testing.assert_allclose(
-                database.get_data('configurations/positions'),
-                np.concatenate([_.get_positions() for _ in images])
-            )
-            np.testing.assert_allclose(
-                database.get_data('configurations/cells'),
-                np.concatenate([_.get_cell() for _ in images])
-            )
-            np.testing.assert_allclose(
-                database.get_data('configurations/pbcs'),
-                np.concatenate([_.get_pbc() for _ in images]).astype(int)
-            )
-
-
     def test_add_then_update_nochange_config(self):
         with tempfile.TemporaryFile() as tmpfile:
 
