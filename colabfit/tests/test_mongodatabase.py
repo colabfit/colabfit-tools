@@ -1,3 +1,4 @@
+import pytest
 import tempfile
 import numpy as np
 np.random.seed(42)
@@ -781,3 +782,80 @@ class TestMongoDatabase:
             assert set(agg['property_labels']) == {'pso_label1', 'pso_label2'}
 
             database.drop_database(database.database_name)
+
+
+class TestPropertyDefinitionsAndSettings:
+    database_name = 'colabfit_test'
+
+    def test_invalid_definition(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = MongoDatabase(self.database_name, drop=True)
+
+            property_definition = {
+                'property-id': 'this should throw an error',
+            }
+
+            with pytest.raises(Exception):
+                database.insert_property_definition(property_definition)
+
+
+    def test_definition_setter_getter(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = MongoDatabase(self.database_name, drop=True)
+
+            property_definition = {
+                    'property-id': 'default',
+                    'property-title': 'A default property used for testing',
+                    'property-description': 'A description of the property',
+                    'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                    'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+                    'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                    'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                    'nd-diff-shape': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                    'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                    'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                    'nd-diff-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+                }
+
+            database.insert_property_definition(property_definition)
+
+            assert database.get_property_definition('default')['definition'] == property_definition
+
+
+    def test_settings_setter_getter(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = MongoDatabase(self.database_name, drop=True)
+
+            dummy_file_contents = 'this is a dummy file\nwith nonsense contents'
+
+            pso = PropertySettings(
+                method='VASP',
+                description='A basic test calculation',
+                files=[('dummy_name', dummy_file_contents)],
+            )
+
+            pso_id = database.insert_property_settings(pso)
+
+            rebuilt_pso = database.get_property_settings(pso_id)
+
+            assert pso == rebuilt_pso
+
+
+    def test_settings_duplicate(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = MongoDatabase(self.database_name, drop=True)
+
+            dummy_file_contents = 'this is a dummy file\nwith nonsense contents'
+
+            pso = PropertySettings(
+                method='VASP',
+                description='A basic test calculation',
+                files=[('dummy_name', dummy_file_contents)],
+            )
+
+            pso_id = database.insert_property_settings(pso)
+            pso_id = database.insert_property_settings(pso)
+
+            rebuilt_pso = database.get_property_settings(pso_id)
+
+            assert pso == rebuilt_pso
