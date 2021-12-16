@@ -488,6 +488,7 @@ class MongoDatabase(MongoClient):
                     'definition': definition
                 }
             },
+            upsert=True
         )
 
 
@@ -652,7 +653,7 @@ class MongoDatabase(MongoClient):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
-        return self.get_configurations([i])
+        return self.get_configurations([i])[0]
 
 
     def get_configurations(self, ids, generator=False, verbose=False):
@@ -847,7 +848,8 @@ class MongoDatabase(MongoClient):
 
         self.configuration_sets.update_one(
             {'_id': cs_id},
-            {'$set': {'aggregated_info': aggregated_info}}
+            {'$set': {'aggregated_info': aggregated_info}},
+            upsert=True,
         )
 
 
@@ -871,7 +873,8 @@ class MongoDatabase(MongoClient):
 
         self.properties.update_one(
             {'_id': pid},
-            {'$set': {'aggregated_info': aggregated_info}}
+            {'$set': {'aggregated_info': aggregated_info}},
+            upsert=True
         )
 
 
@@ -920,7 +923,8 @@ class MongoDatabase(MongoClient):
 
         self.datasets.update_one(
             {'_id': ds_id},
-            {'$set': {'aggregated_info': aggregated_info}}
+            {'$set': {'aggregated_info': aggregated_info}},
+            upsert=True
         )
 
 

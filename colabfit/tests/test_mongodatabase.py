@@ -859,3 +859,112 @@ class TestPropertyDefinitionsAndSettings:
             rebuilt_pso = database.get_property_settings(pso_id)
 
             assert pso == rebuilt_pso
+
+class TestConfigurationSets:
+
+    database_name = 'colabfit_test'
+
+    def test_insert_cs(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = MongoDatabase(self.database_name, drop=True)
+
+            images = build_n(10)[0]
+
+            ids = [_[0] for _ in database.insert_data(images)]
+
+            cs_id = database.insert_configuration_set(
+                ids, description='A basic configuration set'
+            )
+
+            desc = next(database.configuration_sets.find({'_id': cs_id}))['description']
+
+            assert desc == 'A basic configuration set'
+
+            rebuilt_ids = next(database.configuration_sets.find({'_id': cs_id}))['relationships']['configurations']
+
+            # rebuilt_ids = database.get_data(
+            #     f'configuration_sets/{cs_id}/ids',
+            #     ravel=True, in_memory=True, as_str=True
+            # ).tolist()
+
+            assert rebuilt_ids == ids
+
+            for img in images:
+                img2 = database.get_configuration(str(hash(img)))
+
+                assert img == img2
+
+class TestDatasets:
+    database_name = 'colabfit_test'
+
+    def test_insert_ds(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = MongoDatabase(self.database_name, drop=True)
+
+            images = build_n(10)[0]
+
+            database.insert_property_definition(
+                {
+                    'property-id': 'default',
+                    'property-title': 'A default property used for testing',
+                    'property-description': 'A description of the property',
+                    'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                    'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+                    'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                    'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                    'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                    'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+                }
+            )
+
+            property_map = {
+                'default': {
+                    'energy': {'field': 'energy', 'units': 'eV'},
+                    'stress': {'field': 'stress', 'units': 'GPa'},
+                    'name': {'field': 'name', 'units': None},
+                    'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                    'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                    'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                    'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                    'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                }
+            }
+
+            ids = database.insert_data(
+                images, property_map=property_map
+            )
+
+            co_ids1, pr_ids1 = list(zip(*ids))
+
+            cs_id1 = database.insert_configuration_set(
+                co_ids1, description='A basic configuration set'
+            )
+
+            images = build_n(10)[0]
+
+            for img in images:
+                img.info['energy'] += 100000
+
+            ids = database.insert_data(
+                images, property_map=property_map
+            )
+
+            co_ids2, pr_ids2 = list(zip(*ids))
+
+            cs_id2 = database.insert_configuration_set(
+                co_ids2, description='A basic configuration set'
+            )
+
+            ds_id = database.insert_dataset(
+                cs_ids=[cs_id1, cs_id2],
+                pr_ids=pr_ids1+pr_ids2,
+                authors='colabfit',
+                links='https://colabfit.openkim.org/',
+                description='An example dataset',
+                resync=True
+            )
+
+            ds_doc = next(database.datasets.find({'_id': ds_id}))
+            assert ds_doc['authors'] == ['colabfit']
