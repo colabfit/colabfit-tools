@@ -3,12 +3,16 @@ import warnings
 import itertools
 import numpy as np
 from tqdm import tqdm
+from copy import deepcopy
 from hashlib import sha512
 from getpass import getpass
 from pymongo import MongoClient
 # import plotly.graph_objects as go
 # from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
+
+from kim_property.definition import check_property_definition
+from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 from colabfit import (
     HASH_SHIFT,
@@ -21,6 +25,7 @@ from colabfit.tools.property import Property
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.dataset import Dataset
+from colabfit.tools.property_settings import PropertySettings
 
 class MongoDatabase(MongoClient):
     """
@@ -455,6 +460,26 @@ class MongoDatabase(MongoClient):
             }
         """
 
+        if self.property_definitions.count_documents(
+            {'_id': definition['property-id']}
+            ):
+            raise DuplicateDefinitionError(
+                "Property definition with name '{}' already exists".format(
+                    definition['property-id']
+                )
+            )
+
+        dummy_dict = deepcopy(definition)
+
+        # Spoof if necessary
+        if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
+            # Invalid ID. Try spoofing it
+            dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
+            dummy_dict['property-id'] += definition['property-id']
+            warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+
+        check_property_definition(dummy_dict)
+
         self.property_definitions.update_one(
             {'_id': definition['property-id']},
             {
@@ -463,7 +488,6 @@ class MongoDatabase(MongoClient):
                     'definition': definition
                 }
             },
-            upsert=True
         )
 
 
@@ -517,7 +541,22 @@ class MongoDatabase(MongoClient):
 
 
     def get_property_settings(self, pso_id):
-        return next(self.property_settings.find({'_id': pso_id}))
+        pso_doc = next(self.property_settings.find({'_id': pso_id}))
+                #   'files': [
+                #         {
+                #             'file_name': ftup[0],
+                #             'file_contents': ftup[1],
+                #         } for ftup in pso_object.files
+                #     ],
+        return PropertySettings(
+                method=pso_doc['method'],
+                description=pso_doc['description'],
+                labels=set(pso_doc['labels']),
+                files=[
+                    (d['file_name'], d['file_contents'])
+                    for d in pso_doc['files']
+                ]
+            )
 
 
     def get_data(
@@ -1628,4 +1667,7 @@ class InvalidGroupError(Exception):
     pass
 
 class MissingEntryError(Exception):
+    pass
+
+class DuplicateDefinitionError(Exception):
     pass
