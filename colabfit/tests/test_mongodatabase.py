@@ -156,7 +156,7 @@ class TestMongoDatabase:
                 assert n[0] == 'another_label'
                 assert n[1] == 'another_label2'
 
-            next(database.get_configuration(ids[0][0]))
+            database.get_configuration(ids[0][0])
 
             np.testing.assert_allclose(
                 database.get_data('configurations', 'atomic_numbers', concatenate=True),
@@ -236,33 +236,33 @@ class TestMongoDatabase:
             )))
 
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'energy', concatenate=True),
+                database.get_data('properties', 'default.energy', concatenate=True),
                 np.hstack(energies)
             )
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'stress', concatenate=True),
+                database.get_data('properties', 'default.stress', concatenate=True),
                 np.hstack(stress)
             )
-            decoded_names = database.get_data('properties/default', 'name', concatenate=True)
+            decoded_names = database.get_data('properties', 'default.name', concatenate=True)
             decoded_names = decoded_names.tolist()
             assert decoded_names == names
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'nd-same-shape', concatenate=True),
+                database.get_data('properties', 'default.nd-same-shape', concatenate=True),
                 np.concatenate(nd_same_shape)
             )
-            data = database.get_data('properties/default', 'nd-diff-shapes')
+            data = database.get_data('properties', 'default.nd-diff-shapes')
             for a1, a2 in zip(data, nd_diff_shape):
                 np.testing.assert_allclose(a1, a2)
 
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'forces', concatenate=True),
+                database.get_data('properties', 'default.forces', concatenate=True),
                 np.concatenate(forces)
             )
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'nd-same-shape-arr', concatenate=True),
+                database.get_data('properties', 'default.nd-same-shape-arr', concatenate=True),
                 np.concatenate(nd_same_shape_arr)
             )
-            data = database.get_data('properties/default', 'nd-diff-shapes-arr')
+            data = database.get_data('properties', 'default.nd-diff-shapes-arr')
             for a1, a2 in zip(data, nd_diff_shape_arr):
                 np.testing.assert_allclose(a1, a2)
 
@@ -363,7 +363,7 @@ class TestMongoDatabase:
             )
 
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'energy', concatenate=True),
+                database.get_data('properties', 'default.energy', concatenate=True),
                 np.concatenate([
                     np.hstack(energies),
                     np.hstack(energies)+100000,
@@ -371,30 +371,30 @@ class TestMongoDatabase:
                 ])
             )
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'stress', concatenate=True),
+                database.get_data('properties', 'default.stress', concatenate=True),
                 np.concatenate([
                     np.hstack(stress),
                     np.hstack(stress),
                     np.hstack(stress),
                 ])
             )
-            decoded_names = database.get_data('properties/default', 'name', concatenate=True)
+            decoded_names = database.get_data('properties', 'default.name', concatenate=True)
             decoded_names = decoded_names.tolist()
             assert decoded_names == names*3
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'nd-same-shape', concatenate=True),
+                database.get_data('properties', 'default.nd-same-shape', concatenate=True),
                 np.concatenate([
                     np.concatenate(nd_same_shape),
                     np.concatenate(nd_same_shape),
                     np.concatenate(nd_same_shape),
                 ])
             )
-            data = database.get_data('properties/default', 'nd-diff-shapes')
+            data = database.get_data('properties', 'default.nd-diff-shapes')
             for a1, a2 in zip(data, nd_diff_shape*3):
                 np.testing.assert_allclose(a1, a2)
 
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'forces', concatenate=True),
+                database.get_data('properties', 'default.forces', concatenate=True),
                 np.concatenate([
                     np.concatenate(forces),
                     np.concatenate(forces),
@@ -402,14 +402,14 @@ class TestMongoDatabase:
                 ])
             )
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'nd-same-shape-arr', concatenate=True),
+                database.get_data('properties', 'default.nd-same-shape-arr', concatenate=True),
                 np.concatenate([
                     np.concatenate(nd_same_shape_arr),
                     np.concatenate(nd_same_shape_arr),
                     np.concatenate(nd_same_shape_arr),
                 ])
             )
-            data = database.get_data('properties/default', 'nd-diff-shapes-arr')
+            data = database.get_data('properties', 'default.nd-diff-shapes-arr')
             for a1, a2 in zip(data, nd_diff_shape_arr*3):
                 np.testing.assert_allclose(a1, a2)
 
@@ -481,35 +481,51 @@ class TestMongoDatabase:
             )
 
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'energy', concatenate=True),
+                database.get_data('properties', 'default.energy', concatenate=True),
                 np.hstack(energies)
             )
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'stress', concatenate=True),
+                database.get_data('properties', 'default.stress', concatenate=True),
                 np.hstack(stress)
             )
-            decoded_names =  database.get_data('properties/default', 'name', concatenate=True)
+            decoded_names =  database.get_data('properties', 'default.name', concatenate=True)
             decoded_names = decoded_names.tolist()
             assert decoded_names == names
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'nd-same-shape', concatenate=True),
+                database.get_data('properties', 'default.nd-same-shape', concatenate=True),
                 np.concatenate(nd_same_shape)
             )
-            data = database.get_data('properties/default', 'nd-diff-shapes')
+            data = database.get_data('properties', 'default.nd-diff-shapes')
             for a1, a2 in zip(data, nd_diff_shape):
                 np.testing.assert_allclose(a1, a2)
 
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'forces', concatenate=True),
+                database.get_data('properties', 'default.forces', concatenate=True),
                 np.concatenate(forces)
             )
             np.testing.assert_allclose(
-                database.get_data('properties/default', 'nd-same-shape-arr', concatenate=True),
+                database.get_data('properties', 'default.nd-same-shape-arr', concatenate=True),
                 np.concatenate(nd_same_shape_arr)
             )
-            data = database.get_data('properties/default', 'nd-diff-shapes-arr')
+            data = database.get_data('properties', 'default.nd-diff-shapes-arr')
             for a1, a2 in zip(data, nd_diff_shape_arr):
                 np.testing.assert_allclose(a1, a2)
+
+
+    def test_get_configurations(self):
+
+        with tempfile.TemporaryFile() as tmpfile:
+            database = MongoDatabase(self.database_name, drop=True)
+
+            images = build_n(10)[0]
+
+            database.insert_data(images)
+
+            count = 0
+            for atoms, img in zip(database.get_configurations('all'), images):
+                assert atoms == img
+                count += 1
+            assert count == 10
 
 
     def test_insert_pso_definition_data(self):
@@ -571,10 +587,10 @@ class TestMongoDatabase:
 
             for i, ((cid, pid), config) in enumerate(zip(ids, images)):
                 config_doc = next(database.configurations.find({'_id': cid}))
-                prop_doc   = next(database.properties['default'].find({'_id': pid}))
+                prop_doc   = next(database.properties.find({'_id': pid}))
 
                 pn = database.get_data(
-                    'properties/default', 'forces', ids=[pid], concatenate=True
+                    'properties', 'default.forces', ids=[pid], concatenate=True
                 ).shape[0]
 
                 na = len(config)
