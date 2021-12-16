@@ -3,6 +3,7 @@ import warnings
 import itertools
 import numpy as np
 from tqdm import tqdm
+from hashlib import sha512
 from getpass import getpass
 from pymongo import MongoClient
 # import plotly.graph_objects as go
@@ -10,6 +11,7 @@ from pymongo import MongoClient
 import matplotlib.pyplot as plt
 
 from colabfit import (
+    HASH_SHIFT,
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
@@ -51,17 +53,17 @@ class MongoDatabase(MongoClient):
             configuration_sets
 
     /properties
-        /property_name_1
-            _id
+        _id
+        property_name
             each field in the property definition
-            last_modified
-            aggregated_info
-                (from property settings)
-                labels
-                labels_counts
-            relationships
-                property_settings
-                configurations
+        last_modified
+        aggregated_info
+            (from property settings)
+            labels
+            labels_counts
+        relationships
+            property_settings
+            configurations
 
     /property_settings
         _id
@@ -369,7 +371,6 @@ class MongoDatabase(MongoClient):
                         {'$addToSet': {'relationships.properties': pid}}
                     )
 
-            # TODO: resync PSO labels to PR
                 setOnInsert = {}
                 for k in property_map[pname]:
                     setOnInsert[k] = {
@@ -383,7 +384,7 @@ class MongoDatabase(MongoClient):
 
                 setOnInsert['_id'] = pid
 
-                self.properties[pname].update_one(
+                self.properties.update_one(
                     {'_id': pid},
                     {
                         '$addToSet': {
@@ -395,7 +396,10 @@ class MongoDatabase(MongoClient):
                             },
                             'relationships.configurations': cid,
                         },
-                        '$setOnInsert': setOnInsert,
+                        '$setOnInsert': {
+                            'type': pname,
+                            pname: setOnInsert
+                        },
                         '$set': {
                             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                         }
@@ -530,20 +534,19 @@ class MongoDatabase(MongoClient):
         ..code-block:: python
 
             database.get_data(
-                collection_name='properties/property_name_1',
-                keys=['energy', 'forces'],
+                collection_name='properties',
+                keys=['property_name_1.energy', 'property_name_1.forces'],
             )
 
         Args:
 
             collection_name (str):
-                The name of a collection in the database. Can include nested
-                collections using path-like strings (e.g.,
-                'properties/property_name_1').
+                The name of a collection in the database.
 
             keys (list or str):
                 A keys for indexing the returned objects from
-                the Mongo cursor.
+                the Mongo cursor. Sub-fields can be returned by providing names
+                separated by periods ('.')
 
             ids (list):
                 The list of IDs to return the data for. If None, returns the
@@ -573,20 +576,24 @@ class MongoDatabase(MongoClient):
         if isinstance(keys, str):
             keys = [keys]
 
-        collection = self[self.database_name]
-        for cname in collection_name.split('/'):
-            collection = collection[cname]
+        keys = [k.split('.') for k in keys]
 
-        cursor = collection.find(query, {k: 1 for k in keys})
+        collection = self[self.database_name][collection_name]
 
-        data = {k: [] for k in keys}
+        cursor = collection.find(query, {k[0]: 1 for k in keys})
+
+        data = {
+            '.'.join(k): [] for k in keys
+        }
 
         for doc in cursor:
             for k in keys:
-                if isinstance(doc[k], dict):
-                    data[k].append(doc[k]['source-value'])
+                for kk in k:
+                    doc = doc[kk]
+                if isinstance(doc, dict):
+                    data['.'.join(k)].append(doc['source-value'])
                 else:
-                    data[k].append(doc[k])
+                    data['.'.join(k)].append(doc)
 
         if concatenate or ravel:
             for k,v in data.items():
@@ -597,7 +604,7 @@ class MongoDatabase(MongoClient):
                 data[k] = v.ravel()
 
         if len(data) == 1:
-            return data[keys[0]]
+            return data['.'.join(keys[0])]
         else:
             return data
 
@@ -620,11 +627,10 @@ class MongoDatabase(MongoClient):
                 A list of string IDs specifying which Configurations to return.
                 If 'all', returns all of the configurations in the database.
 
-            generator (bool):
-                If true, this function becomes a generator which only returns
-                the configurations one at a time. This is useful if the
-                configurations can't all fit in memory at the same time. Default
-                is False.
+            generator (bool, default=False):
+                If True, this function returns a generator of the
+                configurations. This is useful if the configurations can't all
+                fit in memory at the same time.
 
             verbose (bool):
                 If True, prints progress bar
@@ -635,15 +641,35 @@ class MongoDatabase(MongoClient):
                 A list or generator of the re-constructed configurations
         """
 
-        return (
-            Configuration(
+        if ids == 'all':
+            query = {}
+        else:
+            if isinstance(ids, str):
+                ids = [ids]
+
+            query = {'_id': {'$in': ids}}
+
+        if generator:
+            return self._get_configurations(query=query, verbose=verbose)
+        else:
+            return list(self._get_configurations(query=query, verbose=verbose))
+
+
+    def _get_configurations(self, query, verbose=False):
+        for co_doc in tqdm(
+            self.configurations.find(
+                query,
+                {'atomic_numbers': 1, 'positions': 1, 'cell': 1, 'pbc': 1}
+            ),
+            desc='Getting configurations',
+            disable=not verbose
+            ):
+            yield Configuration(
                 symbols=co_doc['atomic_numbers'],
                 positions=co_doc['positions'],
                 cell=co_doc['cell'],
                 pbc=co_doc['pbc'],
-            ) for co_doc in self.configurations.find({'_id': {'$in': ids}})
-        )
-
+            )
 
 
     def concatenate_configurations(self):
@@ -668,9 +694,25 @@ class MongoDatabase(MongoClient):
                 A human-readable description of the configuration set.
         """
 
-        cs_id = self.database.insert_configuration_set(
-            ids=ids, description=description
-        )
+        if isinstance(ids, str):
+            ids = [ids]
+
+        cs_hash = sha512()
+        for i in sorted(ids):
+            cs_hash.update(str(i).encode('utf-8'))
+
+        cs_id = str(int(cs_hash.hexdigest()[:16], 16)-HASH_SHIFT)
+
+        # Check for duplicates
+        if self.configuration_sets.count_documents({'_id': cs_id}):
+            return cs_id
+
+        # Make sure all of the configurations exist
+        if self.configurations.count_documents({'_id': {'$in': ids}}) != len(ids):
+            raise MissingEntryError(
+                "Not all of the IDs provided to insert_configuration_set exist"\
+                " in the database."
+            )
 
         aggregated_info = self.aggregate_configuration_info(ids)
 
@@ -686,7 +728,7 @@ class MongoDatabase(MongoClient):
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
-                    'last_modified': self.database[f'configuration_sets/{cs_id}'].attrs['last_modified']
+                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                 },
             },
             upsert=True
@@ -758,9 +800,11 @@ class MongoDatabase(MongoClient):
 
         """
 
-        co_ids = list(self.database[f'configuration_sets/{cs_id}'].attrs['configuration_ids'])
+        cs_doc = next(self.configuration_sets.find({'_id': cs_id}))
 
-        aggregated_info = self.aggregate_configuration_info(co_ids)
+        aggregated_info = self.aggregate_configuration_info(
+            cs_doc['relationships']['configurations']
+        )
 
         self.configuration_sets.update_one(
             {'_id': cs_id},
@@ -782,10 +826,7 @@ class MongoDatabase(MongoClient):
 
             None; updates the property document in-place
         """
-        pso_ids = self.database.get_data(
-            'properties/settings_ids', ids=pid, as_str=True,
-            in_memory=True, ravel=True
-        ).tolist()
+        pso_ids = next(self.properties.find({'_id': pid}))['relationships']['property_settings']
 
         aggregated_info = self.aggregate_property_settings_info(pso_ids)
 
@@ -1090,8 +1131,8 @@ class MongoDatabase(MongoClient):
                 self.resync_configuration_set(csid)
 
         co_ids = list(set(itertools.chain.from_iterable(
-            self.database[f'configuration_sets/{csid}'].attrs['configuration_ids'][()]
-            for csid in cs_ids
+            cs_doc['relationships']['configurations'] for cs_doc in
+            self.configuration_sets.find({'_id': {'$in': cs_ids}})
         )))
 
         return self.aggregate_configuration_info(co_ids)
@@ -1215,13 +1256,30 @@ class MongoDatabase(MongoClient):
             ds_id (str):
                 The ID of the inserted dataset
         """
-        ds_id = self.database.insert_dataset(
-            cs_ids=cs_ids,
-            pr_ids=pr_ids,
-            authors=authors,
-            links=links,
-            description=description
-        )
+
+        if isinstance(cs_ids, str):
+            cs_ids = [cs_ids]
+
+        if isinstance(pr_ids, str):
+            pr_ids = [pr_ids]
+
+        if isinstance(authors, str):
+            authors = [authors]
+
+        if isinstance(links, str):
+            links = [links]
+
+        ds_hash = sha512()
+        for ci in sorted(cs_ids):
+            ds_hash.update(str(ci).encode('utf-8'))
+        for pi in sorted(pr_ids):
+            ds_hash.update(str(pi).encode('utf-8'))
+
+        ds_id = str(int(ds_hash.hexdigest()[:16], 16)-HASH_SHIFT)
+
+        # Check for duplicates
+        if self.datasets.count_documents({'_id': ds_id}):
+            return ds_id
 
         aggregated_info = {}
         for k,v in self.aggregate_configuration_set_info(cs_ids, resync=resync).items():
@@ -1255,7 +1313,7 @@ class MongoDatabase(MongoClient):
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
-                    'last_modified': self.database[f'datasets/{ds_id}'].attrs['last_modified']
+                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                 },
             },
             upsert=True
