@@ -3,10 +3,12 @@ import warnings
 import itertools
 import numpy as np
 from tqdm import tqdm
+import multiprocessing
 from copy import deepcopy
 from hashlib import sha512
 from getpass import getpass
-from pymongo import MongoClient
+from functools import partial
+from pymongo import MongoClient, UpdateOne
 # import plotly.graph_objects as go
 # from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
@@ -154,18 +156,20 @@ class MongoDatabase(MongoClient):
             A Mongo collection of dataset documents
 
     """
-    def __init__(self, database_name, drop=False):
+    def __init__(self, database_name, nprocs=1, drop=False):
         """
         Args:
 
             database_name (str):
                 The name of the database
 
+            nprocs (int):
+                The size of the processor pool
+
             drop (bool, default=False):
                 If True, deletes the existing Mongo database.
 
         """
-        # super().__init__(repository=client_repo, **kwargs)
         # user = input("mongodb username: ")
         # pwrd = getpass("mongodb password: ")
         user = 'colabfitAdmin'
@@ -186,6 +190,8 @@ class MongoDatabase(MongoClient):
         self.property_settings      = self[database_name][_PROPSETTINGS_COLLECTION]
         self.configuration_sets     = self[database_name][_CONFIGSETS_COLLECTION]
         self.datasets               = self[database_name][_DATASETS_COLLECTION]
+
+        self.nprocs = nprocs
 
 
     def insert_data(
@@ -246,6 +252,24 @@ class MongoDatabase(MongoClient):
                 verbose=verbose
             )
         else:
+            configurations = list(configurations)
+
+            split_configs = np.array_split(configurations, self.nprocs)
+
+            pfunc = partial(
+                self._insert_data,
+                database_name=self.database_name,
+                property_map=property_map,
+                property_settings=property_settings,
+                verbose=verbose
+            )
+
+            pool = multiprocessing.Pool(self.nprocs)
+
+            return list(itertools.chain.from_iterable(
+                pool.map(pfunc, split_configs)
+            ))
+
             return list(self._insert_data(
                 configurations=configurations,
                 property_map=property_map,
@@ -254,10 +278,25 @@ class MongoDatabase(MongoClient):
             ))
 
 
+    @staticmethod
     def _insert_data(
-        self, configurations, property_map=None, property_settings=None,
+        configurations, database_name,
+        property_map=None, property_settings=None,
         verbose=True
         ):
+        user = 'colabfitAdmin'
+        pwrd = 'Fo08w3K&VEY&'
+
+        client = MongoClient(
+            'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
+        )
+
+        coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
+        coll_properties             = client[database_name][_PROPS_COLLECTION]
+        coll_property_definitions   = client[database_name][_PROPDEFS_COLLECTION]
+        coll_property_settings      = client[database_name][_PROPSETTINGS_COLLECTION]
+        coll_configuration_sets     = client[database_name][_CONFIGSETS_COLLECTION]
+        coll_datasets               = client[database_name][_DATASETS_COLLECTION]
 
         if isinstance(configurations, Configuration):
             configurations = [configurations]
@@ -269,14 +308,14 @@ class MongoDatabase(MongoClient):
             property_settings = {}
 
         for settings_id in property_settings.values():
-            if not self.property_settings.count_documents({'_id': settings_id}):
+            if not coll_property_settings.count_documents({'_id': settings_id}):
                 raise MissingEntryError(
                     "The property settings object with ID '{}' does"\
                     " not exist in the database".format(settings_id)
                 )
 
         property_definitions = {
-            pname: self.get_property_definition(pname)['definition']
+            pname: next(coll_property_definitions.find({'_id': pname}))['definition']
             for pname in property_map
         }
 
@@ -294,6 +333,12 @@ class MongoDatabase(MongoClient):
             for pname in property_map
         }
 
+        insertions = []
+
+        config_docs     = []
+        property_docs   = []
+        settings_docs   = {}
+
         # Add all of the configurations into the Mongo server
         ai = 1
         for atoms in tqdm(
@@ -308,9 +353,7 @@ class MongoDatabase(MongoClient):
 
             # Add if doesn't exist, else update (since last-modified changed)
 
-            self.configurations.update_one(
-                {'_id': cid},  # filter
-                {  # update document
+            c_update_doc =  {  # update document
                     '$setOnInsert': {
                         '_id': cid,
                         'atomic_numbers': atoms.get_atomic_numbers().tolist(),
@@ -338,10 +381,52 @@ class MongoDatabase(MongoClient):
                         'labels': {
                             '$each': list(atoms.info[ATOMS_LABELS_FIELD])
                         },
+                        'relationships.properties': {
+                            '$each': []
+                        }
                     }
-                },
-                upsert=True,  # overwrite if exists already
-            )
+                }
+
+            # config_docs.append(UpdateOne(
+            #     {'_id': cid},  # filter
+            #     upsert=True,  # overwrite if exists already
+            # ))
+
+
+            # coll_configurations.update_one(
+            #     {'_id': cid},  # filter
+            #     {  # update document
+            #         '$setOnInsert': {
+            #             '_id': cid,
+            #             'atomic_numbers': atoms.get_atomic_numbers().tolist(),
+            #             'positions': atoms.get_positions().tolist(),
+            #             'cell': np.array(atoms.get_cell()).tolist(),
+            #             'pbc': atoms.get_pbc().astype(int).tolist(),
+            #             'elements': processed_fields['elements'],
+            #             'nelements': processed_fields['nelements'],
+            #             'elements_ratios': processed_fields['elements_ratios'],
+            #             'chemical_formula_reduced': processed_fields['chemical_formula_reduced'],
+            #             'chemical_formula_anonymous': processed_fields['chemical_formula_anonymous'],
+            #             'chemical_formula_hill': atoms.get_chemical_formula(),
+            #             'nsites': len(atoms),
+            #             'dimension_types': atoms.get_pbc().astype(int).tolist(),
+            #             'nperiodic_dimensions': int(sum(atoms.get_pbc())),
+            #             'lattice_vectors': np.array(atoms.get_cell()).tolist(),
+            #         },
+            #         '$set': {
+            #             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+            #         },
+            #         '$addToSet': {
+            #             'names': {
+            #                 '$each': list(atoms.info[ATOMS_NAME_FIELD])
+            #             },
+            #             'labels': {
+            #                 '$each': list(atoms.info[ATOMS_LABELS_FIELD])
+            #             },
+            #         }
+            #     },
+            #     upsert=True,  # overwrite if exists already
+            # )
 
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
@@ -371,10 +456,14 @@ class MongoDatabase(MongoClient):
                 settings_id = property_settings[pname] if pname in property_settings else None
 
                 if settings_id:
-                    self.property_settings.update_one(
-                        {'_id': settings_id},
-                        {'$addToSet': {'relationships.properties': pid}}
-                    )
+                    if settings_id in settings_docs:
+                        settings_docs[settings_id].append(pid)
+                    else:
+                        settings_docs[settings_id] = [pid]
+                    # coll_property_settings.update_one(
+                    #     {'_id': settings_id},
+                    #     {'$addToSet': {'relationships.properties': pid}}
+                    # )
 
                 setOnInsert = {}
                 for k in property_map[pname]:
@@ -389,7 +478,7 @@ class MongoDatabase(MongoClient):
 
                 setOnInsert['_id'] = pid
 
-                self.properties.update_one(
+                property_docs.append(UpdateOne(
                     {'_id': pid},
                     {
                         '$addToSet': {
@@ -409,23 +498,80 @@ class MongoDatabase(MongoClient):
                             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                         }
                     },
-                    upsert=True
-                )
+                    upsert=True,
+                ))
 
-                # Add the backwards arrow
-                self.configurations.update_one(
-                    {'_id': cid},
-                    {'$addToSet': {'relationships.properties': pid}},
-                    upsert=True
-                )
+                # coll_properties.update_one(
+                #     {'_id': pid},
+                #     {
+                #         '$addToSet': {
+                #             # 'labels': {'$each': labels},
+                #             # PR -> PSO pointer
+                #             'relationships.property_settings': {
+                #                 # hack for handling possibly empty case
+                #                 '$each': [settings_id] if settings_id  else []
+                #             },
+                #             'relationships.configurations': cid,
+                #         },
+                #         '$setOnInsert': {
+                #             'type': pname,
+                #             pname: setOnInsert
+                #         },
+                #         '$set': {
+                #             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                #         }
+                #     },
+                #     upsert=True
+                # )
 
-                yield (cid, pid)
+                # # Add the backwards arrow
+                # config_docs.append(UpdateOne(
+                #     {'_id': cid},
+                #     {'$addToSet': {'relationships.properties': pid}},
+                #     upsert=True
+                # ))
+
+                c_update_doc['$addToSet']['relationships.properties']['$each'].append(
+                    pid
+                )
+                # coll_configurations.update_one(
+                #     {'_id': cid},
+                #     {'$addToSet': {'relationships.properties': pid}},
+                #     upsert=True
+                # )
+
+                insertions.append((cid, pid))
+
+            config_docs.append(
+                UpdateOne({'_id': cid}, c_update_doc, upsert=True)
+            )
 
             if not pid:
                 # Only yield if something wasn't yielded earlier
-                yield (cid, pid)
+                insertions.append((cid, pid))
 
             ai += 1
+
+        if config_docs:
+            print(f'Writing configurations: {len(config_docs)}', flush=True)
+            coll_configurations.bulk_write(config_docs, ordered=False)
+        if property_docs:
+            print(f'Writing properties: {len(property_docs)}', flush=True)
+            coll_properties.bulk_write(property_docs, ordered=False)
+        if settings_docs:
+            print(f'Writing property settings: {len(settings_docs)}', flush=True)
+            coll_property_settings.bulk_write(
+                [
+                    UpdateOne(
+                        {'_id': sid},
+                        {'$addToSet': {'relationships.properties': {'$each': lst}}}
+                    ) for sid, lst in settings_docs.items()
+                ],
+                ordered=False
+            )
+
+        client.close()
+        return insertions
 
 
     def insert_property_definition(self, definition):
@@ -775,15 +921,18 @@ class MongoDatabase(MongoClient):
         )
 
         # Add the backwards relationships CO->CS
+        config_docs = []
         for cid in ids:
-            self.configurations.update_one(
+            config_docs.append(UpdateOne(
                 {'_id': cid},
                 {
                     '$addToSet': {
                         'relationships.configuration_sets': cs_id
                     }
                 }
-            )
+            ))
+
+        self.configurations.bulk_write(config_docs)
 
         return cs_id
 
@@ -824,7 +973,7 @@ class MongoDatabase(MongoClient):
         }
 
 
-    def resync_configuration_set(self, cs_id):
+    def resync_configuration_set(self, cs_id, verbose=False):
         """
         Re-synchronizes the configuration set by re-aggregating the information
         from the configurations.
@@ -833,6 +982,9 @@ class MongoDatabase(MongoClient):
 
             cs_id (str):
                 The ID of the configuration set to update
+
+            verbose (bool, default=False):
+                If True, prints a progress bar
 
         Returns:
 
@@ -843,7 +995,7 @@ class MongoDatabase(MongoClient):
         cs_doc = next(self.configuration_sets.find({'_id': cs_id}))
 
         aggregated_info = self.aggregate_configuration_info(
-            cs_doc['relationships']['configurations']
+            cs_doc['relationships']['configurations'], verbose=verbose
         )
 
         self.configuration_sets.update_one(
@@ -878,7 +1030,7 @@ class MongoDatabase(MongoClient):
         )
 
 
-    def resync_dataset(self, ds_id):
+    def resync_dataset(self, ds_id, verbose=False):
         """
         Re-synchronizes the dataset by aggregating all necessary data from
         properties and configuration sets. Note that this also calls
@@ -890,6 +1042,9 @@ class MongoDatabase(MongoClient):
             ds_id (str):
                 The ID of the dataset to update
 
+            verbose (bool, default=False):
+                If True, prints a progress bar
+
         Returns:
 
             None; updates the dataset document in-place
@@ -899,9 +1054,13 @@ class MongoDatabase(MongoClient):
         pr_ids = self.database[f'datasets/{ds_id}'].attrs['property_ids'].tolist()
 
         for csid in cs_ids:
-            self.resync_configuration_set(csid)
+            self.resync_configuration_set(csid, verbose=verbose)
 
-        for pid in pr_ids:
+        for pid in tqdm(
+            pr_ids,
+            desc='Re-synchronizing properties',
+            disable=not verbose
+            ):
             self.resync_property(pid)
 
         aggregated_info = {}
@@ -913,7 +1072,7 @@ class MongoDatabase(MongoClient):
 
             aggregated_info[k] = v
 
-        for k,v in self.aggregate_property_info(pr_ids).items():
+        for k,v in self.aggregate_property_info(pr_ids, verbose=verbose).items():
             if k == 'labels':
                 k = 'property_labels'
             elif k == 'labels_counts':
@@ -928,7 +1087,7 @@ class MongoDatabase(MongoClient):
         )
 
 
-    def aggregate_configuration_info(self, ids):
+    def aggregate_configuration_info(self, ids, verbose=False):
         """
         Gathers the following information from a collection of configurations:
 
@@ -956,6 +1115,9 @@ class MongoDatabase(MongoClient):
 
             aggregated_info (dict):
                 All of the aggregated info
+
+            verbose (bool, default=False):
+                If True, prints a progress bar
         """
 
         aggregated_info = {
@@ -974,28 +1136,12 @@ class MongoDatabase(MongoClient):
             'dimension_types': set(),
         }
 
-        # TODO: I could convert this to only using HDF5 operations instead.
-
-        # aggregated_info['nconfigurations'] = len(ids)
-
-        # atomic_numbers = self.database.get_data(
-        #     'configurations/atomic_numbers',
-        #     ids=ids
-        # )
-
-        # for cid in ids:
-        #     sl = self.database[f'configurations/atomic_numbers/slices/{cid}'][()]
-
-        #     aggregated_info['nsites'] += atomic_numbers[sl].shape[0]
-        #     aggregated_info['elements'] = aggregated_info.union(set(np.unique(
-        #         atomic_numbers[sl]
-        #     )))
-
-        # aggregated_info['nelements'] = len(aggregated_info['elements'])
-
-        # elements = set().union(*[np.unique(a) for a in self.database.])
-
-        for doc in self.configurations.find({'_id': {'$in': ids}}):
+        for doc in tqdm(
+            self.configurations.find({'_id': {'$in': ids}}),
+            desc='Aggregating configuration info',
+            disable=not verbose,
+            total=len(ids),
+            ):
             aggregated_info['nsites'] += doc['nsites']
 
             for e, er in zip(doc['elements'], doc['elements_ratios']):
@@ -1079,7 +1225,7 @@ class MongoDatabase(MongoClient):
         return aggregated_info
 
 
-    def aggregate_property_info(self, pr_ids, resync=False):
+    def aggregate_property_info(self, pr_ids, resync=False, verbose=False):
         """
         Aggregates the following information from a list of properties:
 
@@ -1096,6 +1242,8 @@ class MongoDatabase(MongoClient):
                 If True, re-synchronizes the property before aggregating the
                 information. Default is False.
 
+            verbose (bool, default=False):
+                If True, prints a progress bar
 
         Returns:
 
@@ -1116,7 +1264,12 @@ class MongoDatabase(MongoClient):
             'labels_counts': []
         }
 
-        for doc in self.properties.find({'_id': {'$in': pr_ids}}):
+        for doc in tqdm(
+            self.properties.find({'_id': {'$in': pr_ids}}),
+            desc='Aggregating property info',
+            disable=not verbose,
+            total=len(pr_ids)
+            ):
             aggregated_info['types'].add(doc['type'])
 
             for l in doc['aggregated_info']['labels']:
@@ -1131,7 +1284,7 @@ class MongoDatabase(MongoClient):
         return aggregated_info
 
 
-    def aggregate_configuration_set_info(self, cs_ids, resync=False):
+    def aggregate_configuration_set_info(self, cs_ids, resync=False, verbose=False):
         """
         Aggregates the following information from a list of configuration sets:
 
@@ -1154,9 +1307,12 @@ class MongoDatabase(MongoClient):
             cs_ids (list or str):
                 The IDs of the configurations to aggregate information from
 
-            resync (bool):
+            resync (bool, default=False):
                 If True, re-synchronizes each configuration set before
-                aggregating the information. Default is False.
+                aggregating the information.
+
+            verbose (bool, default=False):
+                If True, prints a progress bar
 
         Returns:
 
@@ -1164,21 +1320,19 @@ class MongoDatabase(MongoClient):
                 All of the aggregated info
         """
 
-        # TODO: if the CSs overlap, they'll double count COs...
-
         if isinstance(cs_ids, str):
             cs_ids = [cs_ids]
 
         if resync:
             for csid in cs_ids:
-                self.resync_configuration_set(csid)
+                self.resync_configuration_set(csid, verbose=verbose)
 
         co_ids = list(set(itertools.chain.from_iterable(
             cs_doc['relationships']['configurations'] for cs_doc in
             self.configuration_sets.find({'_id': {'$in': cs_ids}})
         )))
 
-        return self.aggregate_configuration_info(co_ids)
+        return self.aggregate_configuration_info(co_ids, verbose=verbose)
 
         # aggregated_info = {
         #     'nconfigurations': len(co_ids),
@@ -1265,6 +1419,7 @@ class MongoDatabase(MongoClient):
         links=None,
         description='',
         resync=False,
+        verbose=True,
         ):
         """
         Inserts a dataset into the database.
@@ -1293,6 +1448,9 @@ class MongoDatabase(MongoClient):
             resync (bool):
                 If True, re-synchronizes the configuration sets and properties
                 before adding to the dataset. Default is False.
+
+            verbose (bool, default=False):
+                If True, prints a progress bar
 
         Returns:
 
@@ -1325,7 +1483,8 @@ class MongoDatabase(MongoClient):
             return ds_id
 
         aggregated_info = {}
-        for k,v in self.aggregate_configuration_set_info(cs_ids, resync=resync).items():
+        for k,v in self.aggregate_configuration_set_info(
+            cs_ids, resync=resync).items():
             if k == 'labels':
                 k = 'configuration_labels'
             elif k == 'labels_counts':
@@ -1333,7 +1492,8 @@ class MongoDatabase(MongoClient):
 
             aggregated_info[k] = v
 
-        for k,v in self.aggregate_property_info(pr_ids, resync=resync).items():
+        for k,v in self.aggregate_property_info(
+            pr_ids, resync=resync, verbose=verbose).items():
             if k == 'labels':
                 k = 'property_labels'
             elif k == 'labels_counts':
@@ -1374,15 +1534,18 @@ class MongoDatabase(MongoClient):
             )
 
         # Add the backwards relationships PR->DS
-        for pid in pr_ids:
-            self.properties.update_one(
+        property_docs = []
+        for pid in tqdm(pr_ids, desc='Updating PR->DS relationships'):
+            property_docs.append(UpdateOne(
                 {'_id': pid},
                 {
                     '$addToSet': {
-                        'relationships.configuration_sets': ds_id
+                        'relationships.datasets': ds_id
                     }
                 }
-            )
+            ))
+
+        self.properties.bulk_write(property_docs)
 
         return ds_id
 
@@ -1476,14 +1639,6 @@ class MongoDatabase(MongoClient):
                 {'$addToSet': {'labels': {'$each': list(labels)}}}
             )
 
-            self.database
-            data = self.database[f'configurations/labels/data/{cid}']
-            new_labels = set(data.asstr()[()]).union(labels)
-            data.resize(
-                (len(new_labels),) + data.shape[1:]
-            )
-            data[:] = list(new_labels)
-
 
     def plot_histograms(self, fields=None, ids=None, xscale='linear', yscale='linear'):
         """
@@ -1513,7 +1668,7 @@ class MongoDatabase(MongoClient):
         axes = np.atleast_2d(axes)
 
         for i, prop in enumerate(fields):
-            data = self.get_data(prop, in_memory=True, ravel=True)
+            data = self.get_data('properties', prop, ravel=True)
 
             nbins = max(data.shape[0]//1000, 100)
 
@@ -1556,7 +1711,7 @@ class MongoDatabase(MongoClient):
                     {'average': np.average(data), 'std': np.std(data), 'min': np.min(data), 'max': np.max(data), 'average_abs': np.average(np.abs(data))}
         """
 
-        data = self.get_data(field, in_memory=True, ravel=True)
+        data = self.get_data('properties', field, ravel=True)
 
         return {
             'average': np.average(data),
