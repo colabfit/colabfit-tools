@@ -464,8 +464,8 @@ class Property(dict):
 
     def __hash__(self):
         """
-        Hashes the Property by hashing its linked PropertySettings,
-        Configurations, and EDN.
+        Hashes the Property by hashing its EDN. Note that the hash does NOT
+        depend upon the linked configurations or settings.
         """
 
         _hash = sha512()
@@ -491,20 +491,14 @@ class Property(dict):
             # hashed_values.append(hashval)
             _hash.update(hashval)
 
-        _hash.update(
-            str(hash(self.settings)).encode('utf-8')
-            if self.settings is not None else b''
-        )
-        for c in self.configurations:
-            _hash.update(str(hash(c)).encode('utf-8'))
+        # _hash.update(
+        #     str(hash(self.settings)).encode('utf-8')
+        #     if self.settings is not None else b''
+        # )
+        # for c in self.configurations:
+        #     _hash.update(str(hash(c)).encode('utf-8'))
 
         return int(_hash.hexdigest()[:16], 16)-HASH_SHIFT
-
-        # return sha512((
-        #     sha512(self.settings),
-        #     tuple([sha512(c) for c in self.configurations]),
-        #     sha512(tuple(hashed_values))
-        # ))
 
 
     def __eq__(self, other):
