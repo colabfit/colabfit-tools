@@ -9,9 +9,9 @@ from hashlib import sha512
 from getpass import getpass
 from functools import partial
 from pymongo import MongoClient, UpdateOne
-# import plotly.graph_objects as go
-# from plotly.subplots import make_subplots
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+# import matplotlib.pyplot as plt
 
 from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
@@ -61,6 +61,7 @@ class MongoDatabase(MongoClient):
 
     /properties
         _id
+        type
         property_name
             each field in the property definition
         methods
@@ -123,11 +124,12 @@ class MongoDatabase(MongoClient):
             dimension_types
 
             (from properties)
-                types
-                methods
-                methods_counts
-                property_labels
-                property_labels_counts
+            property_types
+            property_fields
+            methods
+            methods_counts
+            property_labels
+            property_labels_counts
         relationships
             properties
             configuration_sets
@@ -256,8 +258,14 @@ class MongoDatabase(MongoClient):
 
             split_configs = np.array_split(configurations, self.nprocs)
 
+            user = 'colabfitAdmin'
+            pwrd = 'Fo08w3K&VEY&'
+
+            mongo_login = 'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
+
             pfunc = partial(
                 self._insert_data,
+                mongo_login=mongo_login,
                 database_name=self.database_name,
                 property_map=property_map,
                 property_settings=property_settings,
@@ -273,16 +281,12 @@ class MongoDatabase(MongoClient):
 
     @staticmethod
     def _insert_data(
-        configurations, database_name,
+        configurations, database_name, mongo_login,
         property_map=None, property_settings=None,
         verbose=True
         ):
-        user = 'colabfitAdmin'
-        pwrd = 'Fo08w3K&VEY&'
 
-        client = MongoClient(
-            'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
-        )
+        client = MongoClient(mongo_login)
 
         coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
         coll_properties             = client[database_name][_PROPS_COLLECTION]
@@ -306,7 +310,7 @@ class MongoDatabase(MongoClient):
         #         )
 
         property_definitions = {
-            pname: next(coll_property_definitions.find({'_id': pname}))['definition']
+            pname: coll_property_definitions.find_one({'_id': pname})['definition']
             for pname in property_map
         }
 
@@ -422,11 +426,18 @@ class MongoDatabase(MongoClient):
                 # Prepare the EDN document
                 setOnInsert = {}
                 for k in property_map[pname]:
-                    setOnInsert[k] = {
-                        'source-value': np.atleast_1d(
-                            prop[k]['source-value']
-                        ).tolist()
-                    }
+                    if isinstance(prop[k]['source-value'], (int, float, str)):
+                        # Add directly
+                        setOnInsert[k] = {
+                            'source-value': prop[k]['source-value']
+                        }
+                    else:
+                        # Then it's array-like and should be converted to a list
+                        setOnInsert[k] = {
+                            'source-value': np.atleast_1d(
+                                prop[k]['source-value']
+                            ).tolist()
+                        }
 
                     if 'source-unit' in prop[k]:
                         setOnInsert[k]['source-unit'] = prop[k]['source-unit']
@@ -473,13 +484,10 @@ class MongoDatabase(MongoClient):
             ai += 1
 
         if config_docs:
-            print(f'Writing configurations: {len(config_docs)}', flush=True)
             coll_configurations.bulk_write(config_docs, ordered=False)
         if property_docs:
-            print(f'Writing properties: {len(property_docs)}', flush=True)
             coll_properties.bulk_write(property_docs, ordered=False)
         if settings_docs:
-            print(f'Writing property settings: {len(settings_docs)}', flush=True)
             coll_property_settings.bulk_write(
                 [
                     UpdateOne(
@@ -490,8 +498,6 @@ class MongoDatabase(MongoClient):
                 ordered=False
             )
 
-        print('Closing client')
-
         client.close()
         return insertions
 
@@ -500,7 +506,8 @@ class MongoDatabase(MongoClient):
         """
         Inserts a new property definition into the database. Checks that
         definition is valid, then builds all necessary groups in
-        :code:`/root/properties`.
+        :code:`/root/properties`. Throws an error if the property already
+        exists.
 
         Args:
 
@@ -561,7 +568,7 @@ class MongoDatabase(MongoClient):
 
 
     def get_property_definition(self, name):
-        return next(self.property_definitions.find({'_id': name}))
+        return self.property_definitions.find_one({'_id': name})
 
 
     def insert_property_settings(self, pso_object):
@@ -610,13 +617,8 @@ class MongoDatabase(MongoClient):
 
 
     def get_property_settings(self, pso_id):
-        pso_doc = next(self.property_settings.find({'_id': pso_id}))
-                #   'files': [
-                #         {
-                #             'file_name': ftup[0],
-                #             'file_contents': ftup[1],
-                #         } for ftup in pso_object.files
-                #     ],
+        pso_doc = self.property_settings.find_one({'_id': pso_id})
+
         return PropertySettings(
                 method=pso_doc['method'],
                 description=pso_doc['description'],
@@ -628,14 +630,18 @@ class MongoDatabase(MongoClient):
             )
 
 
+    # @staticmethod
     def get_data(
-        self, collection_name, keys,
+        self, collection_name,
+        fields,
+        query=None,
         ids=None,
+        keep_ids=False,
         concatenate=False, ravel=False, verbose=False, cache=False
         ):
         """
-        Queries the database and returns the fields specified by `keys`. Returns
-        the results in memory.
+        Queries the database and returns the fields specified by `keys` as a
+        list or an array of values. Returns the results in memory.
 
         Example:
 
@@ -643,7 +649,8 @@ class MongoDatabase(MongoClient):
 
             data = database.get_data(
                 collection_name='properties',
-                keys=['property_name_1.energy', 'property_name_1.forces'],
+                query={'_id': {'$in': <list_of_property_IDs>}},
+                fields=['property_name_1.energy', 'property_name_1.forces'],
                 cache=True
             )
 
@@ -652,14 +659,21 @@ class MongoDatabase(MongoClient):
             collection_name (str):
                 The name of a collection in the database.
 
-            keys (list or str):
-                A keys for indexing the returned objects from
-                the Mongo cursor. Sub-fields can be returned by providing names
-                separated by periods ('.')
+            fields (list or str):
+                The fields to return from the documents. Sub-fields can be
+                returned by providing names separated by periods ('.')
+
+            query (dict, default=None):
+                A Mongo query dictionary. If None, returns the data for all of
+                the documents in the collection.
 
             ids (list):
                 The list of IDs to return the data for. If None, returns the
-                data for the entire collection.
+                data for the entire collection. Note that this information can
+                also be provided using the :code:`query` argument.
+
+            keep_ids (bool, default=False):
+                If True, includes the '_id' field as one of the returned values.
 
             concatenate (bool, default=False):
                 If True, concatenates the data before returning.
@@ -681,35 +695,44 @@ class MongoDatabase(MongoClient):
             data (dict):
                 key = k for k in keys. val = in-memory data
         """
-        if ids is None:
+
+        if query is None:
             query = {}
-        else:
+
+        if ids is not None:
             if isinstance(ids, str):
                 ids = [ids]
+            elif isinstance(ids, np.ndarray):
+                ids = ids.tolist()
 
             query = {'_id': {'$in': ids}}
 
-        if isinstance(keys, str):
-            keys = [keys]
+        if isinstance(fields, str):
+            fields = [fields]
 
-        keys = [k.split('.') for k in keys]
+        retfields = {k: 1 for k in fields}
+
+        if keep_ids:
+            retfields['_id'] = 1
 
         collection = self[self.database_name][collection_name]
 
-        cursor = collection.find(query, {k[0]: 1 for k in keys})
+        cursor = collection.find(query, retfields)
 
         data = {
-            '.'.join(k): [] for k in keys
+            k: [] for k in retfields
         }
 
         for doc in tqdm(cursor, desc='Getting data', disable=not verbose):
-            for k in keys:
-                for kk in k:
+            for k in retfields:
+                splitk = k.split('.')
+                for kk in splitk:
                     doc = doc[kk]
                 if isinstance(doc, dict):
-                    data['.'.join(k)].append(doc['source-value'])
+                    v = doc['source-value']
                 else:
-                    data['.'.join(k)].append(doc)
+                    v = doc
+                data[k].append(np.atleast_1d(v))
 
         if concatenate or ravel:
             for k,v in data.items():
@@ -719,8 +742,8 @@ class MongoDatabase(MongoClient):
             for k,v in data.items():
                 data[k] = v.ravel()
 
-        if len(data) == 1:
-            return data['.'.join(keys[0])]
+        if len(retfields) == 1:
+            return data[list(retfields.keys())[0]]
         else:
             return data
 
@@ -894,7 +917,7 @@ class MongoDatabase(MongoClient):
         if resync:
             self.resync_configuration_set(cs_id)
 
-        cs_doc = next(self.configuration_sets.find({'_id': cs_id}))
+        cs_doc = self.configuration_sets.find_one({'_id': cs_id})
 
         return {
             'last_modified': cs_doc['last_modified'],
@@ -925,7 +948,7 @@ class MongoDatabase(MongoClient):
 
         """
 
-        cs_doc = next(self.configuration_sets.find({'_id': cs_id}))
+        cs_doc = self.configuration_sets.find_one({'_id': cs_id})
 
         aggregated_info = self.aggregate_configuration_info(
             cs_doc['relationships']['configurations'], verbose=verbose
@@ -936,31 +959,6 @@ class MongoDatabase(MongoClient):
             {'$set': {'aggregated_info': aggregated_info}},
             upsert=True,
         )
-
-
-    # def resync_property(self, pid):
-    #     """
-    #     Re-synchronizes the property by pulling up labels from any attached
-    #     property settings.
-
-    #     Args:
-
-    #         pid (str):
-    #             The ID of the property to update
-
-    #     Returns:
-
-    #         None; updates the property document in-place
-    #     """
-    #     pso_ids = next(self.properties.find({'_id': pid}))['relationships']['property_settings']
-
-    #     aggregated_info = self.aggregate_property_settings_info(pso_ids)
-
-    #     self.properties.update_one(
-    #         {'_id': pid},
-    #         {'$set': {'aggregated_info': aggregated_info}},
-    #         upsert=True
-    #     )
 
 
     def resync_dataset(self, ds_id, verbose=False):
@@ -982,18 +980,13 @@ class MongoDatabase(MongoClient):
             None; updates the dataset document in-place
         """
 
-        cs_ids = self.database[f'datasets/{ds_id}'].attrs['configuration_set_ids'].tolist()
-        pr_ids = self.database[f'datasets/{ds_id}'].attrs['property_ids'].tolist()
+        ds_doc = self.datasets.find_one({'_id': ds_id})
+
+        cs_ids = ds_doc['relationships']['configuration_sets']
+        pr_ids = ds_doc['relationships']['properties']
 
         for csid in cs_ids:
             self.resync_configuration_set(csid, verbose=verbose)
-
-        # for pid in tqdm(
-        #     pr_ids,
-        #     desc='Re-synchronizing properties',
-        #     disable=not verbose
-        #     ):
-        #     self.resync_property(pid)
 
         aggregated_info = {}
         for k,v in self.aggregate_configuration_set_info(cs_ids).items():
@@ -1005,10 +998,12 @@ class MongoDatabase(MongoClient):
             aggregated_info[k] = v
 
         for k,v in self.aggregate_property_info(pr_ids, verbose=verbose).items():
-            if k == 'labels':
-                k = 'property_labels'
-            elif k == 'labels_counts':
-                k = 'property_labels_counts'
+            if k in {
+                'labels', 'labels_counts',
+                'types',  'types_counts',
+                'fields', 'fields_counts'
+                }:
+                k = 'property_' + k
 
             aggregated_info[k] = v
 
@@ -1125,39 +1120,7 @@ class MongoDatabase(MongoClient):
         return aggregated_info
 
 
-    # def aggregate_property_settings_info(self, pso_ids):
-    #     """
-    #     Aggregates the following information from a list of property settings:
-
-    #         * labels
-
-    #     Args:
-
-    #         pso_ids (list or str):
-    #             The IDs of the properties to aggregate the information from
-
-    #     Returns:
-
-    #         aggregated_info (dict):
-    #             All of the aggregated info
-    #     """
-
-    #     if isinstance(pso_ids, str):
-    #         pso_ids = [pso_ids]
-
-    #     aggregated_info = {
-    #         'labels': [],
-    #     }
-
-    #     for doc in self.property_settings.find({'_id': {'$in': pso_ids}}):
-    #         for l in doc['labels']:
-    #             if l not in aggregated_info['labels']:
-    #                 aggregated_info['labels'].append(l)
-
-    #     return aggregated_info
-
-
-    def aggregate_property_info(self, pr_ids, resync=False, verbose=False):
+    def aggregate_property_info(self, pr_ids, verbose=False):
         """
         Aggregates the following information from a list of properties:
 
@@ -1169,10 +1132,6 @@ class MongoDatabase(MongoClient):
 
             pr_ids (list or str):
                 The IDs of the configurations to aggregate information from
-
-            resync (bool):
-                If True, re-synchronizes the property before aggregating the
-                information. Default is False.
 
             verbose (bool, default=False):
                 If True, prints a progress bar
@@ -1187,11 +1146,18 @@ class MongoDatabase(MongoClient):
             pr_ids = [pr_ids]
 
         aggregated_info = {
-            'types': set(),
+            'types': [],
+            'types_counts': [],
+            'fields': [],
+            'fields_counts': [],
             'methods': [],
             'methods_counts': [],
             'labels': [],
             'labels_counts': []
+        }
+
+        ignore_keys = {
+            'property-id', 'property-title', 'property-description', '_id',
         }
 
         for doc in tqdm(
@@ -1200,7 +1166,24 @@ class MongoDatabase(MongoClient):
             disable=not verbose,
             total=len(pr_ids)
             ):
-            aggregated_info['types'].add(doc['type'])
+            if doc['type'] not in aggregated_info['types']:
+                aggregated_info['types'].append(doc['type'])
+                aggregated_info['types_counts'].append(1)
+            else:
+                idx = aggregated_info['types'].index(doc['type'])
+                aggregated_info['types_counts'][idx] += 1
+
+            for l in doc[doc['type']]:
+                if l in ignore_keys: continue
+
+                l = '.'.join([doc['type'], l])
+
+                if l not in aggregated_info['fields']:
+                    aggregated_info['fields'].append(l)
+                    aggregated_info['fields_counts'].append(1)
+                else:
+                    idx = aggregated_info['fields'].index(l)
+                    aggregated_info['fields_counts'][idx] += 1
 
             for l in doc['labels']:
                 if l not in aggregated_info['labels']:
@@ -1219,7 +1202,6 @@ class MongoDatabase(MongoClient):
                     idx = aggregated_info['methods'].index(l)
                     aggregated_info['methods_counts'][idx] += 1
 
-        aggregated_info['types'] = list(aggregated_info['types'])
         return aggregated_info
 
 
@@ -1263,11 +1245,7 @@ class MongoDatabase(MongoClient):
             cs_ids = [cs_ids]
 
         if resync:
-            for csid in tqdm(
-                cs_ids,
-                desc='Re-synchronizing configuration sets',
-                disable=not verbose
-                ):
+            for csid in cs_ids:
                 self.resync_configuration_set(csid, verbose=verbose)
 
         co_ids = list(set(itertools.chain.from_iterable(
@@ -1276,84 +1254,6 @@ class MongoDatabase(MongoClient):
         )))
 
         return self.aggregate_configuration_info(co_ids, verbose=verbose)
-
-        # aggregated_info = {
-        #     'nconfigurations': len(co_ids),
-        #     'nsites': 0,
-        #     'nelements': 0,
-        #     'elements': [],
-        #     'individual_elements_ratios': [],
-        #     'total_elements_ratios': [],
-        #     'labels': [],
-        #     'labels_counts': [],
-        #     'chemical_formula_reduced': set(),
-        #     'chemical_formula_anonymous': set(),
-        #     'chemical_formula_hill': set(),
-        #     'nperiodic_dimensions': set(),
-        #     'dimension_types': set(),
-        # }
-
-
-        # for doc in self.configuration_sets.find({'_id': {'$in': cs_ids}}):
-
-        #     agg = doc['aggregated_info']
-
-        #     aggregated_info['nconfigurations'] += agg['nconfigurations']
-        #     aggregated_info['nsites'] += agg['nsites']
-
-        #     for e, er, ier in zip(
-        #         agg['elements'], agg['total_elements_ratios'],
-        #         agg['individual_elements_ratios']
-        #         ):
-        #         if e not in aggregated_info['elements']:
-        #             aggregated_info['nelements'] += 1
-        #             aggregated_info['elements'].append(e)
-        #             aggregated_info['total_elements_ratios'].append(er*agg['nsites'])
-        #             aggregated_info['individual_elements_ratios'].append(
-        #                 set(ier)
-        #             )
-        #         else:
-        #             idx = aggregated_info['elements'].index(e)
-        #             aggregated_info['total_elements_ratios'][idx] += er*agg['nsites']
-
-        #             old = aggregated_info['individual_elements_ratios'][idx]
-        #             new = old.union(set(agg['individual_elements_ratios'][idx]))
-        #             aggregated_info['individual_elements_ratios'][idx] = new
-
-        #     for l in agg['labels']:
-        #         if l not in aggregated_info['labels']:
-        #             aggregated_info['labels'].append(l)
-        #             aggregated_info['labels_counts'].append(1)
-        #         else:
-        #             idx = aggregated_info['labels'].index(l)
-        #             aggregated_info['labels_counts'][idx] += 1
-
-
-        #     for n in ['reduced', 'anonymous', 'hill']:
-        #         t = 'chemical_formula_'+n
-
-        #         old = aggregated_info[t]
-        #         new = old.union(set(agg[t]))
-
-        #         aggregated_info[t] = new
-
-
-        #     old = aggregated_info['nperiodic_dimensions']
-        #     new = old.union(set(agg['nperiodic_dimensions']))
-        #     aggregated_info['nperiodic_dimensions'] = new
-
-        #     old = aggregated_info['dimension_types']
-        #     new = old.union(set(tuple(_) for _ in agg['dimension_types']))
-        #     aggregated_info['dimension_types'] = new
-
-        # aggregated_info['individual_elements_ratios'] = [list(_) for _ in aggregated_info['individual_elements_ratios']]
-        # aggregated_info['chemical_formula_reduced'] = list(aggregated_info['chemical_formula_reduced'])
-        # aggregated_info['chemical_formula_anonymous'] = list(aggregated_info['chemical_formula_anonymous'])
-        # aggregated_info['chemical_formula_hill'] = list(aggregated_info['chemical_formula_hill'])
-        # aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
-        # aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
-
-        # return aggregated_info
 
 
     def insert_dataset(
@@ -1435,14 +1335,14 @@ class MongoDatabase(MongoClient):
 
             aggregated_info[k] = v
 
-        print('Beginning to aggregate property info', flush=True)
-
         for k,v in self.aggregate_property_info(
-            pr_ids, resync=resync, verbose=verbose).items():
-            if k == 'labels':
-                k = 'property_labels'
-            elif k == 'labels_counts':
-                k = 'property_labels_counts'
+            pr_ids, verbose=verbose).items():
+            if k in {
+                'labels', 'labels_counts',
+                'types',  'types_counts',
+                'fields', 'fields_counts'
+                }:
+                k = 'property_' + k
 
             aggregated_info[k] = v
 
@@ -1498,7 +1398,7 @@ class MongoDatabase(MongoClient):
         return ds_id
 
 
-    def get_dataset(self, ds_id, resync=False):
+    def get_dataset(self, ds_id, resync=False, verbose=False):
         """
         Returns the dataset with the given ID.
 
@@ -1511,6 +1411,10 @@ class MongoDatabase(MongoClient):
                 If True, re-aggregates the configuration set and property
                 information before returning. Default is False.
 
+            verbose (bool, default=True):
+                If True, prints a progress bar. Only used if
+                :code:`resync=False`.
+
         Returns:
 
             A dictionary with two keys:
@@ -1520,9 +1424,9 @@ class MongoDatabase(MongoClient):
 
 
         if resync:
-            self.resync_dataset(ds_id)
+            self.resync_dataset(ds_id, verbose=verbose)
 
-        ds_doc = next(self.datasets.find({'_id': ds_id}))
+        ds_doc = self.datasets.find_one({'_id': ds_id})
 
         return {
             'last_modified': ds_doc['last_modified'],
@@ -1588,7 +1492,12 @@ class MongoDatabase(MongoClient):
             )
 
 
-    def plot_histograms(self, fields=None, ids=None, verbose=False, xscale='linear', yscale='linear'):
+    def plot_histograms(
+        self,
+        fields=None, ids=None,
+        verbose=False,
+        nbins=100, xscale='linear', yscale='linear'
+        ):
         """
         Generates histograms of the given fields.
 
@@ -1599,8 +1508,19 @@ class MongoDatabase(MongoClient):
 
             ids (list or str):
                 The IDs of the objects to plot the data for
-        """
 
+            verbose (bool, default=False):
+                If True, prints progress bar
+
+            nbins (int):
+                Number of bins per histogram
+
+            xscale (str):
+                Scaling for x-axes. One of ['linear', 'log'].
+
+            yscale (str):
+                Scaling for y-axes. One of ['linear', 'log'].
+        """
         if fields is None:
             fields = self.property_fields
         elif isinstance(fields, str):
@@ -1611,47 +1531,79 @@ class MongoDatabase(MongoClient):
         nrows = max(1, int(np.ceil(nfields/3)))
         ncols = max(3, nfields%3)
 
-        # fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(4*ncols, 2*nrows))
-        axes = np.atleast_2d(axes)
+        fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
+        # fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(4*ncols, 2*nrows))
+        # axes = np.atleast_2d(axes)
 
         for i, prop in enumerate(fields):
             data = self.get_data('properties', prop, ids=ids, verbose=verbose, ravel=True)
 
-            nbins = max(data.shape[0]//1000, 100)
+            # nbins = max(data.shape[0]//1000, 100)
 
             c = i % 3
             r = i // 3
 
-            ax = axes[r][c]
-            _ = ax.hist(data, bins=nbins)
+            # ax = axes[r][c]
+            # _ = ax.hist(data, bins=nbins)
 
-        #     if nrows > 1:
-        #         fig.add_trace(
-        #             go.Histogram(x=data, nbinsx=nbins),
-        #             row=r+1, col=c+1,
-        #         )
-        #     else:
-        #         fig.add_trace(
-        #             go.Histogram(x=data, nbinsx=nbins),
-        #             row=1, col=c+1
-        #         )
+            if nrows > 1:
+                fig.add_trace(
+                    go.Histogram(x=data, nbinsx=nbins),
+                    row=r+1, col=c+1,
+                )
+            else:
+                fig.add_trace(
+                    go.Histogram(x=data, nbinsx=nbins),
+                    row=1, col=c+1
+                )
 
-        # fig.update_layout(showlegend=False)
-        # fig.update_xaxes(type=xscale)
-        # fig.update_yaxes(type=yscale)
-        plt.tight_layout()
+        fig.update_layout(showlegend=False)
+        fig.update_xaxes(type=xscale)
+        fig.update_yaxes(type=yscale)
+        # plt.tight_layout()
+
+        return fig
 
 
-    def get_statistics(self, field, verbose=False):
+    def get_statistics(
+        self,
+        fields,
+        query=None,
+        ids=None,
+        verbose=False,
+        ):
         """
-        Returns the average, standard deviation, minimum, maximum, and average
-        absolute value of all entries for the given field .
+        Queries the database and returns the fields specified by `keys` as a
+        list or an array of values. Returns the results in memory.
+
+        Example:
+
+        ..code-block:: python
+
+            data = database.get_data(
+                collection_name='properties',
+                query={'_id': {'$in': <list_of_property_IDs>}},
+                fields=['property_name_1.energy', 'property_name_1.forces'],
+                cache=True
+            )
 
         Args:
 
-            field (str):
-                The name of the field to get statistics for.
+            collection_name (str):
+                The name of a collection in the database.
+
+            fields (list or str):
+                The fields to return from the documents. Sub-fields can be
+                returned by providing names separated by periods ('.')
+
+            query (dict, default=None):
+                A Mongo query dictionary. If None, returns the data for all of
+                the documents in the collection.
+
+            ids (list):
+                The list of IDs to return the data for. If None, returns the
+                data for the entire collection. Note that this information can
+                also be provided using the :code:`query` argument.
 
             verbose (bool, default=False):
                 If True, prints a progress bar during data extraction
@@ -1659,18 +1611,38 @@ class MongoDatabase(MongoClient):
         Returns:
             results (dict)::
                 ..code-block::
-                    {'average': np.average(data), 'std': np.std(data), 'min': np.min(data), 'max': np.max(data), 'average_abs': np.average(np.abs(data))}
+                    {
+                        f:  {
+                            'average': np.average(data),
+                            'std': np.std(data),
+                            'min': np.min(data),
+                            'max': np.max(data),
+                            'average_abs': np.average(np.abs(data))
+                        } for f in fields
+                    }
         """
 
-        data = self.get_data('properties', field, ravel=True, verbose=verbose)
+        if isinstance(fields, str):
+            fields = [fields]
 
-        return {
-            'average': np.average(data),
-            'std': np.std(data),
-            'min': np.min(data),
-            'max': np.max(data),
-            'average_abs': np.average(np.abs(data)),
-        }
+        retdict = {}
+
+        for field in fields:
+
+            data = self.get_data('properties', field, ravel=True, verbose=verbose)
+
+            retdict[field] = {
+                'average': np.average(data),
+                'std': np.std(data),
+                'min': np.min(data),
+                'max': np.max(data),
+                'average_abs': np.average(np.abs(data)),
+            }
+
+        if len(fields) == 1:
+            return retdict[fields[0]]
+        else:
+            return retdict
 
 
     def filter_on_configurations(self, ds_id, query, verbose=False):
@@ -1708,7 +1680,7 @@ class MongoDatabase(MongoClient):
                 A list of property IDs that satisfy the filter
         """
 
-        ds_doc = next(self.datasets.find({'_id': ds_id}))
+        ds_doc = self.datasets.find_one({'_id': ds_id})
 
         configuration_sets = []
         property_ids = []
@@ -1727,12 +1699,7 @@ class MongoDatabase(MongoClient):
 
             query['_id'] = {'$in': cs_doc['relationships']['configurations']}
 
-            co_ids = [
-                _['_id'] for _ in self.configurations.find(
-                    query,
-                    {'_id': 1}
-                )
-            ]
+            co_ids = self.get_data('configurations', fields='_id', query=query)
 
             # Build the filtered configuration sets
             configuration_sets.append(
@@ -1759,7 +1726,9 @@ class MongoDatabase(MongoClient):
         return configuration_sets, property_ids
 
 
-    def filter_on_properties(self, ds_id, query, verbose=False):
+    def filter_on_properties(
+        self, ds_id, filter_fxn, fields=None, verbose=False
+        ):
         """
         Searches the properties of a given dataset, and returns configuration
         sets and properties that have been filtered based on the given
@@ -1776,8 +1745,7 @@ class MongoDatabase(MongoClient):
 
             configuration_sets, property_ids = database.filter_on_properties(
                 ds_id=...,
-                field='energy-forces.energy',
-                filter_fxn=lambda x:
+                filter_fxn=lambda x: np.max(np.abs(x[']))
             )
 
         Args:
@@ -1785,11 +1753,14 @@ class MongoDatabase(MongoClient):
             ds_id (str):
                 The ID of the dataset to filter
 
-            query (dict):
-                A Mongo query that will return the desired objects. Note that
-                the key-value pair :code:`{'_id': {'$in': ...}}` will be
-                included automatically to filter on only the objects that are
-                already linked to the given dataset.
+            filter_fxn (callable):
+                A callable function to use as :code:`filter(filter_fxn, cursor)`
+                where :code:`cursor` is a Mongo cursor over all of the
+                property documents in the given dataset.
+
+            fields (str or list, default=None):
+                The fields required by :code:`filter_fxn`. Providing the minimum
+                number of necessary fields can improve query performance.
 
             verbose (bool, default=False):
                 If True, prints progress bars
@@ -1804,28 +1775,34 @@ class MongoDatabase(MongoClient):
                 A list of property IDs that satisfy the filter
         """
 
-        ds_doc = next(self.datasets.find({'_id': ds_id}))
+        ds_doc = self.datasets.find_one({'_id': ds_id})
 
         configuration_sets = []
         property_ids = []
 
         # Filter the properties
-        query['_id'] = {'$in': ds_doc['relationships']['properties']}
+        retfields = {'_id': 1, 'relationships.configurations': 1}
+        if fields is not None:
+            if isinstance(fields, str):
+                fields = [fields]
+
+            for f in fields:
+                retfields[f] = 1
 
         cursor = self.properties.find(
-            query,
-            {'_id': 1, 'relationships.configurations': 1}
+            {'_id': {'$in': ds_doc['relationships']['properties']}},
+            retfields
         )
 
         all_co_ids = []
         for pr_doc in tqdm(
             cursor,
             desc='Filtering on properties',
-            disable=not verbose
+            disable=not verbose,
             ):
-            property_ids.append(pr_doc['_id'])
-
-            all_co_ids.append(pr_doc['relationships']['configurations'])
+            if filter_fxn(pr_doc):
+                property_ids.append(pr_doc['_id'])
+                all_co_ids.append(pr_doc['relationships']['configurations'])
 
         all_co_ids = list(set(itertools.chain.from_iterable(all_co_ids)))
 

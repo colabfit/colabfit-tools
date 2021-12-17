@@ -228,7 +228,7 @@ class Property(dict):
                 # Invalid ID. Try spoofing it
                 dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
                 dummy_dict['property-id'] += definition['property-id']
-                warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+                # warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
 
             load_from_existing = dummy_dict['property-id'] in KIM_PROPERTIES
             definition = dummy_dict['property-id']
