@@ -1,6 +1,6 @@
 import sys
 sys.path.append('.')
-from colabfit.tools.dataset import Dataset, load_data
+from colabfit.tools.dataset_old import Dataset, load_data
 from colabfit.tools.property_settings import PropertySettings
 from colabfit.tools.transformations import ExtractCauchyStress
 

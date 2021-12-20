@@ -67,9 +67,9 @@ class BaseConverter:
             verbose, **kwargs
         )
 
-        if len(images) == 0:
-            no_images_found = 'No configurations were found'
-            warnings.warn(no_images_found)
+        # if len(images) == 0:
+        #     no_images_found = 'No configurations were found'
+        #     warnings.warn(no_images_found)
 
         return images
 
@@ -336,7 +336,7 @@ class FolderConverter(BaseConverter):
         """
 
         ai = 0
-        images = []
+        # images = []
         files = list(Path(file_path).rglob(glob_string))
         for fpath in tqdm(
             files,
@@ -345,8 +345,8 @@ class FolderConverter(BaseConverter):
             ):
             new = self.reader(fpath, **kwargs)
 
-            if not isinstance(new, list):
-                new = [new]
+            # if not isinstance(new, list):
+            #     new = [new]
 
             for atoms in new:
 
@@ -380,7 +380,8 @@ class FolderConverter(BaseConverter):
                         [_.strip() for _ in atoms.info[labels_field].split(',')]
                     )
 
-                images.append(Configuration.from_ase(atoms))
+                yield Configuration.from_ase(atoms)
+                # images.append(Configuration.from_ase(atoms))
                 ai += 1
 
-        return images
+        # return images
