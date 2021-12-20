@@ -1089,8 +1089,8 @@ class MongoDatabase(MongoClient):
             'nelements': 0,
             'chemical_systems': set(),
             'elements': [],
-            'individual_elements_ratios': [],
-            'total_elements_ratios': [],
+            'individual_elements_ratios': {},
+            'total_elements_ratios': {},
             'labels': [],
             'labels_counts': [],
             'chemical_formula_reduced': set(),
@@ -1114,14 +1114,13 @@ class MongoDatabase(MongoClient):
                 if e not in aggregated_info['elements']:
                     aggregated_info['nelements'] += 1
                     aggregated_info['elements'].append(e)
-                    aggregated_info['total_elements_ratios'].append(er*doc['nsites'])
-                    aggregated_info['individual_elements_ratios'].append(set(
+                    aggregated_info['total_elements_ratios'][e] = er*doc['nsites']
+                    aggregated_info['individual_elements_ratios'][e] = set(
                         [np.round_(er, decimals=2)]
-                    ))
+                    )
                 else:
-                    idx = aggregated_info['elements'].index(e)
-                    aggregated_info['total_elements_ratios'][idx] += er*doc['nsites']
-                    aggregated_info['individual_elements_ratios'][idx].add(
+                    aggregated_info['total_elements_ratios'][e] += er*doc['nsites']
+                    aggregated_info['individual_elements_ratios'][e].add(
                         np.round_(er, decimals=2)
                     )
 
@@ -1140,17 +1139,11 @@ class MongoDatabase(MongoClient):
             aggregated_info['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
             aggregated_info['dimension_types'].add(tuple(doc['dimension_types']))
 
-        aggregated_info['individual_elements_ratios'] = [
-            list(_) for _ in aggregated_info['individual_elements_ratios']
-        ]
-
-        aggregated_info['total_elements_ratios'] = [
-            c/aggregated_info['nsites'] for c in aggregated_info['total_elements_ratios']
-        ]
+        for e in aggregated_info['elements']:
+            aggregated_info['total_elements_ratios'][e] /= aggregated_info['nsites']
+            aggregated_info['individual_elements_ratios'][e] = list(aggregated_info['individual_elements_ratios'][e])
 
         aggregated_info['chemical_systems'] = list(aggregated_info['chemical_systems'])
-
-        aggregated_info['individual_elements_ratios'] = list(aggregated_info['individual_elements_ratios'])
 
         aggregated_info['chemical_formula_reduced'] = list(aggregated_info['chemical_formula_reduced'])
         aggregated_info['chemical_formula_anonymous'] = list(aggregated_info['chemical_formula_anonymous'])
