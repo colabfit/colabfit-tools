@@ -15,6 +15,9 @@ class Dataset:
         property_ids (list):
             A list of attached properties
 
+        name (str):
+            The name of the dataset
+
         authors (list or str or None):
             The names of the authors of the dataset.
 
@@ -63,6 +66,7 @@ class Dataset:
         self,
         configuration_set_ids,
         property_ids,
+        name,
         authors,
         links,
         description,
@@ -71,6 +75,7 @@ class Dataset:
 
         self.configuration_set_ids  = configuration_set_ids
         self.property_ids           = property_ids
+        self.name                   = name
         self.authors                = authors
         self.links                  = links
         self.description            = description
@@ -78,6 +83,7 @@ class Dataset:
 
 
     def __hash__(self):
+        """Hashes the dataset using its configuration set and property IDs"""
         ds_hash = sha512()
 
         for i in sorted(self.configuration_set_ids):
