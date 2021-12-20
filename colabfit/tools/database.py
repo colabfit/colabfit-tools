@@ -1,3 +1,6 @@
+import os
+import json
+import shutil
 import datetime
 import warnings
 import itertools
@@ -90,6 +93,7 @@ class MongoDatabase(MongoClient):
             nconfigurations
             nsites
             nelements
+            chemical_systems
             elements
             individual_elements_ratios
             total_elements_ratios
@@ -112,6 +116,7 @@ class MongoDatabase(MongoClient):
             nconfigurations
             nsites
             nelements
+            chemical_systems
             elements
             individual_elements_ratios
             total_elements_ratios
@@ -310,10 +315,8 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
-            'last_modified', 'definition'
+            'last_modified', 'definition', '_id'
         }
-
-        # TODO: expected_keys should be able to ignore non-required stuff
 
         expected_keys = {
             pname: set(
@@ -329,6 +332,9 @@ class MongoDatabase(MongoClient):
         config_docs     = []
         property_docs   = []
         settings_docs   = {}
+
+        ndup_cos = 0
+        ndup_prs = 0
 
         # Add all of the configurations into the Mongo server
         ai = 1
@@ -448,8 +454,6 @@ class MongoDatabase(MongoClient):
                     if 'source-unit' in prop[k]:
                         setOnInsert[k]['source-unit'] = prop[k]['source-unit']
 
-                setOnInsert['_id'] = pid
-
                 property_docs.append(UpdateOne(
                     {'_id': pid},
                     {
@@ -463,6 +467,7 @@ class MongoDatabase(MongoClient):
                             'relationships.configurations': cid,
                         },
                         '$setOnInsert': {
+                            '_id': pid,
                             'type': pname,
                             pname: setOnInsert
                         },
@@ -490,11 +495,21 @@ class MongoDatabase(MongoClient):
             ai += 1
 
         if config_docs:
-            coll_configurations.bulk_write(config_docs, ordered=False)
+            res = coll_configurations.bulk_write(config_docs, ordered=False)
+            nmatch = res.bulk_api_result['nMatched']
+            if nmatch:
+                warnings.warn(
+                    '{} duplicate configurations detected'.format(nmatch)
+                )
         if property_docs:
-            coll_properties.bulk_write(property_docs, ordered=False)
+            res = coll_properties.bulk_write(property_docs, ordered=False)
+            nmatch = res.bulk_api_result['nMatched']
+            if nmatch:
+                warnings.warn(
+                    '{} duplicate properties detected'.format(nmatch)
+                )
         if settings_docs:
-            coll_property_settings.bulk_write(
+            res = coll_property_settings.bulk_write(
                 [
                     UpdateOne(
                         {'_id': sid},
@@ -503,6 +518,12 @@ class MongoDatabase(MongoClient):
                 ],
                 ordered=False
             )
+
+            nmatch = res.bulk_api_result['nMatched']
+            if nmatch:
+                warnings.warn(
+                    '{} duplicate property settings detected'.format(nmatch)
+                )
 
         client.close()
         return insertions
@@ -1066,6 +1087,7 @@ class MongoDatabase(MongoClient):
             'nconfigurations': len(ids),
             'nsites': 0,
             'nelements': 0,
+            'chemical_systems': set(),
             'elements': [],
             'individual_elements_ratios': [],
             'total_elements_ratios': [],
@@ -1085,6 +1107,8 @@ class MongoDatabase(MongoClient):
             total=len(ids),
             ):
             aggregated_info['nsites'] += doc['nsites']
+
+            aggregated_info['chemical_systems'].add(''.join(doc['elements']))
 
             for e, er in zip(doc['elements'], doc['elements_ratios']):
                 if e not in aggregated_info['elements']:
@@ -1123,6 +1147,8 @@ class MongoDatabase(MongoClient):
         aggregated_info['total_elements_ratios'] = [
             c/aggregated_info['nsites'] for c in aggregated_info['total_elements_ratios']
         ]
+
+        aggregated_info['chemical_systems'] = list(aggregated_info['chemical_systems'])
 
         aggregated_info['individual_elements_ratios'] = list(aggregated_info['individual_elements_ratios'])
 
@@ -1226,6 +1252,7 @@ class MongoDatabase(MongoClient):
 
             * nconfigurations
             * nsites
+            * chemical_systems
             * nelements
             * elements
             * individual_elements_ratios
@@ -1894,6 +1921,191 @@ class MongoDatabase(MongoClient):
             )
 
         return configuration_sets, property_ids
+
+
+    def dataset_to_markdown(
+        self,
+        ds_id,
+        base_folder,
+        html_file_name,
+        data_file_name,
+        data_format,
+        name_field=ATOMS_NAME_FIELD,
+        ):
+        """
+        Saves a Dataset and writes a properly formatted markdown file. In the
+        case of a Dataset that has child Dataset objects, each child Dataset
+        is written to a separate sub-folder.
+
+        Args:
+
+            ds_id (str):
+                The ID of the dataset.
+
+            base_folder (str):
+                Top-level folder in which to save the markdown and data files
+
+            html_file_name (str):
+                Name of file to save markdown to
+
+            data_file_name (str):
+                Name of file to save configuration and properties to
+
+            data_format (str):
+                Format to use for data file. Default is 'xyz'
+
+            name_field (str):
+                The name of the field that should be used to generate
+                configuration names
+        """
+
+        template = \
+"""
+# Summary
+|||
+|---|---|
+|Chemical systems|{}|
+|Element ratios|{}|
+|# of configurations|{}|
+|# of atoms|{}|
+
+# Name
+
+{}
+
+# Authors
+
+{}
+
+# Links
+
+{}
+
+# Description
+
+{}
+
+# Data
+
+|||
+|---|---|
+|Elements|{}|
+|File|[{}]({})|
+|Format|{}|
+|Name field|{}|
+
+# Properties
+
+|Property|KIM field|ASE field|Units
+|---|---|---|---|
+{}
+
+# Property settings
+
+|Method|Description|Labels|Files|
+|---|---|---|---|
+{}
+
+# Configuration sets
+
+|Regex|Description|# of structures| # of atoms|
+|---|---|---|---|
+{}
+
+# Configuration labels
+
+|Regex|Labels|Counts|
+|---|---|---|
+{}
+"""
+
+        html_file_name = os.path.join(base_folder, html_file_name)
+
+        dataset = self.get_dataset(ds_id)
+
+        definition_files = {
+            pname: json.encode(self.get_property_definition(pname))
+            for pname in dataset.aggregated_info['property_types']
+        }
+
+        definition_files = {}
+        for pname in dataset.aggregated_info['property_types']:
+            definition = self.get_property_definition(pname)
+
+            def_fpath = os.path.join(base_folder, f'{pname}.edn')
+
+            json.dump(definition, open(def_fpath, 'w'))
+
+            definition_files[pname] = def_fpath
+
+        property_map = {}
+        for pr_doc in self.properties.find(
+            {'_id': {'$in': dataset.property_ids}}
+            ):
+            if pr_doc['type'] not in property_map:
+                property_map[pr_doc['type']] = {
+                    f: v['source-unit']
+                    for f,v in pr_doc[pr_doc['type']]
+                }
+
+        agg_info = dataset.aggregated_info
+
+        property_settings = []
+        for pso_doc in self.property_settings.find(
+            {'relationships.properties': {'$in': dataset.property_ids}}
+            ):
+            property_settings.append(self.get_property_settings(pso_doc['_id']))
+
+        configuration_sets = [
+            self.get_configuration_set(csid)
+            for csid in dataset.configuration_set_ids
+        ]
+
+        # Write the markdown file
+        with open(html_file_name, 'w') as html:
+            html.write(
+                template.format(
+                    ', '.join(agg_info['chemical_systems']),
+                    ', '.join(['{} ({:.1f}%)'.format(e, er*100) for e, er in zip(agg_info['elements'], agg_info['elements_ratios'])]),
+                    agg_info['nconfigurations'],
+                    agg_info['nsites'],
+                    dataset.name,
+                    '\n\n'.join(dataset.authors),
+                    '\n\n'.join(dataset.links),
+                    dataset.description,
+                    ', '.join(agg_info['elements']),
+                    data_file_name, data_file_name,
+                    data_format,
+                    name_field,
+                    '\n'.join('\n'.join('| {} | {} | {}'.format('[{}]({})'.format(pid, definition_files[pid]), f, v) for f,v in fdict.items()) for pid, fdict in property_map.items()),
+                    '\n'.join('| {} | {} | {} | {} |'.format(pso.method, pso.description, ', '.join(pso.labels), ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for pso in property_settings),
+                    '\n'.join('| {} | {} | {} |'.format(cs.description, cs.aggregated_info['n_configurations'], cs.aggregated_info['n_sites']) for cs in configuration_sets),
+                    '\n'.join('| {} | {} |'.format(l, lc) for l, lc in zip(dataset.aggregated_info['configuration_labels'], dataset.aggregated_info['configuration_labels_counts'])),
+                )
+            )
+
+        data_file_name = os.path.join(base_folder, data_file_name)
+
+        # Copy any PSO files
+        all_file_names = []
+        for pso in property_settings:
+            for fi, f in enumerate(pso.files):
+                new_name = os.path.join(base_folder, os.path.split(f)[-1])
+                shutil.copyfile(f, new_name)
+
+                if new_name in all_file_names:
+                    raise RuntimeError(
+                        "PSO file name {} is used more than once."\
+                        "Use unique file names to avoid errors".format(f)
+                    )
+
+                all_file_names.append(new_name)
+                pso.files[fi] = new_name
+
+        if data_format == 'xyz':
+            data_format = 'extxyz'
+
+        # TODO: how to write configurations; with/without data
 
 
 def load_data(

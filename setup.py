@@ -29,8 +29,8 @@ setup(
         'kim_property',
         'numpy',
         'tqdm',
-        'bson',
         'markdown',
         'plotly',
+        'pymongo',
     ],
 )

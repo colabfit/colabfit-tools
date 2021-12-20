@@ -479,7 +479,7 @@ class Property(dict):
 
             try:
                 hashval =  np.round_(
-                    np.array(val['source-value']), decimals=8
+                    np.array(val['source-value']), decimals=12
                 ).data.tobytes()
             except:
                 try:
