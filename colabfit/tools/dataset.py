@@ -1,6 +1,7 @@
+import os
 from hashlib import sha512
 
-from colabfit import HASH_SHIFT
+from colabfit import HASH_SHIFT, ATOMS_NAME_FIELD
 
 class Dataset:
     """
@@ -34,32 +35,28 @@ class Dataset:
             information:
 
                 From the configuration sets:
-
-                * nconfigurations: the total number of configurations
-                * nsites: the total number of sites
-                * nelements: the total number of unique element types
-                * elements: the element types
-                * individual_elements_ratios: a set of elements ratios generated
-                by looping over each configuration, extracting its concentration of
-                each element, and adding the tuple of concentrations to the set
-                * total_elements_ratios: the ratio of the total count of atoms
-                    of each element type over nsites
-                * configuration_labels: the union of all configuration labels
-                * configuration_labels_counts: the total count of each configuration label
-                * chemical_formula_reduced: the set of all reduced chemical
-                    formulae
-                * chemical_formula_anonymous: the set of all anonymous chemical
-                    formulae
-                * chemical_formula_hill: the set of all hill chemical formulae
-                * nperiodic_dimensions: the set of all numbers of periodic
-                    dimensions
-                * dimension_types: the set of all periodic boundary choices
+                    nconfigurations
+                    nsites
+                    nelements
+                    chemical_systems
+                    elements
+                    individual_elements_ratios
+                    total_elements_ratios
+                    configuration_labels
+                    configuration_labels_counts
+                    chemical_formula_reduced
+                    chemical_formula_anonymous
+                    chemical_formula_hill
+                    nperiodic_dimensions
+                    dimension_types
 
                 From the properties:
-
-                * types: the set of all property types
-                * property_labels: the set of all property labels
-                * property_labels_counts: the total count of each property label
+                    property_types
+                    property_fields
+                    methods
+                    methods_counts
+                    property_labels
+                    property_labels_counts
     """
 
     def __init__(
