@@ -2,11 +2,24 @@ __version__ = "0.0.1"
 __author__  = "ColabFit"
 __credit__  = "University of Minnesota"
 
+HASH_SHIFT = 2**63
 
-ATOMS_ID_FIELD          = '_id'
-ATOMS_NAME_FIELD        = '_name'
-ATOMS_LABELS_FIELD      = '_labels'
-ATOMS_CONSTRAINTS_FIELD = '_constraints'
+MAX_STRING_LENGTH = 128
+STRING_DTYPE_SPECIFIER = f'S{MAX_STRING_LENGTH}'
+
+# _DBASE_COLLECTION           = '_databases'
+_DATABASE_NAME              = 'colabfit_database'
+_CONFIGS_COLLECTION         = 'configurations'
+_PROPS_COLLECTION           = 'properties'
+_PROPDEFS_COLLECTION        = 'property_definitions'
+_PROPSETTINGS_COLLECTION    = 'property_settings'
+_CONFIGSETS_COLLECTION      = 'configuration_sets'
+_DATASETS_COLLECTION        = 'datasets'
+
+ATOMS_NAME_FIELD            = '_name'
+ATOMS_LABELS_FIELD          = '_labels'
+ATOMS_LAST_MODIFIED_FIELD   = '_last_modified'
+ATOMS_CONSTRAINTS_FIELD     = '_constraints'
 
 DEFAULT_PROPERTY_NAME = 'configuration-nonorthogonal-periodic-3d-cell-fixed-particles-fixed'
 

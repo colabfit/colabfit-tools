@@ -5,6 +5,7 @@ import warnings
 import itertools
 import numpy as np
 from copy import deepcopy
+from hashlib import sha512
 
 import kim_edn
 from kim_property.instance import check_property_instances
@@ -18,7 +19,9 @@ from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
 
 from colabfit import (
-    DEFAULT_PROPERTY_NAME, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
+    HASH_SHIFT,
+    DEFAULT_PROPERTY_NAME, STRING_DTYPE_SPECIFIER, UNITS,
+    OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
 )
 
 # These are fields that are related to the geometry of the atomic structure
@@ -225,7 +228,7 @@ class Property(dict):
                 # Invalid ID. Try spoofing it
                 dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
                 dummy_dict['property-id'] += definition['property-id']
-                warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+                # warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
 
             load_from_existing = dummy_dict['property-id'] in KIM_PROPERTIES
             definition = dummy_dict['property-id']
@@ -281,18 +284,19 @@ class Property(dict):
                 data = conf.arrays[val['field']]
             else:
                 # Key not found on configurations. Will be checked later
-                raise MissingPropertyFieldWarning(
-                    f"Key '{key}' not found during Property.from_defintion()"
-                )
+                continue
+                # raise MissingPropertyFieldWarning(
+                #     f"Key '{key}' not found during Property.from_defintion()"
+                # )
 
-            if isinstance(data, str):
+            if isinstance(data, (np.ndarray, list)):
+                data = np.atleast_1d(data).tolist()
+            elif isinstance(data, (str, bool, int, float)):
                 pass
-            else:
-                data = np.atleast_1d(data)
-                if data.size == 1:
-                    data = float(data)
-                else:
-                    data = data.tolist()
+            elif np.issubdtype(data.dtype, np.integer):
+                data = int(data)
+            elif np.issubdtype(data.dtype, np.float):
+                data = float(data)
 
             edn[key] = {
                 'source-value': data,
@@ -461,23 +465,43 @@ class Property(dict):
 
     def __hash__(self):
         """
-        Hashes the Property by hashing its linked PropertySettings,
-        Configurations, and EDN.
+        Hashes the Property by hashing its EDN. Note that the property hash
+        depends upon the hashes of the linked configurations; this is to avoid
+        the case where two properties happen to be the same even though their
+        underlying configurations are different.
         """
+
+        _hash = sha512()
 
         hashed_values = []
         for key, val in self.edn.items():
             if key in _ignored_fields: continue
 
-            hashed_values.append(hash(
-                np.round_(np.array(val['source-value']), decimals=8).data.tobytes()
-            ))
+            try:
+                hashval =  np.round_(
+                    np.array(val['source-value']), decimals=8
+                ).data.tobytes()
+            except:
+                try:
+                    hashval = np.array(
+                        val['source-value'], dtype=STRING_DTYPE_SPECIFIER
+                    ).data.tobytes()
+                except:
+                    raise PropertyHashError(
+                        "Could not hash key {}: {}".format(key, val)
+                    )
 
-        return hash((
-            hash(self.settings),
-            tuple([hash(c) for c in self.configurations]),
-            hash(tuple(hashed_values))
-        ))
+            # hashed_values.append(hashval)
+            _hash.update(hashval)
+
+        # _hash.update(
+        #     str(hash(self.settings)).encode('utf-8')
+        #     if self.settings is not None else b''
+        # )
+        for c in self.configurations:
+            _hash.update(str(hash(c)).encode('utf-8'))
+
+        return int(_hash.hexdigest()[:16], 16)-HASH_SHIFT
 
 
     def __eq__(self, other):
@@ -493,9 +517,6 @@ class Property(dict):
 
         h1 = hash(self)
         h2 = hash(other)
-
-        if h1 != h2:
-            print(self, other)
 
         return hash(self) == hash(other)
 
@@ -522,6 +543,9 @@ class Property(dict):
 
         # return True
 
+
+    def todict(self):
+        return self.edn
 
     def keys(self):
         """Overloaded dictionary function for getting the keys of :attr:`self.edn`"""
@@ -625,3 +649,6 @@ def update_edn_with_conf(edn, conf):
         'source-unit': 'angstrom'
     }
 
+
+class PropertyHashError(Exception):
+    pass
