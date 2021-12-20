@@ -284,18 +284,19 @@ class Property(dict):
                 data = conf.arrays[val['field']]
             else:
                 # Key not found on configurations. Will be checked later
-                raise MissingPropertyFieldWarning(
-                    f"Key '{key}' not found during Property.from_defintion()"
-                )
+                continue
+                # raise MissingPropertyFieldWarning(
+                #     f"Key '{key}' not found during Property.from_defintion()"
+                # )
 
-            if isinstance(data, str):
+            if isinstance(data, (np.ndarray, list)):
+                data = np.atleast_1d(data).tolist()
+            elif isinstance(data, (str, bool, int, float)):
                 pass
-            else:
-                data = np.atleast_1d(data)
-                if data.size == 1:
-                    data = float(data)
-                else:
-                    data = data.tolist()
+            elif np.issubdtype(data.dtype, np.integer):
+                data = int(data)
+            elif np.issubdtype(data.dtype, np.float):
+                data = float(data)
 
             edn[key] = {
                 'source-value': data,
@@ -464,8 +465,10 @@ class Property(dict):
 
     def __hash__(self):
         """
-        Hashes the Property by hashing its EDN. Note that the hash does NOT
-        depend upon the linked configurations or settings.
+        Hashes the Property by hashing its EDN. Note that the property hash
+        depends upon the hashes of the linked configurations; this is to avoid
+        the case where two properties happen to be the same even though their
+        underlying configurations are different.
         """
 
         _hash = sha512()
@@ -495,8 +498,8 @@ class Property(dict):
         #     str(hash(self.settings)).encode('utf-8')
         #     if self.settings is not None else b''
         # )
-        # for c in self.configurations:
-        #     _hash.update(str(hash(c)).encode('utf-8'))
+        for c in self.configurations:
+            _hash.update(str(hash(c)).encode('utf-8'))
 
         return int(_hash.hexdigest()[:16], 16)-HASH_SHIFT
 

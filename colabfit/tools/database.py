@@ -158,7 +158,7 @@ class MongoDatabase(MongoClient):
             A Mongo collection of dataset documents
 
     """
-    def __init__(self, database_name, nprocs=1, drop=False):
+    def __init__(self, database_name, nprocs=1, drop_database=False):
         """
         Args:
 
@@ -168,7 +168,7 @@ class MongoDatabase(MongoClient):
             nprocs (int):
                 The size of the processor pool
 
-            drop (bool, default=False):
+            drop_database (bool, default=False):
                 If True, deletes the existing Mongo database.
 
         """
@@ -183,7 +183,7 @@ class MongoDatabase(MongoClient):
 
         self.database_name = database_name
 
-        if drop:
+        if drop_database:
             self.drop_database(database_name)
 
         self.configurations         = self[database_name][_CONFIGS_COLLECTION]
@@ -254,9 +254,10 @@ class MongoDatabase(MongoClient):
                 verbose=verbose
             )
         else:
-            configurations = list(configurations)
+            configurations = np.array(list(configurations), dtype='object')
 
             split_configs = np.array_split(configurations, self.nprocs)
+            split_configs = [_.tolist() for _ in split_configs]
 
             user = 'colabfitAdmin'
             pwrd = 'Fo08w3K&VEY&'
@@ -283,7 +284,7 @@ class MongoDatabase(MongoClient):
     def _insert_data(
         configurations, database_name, mongo_login,
         property_map=None, property_settings=None,
-        verbose=True
+        verbose=False
         ):
 
         client = MongoClient(mongo_login)
@@ -302,13 +303,6 @@ class MongoDatabase(MongoClient):
         if property_settings is None:
             property_settings = {}
 
-        # for settings_id in property_settings.values():
-        #     if not coll_property_settings.count_documents({'_id': settings_id}):
-        #         raise MissingEntryError(
-        #             "The property settings object with ID '{}' does"\
-        #             " not exist in the database".format(settings_id)
-        #         )
-
         property_definitions = {
             pname: coll_property_definitions.find_one({'_id': pname})['definition']
             for pname in property_map
@@ -319,10 +313,13 @@ class MongoDatabase(MongoClient):
             'last_modified', 'definition'
         }
 
+        # TODO: expected_keys should be able to ignore non-required stuff
+
         expected_keys = {
             pname: set(
                 property_map[pname][f]['field']
                 for f in property_definitions[pname].keys() - ignore_keys
+                if property_definitions[pname][f]['required']
             )
             for pname in property_map
         }
@@ -390,10 +387,14 @@ class MongoDatabase(MongoClient):
                 missing_keys = expected_keys[pname] - available_keys
                 if missing_keys:
                     warnings.warn(
-                        "Configuration {} is missing keys {} during "\
+                        "Configuration is missing keys {} during "\
                         "insert_data. Available keys: {}. Skipping".format(
-                            ai, missing_keys, available_keys
+                            missing_keys, available_keys
                         )
+                        # "Configuration {} is missing keys {} during "\
+                        # "insert_data. Available keys: {}. Skipping".format(
+                        #     ai, missing_keys, available_keys
+                        # )
                     )
                     continue
 
@@ -426,6 +427,11 @@ class MongoDatabase(MongoClient):
                 # Prepare the EDN document
                 setOnInsert = {}
                 for k in property_map[pname]:
+                    if k not in prop.keys():
+                        # To allow for missing non-required keys.
+                        # Required keys checked for in Property.from_definition
+                        continue
+
                     if isinstance(prop[k]['source-value'], (int, float, str)):
                         # Add directly
                         setOnInsert[k] = {
@@ -725,14 +731,23 @@ class MongoDatabase(MongoClient):
 
         for doc in tqdm(cursor, desc='Getting data', disable=not verbose):
             for k in retfields:
-                splitk = k.split('.')
-                for kk in splitk:
-                    doc = doc[kk]
-                if isinstance(doc, dict):
-                    v = doc['source-value']
-                else:
-                    v = doc
-                data[k].append(np.atleast_1d(v))
+                # For figuring out if document has the data
+
+                # Handle keys like "property-name.property-field"
+                missing = False
+                v = doc
+                for kk in k.split('.'):
+                    if kk in v:
+                        v = v[kk]
+                    else:
+                        # Missing something
+                        missing = True
+
+                if not missing:
+                    if isinstance(v, dict):
+                        v = v['source-value']
+
+                    data[k].append(np.atleast_1d(v))
 
         if concatenate or ravel:
             for k,v in data.items():
@@ -748,7 +763,7 @@ class MongoDatabase(MongoClient):
             return data
 
 
-    def get_configuration(self, i, verbose=False):
+    def get_configuration(self, i):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
@@ -1257,7 +1272,7 @@ class MongoDatabase(MongoClient):
 
 
     def insert_dataset(
-        self, cs_ids, pr_ids,
+        self, cs_ids, pr_ids, name,
         authors=None,
         links=None,
         description='',
@@ -1274,6 +1289,9 @@ class MongoDatabase(MongoClient):
 
             pr_ids (list or str):
                 The IDs of the properties to link to the dataset
+
+            name (str):
+                The name of the dataset
 
             authors (list or str or None):
                 The names of the authors of the dataset. If None, then no
@@ -1323,11 +1341,14 @@ class MongoDatabase(MongoClient):
 
         # Check for duplicates
         if self.datasets.count_documents({'_id': ds_id}):
+            if resync:
+                self.resync_dataset(ds_id)
+
             return ds_id
 
         aggregated_info = {}
         for k,v in self.aggregate_configuration_set_info(
-            cs_ids, resync=resync, verbose=verbose).items():
+            cs_ids, verbose=verbose).items():
             if k == 'labels':
                 k = 'configuration_labels'
             elif k == 'labels_counts':
@@ -1355,6 +1376,7 @@ class MongoDatabase(MongoClient):
                 },
                 '$setOnInsert': {
                     '_id': ds_id,
+                    'name': name,
                     'authors': authors,
                     'links': links,
                     'description': description,
@@ -1433,6 +1455,7 @@ class MongoDatabase(MongoClient):
             'dataset': Dataset(
                 configuration_set_ids=ds_doc['relationships']['configuration_sets'],
                 property_ids=ds_doc['relationships']['properties'],
+                name=ds_doc['name'],
                 authors=ds_doc['authors'],
                 links=ds_doc['links'],
                 description=ds_doc['description'],
@@ -1454,18 +1477,22 @@ class MongoDatabase(MongoClient):
         pass
 
 
-    def apply_configuration_labels(self, query, labels, verbose=False):
+    def apply_labels(self, collection_name, query, labels, verbose=False):
         """
-        Applies the given labels to all configurations that match the query.
+        Applies the given labels to all objects in the specified collection that
+        match the query.
 
         Args:
 
+            collection_name (str):
+                One of 'configurations' or 'properties'.
+
             query (dict):
-                A Mongo-style query for filtering the configurations. For
+                A Mongo-style query for filtering the collection. For
                 example: :code:`query = {'nsites': {'$lt': 100}}`.
 
             labels (set or str):
-                A set of labels to apply to the matching configurations.
+                A set of labels to apply to the matching entries.
 
             verbose (bool):
                 If True, prints progress bar.
@@ -1476,25 +1503,36 @@ class MongoDatabase(MongoClient):
             * Iterate over the HDF5 entries.
         """
 
+        if collection_name == 'configurations':
+            collection = self.configurations
+        elif collection_name == 'properties':
+            collection = self.properties
+        else:
+            raise RuntimeError(
+                "collection_name must be 'configurations' or 'properties'"
+            )
+
         if isinstance(labels, str):
             labels = {labels}
 
-        for cdoc in tqdm(
-            self.configurations.find(query, {'_id': 1}),
+        for doc in tqdm(
+            collection.find(query, {'_id': 1}),
             desc='Applying configuration labels',
             disable=not verbose
             ):
-            cid = cdoc['_id']
+            doc_id = doc['_id']
 
-            self.configurations.update_one(
-                {'_id': cid},
+            collection.update_one(
+                {'_id': doc_id},
                 {'$addToSet': {'labels': {'$each': list(labels)}}}
             )
 
 
     def plot_histograms(
         self,
-        fields=None, ids=None,
+        fields=None,
+        query=None,
+        ids=None,
         verbose=False,
         nbins=100, xscale='linear', yscale='linear'
         ):
@@ -1505,6 +1543,10 @@ class MongoDatabase(MongoClient):
 
             fields (list or str):
                 The names of the fields to plot
+
+            query (dict, default=None):
+                A Mongo query dictionary. If None, returns the data for all of
+                the documents in the collection.
 
             ids (list or str):
                 The IDs of the objects to plot the data for
@@ -1536,7 +1578,10 @@ class MongoDatabase(MongoClient):
         # axes = np.atleast_2d(axes)
 
         for i, prop in enumerate(fields):
-            data = self.get_data('properties', prop, ids=ids, verbose=verbose, ravel=True)
+            data = self.get_data(
+                'properties', prop,
+                query=query, ids=ids, verbose=verbose, ravel=True
+            )
 
             # nbins = max(data.shape[0]//1000, 100)
 
@@ -1629,7 +1674,10 @@ class MongoDatabase(MongoClient):
 
         for field in fields:
 
-            data = self.get_data('properties', field, ravel=True, verbose=verbose)
+            data = self.get_data(
+                'properties', field, query=query, ids=ids,
+                ravel=True, verbose=verbose
+            )
 
             retdict[field] = {
                 'average': np.average(data),
@@ -1727,7 +1775,7 @@ class MongoDatabase(MongoClient):
 
 
     def filter_on_properties(
-        self, ds_id, filter_fxn, fields=None, verbose=False
+        self, ds_id, filter_fxn=None, query=None, fields=None, verbose=False
         ):
         """
         Searches the properties of a given dataset, and returns configuration
@@ -1753,10 +1801,17 @@ class MongoDatabase(MongoClient):
             ds_id (str):
                 The ID of the dataset to filter
 
-            filter_fxn (callable):
+            filter_fxn (callable, default=None):
                 A callable function to use as :code:`filter(filter_fxn, cursor)`
                 where :code:`cursor` is a Mongo cursor over all of the
-                property documents in the given dataset.
+                property documents in the given dataset. If
+                :code:`filter_fxn` is None, must specify :code:`query`.
+
+            query (dict, default=None):
+                A Mongo query that will return the desired objects. Note that
+                the key-value pair :code:`{'_id': {'$in': ...}}` will be
+                included automatically to filter on only the objects that are
+                already linked to the given dataset.
 
             fields (str or list, default=None):
                 The fields required by :code:`filter_fxn`. Providing the minimum
@@ -1775,6 +1830,14 @@ class MongoDatabase(MongoClient):
                 A list of property IDs that satisfy the filter
         """
 
+        if filter_fxn is None:
+            if query is None:
+                raise RuntimeError(
+                    'filter_fxn and query cannot both be None'
+                )
+            else:
+                filter_fxn = lambda x: True
+
         ds_doc = self.datasets.find_one({'_id': ds_id})
 
         configuration_sets = []
@@ -1789,10 +1852,12 @@ class MongoDatabase(MongoClient):
             for f in fields:
                 retfields[f] = 1
 
-        cursor = self.properties.find(
-            {'_id': {'$in': ds_doc['relationships']['properties']}},
-            retfields
-        )
+        if query is None:
+            query = {}
+
+        query['_id'] = {'$in': ds_doc['relationships']['properties']}
+
+        cursor = self.properties.find(query, retfields)
 
         all_co_ids = []
         for pr_doc in tqdm(
