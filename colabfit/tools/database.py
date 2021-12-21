@@ -1916,6 +1916,109 @@ class MongoDatabase(MongoClient):
         return configuration_sets, property_ids
 
 
+    def apply_transformation(
+        self,
+        property_ids,
+        configuration_ids,
+        update_map,
+        configuration_fields=None
+        ):
+        """
+        This function works by looping over the properties that match the
+        provided query and updating them by applying the updated rule. Fields
+        from the linked configurations can also be used for the update rule if
+        by setting configuration_fields.
+
+        Example:
+
+        ..code-block:: python
+
+            # Convert energies to per-atom values
+            database.apply_transformation(
+                query={'_id': <property_ids>},
+                update={
+                    'property-name.energy':
+                    lambda fv, doc: fv/doc['configuration']['nsites']
+                }
+            )
+
+        Args:
+
+            property_ids (list or str):
+                The IDs of the properties to be updated.
+
+            update_map (dict):
+                A dictionary where the keys are the name of a field to update
+                (omitting "source-value"), and the values are callable functions
+                that take the field value and property document as arguments.
+
+            configuration_ids (list, default=None):
+                The IDs of the configurations to use for each property update.
+                Must be the same length as :code:`pr_ids`. Note that the fields
+                of configuration :code:`co_ids[i]` will be accessible for the
+                update command of property :code:`pr_ids[i]` using the
+                :code:`configuration.<field>` notation. If None, applies the
+                updates to the properties without using any configuration
+                fields.
+
+        Returns:
+
+            update_results (dict):
+                The results of a Mongo bulkWrite operation
+        """
+
+
+        pipeline = [
+            # Filter on the specified properties
+            {'$match': {'_id': {'$in': property_ids}}},
+        ]
+
+        if configuration_ids:
+            # Attach the linked configuration documents
+            pipeline.append(
+                {'$lookup': {
+                    'from': 'configurations',
+                    'localField': 'relationships.configurations',
+                    'foreignField': '_id',
+                    'as': 'configuration'
+                }}
+            )
+            pipeline.append(
+                {'$unwind': '$configuration'}
+            )
+        else:
+            configuration_ids = [None]*len(property_ids)
+
+        pr_to_co_map = {p:c for p,c in zip(property_ids, configuration_ids)}
+
+        updates = []
+        for pr_doc in self.properties.aggregate(pipeline):
+            link_cid = pr_to_co_map[pr_doc['_id']]
+
+            # Only perform the operation for the desired configurations
+            if (link_cid is None) or (pr_doc['configuration']['_id'] == link_cid):
+                for key, fxn in update_map.items():
+                    keysplit = key.split('.')
+                    fv = pr_doc
+                    for k in key.split('.'):
+                        fv = fv[k]
+
+                    if isinstance(fv, dict):
+                        fv = fv['source-value']
+
+                    updates.append(UpdateOne(
+                        {'_id': pr_doc['_id']},
+                        {'$set': {key: fxn(fv, pr_doc)}}
+                    ))
+
+        res = self.properties.bulk_write(updates, ordered=False)
+        nmatch = res.bulk_api_result['nMatched']
+        if nmatch:
+            warnings.warn('Modified {} properties'.format(nmatch))
+
+        return res
+
+
     def dataset_to_markdown(
         self,
         ds_id,
@@ -1959,8 +2062,8 @@ class MongoDatabase(MongoClient):
 |---|---|
 |Chemical systems|{}|
 |Element ratios|{}|
-|# of configurations|{}|
-|# of atoms|{}|
+|# of unique configurations|{}|
+|# of unique atoms|{}|
 
 # Name
 
