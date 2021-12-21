@@ -142,9 +142,9 @@ class Configuration(Atoms):
         # int(hashlib.sha512(mystring).hexdigest(), 16)
 
         _hash = sha512()
-        _hash.update(np.round_(self.arrays['positions'], decimals=8).data.tobytes()),
+        _hash.update(np.round_(self.arrays['positions'], decimals=16).data.tobytes()),
         _hash.update(self.arrays['numbers'].data.tobytes()),
-        _hash.update(np.round_(np.array(self.cell), decimals=8).data.tobytes()),
+        _hash.update(np.round_(np.array(self.cell), decimals=16).data.tobytes()),
         _hash.update(np.array(self.pbc).data.tobytes()),
 
         return int(_hash.hexdigest()[:16], 16)-HASH_SHIFT
