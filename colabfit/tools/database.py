@@ -1415,11 +1415,7 @@ class MongoDatabase(MongoClient):
         for csid in cs_ids:
             config_set_docs.append(UpdateOne(
                 {'_id': csid},
-                {
-                    '$addToSet': {
-                        'relationships.configuration_sets': ds_id
-                    }
-                }
+                {'$addToSet': {'relationships.datasets': ds_id}}
             ))
 
         self.configuration_sets.bulk_write(config_set_docs)
@@ -1429,11 +1425,7 @@ class MongoDatabase(MongoClient):
         for pid in tqdm(pr_ids, desc='Updating PR->DS relationships'):
             property_docs.append(UpdateOne(
                 {'_id': pid},
-                {
-                    '$addToSet': {
-                        'relationships.datasets': ds_id
-                    }
-                }
+                {'$addToSet': {'relationships.datasets': ds_id}}
             ))
 
         self.properties.bulk_write(property_docs)
