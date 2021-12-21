@@ -565,8 +565,9 @@ class MongoDatabase(MongoClient):
         if self.property_definitions.count_documents(
             {'_id': definition['property-id']}
             ):
-            raise DuplicateDefinitionError(
-                "Property definition with name '{}' already exists".format(
+            warnings.warn(
+                "Property definition with name '{}' already exists. "\
+                "Using existing definition.".format(
                     definition['property-id']
                 )
             )
@@ -1497,12 +1498,18 @@ class MongoDatabase(MongoClient):
         pass
 
 
-    def apply_labels(self, collection_name, query, labels, verbose=False):
+    def apply_labels(
+        self, dataset_id, collection_name, query, labels, verbose=False
+        ):
         """
         Applies the given labels to all objects in the specified collection that
-        match the query.
+        match the query and are linked to the given dataset.
 
         Args:
+
+            dataset_id (str):
+                The ID of the dataset. Used as a safety measure to only update
+                entries for the given dataset.
 
             collection_name (str):
                 One of 'configurations' or 'properties'.
@@ -1523,10 +1530,23 @@ class MongoDatabase(MongoClient):
             * Iterate over the HDF5 entries.
         """
 
+        dataset = self.get_dataset(dataset_id)['dataset']
+
         if collection_name == 'configurations':
             collection = self.configurations
+
+            cs_ids = dataset.configuration_set_ids
+
+            all_co_ids = list(set(itertools.chain.from_iterable(
+                cs_doc['relationships']['configurations'] for cs_doc in
+                self.configuration_sets.find({'_id': {'$in': cs_ids}})
+            )))
+
+            query['_id'] = {'$in': all_co_ids}
         elif collection_name == 'properties':
             collection = self.properties
+
+            query['_id'] = {'$in': dataset.property_ids}
         else:
             raise RuntimeError(
                 "collection_name must be 'configurations' or 'properties'"
@@ -1918,10 +1938,10 @@ class MongoDatabase(MongoClient):
 
     def apply_transformation(
         self,
+        dataset_id,
         property_ids,
         configuration_ids,
         update_map,
-        configuration_fields=None
         ):
         """
         This function works by looping over the properties that match the
@@ -1935,6 +1955,8 @@ class MongoDatabase(MongoClient):
 
             # Convert energies to per-atom values
             database.apply_transformation(
+                dataset_id=<dataset_id>,
+
                 query={'_id': <property_ids>},
                 update={
                     'property-name.energy':
@@ -1943,6 +1965,10 @@ class MongoDatabase(MongoClient):
             )
 
         Args:
+
+            dataset_id (str):
+                The ID of the dataset. Used as a safety measure to only update
+                entries for the given dataset.
 
             property_ids (list or str):
                 The IDs of the properties to be updated.
@@ -1967,8 +1993,11 @@ class MongoDatabase(MongoClient):
                 The results of a Mongo bulkWrite operation
         """
 
+        dataset = self.get_dataset(dataset_id)['dataset']
 
         pipeline = [
+            # Filter on the dataset properties
+            {'$match': {'_id': {'$in': dataset.property_ids}}},
             # Filter on the specified properties
             {'$match': {'_id': {'$in': property_ids}}},
         ]
@@ -1998,17 +2027,36 @@ class MongoDatabase(MongoClient):
             # Only perform the operation for the desired configurations
             if (link_cid is None) or (pr_doc['configuration']['_id'] == link_cid):
                 for key, fxn in update_map.items():
-                    keysplit = key.split('.')
                     fv = pr_doc
+                    missing = False
                     for k in key.split('.'):
-                        fv = fv[k]
+                        if k in fv:
+                            fv = fv[k]
+                        else:
+                            # Does not have necessary data
+                            missing = True
+
+                    if missing: continue
 
                     if isinstance(fv, dict):
+                        # Handle case where "source-value" isn't at end of key
                         fv = fv['source-value']
+                        key += '.source-value'
+
+                    data = fxn(fv, pr_doc)
+
+                    if isinstance(data, (np.ndarray, list)):
+                        data = np.atleast_1d(data).tolist()
+                    elif isinstance(data, (str, bool, int, float)):
+                        pass
+                    elif np.issubdtype(data.dtype, np.integer):
+                        data = int(data)
+                    elif np.issubdtype(data.dtype, np.float):
+                        data = float(data)
 
                     updates.append(UpdateOne(
                         {'_id': pr_doc['_id']},
-                        {'$set': {key: fxn(fv, pr_doc)}}
+                        {'$set': {key: data}}
                     ))
 
         res = self.properties.bulk_write(updates, ordered=False)
