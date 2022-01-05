@@ -32,7 +32,7 @@ Adding Configurations
 
 Load the configurations onto the Dataset by either manually constructing the
 Configurations and assigning them to the :attr:`configurations` attribute, or
-using :meth:`~colabfit.tools.dataset.load_data`, which calls a pre-made
+using :meth:`~colabfit.tools.database.load_data`, which calls a pre-made
 :class:`~colabfit.tools.converters.BaseConverter` and returns a list of
 :class:`~colabfit.tools.configuration.Configuration` objects.
 
@@ -63,7 +63,7 @@ Manually
         Configuration.from_ase(atoms) for atoms in images
     ]
 
-Using :meth:`~colabfit.dataset.load_data`
+Using :meth:`~colabfit.database.load_data`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Note that the file_format must be specified, and a name_field (or None) should
 be provided to specify the name of the loaded configurations.
@@ -76,7 +76,7 @@ be provided to specify the name of the loaded configurations.
 
 .. code-block:: python
 
-	from colabfit.tools.dataset import load_data
+	from colabfit.tools.database import load_data
 
 	dataset.configurations = load_data(
 		file_path='/content/example.extxyz',

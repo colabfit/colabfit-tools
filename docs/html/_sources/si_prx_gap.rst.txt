@@ -21,7 +21,7 @@ using the following commands:
 Loading from a file
 ===================
 
-This example uses :meth:`~colabfit.tools.dataset.load_data` to load the data
+This example uses :meth:`~colabfit.tools.database.load_data` to load the data
 from an existing Extended XYZ file. Note that the raw data includes the
 :code:`config_type` field, which is used to generate the names of the loaded
 Configurations. A :attr:`default_name` is also provided to handle the

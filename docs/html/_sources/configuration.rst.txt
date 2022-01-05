@@ -52,7 +52,7 @@ Building Configurations
 The most common use-case for building :class:`Configuration` objects is to use
 the :meth:`~colabfit.tools.converters.BaseConverter.load` method of a
 :class:`colabfit.tools.BaseConverter` instance (or equivalently, the
-:meth:`~colabfit.tools.dataset.load_data` function), which will call
+:meth:`~colabfit.tools.database.load_data` function), which will call
 :meth:`Configuration.from_ase` on an existing :class:`ase.Atoms` object.
 
 .. code-block:: python
@@ -66,7 +66,7 @@ the :meth:`~colabfit.tools.converters.BaseConverter.load` method of a
 
 .. code-block:: python
     
-    from colabfit.tools.dataset import load_data
+    from colabfit.tools.database import load_data
 
     configurations = load_data(...)
 
