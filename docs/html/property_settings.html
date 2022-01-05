@@ -121,8 +121,13 @@ properties (e.g., ‘VASP’, ‘QuantumEspresso’, ‘experiment’, …)</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="colabfit.tools.property_settings.PropertySettings.files">
 <span class="sig-name descname"><span class="pre">files</span></span><a class="headerlink" href="#colabfit.tools.property_settings.PropertySettings.files" title="Permalink to this definition"></a></dt>
+<<<<<<< HEAD
 <dd><p>A list of 2-tuples, where the first value of each tuple is the name
 of a file, and the second value is the contents of the file.</p>
+=======
+<dd><p>A list of strings, where each entry is the path to a file that may
+be useful for computing one or more of the properties.</p>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>list</p>
@@ -145,14 +150,22 @@ of a file, and the second value is the contents of the file.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.property_settings.PropertySettings.__eq__">
 <span class="sig-name descname"><span class="pre">__eq__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property_settings.PropertySettings.__eq__" title="Permalink to this definition"></a></dt>
+<<<<<<< HEAD
 <dd><p>Equality check compares hashes</p>
+=======
+<dd><p>Equality check just compares the calculation method</p>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.property_settings.PropertySettings.__hash__">
 <span class="sig-name descname"><span class="pre">__hash__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property_settings.PropertySettings.__hash__" title="Permalink to this definition"></a></dt>
+<<<<<<< HEAD
 <dd><p>Hashes method, description, and file contents. Not labels. Returns a
 string</p>
+=======
+<dd><p>Only hashes <code class="xref py py-attr docutils literal notranslate"><span class="pre">self.method</span></code> for now</p>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 </dd></dl>
 
 <dl class="py method">

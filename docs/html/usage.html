@@ -102,14 +102,22 @@ been “synchronized” in order to ensure that all of the data (configuration
 labels, configuration sets, aggregated metadata, …) have been properly updated
 to reflect any recent changes to the Dataset. However, this often requires
 looping over (potentially large) lists of Property and Configuration objects.</p>
+<<<<<<< HEAD
 <p>A <code class="xref py py-meth docutils literal notranslate"><span class="pre">resync()</span></code> function is provided in order
+=======
+<p>A <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.resync" title="colabfit.tools.dataset.Dataset.resync"><code class="xref py py-meth docutils literal notranslate"><span class="pre">resync()</span></code></a> function is provided in order
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 to allow Datasets to be synchronized without performing these iterations at
 unnecessary times.</p>
 <p><strong>Important</strong>: the <code class="xref py py-meth docutils literal notranslate"><span class="pre">resync()</span></code> function should be called after making any
 major changes to a Dataset (e.g., loading data, or updating one of the
 <a class="reference internal" href="#regex-dictionaries"><span class="std std-ref">regex dictionaries</span></a>).</p>
 <p>Note: this function will be called automatically before many core operations
+<<<<<<< HEAD
 (like <code class="xref py py-meth docutils literal notranslate"><span class="pre">to_markdown()</span></code>).</p>
+=======
+(like <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.to_markdown" title="colabfit.tools.dataset.Dataset.to_markdown"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_markdown()</span></code></a>).</p>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 </section>
 <section id="custom-properties">
 <h2>Custom properties<a class="headerlink" href="#custom-properties" title="Permalink to this headline"></a></h2>
@@ -123,6 +131,7 @@ dictionaries, the key is a string that will be used to perform regex matching on
 the <code class="xref py py-attr docutils literal notranslate"><span class="pre">ASE_NAME_FIELD</span></code> of a Configuration, and the value is a representation
 of the metadata to be applied to all matching Configurations.</p>
 <ul class="simple">
+<<<<<<< HEAD
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code>: key = regex, value = dictionary</p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_label_regexes</span></code>: key = regex, value = string OR list of strings</p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code>: key = regex, value = string</p></li>
@@ -139,12 +148,34 @@ dictionaries:</p>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_label_regexes</span></code>: <a class="reference internal" href="#applying-configuration-labels"><span class="std std-ref">Applying configuration labels</span></a></p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code>: <a class="reference internal" href="#building-configuration-sets"><span class="std std-ref">Building configuration sets</span></a></p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_settings_regexes</span></code>: <a class="reference internal" href="#attaching-property-settings"><span class="std std-ref">Attaching property settings</span></a></p></li>
+=======
+<li><p><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.property_map" title="colabfit.tools.dataset.Dataset.property_map"><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code></a>: key = regex, value = dictionary</p></li>
+<li><p><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.configuration_label_regexes" title="colabfit.tools.dataset.Dataset.configuration_label_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_label_regexes</span></code></a>: key = regex, value = string OR list of strings</p></li>
+<li><p><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.configuration_set_regexes" title="colabfit.tools.dataset.Dataset.configuration_set_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code></a>: key = regex, value = string</p></li>
+<li><p><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.property_settings_regexes" title="colabfit.tools.dataset.Dataset.property_settings_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_settings_regexes</span></code></a>: key = regex, value = <a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a> instance</p></li>
+</ul>
+<p>See below for more details of how to use each dictionary.</p>
+<p>These dictionaries will affect what happens when
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.resync" title="colabfit.tools.dataset.Dataset.resync"><code class="xref py py-meth docutils literal notranslate"><span class="pre">resync()</span></code></a> and/or
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.parse_data" title="colabfit.tools.dataset.Dataset.parse_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code></a> are called.</p>
+<p>See the following sections for more details about how to use each of these
+dictionaries:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.property_map" title="colabfit.tools.dataset.Dataset.property_map"><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code></a>: <a class="reference internal" href="#parsing-data"><span class="std std-ref">Parsing data</span></a></p></li>
+<li><p><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.configuration_label_regexes" title="colabfit.tools.dataset.Dataset.configuration_label_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_label_regexes</span></code></a>: <a class="reference internal" href="#applying-configuration-labels"><span class="std std-ref">Applying configuration labels</span></a></p></li>
+<li><p><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.configuration_set_regexes" title="colabfit.tools.dataset.Dataset.configuration_set_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code></a>: <a class="reference internal" href="#building-configuration-sets"><span class="std std-ref">Building configuration sets</span></a></p></li>
+<li><p><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.property_settings_regexes" title="colabfit.tools.dataset.Dataset.property_settings_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_settings_regexes</span></code></a>: <a class="reference internal" href="#attaching-property-settings"><span class="std std-ref">Attaching property settings</span></a></p></li>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 </ul>
 </section>
 <section id="parsing-data">
 <h2>Parsing data<a class="headerlink" href="#parsing-data" title="Permalink to this headline"></a></h2>
 <p>The most common way to parse data is using the
+<<<<<<< HEAD
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code> attribute of a Dataset
+=======
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.property_map" title="colabfit.tools.dataset.Dataset.property_map"><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code></a> attribute of a Dataset
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 instance. A property map is used to define how a
 <a class="reference internal" href="property.html#colabfit.tools.property.Property" title="colabfit.tools.property.Property"><code class="xref py py-class docutils literal notranslate"><span class="pre">Property</span></code></a> should be parsed from a
 <a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> during <code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code>.</p>
@@ -186,7 +217,11 @@ for more details.</p></li>
 <section id="applying-configuration-labels">
 <h2>Applying configuration labels<a class="headerlink" href="#applying-configuration-labels" title="Permalink to this headline"></a></h2>
 <p>The most common method for applying configuration labels is to use the
+<<<<<<< HEAD
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_label_regexes</span></code>
+=======
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.configuration_label_regexes" title="colabfit.tools.dataset.Dataset.configuration_label_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_label_regexes</span></code></a>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 attribute of a Dataset. It determines which labels will be applied to
 configurations when <code class="xref py py-meth docutils literal notranslate"><span class="pre">resync()</span></code> is called. See <a class="reference internal" href="configuration.html#basics-of-configurations"><span class="std std-ref">Basics of Configurations</span></a>
 for more details on Configuration labels.</p>
@@ -205,15 +240,25 @@ for more details on Configuration labels.</p>
 <span class="p">}</span>
 </pre></div>
 </div>
+<<<<<<< HEAD
 <p>See <code class="xref py py-meth docutils literal notranslate"><span class="pre">attach_configuration_labels()</span></code> for an
+=======
+<p>See <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.attach_configuration_labels" title="colabfit.tools.dataset.Dataset.attach_configuration_labels"><code class="xref py py-meth docutils literal notranslate"><span class="pre">attach_configuration_labels()</span></code></a> for an
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 alternative method.</p>
 </section>
 <section id="building-configuration-sets">
 <h2>Building configuration sets<a class="headerlink" href="#building-configuration-sets" title="Permalink to this headline"></a></h2>
 <p>The most common method for building configuration sets is to use the
+<<<<<<< HEAD
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code>
 attribute of a Dataset. It determines which
 <code class="xref py py-class docutils literal notranslate"><span class="pre">ConfigurationSet</span></code> objects will be
+=======
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.configuration_set_regexes" title="colabfit.tools.dataset.Dataset.configuration_set_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code></a>
+attribute of a Dataset. It determines which
+<a class="reference internal" href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet" title="colabfit.tools.configuration_sets.ConfigurationSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">ConfigurationSet</span></code></a> objects will be
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 constructed  when <code class="xref py py-meth docutils literal notranslate"><span class="pre">resync()</span></code> is called. See <a class="reference internal" href="configuration_set.html#basics-of-configuration-sets"><span class="std std-ref">Basics of Configuration Sets</span></a> for more details on Configuration labels.</p>
 <p>An example <code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configuration_set_regexes</span> <span class="o">=</span> <span class="p">{</span>
@@ -223,13 +268,21 @@ constructed  when <code class="xref py py-meth docutils literal notranslate"><sp
 <span class="p">}</span>
 </pre></div>
 </div>
+<<<<<<< HEAD
 <p>See <code class="xref py py-meth docutils literal notranslate"><span class="pre">define_configuration_set()</span></code> for an
+=======
+<p>See <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.define_configuration_set" title="colabfit.tools.dataset.Dataset.define_configuration_set"><code class="xref py py-meth docutils literal notranslate"><span class="pre">define_configuration_set()</span></code></a> for an
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 alternative method.</p>
 </section>
 <section id="attaching-property-settings">
 <h2>Attaching property settings<a class="headerlink" href="#attaching-property-settings" title="Permalink to this headline"></a></h2>
 <p>The most common method for attaching property settings is to use the
+<<<<<<< HEAD
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">property_settings_regexes</span></code>
+=======
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.property_settings_regexes" title="colabfit.tools.dataset.Dataset.property_settings_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_settings_regexes</span></code></a>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 attribute of a Dataset. It determines which
 <a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a> objects will be
 applied to the matching Properties when <code class="xref py py-meth docutils literal notranslate"><span class="pre">resync()</span></code> is called.
@@ -247,14 +300,23 @@ See <a class="reference internal" href="property_settings.html#propertysettings"
 <span class="p">}</span>
 </pre></div>
 </div>
+<<<<<<< HEAD
 <p>See <code class="xref py py-meth docutils literal notranslate"><span class="pre">attach_property_settings()</span></code> for an
+=======
+<p>See <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.attach_property_settings" title="colabfit.tools.dataset.Dataset.attach_property_settings"><code class="xref py py-meth docutils literal notranslate"><span class="pre">attach_property_settings()</span></code></a> for an
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 alternative method.</p>
 </section>
 <section id="reading-writing-datasets-with-markdown">
 <h2>Reading/writing Datasets with Markdown<a class="headerlink" href="#reading-writing-datasets-with-markdown" title="Permalink to this headline"></a></h2>
 <p>One of the best ways to store and distribute a Dataset is by using a Datasets’
+<<<<<<< HEAD
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">to_markdown()</span></code> and
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">from_markdown()</span></code> functions. These functions
+=======
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.to_markdown" title="colabfit.tools.dataset.Dataset.to_markdown"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_markdown()</span></code></a> and
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.from_markdown" title="colabfit.tools.dataset.Dataset.from_markdown"><code class="xref py py-meth docutils literal notranslate"><span class="pre">from_markdown()</span></code></a> functions. These functions
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 will write/read the data to one of the <cite>supported file formats &lt;Supported file
 formats&gt;</cite>.</p>
 <p>See <a class="reference internal" href="md_file_input.html#writing-an-input-markdown-file"><span class="std std-ref">writing an input Markdown file</span></a> for
@@ -264,9 +326,15 @@ after it has been loaded into a Dataset.</p>
 </section>
 <section id="data-exploration">
 <h2>Data exploration<a class="headerlink" href="#data-exploration" title="Permalink to this headline"></a></h2>
+<<<<<<< HEAD
 <p>A Dataset’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_histograms()</span></code>,
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data()</span></code>,
 and <code class="xref py py-meth docutils literal notranslate"><span class="pre">get_statistics()</span></code> functions can be
+=======
+<p>A Dataset’s <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.plot_histograms" title="colabfit.tools.dataset.Dataset.plot_histograms"><code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_histograms()</span></code></a>,
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.get_data" title="colabfit.tools.dataset.Dataset.get_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data()</span></code></a>,
+and <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.get_statistics" title="colabfit.tools.dataset.Dataset.get_statistics"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_statistics()</span></code></a> functions can be
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 extremely useful for quickly visualizing your data and detecting outliers.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">energies</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="s1">&#39;energy&#39;</span><span class="p">,</span> <span class="n">ravel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">forces</span>   <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="s1">&#39;forces&#39;</span><span class="p">,</span> <span class="n">concatenate</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -299,7 +367,11 @@ the benefits of these functions.</p>
 <h2>Filtering a Dataset<a class="headerlink" href="#filtering-a-dataset" title="Permalink to this headline"></a></h2>
 <p>Datasets can be easily filtered to remove unwanted entries or extract subsets of
 interest. Filtering can be done using a Dataset’s
+<<<<<<< HEAD
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code> function, which allows a user to
+=======
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.filter" title="colabfit.tools.dataset.Dataset.filter"><code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code></a> function, which allows a user to
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 either filter on the <code class="code docutils literal notranslate"><span class="pre">&quot;data&quot;</span></code> or <code class="code docutils literal notranslate"><span class="pre">&quot;configurations&quot;</span></code> of a Dataset
 using a user-provided lambda function. The lambda function will iterate over
 either the list of Property objects or Configurations objects, and should return
@@ -323,9 +395,15 @@ original dataset (and vice-versa).</p>
 This can be helpful to avoid including duplicate data, and to properly maintain
 original authorships over Datasets that are composed of one another.</p>
 <p>To perform set operations with Datasets, use the
+<<<<<<< HEAD
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">colabfit.tools.dataset.Dataset.issubset()</span></code>,
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">colabfit.tools.dataset.Dataset.issuperset()</span></code>, and
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">colabfit.tools.dataset.Dataset.isdisjoint()</span></code> functions. By default, these
+=======
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.issubset" title="colabfit.tools.dataset.Dataset.issubset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">colabfit.tools.dataset.Dataset.issubset()</span></code></a>,
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.issuperset" title="colabfit.tools.dataset.Dataset.issuperset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">colabfit.tools.dataset.Dataset.issuperset()</span></code></a>, and
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.isdisjoint" title="colabfit.tools.dataset.Dataset.isdisjoint"><code class="xref py py-meth docutils literal notranslate"><span class="pre">colabfit.tools.dataset.Dataset.isdisjoint()</span></code></a> functions. By default, these
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 functions work by hashing the Configuration and Property objects on a Dataset.
 These functions also include the <code class="xref py py-attr docutils literal notranslate"><span class="pre">configurations_only</span></code> option to only
 compare the Configurations (not the Properties) of a Dataset.</p>
@@ -366,7 +444,11 @@ different format. This can be done using a Dataset’s
 </section>
 <section id="building-parent-datasets">
 <h2>Building parent datasets<a class="headerlink" href="#building-parent-datasets" title="Permalink to this headline"></a></h2>
+<<<<<<< HEAD
 <p>The <code class="xref py py-attr docutils literal notranslate"><span class="pre">data</span></code> field of a Dataset can have two
+=======
+<p>The <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.data" title="colabfit.tools.dataset.Dataset.data"><code class="xref py py-attr docutils literal notranslate"><span class="pre">data</span></code></a> field of a Dataset can have two
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 forms:</p>
 <ol class="arabic simple">
 <li><p>a list of <a class="reference internal" href="property.html#colabfit.tools.property.Property" title="colabfit.tools.property.Property"><code class="xref py py-class docutils literal notranslate"><span class="pre">Property</span></code></a> objects</p></li>
@@ -380,19 +462,32 @@ iterating through a tree of parent Datasets, so for the most part the behavior
 of a Dataset is unchanged if it is a parent or a child. However, there are some
 additional functions that can be used with a parent dataset:</p>
 <ul class="simple">
+<<<<<<< HEAD
 <li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">attach_dataset()</span></code> for attaching a child
 dataset to a parent dataset (use this function instead of modifying
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">Dataset.data</span></code>)</p></li>
 <li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">flatten()</span></code> for flattening a nested tree
 of parent datasets into a single dataset (see
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">merge()</span></code> for details on how the merging
+=======
+<li><p><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.attach_dataset" title="colabfit.tools.dataset.Dataset.attach_dataset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">attach_dataset()</span></code></a> for attaching a child
+dataset to a parent dataset (use this function instead of modifying
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">Dataset.data</span></code>)</p></li>
+<li><p><a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.flatten" title="colabfit.tools.dataset.Dataset.flatten"><code class="xref py py-meth docutils literal notranslate"><span class="pre">flatten()</span></code></a> for flattening a nested tree
+of parent datasets into a single dataset (see
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.merge" title="colabfit.tools.dataset.Dataset.merge"><code class="xref py py-meth docutils literal notranslate"><span class="pre">merge()</span></code></a> for details on how the merging
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 is performed)</p></li>
 </ul>
 </section>
 <section id="train-test-splits">
 <h2>Train/test splits<a class="headerlink" href="#train-test-splits" title="Permalink to this headline"></a></h2>
 <p>A Dataset can be split into two Datasets for training/testing using the
+<<<<<<< HEAD
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">train_test_split()</span></code> function:</p>
+=======
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.train_test_split" title="colabfit.tools.dataset.Dataset.train_test_split"><code class="xref py py-meth docutils literal notranslate"><span class="pre">train_test_split()</span></code></a> function:</p>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">train</span><span class="p">,</span> <span class="n">test</span> <span class="o">=</span> <span class="n">train_test_split</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">train_frac</span><span class="p">)</span>
 </pre></div>
 </div>

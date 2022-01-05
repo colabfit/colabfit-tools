@@ -148,7 +148,11 @@ considered as additional inputs to a calculation</p>
 <p>The most common use-case for building <a class="reference internal" href="#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> objects is to use
 the <a class="reference internal" href="converters.html#colabfit.tools.converters.BaseConverter.load" title="colabfit.tools.converters.BaseConverter.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a> method of a
 <code class="xref py py-class docutils literal notranslate"><span class="pre">colabfit.tools.BaseConverter</span></code> instance (or equivalently, the
+<<<<<<< HEAD
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code> function), which will call
+=======
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.load_data" title="colabfit.tools.dataset.load_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code></a> function), which will call
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 <a class="reference internal" href="#colabfit.tools.configuration.Configuration.from_ase" title="colabfit.tools.configuration.Configuration.from_ase"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Configuration.from_ase()</span></code></a> on an existing <code class="xref py py-class docutils literal notranslate"><span class="pre">ase.Atoms</span></code> object.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.converters</span> <span class="kn">import</span> <span class="n">EXYZConverter</span>
 
@@ -164,15 +168,24 @@ the <a class="reference internal" href="converters.html#colabfit.tools.converter
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration">
+<<<<<<< HEAD
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.configuration.</span></span><span class="sig-name descname"><span class="pre">Configuration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration" title="Permalink to this definition"></a></dt>
 <dd><p>A Configuration is an extension of an <code class="xref py py-class docutils literal notranslate"><span class="pre">ase.Atoms</span></code> object that is
 guaranteed to have the following fields in its <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code> dictionary:</p>
 <ul class="simple">
+=======
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.configuration.</span></span><span class="sig-name descname"><span class="pre">Configuration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration" title="Permalink to this definition"></a></dt>
+<dd><p>A Configuration is an extension of an <code class="xref py py-class docutils literal notranslate"><span class="pre">ase.Atoms</span></code> object that is
+guaranteed to have the following fields in its <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code> dictionary:</p>
+<ul class="simple">
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_ID_FIELD</span></code> = :code:”_id”</p></li>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_NAME_FIELD</span></code> = :code:”_name”</p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_LABELS_FIELD</span></code> = :code:”_labels”</p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_CONSTRAINTS_FIELD</span></code> = :code:”_constraints”</p></li>
 </ul>
 <dl class="py method">
+<<<<<<< HEAD
 <dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration.__eq__">
 <span class="sig-name descname"><span class="pre">__eq__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration.__eq__" title="Permalink to this definition"></a></dt>
 <dd><p>Check for identity of two atoms objects.</p>
@@ -189,10 +202,18 @@ boundary conditions.</p>
 <p>Note that the positions and cell vectors are rounded to 8 decimal places
 before being compared.</p>
 <p>hashlib is used instead of hash() to avoid hash randomisation.</p>
+=======
+<dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration.__hash__">
+<span class="sig-name descname"><span class="pre">__hash__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration.__hash__" title="Permalink to this definition"></a></dt>
+<dd><p>Generates a hash for <code class="code docutils literal notranslate"><span class="pre">self</span></code> by hashing its length, constraints,
+positions, (atomic) numbers, simulation cell, and periodic
+boundary conditions</p>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration.__init__">
+<<<<<<< HEAD
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration.__init__" title="Permalink to this definition"></a></dt>
 <dd><p>Constructs a Configuration. Calls <code class="xref py py-meth docutils literal notranslate"><span class="pre">ase.Atoms.__init__()</span></code>, then
 populates the additional required fields.</p>
@@ -201,6 +222,11 @@ populates the additional required fields.</p>
 <dd class="field-odd"><p><strong>description</strong> (<em>str</em>) – A human-readable description. Can also be a list of strings.</p>
 </dd>
 </dl>
+=======
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration.__init__" title="Permalink to this definition"></a></dt>
+<dd><p>Constructs a Configuration. Calls <code class="xref py py-meth docutils literal notranslate"><span class="pre">ase.Atoms.__init__()</span></code>, then
+populates the additional required fields.</p>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 </dd></dl>
 
 <dl class="py method">

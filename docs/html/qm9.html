@@ -245,7 +245,11 @@ modification to the typical XYZ format), it is necessary to use the
 <section id="writing-to-markdown">
 <h2>Writing to Markdown<a class="headerlink" href="#writing-to-markdown" title="Permalink to this headline"></a></h2>
 <p>To avoid having to re-process the raw data using <code class="code docutils literal notranslate"><span class="pre">reader</span></code>, and to provide
+<<<<<<< HEAD
 a cleaner storage format, <code class="xref py py-meth docutils literal notranslate"><span class="pre">to_markdown()</span></code>
+=======
+a cleaner storage format, <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.to_markdown" title="colabfit.tools.dataset.Dataset.to_markdown"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_markdown()</span></code></a>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 can be used (see <a class="reference internal" href="usage.html#reading-writing-datasets-with-markdown"><span class="std std-ref">Reading/writing Datasets with Markdown</span></a> for more
 details).</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">to_markdown</span><span class="p">(</span>
@@ -259,8 +263,13 @@ details).</p>
 </section>
 <section id="cleaning-the-dataset">
 <h2>Cleaning the dataset<a class="headerlink" href="#cleaning-the-dataset" title="Permalink to this headline"></a></h2>
+<<<<<<< HEAD
 <p>Using the <code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_histograms()</span></code> and
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">get_statistics()</span></code> functions reveals that
+=======
+<p>Using the <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.plot_histograms" title="colabfit.tools.dataset.Dataset.plot_histograms"><code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_histograms()</span></code></a> and
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.get_statistics" title="colabfit.tools.dataset.Dataset.get_statistics"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_statistics()</span></code></a> functions reveals that
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 the QM9 dataset has some outlying data entries.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;a&#39;</span><span class="p">))</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;b&#39;</span><span class="p">))</span>
@@ -278,7 +287,11 @@ the QM9 dataset has some outlying data entries.</p>
 </pre></div>
 </div>
 <img alt="_images/qm9_histograms.png" class="align-center" src="_images/qm9_histograms.png" />
+<<<<<<< HEAD
 <p>The <code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code> function can be used to
+=======
+<p>The <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.filter" title="colabfit.tools.dataset.Dataset.filter"><code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code></a> function can be used to
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 return a new dataset without the outlying data.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">clean</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
     <span class="s1">&#39;data&#39;</span><span class="p">,</span>
