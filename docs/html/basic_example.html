@@ -119,7 +119,7 @@ Jupyter notebook in the GitHub repo, which can be run in Google Colab.</p>
 <h2>Adding Configurations<a class="headerlink" href="#adding-configurations" title="Permalink to this headline"></a></h2>
 <p>Load the configurations onto the Dataset by either manually constructing the
 Configurations and assigning them to the <code class="xref py py-attr docutils literal notranslate"><span class="pre">configurations</span></code> attribute, or
-using <a class="reference internal" href="dataset.html#colabfit.tools.dataset.load_data" title="colabfit.tools.dataset.load_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code></a>, which calls a pre-made
+using <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code>, which calls a pre-made
 <a class="reference internal" href="converters.html#colabfit.tools.converters.BaseConverter" title="colabfit.tools.converters.BaseConverter"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseConverter</span></code></a> and returns a list of
 <a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> objects.</p>
 <section id="manually">
@@ -185,7 +185,7 @@ mappings are provided by setting the configuration_label_regexes dictionary.</p>
 </section>
 <section id="configuration-sets-using-regexes">
 <h2>Configuration sets using regexes<a class="headerlink" href="#configuration-sets-using-regexes" title="Permalink to this headline"></a></h2>
-<p>A <a class="reference internal" href="configuration_set.html#colabfit.tools.configuration_sets.ConfigurationSet" title="colabfit.tools.configuration_sets.ConfigurationSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">ConfigurationSet</span></code></a> can be used to
+<p>A <code class="xref py py-class docutils literal notranslate"><span class="pre">ConfigurationSet</span></code> can be used to
 create groups of configurations for organizational purposes. This can be done in
 a similar manner to how configuration labels are applied, but using the
 <code class="code docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code> dictionary. Note that a configuration may
@@ -231,19 +231,19 @@ details.</p>
 </section>
 <section id="exploring-the-data">
 <h2>Exploring the data<a class="headerlink" href="#exploring-the-data" title="Permalink to this headline"></a></h2>
-<p>Use <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.get_data" title="colabfit.tools.dataset.Dataset.get_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data()</span></code></a> to obtain a list of the
+<p>Use <code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data()</span></code> to obtain a list of the
 given property field where each element has been wrapped in a numpy array.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">energies</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="s1">&#39;energy&#39;</span><span class="p">,</span> <span class="n">ravel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">forces</span>   <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="s1">&#39;forces&#39;</span><span class="p">,</span> <span class="n">ravel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Basic statistics can be obtained using
-<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.get_statistics" title="colabfit.tools.dataset.Dataset.get_statistics"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_statistics()</span></code></a>.</p>
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">get_statistics()</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Returns: {&#39;average&#39;: ..., &#39;std&#39;: ..., &#39;min&#39;: ..., &#39;max&#39;:, ..., &#39;average_abs&#39;: ...}</span>
 <span class="n">dataset</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;energy&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>The <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.plot_histograms" title="colabfit.tools.dataset.Dataset.plot_histograms"><code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_histograms()</span></code></a> function is useful
+<p>The <code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_histograms()</span></code> function is useful
 for quickly visualizing the distribution of your data.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">plot_histograms</span><span class="p">([</span><span class="s1">&#39;energy&#39;</span><span class="p">,</span> <span class="s1">&#39;forces&#39;</span><span class="p">])</span>
 </pre></div>

@@ -2,8 +2,8 @@
 Overview
 ========
 
-Dataset Standard
-================
+Database structure
+==================
 
 .. figure:: ds_diagram_cropped.png
     :width: 485
