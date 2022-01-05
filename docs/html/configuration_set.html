@@ -88,7 +88,11 @@
            <div itemprop="articleBody">
              
 <<<<<<< HEAD
+<<<<<<< HEAD
   <span class="target" id="module-colabfit.tools.configuration_set"></span><section id="configurationset">
+=======
+  <span class="target" id="module-colabfit.tools.configuration_sets"></span><section id="configurationset">
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 =======
   <span class="target" id="module-colabfit.tools.configuration_sets"></span><section id="configurationset">
 >>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
@@ -98,7 +102,11 @@ This is useful when organizing a Dataset and can help future users of the
 dataset better understand its contents.</p>
 <p>The most important functionality of a ConfigurationSet is provided by its
 <<<<<<< HEAD
+<<<<<<< HEAD
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate()</span></code> method,
+=======
+<a class="reference internal" href="#colabfit.tools.configuration_sets.ConfigurationSet.aggregate" title="colabfit.tools.configuration_sets.ConfigurationSet.aggregate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate()</span></code></a> method,
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 =======
 <a class="reference internal" href="#colabfit.tools.configuration_sets.ConfigurationSet.aggregate" title="colabfit.tools.configuration_sets.ConfigurationSet.aggregate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate()</span></code></a> method,
 >>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
@@ -106,6 +114,7 @@ which accumulates critical information about its group of configurations.</p>
 <section id="basics-of-configuration-sets">
 <h2>Basics of Configuration Sets<a class="headerlink" href="#basics-of-configuration-sets" title="Permalink to this headline"></a></h2>
 <p>The most often use-case is for a ConfigurationSet to be built by specifying the
+<<<<<<< HEAD
 <<<<<<< HEAD
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code> dictionary of
 a Dataset. For more details about how to build ConfigurationSets,
@@ -122,6 +131,8 @@ existing database (in order to aggregate the info)</p>
 <span class="sig-name descname"><span class="pre">configuration_ids</span></span><a class="headerlink" href="#colabfit.tools.configuration_set.ConfigurationSet.configuration_ids" title="Permalink to this definition"></a></dt>
 <dd><p>A list of all attached configuration IDs</p>
 =======
+=======
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.configuration_set_regexes" title="colabfit.tools.dataset.Dataset.configuration_set_regexes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code></a> dictionary of
 a Dataset. For more details about how to build ConfigurationSets,
 see <a class="reference internal" href="usage.html#building-configuration-sets"><span class="std std-ref">Building configuration sets</span></a>.</p>
@@ -132,6 +143,9 @@ see <a class="reference internal" href="usage.html#building-configuration-sets">
 <dt class="sig sig-object py" id="colabfit.tools.configuration_sets.ConfigurationSet.configurations">
 <span class="sig-name descname"><span class="pre">configurations</span></span><a class="headerlink" href="#colabfit.tools.configuration_sets.ConfigurationSet.configurations" title="Permalink to this definition"></a></dt>
 <dd><p>A list of ase.Atoms objects</p>
+<<<<<<< HEAD
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
+=======
 >>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -142,9 +156,15 @@ see <a class="reference internal" href="usage.html#building-configuration-sets">
 
 <dl class="py attribute">
 <<<<<<< HEAD
+<<<<<<< HEAD
 <dt class="sig sig-object py" id="colabfit.tools.configuration_set.ConfigurationSet.description">
 <span class="sig-name descname"><span class="pre">description</span></span><a class="headerlink" href="#colabfit.tools.configuration_set.ConfigurationSet.description" title="Permalink to this definition"></a></dt>
 <dd><p>A human-readable description of the configuration set</p>
+=======
+<dt class="sig sig-object py" id="colabfit.tools.configuration_sets.ConfigurationSet.description">
+<span class="sig-name descname"><span class="pre">description</span></span><a class="headerlink" href="#colabfit.tools.configuration_sets.ConfigurationSet.description" title="Permalink to this definition"></a></dt>
+<dd><p>Human-readable metadata describing the configuration set.</p>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 =======
 <dt class="sig sig-object py" id="colabfit.tools.configuration_sets.ConfigurationSet.description">
 <span class="sig-name descname"><span class="pre">description</span></span><a class="headerlink" href="#colabfit.tools.configuration_sets.ConfigurationSet.description" title="Permalink to this definition"></a></dt>
@@ -158,6 +178,7 @@ see <a class="reference internal" href="usage.html#building-configuration-sets">
 </dd></dl>
 
 <dl class="py attribute">
+<<<<<<< HEAD
 <<<<<<< HEAD
 <dt class="sig sig-object py" id="colabfit.tools.configuration_set.ConfigurationSet.aggregated_info">
 <span class="sig-name descname"><span class="pre">aggregated_info</span></span><a class="headerlink" href="#colabfit.tools.configuration_set.ConfigurationSet.aggregated_info" title="Permalink to this definition"></a></dt>
@@ -184,6 +205,8 @@ attached configurations. Contains the following information:</p>
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>dict</p>
 =======
+=======
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 <dt class="sig sig-object py" id="colabfit.tools.configuration_sets.ConfigurationSet.labels">
 <span class="sig-name descname"><span class="pre">labels</span></span><a class="headerlink" href="#colabfit.tools.configuration_sets.ConfigurationSet.labels" title="Permalink to this definition"></a></dt>
 <dd><p>A list of strings; generated by making a set from the list of all
@@ -191,11 +214,15 @@ labels on the configurations. Used to improve queries.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>list</p>
+<<<<<<< HEAD
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
+=======
 >>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 </dd>
 </dl>
 </dd></dl>
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.configuration_set.ConfigurationSet.__hash__">
@@ -215,6 +242,8 @@ labels on the configurations. Used to improve queries.</p>
 </dd></dl>
 
 =======
+=======
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 <dl class="py attribute">
 <dt class="sig sig-object py" id="colabfit.tools.configuration_sets.ConfigurationSet.labels_counts">
 <span class="sig-name descname"><span class="pre">labels_counts</span></span><a class="headerlink" href="#colabfit.tools.configuration_sets.ConfigurationSet.labels_counts" title="Permalink to this definition"></a></dt>
@@ -310,6 +339,9 @@ a fraction of the total number of atoms in the collection</p>
 </ul>
 </dd></dl>
 
+<<<<<<< HEAD
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
+=======
 >>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 </dd></dl>
 

@@ -95,7 +95,11 @@
 Property is usually extracted from a
 <a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> object using the
 <<<<<<< HEAD
+<<<<<<< HEAD
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code> of a
+=======
+<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.parse_data" title="colabfit.tools.dataset.Dataset.parse_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code></a> of a
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 =======
 <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.parse_data" title="colabfit.tools.dataset.Dataset.parse_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code></a> of a
 >>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
@@ -123,7 +127,11 @@ documentation. In most cases, this dictionary should not be manually
 constructed by the user. Instead, an OpenKIM Property Definition
 (see <a class="reference internal" href="usage.html#custom-properties"><span class="std std-ref">Custom properties</span></a> for details) should be provided using
 <<<<<<< HEAD
+<<<<<<< HEAD
 a <code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code>, which will
+=======
+a <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.property_map" title="colabfit.tools.dataset.Dataset.property_map"><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code></a>, which will
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 =======
 a <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.property_map" title="colabfit.tools.dataset.Dataset.property_map"><code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code></a>, which will
 >>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
@@ -205,7 +213,10 @@ provided.</p>
 <li><p>OpenKIM EDN fields differ in any way</p></li>
 </ul>
 <<<<<<< HEAD
+<<<<<<< HEAD
 <p>Note that comparison is performed by hashing</p>
+=======
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 =======
 >>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 </dd></dl>
@@ -220,10 +231,15 @@ provided.</p>
 <dt class="sig sig-object py" id="colabfit.tools.property.Property.__hash__">
 <span class="sig-name descname"><span class="pre">__hash__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.__hash__" title="Permalink to this definition"></a></dt>
 <<<<<<< HEAD
+<<<<<<< HEAD
 <dd><p>Hashes the Property by hashing its EDN. Note that the property hash
 depends upon the hashes of the linked configurations; this is to avoid
 the case where two properties happen to be the same even though their
 underlying configurations are different.</p>
+=======
+<dd><p>Hashes the Property by hashing its linked PropertySettings,
+Configurations, and EDN.</p>
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 =======
 <dd><p>Hashes the Property by hashing its linked PropertySettings,
 Configurations, and EDN.</p>
@@ -291,9 +307,13 @@ from its original units to the expected ColabFit-compliant units.</p>
 <dt class="sig sig-object py" id="colabfit.tools.property.Property.get_data">
 <span class="sig-name descname"><span class="pre">get_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.get_data" title="Permalink to this definition"></a></dt>
 <<<<<<< HEAD
+<<<<<<< HEAD
 <dd><p>First checks if <code class="code docutils literal notranslate"><span class="pre">k</span></code> is in <code class="code docutils literal notranslate"><span class="pre">self.edn</span></code>. If not, checks under
 possible pseudonyms. If nothing exists, returns <code class="code docutils literal notranslate"><span class="pre">np.nan</span></code></p>
 <dl class="field-list simple">
+=======
+<dd><dl class="field-list simple">
+>>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 =======
 <dd><dl class="field-list simple">
 >>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
