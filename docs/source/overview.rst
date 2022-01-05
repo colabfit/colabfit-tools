@@ -2,18 +2,8 @@
 Overview
 ========
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 Database structure
 ==================
-=======
-Dataset Standard
-================
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
-=======
-Dataset Standard
-================
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 
 .. figure:: ds_diagram_cropped.png
     :width: 485
