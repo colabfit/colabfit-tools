@@ -898,6 +898,7 @@ class MongoDatabase(MongoClient):
             ids = [ids]
 
         cs_hash = sha512()
+        cs_hash.update(description.encode('utf-8'))
         for i in sorted(ids):
             cs_hash.update(str(i).encode('utf-8'))
 
