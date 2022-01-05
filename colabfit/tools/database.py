@@ -251,7 +251,6 @@ class MongoDatabase(MongoClient):
 
         """
 
-<<<<<<< HEAD
         user = 'colabfitAdmin'
         pwrd = 'Fo08w3K&VEY&'
         mongo_login = 'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
@@ -260,10 +259,6 @@ class MongoDatabase(MongoClient):
             return self._insert_data(
                 mongo_login=mongo_login,
                 database_name=self.database_name,
-=======
-        if generator:
-            return self._insert_data(
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
                 configurations=configurations,
                 property_map=property_map,
                 property_settings=property_settings,
@@ -275,14 +270,6 @@ class MongoDatabase(MongoClient):
             split_configs = np.array_split(configurations, self.nprocs)
             split_configs = [_.tolist() for _ in split_configs]
 
-<<<<<<< HEAD
-=======
-            user = 'colabfitAdmin'
-            pwrd = 'Fo08w3K&VEY&'
-
-            mongo_login = 'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
-
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
             pfunc = partial(
                 self._insert_data,
                 mongo_login=mongo_login,
@@ -347,12 +334,6 @@ class MongoDatabase(MongoClient):
         property_docs   = []
         settings_docs   = {}
 
-<<<<<<< HEAD
-=======
-        ndup_cos = 0
-        ndup_prs = 0
-
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
         # Add all of the configurations into the Mongo server
         ai = 1
         for atoms in tqdm(
@@ -1432,15 +1413,7 @@ class MongoDatabase(MongoClient):
         for csid in cs_ids:
             config_set_docs.append(UpdateOne(
                 {'_id': csid},
-<<<<<<< HEAD
                 {'$addToSet': {'relationships.datasets': ds_id}}
-=======
-                {
-                    '$addToSet': {
-                        'relationships.configuration_sets': ds_id
-                    }
-                }
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
             ))
 
         self.configuration_sets.bulk_write(config_set_docs)
@@ -1450,15 +1423,7 @@ class MongoDatabase(MongoClient):
         for pid in tqdm(pr_ids, desc='Updating PR->DS relationships'):
             property_docs.append(UpdateOne(
                 {'_id': pid},
-<<<<<<< HEAD
                 {'$addToSet': {'relationships.datasets': ds_id}}
-=======
-                {
-                    '$addToSet': {
-                        'relationships.datasets': ds_id
-                    }
-                }
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
             ))
 
         self.properties.bulk_write(property_docs)
