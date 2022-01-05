@@ -106,15 +106,7 @@ using the following commands:</p>
 </div>
 <section id="loading-from-a-file">
 <h2>Loading from a file<a class="headerlink" href="#loading-from-a-file" title="Permalink to this headline"></a></h2>
-<<<<<<< HEAD
-<<<<<<< HEAD
 <p>This example uses <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code> to load the data
-=======
-<p>This example uses <a class="reference internal" href="dataset.html#colabfit.tools.dataset.load_data" title="colabfit.tools.dataset.load_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code></a> to load the data
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
-=======
-<p>This example uses <a class="reference internal" href="dataset.html#colabfit.tools.dataset.load_data" title="colabfit.tools.dataset.load_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code></a> to load the data
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 from an existing Extended XYZ file. Note that the raw data includes the
 <code class="code docutils literal notranslate"><span class="pre">config_type</span></code> field, which is used to generate the names of the loaded
 Configurations. A <code class="xref py py-attr docutils literal notranslate"><span class="pre">default_name</span></code> is also provided to handle the
@@ -212,30 +204,14 @@ useful for enabling querying over the data by future users. See
 </section>
 <section id="renaming-configuration-fields">
 <h2>Renaming Configuration fields<a class="headerlink" href="#renaming-configuration-fields" title="Permalink to this headline"></a></h2>
-<<<<<<< HEAD
-<<<<<<< HEAD
 <p>In order to ensure that <code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code> is
-=======
-<p>In order to ensure that <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.parse_data" title="colabfit.tools.dataset.Dataset.parse_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code></a> is
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
-=======
-<p>In order to ensure that <a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.parse_data" title="colabfit.tools.dataset.Dataset.parse_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">parse_data()</span></code></a> is
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 able to properly parse the data, the fields in <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code> and
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.arrays</span></code> should match those used in
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">Dataset.property_map</span></code>. In the case of the Si GAP dataset, some of the
 data has incorrectly labeled energy/force/virial fields, where it uses
 “DFT_*” instead of “dft_*” (lowercase) like the rest of the Configurations. In
 order to fix this, we use the
-<<<<<<< HEAD
-<<<<<<< HEAD
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">rename_configuration_field()</span></code> function:</p>
-=======
-<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.rename_configuration_field" title="colabfit.tools.dataset.Dataset.rename_configuration_field"><code class="xref py py-meth docutils literal notranslate"><span class="pre">rename_configuration_field()</span></code></a> function:</p>
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
-=======
-<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.rename_configuration_field" title="colabfit.tools.dataset.Dataset.rename_configuration_field"><code class="xref py py-meth docutils literal notranslate"><span class="pre">rename_configuration_field()</span></code></a> function:</p>
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">rename_configuration_field</span><span class="p">(</span><span class="s1">&#39;DFT_energy&#39;</span><span class="p">,</span> <span class="s1">&#39;dft_energy&#39;</span><span class="p">)</span>
 <span class="n">dataset</span><span class="o">.</span><span class="n">rename_configuration_field</span><span class="p">(</span><span class="s1">&#39;DFT_force&#39;</span><span class="p">,</span> <span class="s1">&#39;dft_force&#39;</span><span class="p">)</span>
 <span class="n">dataset</span><span class="o">.</span><span class="n">rename_configuration_field</span><span class="p">(</span><span class="s1">&#39;DFT_virial&#39;</span><span class="p">,</span> <span class="s1">&#39;dft_virial&#39;</span><span class="p">)</span>
@@ -254,15 +230,7 @@ and some was computed using a PW91 functional. This information is stored in the
 <p>A user may want to only work with subsets of the data that were computed with
 the exact same DFT settings. To facilitate this, we break the original Dataset
 into three separate datasets using the
-<<<<<<< HEAD
-<<<<<<< HEAD
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code> function (see <a class="reference internal" href="usage.html#filtering-a-dataset"><span class="std std-ref">Filtering a Dataset</span></a> for more details).</p>
-=======
-<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.filter" title="colabfit.tools.dataset.Dataset.filter"><code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code></a> function (see <a class="reference internal" href="usage.html#filtering-a-dataset"><span class="std std-ref">Filtering a Dataset</span></a> for more details).</p>
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
-=======
-<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset.filter" title="colabfit.tools.dataset.Dataset.filter"><code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code></a> function (see <a class="reference internal" href="usage.html#filtering-a-dataset"><span class="std std-ref">Filtering a Dataset</span></a> for more details).</p>
->>>>>>> a36a6b69ee420948c36e804cdf0331ac810ac3e3
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">no_xc_data</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
     <span class="s1">&#39;configurations&#39;</span><span class="p">,</span>
     <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;xc_functional&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span>

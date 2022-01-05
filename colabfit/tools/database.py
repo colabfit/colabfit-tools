@@ -163,7 +163,10 @@ class MongoDatabase(MongoClient):
             A Mongo collection of dataset documents
 
     """
-    def __init__(self, database_name, nprocs=1, drop_database=False):
+    def __init__(
+        self, database_name, nprocs=1,
+        drop_database=False, user=None, pwrd=None, port=27017
+        ):
         """
         Args:
 
@@ -176,15 +179,29 @@ class MongoDatabase(MongoClient):
             drop_database (bool, default=False):
                 If True, deletes the existing Mongo database.
 
-        """
-        # user = input("mongodb username: ")
-        # pwrd = getpass("mongodb password: ")
-        user = 'colabfitAdmin'
-        pwrd = 'Fo08w3K&VEY&'
+            user (str, default=None):
+                Mongo server username
 
-        super().__init__(
-            'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
-        )
+            pwrd (str, default=None):
+                Mongo server password
+
+            port (int, default=27017):
+                Mongo server port number
+
+        """
+
+        self.user = user
+        self.pwrd = pwrd
+        self.port = port
+
+        if user is None:
+            super().__init__('localhost', self.port)
+        else:
+            super().__init__(
+                'mongodb://{}:{}@localhost:{}/'.format(
+                    self.user, self.pwrd, self.port
+                )
+            )
 
         self.database_name = database_name
 
@@ -251,9 +268,12 @@ class MongoDatabase(MongoClient):
 
         """
 
-        user = 'colabfitAdmin'
-        pwrd = 'Fo08w3K&VEY&'
-        mongo_login = 'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
+        if self.user is None:
+            mongo_login = self.port
+        else:
+            mongo_login = 'mongodb://{}:{}@localhost:{}/'.format(
+                self.user, self.pwrd, self.port
+            )
 
         if generator:
             return self._insert_data(
@@ -293,7 +313,10 @@ class MongoDatabase(MongoClient):
         verbose=False
         ):
 
-        client = MongoClient(mongo_login)
+        if isinstance(mongo_login, int):
+            client = MongoClient('localhost', mongo_login)
+        else:
+            client = MongoClient(mongo_login)
 
         coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
         coll_properties             = client[database_name][_PROPS_COLLECTION]
