@@ -338,17 +338,21 @@ class FolderConverter(BaseConverter):
         ai = 0
         # images = []
         files = list(Path(file_path).rglob(glob_string))
-        for fpath in tqdm(
+        for fi, fpath in enumerate(tqdm(
             files,
             desc='Loading data',
             disable=not verbose
-            ):
+            )):
             new = self.reader(fpath, **kwargs)
 
             # if not isinstance(new, list):
             #     new = [new]
 
-            for atoms in new:
+            for atoms in tqdm(
+                new,
+                desc='Loading file {}'.format(fi),
+                disable=not verbose
+                ):
 
                 a_elems = set(atoms.get_chemical_symbols())
                 if not a_elems.issubset(elements):
@@ -369,7 +373,7 @@ class FolderConverter(BaseConverter):
                     else:
                         raise RuntimeError(
                             f"Field {name_field} not in atoms.info for index "\
-                                f"{len(images)}. Set `name_field=None` "\
+                                f"{ai}. Set `name_field=None` "\
                                     "to use `default_name`."
                         )
 

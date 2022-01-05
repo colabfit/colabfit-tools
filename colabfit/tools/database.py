@@ -251,8 +251,14 @@ class MongoDatabase(MongoClient):
 
         """
 
+        user = 'colabfitAdmin'
+        pwrd = 'Fo08w3K&VEY&'
+        mongo_login = 'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
+
         if generator:
             return self._insert_data(
+                mongo_login=mongo_login,
+                database_name=self.database_name,
                 configurations=configurations,
                 property_map=property_map,
                 property_settings=property_settings,
@@ -263,11 +269,6 @@ class MongoDatabase(MongoClient):
 
             split_configs = np.array_split(configurations, self.nprocs)
             split_configs = [_.tolist() for _ in split_configs]
-
-            user = 'colabfitAdmin'
-            pwrd = 'Fo08w3K&VEY&'
-
-            mongo_login = 'mongodb://{}:{}@localhost:27017/'.format(user, pwrd)
 
             pfunc = partial(
                 self._insert_data,
@@ -332,9 +333,6 @@ class MongoDatabase(MongoClient):
         config_docs     = []
         property_docs   = []
         settings_docs   = {}
-
-        ndup_cos = 0
-        ndup_prs = 0
 
         # Add all of the configurations into the Mongo server
         ai = 1
