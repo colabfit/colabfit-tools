@@ -29,7 +29,7 @@ In order to preserve this information, a custom property can be defined
 
 .. code-block:: python
 
-    qm9_property_definition = {
+    client.insert_property_definition({
         'property-id': 'qm9-property',
         'property-title': 'A, B, C, mu, alpha, homo, lumo, gap, r2, zpve, U0, U, H, G, Cv',
         'property-description': 'Geometries minimal in energy, corresponding harmonic frequencies, dipole moments, polarizabilities, along with energies, enthalpies, and free energies of atomization',
@@ -50,15 +50,11 @@ In order to preserve this information, a custom property can be defined
         'cv':    {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'Heat capacity at 298.15 K'},
         'smiles-relaxed':    {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'SMILES for relaxed geometry'},
         'inchi-relaxed':     {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'InChI for relaxed geometry'},
-    }
-
-.. code-block:: python
-
-    dataset.custom_definitions = {'qm9-property': qm9_property_definition}
+    })
 
 Note that a property definition is used for performing verification checks when
 parsing the data. A :attr:`property_map` must still be provided for specifying
-_how_ to parse the data and what the units of the fields are.
+*how* to parse the data and what the units of the fields are.
 
 .. code-block:: python
 
@@ -85,11 +81,6 @@ _how_ to parse the data and what the units of the fields are.
         }
     }
 
-
-.. code-block:: python
-
-    dataset.property_map = property_map
-
 Defining a reader function
 ==========================
 
@@ -107,7 +98,6 @@ modification to the typical XYZ format), it is necessary to use the
             'tag', 'index', 'A', 'B', 'C', 'mu', 'alpha', 'homo', 'lumo', 'gap', 'r2', 'zpve', 'U0', 'U', 'H', 'G', 'Cv'
         ]
 
-        images = []
         with open(file_path, 'r') as f:
             lines = [_.strip() for _ in f.readlines()]
 
@@ -152,9 +142,7 @@ modification to the typical XYZ format), it is necessary to use the
             atoms.info['InChI']     = inchi[0]
             atoms.info['InChI_relaxed']  = inchi[1]
 
-            images.append(atoms)
-
-        return images
+            yield atoms
 
 .. code-block:: python
 
@@ -169,22 +157,25 @@ modification to the typical XYZ format), it is necessary to use the
         verbose=True
     )
 
-Writing to Markdown
-===================
-
-To avoid having to re-process the raw data using :code:`reader`, and to provide
-a cleaner storage format, :meth:`~colabfit.tools.dataset.Dataset.to_markdown`
-can be used (see :ref:`Reading/writing Datasets with Markdown` for more
-details).
 
 .. code-block:: python
 
-    dataset.to_markdown(
-        base_folder='/content',
-        html_file_name='README.md',
-        data_file_name=dataset.name+'.extxyz',
-        data_format='xyz',
+    from colabfit.tools.property_settings import PropertySettings
+
+    pso = PropertySettings(
+        method='DFT/B3LYP/6-31G(2df,p)',
+        description='QM9 property settings calculation',
+        files=None,
+        labels=['DFT', 'B3LYP', '6-31G(2df,p)'],
     )
+
+    ids = list(client.insert_data(
+        images,
+        property_map=property_map,
+        property_settings={'qm9-property': pso},
+        generator=False,
+        verbose=True
+    ))
 
 Cleaning the dataset
 ====================
@@ -195,52 +186,80 @@ the QM9 dataset has some outlying data entries.
 
 .. code-block:: python
 
-    print(dataset.get_statistics('a'))
-    print(dataset.get_statistics('b'))
-    print(dataset.get_statistics('c'))
+    client.get_statistics(
+        ['qm9-property.a', 'qm9-property.b', 'qm9-property.c'],
+        ids=dataset.property_ids,
+        verbose=True
+    )
 
-    # {'average': 9.814382088508797, 'std': 1809.4589082320583, 'min': 0.0, 'max': 619867.68314, 'average_abs': 9.814382088508797}
-    # {'average': 1.4060972645920002, 'std': 1.5837889998648804, 'min': 0.33712, 'max': 437.90386, 'average_abs': 1.4060972645920002}
-    # {'average': 1.1249210272988013, 'std': 1.0956136904779634, 'min': 0.33118, 'max': 282.94545, 'average_abs': 1.1249210272988013}
+    # 'qm9-property.a': {'average': 9.814382088508797, 'std': 1809.4589082320583, 'min': 0.0, 'max': 619867.68314, 'average_abs': 9.814382088508797}
+    # 'qm9-property.b': {'average': 1.4060972645920002, 'std': 1.5837889998648804, 'min': 0.33712, 'max': 437.90386, 'average_abs': 1.4060972645920002}
+    # 'qm9-property.c': {'average': 1.1249210272988013, 'std': 1.0956136904779634, 'min': 0.33118, 'max': 282.94545, 'average_abs': 1.1249210272988013}
 
 .. code-block:: python
-    
-    dataset.plot_histograms([
-        'a', 'b', 'c', 'mu', 'alpha', 'homo', 'lumo', 'r2', 'zpve', 'u0', 'u',
-        'h', 'g', 'cv'
-    ])
+
+    client.plot_histograms(
+        ['qm9-property.a', 'qm9-property.b', 'qm9-property.c',],
+        ids=dataset.property_ids
+    )
+
 
 .. image:: qm9_histograms.png
     :align: center
 
-The :meth:`~colabfit.tools.dataset.Dataset.filter` function can be used to
-return a new dataset without the outlying data.
+The :meth:`~colabfit.tools.database.MongoeDatabase.filter_on_properties`
+function can be used to filter on the ConfigurationSets and Properties.
 
 .. code-block:: python
 
-    clean = dataset.filter(
-        'data',
-        lambda p: (p['a']['source-value'] < 20) and (p['b']['source-value'] < 10),
+    clean_config_sets, clean_property_ids = client.filter_on_properties(
+        ds_id=ds_id,
+        filter_fxn=lambda x: (x['qm9-property']['a']['source-value'] < 20) and x['qm9-property']['b']['source-value'] < 10,
+        fields=['qm9-property.a.source-value', 'qm9-property.b.source-value'],
         verbose=True
+    )
+
+    new_cs_ids = []
+    for cs in clean_config_sets:
+        new_cs_ids.append(
+            client.insert_configuration_set(
+                cs.configuration_ids,
+                cs.description, verbose=True
+            )
+        )
+
+	ds_id_clean = client.insert_dataset(
+		cs_ids=new_cs_ids,
+		pr_ids=clean_property_ids,
+		name='QM9_filtered',
+		authors=dataset.authors,
+		links=[
+			'https://www.nature.com/articles/sdata201422',
+			'https://figshare.com/collections/Quantum_chemistry_structures_and_properties_of_134_kilo_molecules/978904'
+		],
+		description="The QM9 dataset, filtered by removing values with a>=20 or b>=10",
+		resync=True,
+		verbose=True,
+	)
+
+.. code-block:: python
+
+    client.plot_histograms(
+        ['qm9-property.a', 'qm9-property.b', 'qm9-property.c',],
+        ids=dataset.property_ids
     )
 
 .. code-block:: python
 
-    clean.plot_histograms([
-        'a', 'b', 'c', 'mu', 'alpha', 'homo', 'lumo', 'r2', 'zpve', 'u0', 'u',
-        'h', 'g', 'cv'
-    ])
+    client.get_statistics(
+        ['qm9-property.a', 'qm9-property.b', 'qm9-property.c'],
+        ids=dataset.property_ids,
+        verbose=True
+    )
 
-.. code-block:: python
-
-    print(clean.get_statistics('a'))
-    print(clean.get_statistics('b'))
-    print(clean.get_statistics('c'))
-
-    # {'average': 3.407053427070018, 'std': 1.3368223663235594, 'min': 0.0, 'max': 19.99697, 'average_abs': 3.407053427070018}
-    # {'average': 1.3966863945821093, 'std': 0.45813797072575396, 'min': 0.33712, 'max': 9.93509, 'average_abs': 1.3966863945821093}
-    # {'average': 1.1177706236464617, 'std': 0.328798457356026, 'min': 0.33118, 'max': 6.46247, 'average_abs': 1.1177706236464617}
-
+    # 'qm9-property.a': {'average': 3.407053427070018, 'std': 1.3368223663235594, 'min': 0.0, 'max': 19.99697, 'average_abs': 3.407053427070018}
+    # 'qm9-property.b': {'average': 1.3966863945821093, 'std': 0.45813797072575396, 'min': 0.33712, 'max': 9.93509, 'average_abs': 1.3966863945821093}
+    # 'qm9-property.c': {'average': 1.1177706236464617, 'std': 0.328798457356026, 'min': 0.33118, 'max': 6.46247, 'average_abs': 1.1177706236464617}
 
 
 .. image:: qm9_clean_histograms.png

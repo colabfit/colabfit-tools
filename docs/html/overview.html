@@ -45,6 +45,7 @@
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Overview</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#database-structure">Database structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mongodb-outline">MongoDB outline</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
@@ -144,6 +145,75 @@ and one or more other <code class="xref py py-class docutils literal notranslate
 </dl>
 </li>
 </ul>
+</section>
+<section id="mongodb-outline">
+<h2>MongoDB outline<a class="headerlink" href="#mongodb-outline" title="Permalink to this headline"></a></h2>
+<p>The underlying Mongo database has the following structure:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>/configurations
+    _id
+    atomic_numbers
+    positions
+    cell
+    pbc
+    names
+    labels
+    elements
+    nelements
+    elements_ratios
+    chemical_formula_reduced
+    chemical_formula_anonymous
+    chemical_formula_hill
+    nsites
+    dimension_types
+    nperiodic_dimensions
+    latice_vectors
+    last_modified
+    relationships
+        properties
+        configuration_sets
+
+/properties
+    _id
+    type
+    property_name
+        each field in the property definition
+    methods
+    labels
+    last_modified
+    relationships
+        property_settings
+        configurations
+
+/property_settings
+    _id
+    method
+    decription
+    labels
+    files
+        file_name
+        file_contents
+    relationships
+        properties
+
+/configuration_sets
+    _id
+    last_modified
+    aggregated_info
+        (from configurations)
+        nconfigurations
+        nsites
+        nelements
+        chemical_systems
+        elements
+        individual_elements_ratios
+        total_elements_ratios
+        labels
+        labels_counts
+        chemical_formula_reduced
+        chemical_formula_anonymous
+        chemical_formula_hill
+</pre></div>
+</div>
 </section>
 </section>
 

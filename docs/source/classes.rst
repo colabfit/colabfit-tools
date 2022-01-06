@@ -18,6 +18,7 @@ Classes
 
     configuration_set
     dataset
+    database
 
 .. toctree::
     :maxdepth: 2

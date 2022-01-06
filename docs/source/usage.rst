@@ -2,6 +2,9 @@
 Usage
 =====
 
+Detecting duplicates
+====================
+
 This section describes the core usage of the :code:`colabfit-tools` package.
 
 Synchronizing a Dataset

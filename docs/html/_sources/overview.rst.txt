@@ -54,3 +54,75 @@ stored as a Mongo database with  five core data structures:
       complete, discoverable training set. A :class:`Dataset` points to one or more
       :class:`ConfigurationSet` objects, one or more :class:`Property` objects,
       and one or more other :class:`Dataset` objects.
+
+MongoDB outline
+===============
+
+The underlying Mongo database has the following structure:
+
+.. code-block:: text
+    
+    /configurations
+        _id
+        atomic_numbers
+        positions
+        cell
+        pbc
+        names
+        labels
+        elements
+        nelements
+        elements_ratios
+        chemical_formula_reduced
+        chemical_formula_anonymous
+        chemical_formula_hill
+        nsites
+        dimension_types
+        nperiodic_dimensions
+        latice_vectors
+        last_modified
+        relationships
+            properties
+            configuration_sets
+
+    /properties
+        _id
+        type
+        property_name
+            each field in the property definition
+        methods
+        labels
+        last_modified
+        relationships
+            property_settings
+            configurations
+
+    /property_settings
+        _id
+        method
+        decription
+        labels
+        files
+            file_name
+            file_contents
+        relationships
+            properties
+
+    /configuration_sets
+        _id
+        last_modified
+        aggregated_info
+            (from configurations)
+            nconfigurations
+            nsites
+            nelements
+            chemical_systems
+            elements
+            individual_elements_ratios
+            total_elements_ratios
+            labels
+            labels_counts
+            chemical_formula_reduced
+            chemical_formula_anonymous
+            chemical_formula_hill
+       
