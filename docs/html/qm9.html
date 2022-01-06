@@ -50,7 +50,6 @@
 <li class="toctree-l2 current"><a class="current reference internal" href="#">QM9 example</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#writing-a-custom-property-for-qm9">Writing a custom property for QM9</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#defining-a-reader-function">Defining a reader function</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#writing-to-markdown">Writing to Markdown</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#cleaning-the-dataset">Cleaning the dataset</a></li>
 </ul>
 </li>
@@ -108,7 +107,7 @@ using the following commands:</p>
 Configuration, as documented in <a class="reference external" href="https://figshare.com/articles/dataset/Readme_file_Data_description_for_Quantum_chemistry_structures_and_properties_of_134_kilo_molecules_/1057641?backTo=/collections/Quantum_chemistry_structures_and_properties_of_134_kilo_molecules/978904">its original README</a>.</p>
 <p>In order to preserve this information, a custom property can be defined
 (see <a class="reference internal" href="usage.html#custom-properties"><span class="std std-ref">Custom properties</span></a> for more information).</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qm9_property_definition</span> <span class="o">=</span> <span class="p">{</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">insert_property_definition</span><span class="p">({</span>
     <span class="s1">&#39;property-id&#39;</span><span class="p">:</span> <span class="s1">&#39;qm9-property&#39;</span><span class="p">,</span>
     <span class="s1">&#39;property-title&#39;</span><span class="p">:</span> <span class="s1">&#39;A, B, C, mu, alpha, homo, lumo, gap, r2, zpve, U0, U, H, G, Cv&#39;</span><span class="p">,</span>
     <span class="s1">&#39;property-description&#39;</span><span class="p">:</span> <span class="s1">&#39;Geometries minimal in energy, corresponding harmonic frequencies, dipole moments, polarizabilities, along with energies, enthalpies, and free energies of atomization&#39;</span><span class="p">,</span>
@@ -129,15 +128,12 @@ Configuration, as documented in <a class="reference external" href="https://figs
     <span class="s1">&#39;cv&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Heat capacity at 298.15 K&#39;</span><span class="p">},</span>
     <span class="s1">&#39;smiles-relaxed&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;SMILES for relaxed geometry&#39;</span><span class="p">},</span>
     <span class="s1">&#39;inchi-relaxed&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;InChI for relaxed geometry&#39;</span><span class="p">},</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">custom_definitions</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;qm9-property&#39;</span><span class="p">:</span> <span class="n">qm9_property_definition</span><span class="p">}</span>
+<span class="p">})</span>
 </pre></div>
 </div>
 <p>Note that a property definition is used for performing verification checks when
 parsing the data. A <code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code> must still be provided for specifying
-_how_ to parse the data and what the units of the fields are.</p>
+<em>how</em> to parse the data and what the units of the fields are.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">property_map</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s1">&#39;qm9-property&#39;</span><span class="p">:</span> <span class="p">{</span>
         <span class="c1"># Property Definition field: {&#39;field&#39;: ASE field, &#39;units&#39;: ASE-readable units}</span>
@@ -162,9 +158,6 @@ _how_ to parse the data and what the units of the fields are.</p>
 <span class="p">}</span>
 </pre></div>
 </div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">property_map</span> <span class="o">=</span> <span class="n">property_map</span>
-</pre></div>
-</div>
 </section>
 <section id="defining-a-reader-function">
 <h2>Defining a reader function<a class="headerlink" href="#defining-a-reader-function" title="Permalink to this headline"></a></h2>
@@ -179,7 +172,6 @@ modification to the typical XYZ format), it is necessary to use the
         <span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="s1">&#39;index&#39;</span><span class="p">,</span> <span class="s1">&#39;A&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;mu&#39;</span><span class="p">,</span> <span class="s1">&#39;alpha&#39;</span><span class="p">,</span> <span class="s1">&#39;homo&#39;</span><span class="p">,</span> <span class="s1">&#39;lumo&#39;</span><span class="p">,</span> <span class="s1">&#39;gap&#39;</span><span class="p">,</span> <span class="s1">&#39;r2&#39;</span><span class="p">,</span> <span class="s1">&#39;zpve&#39;</span><span class="p">,</span> <span class="s1">&#39;U0&#39;</span><span class="p">,</span> <span class="s1">&#39;U&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span><span class="p">,</span> <span class="s1">&#39;Cv&#39;</span>
     <span class="p">]</span>
 
-    <span class="n">images</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
         <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="n">_</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">readlines</span><span class="p">()]</span>
 
@@ -224,9 +216,7 @@ modification to the typical XYZ format), it is necessary to use the
         <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;InChI&#39;</span><span class="p">]</span>     <span class="o">=</span> <span class="n">inchi</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;InChI_relaxed&#39;</span><span class="p">]</span>  <span class="o">=</span> <span class="n">inchi</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
 
-        <span class="n">images</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">atoms</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="n">images</span>
+        <span class="k">yield</span> <span class="n">atoms</span>
 </pre></div>
 </div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configurations</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span>
@@ -241,19 +231,22 @@ modification to the typical XYZ format), it is necessary to use the
 <span class="p">)</span>
 </pre></div>
 </div>
-</section>
-<section id="writing-to-markdown">
-<h2>Writing to Markdown<a class="headerlink" href="#writing-to-markdown" title="Permalink to this headline"></a></h2>
-<p>To avoid having to re-process the raw data using <code class="code docutils literal notranslate"><span class="pre">reader</span></code>, and to provide
-a cleaner storage format, <code class="xref py py-meth docutils literal notranslate"><span class="pre">to_markdown()</span></code>
-can be used (see <a class="reference internal" href="usage.html#reading-writing-datasets-with-markdown"><span class="std std-ref">Reading/writing Datasets with Markdown</span></a> for more
-details).</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">to_markdown</span><span class="p">(</span>
-    <span class="n">base_folder</span><span class="o">=</span><span class="s1">&#39;/content&#39;</span><span class="p">,</span>
-    <span class="n">html_file_name</span><span class="o">=</span><span class="s1">&#39;README.md&#39;</span><span class="p">,</span>
-    <span class="n">data_file_name</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">name</span><span class="o">+</span><span class="s1">&#39;.extxyz&#39;</span><span class="p">,</span>
-    <span class="n">data_format</span><span class="o">=</span><span class="s1">&#39;xyz&#39;</span><span class="p">,</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.property_settings</span> <span class="kn">import</span> <span class="n">PropertySettings</span>
+
+<span class="n">pso</span> <span class="o">=</span> <span class="n">PropertySettings</span><span class="p">(</span>
+    <span class="n">method</span><span class="o">=</span><span class="s1">&#39;DFT/B3LYP/6-31G(2df,p)&#39;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s1">&#39;QM9 property settings calculation&#39;</span><span class="p">,</span>
+    <span class="n">files</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;DFT&#39;</span><span class="p">,</span> <span class="s1">&#39;B3LYP&#39;</span><span class="p">,</span> <span class="s1">&#39;6-31G(2df,p)&#39;</span><span class="p">],</span>
 <span class="p">)</span>
+
+<span class="n">ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">insert_data</span><span class="p">(</span>
+    <span class="n">images</span><span class="p">,</span>
+    <span class="n">property_map</span><span class="o">=</span><span class="n">property_map</span><span class="p">,</span>
+    <span class="n">property_settings</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;qm9-property&#39;</span><span class="p">:</span> <span class="n">pso</span><span class="p">},</span>
+    <span class="n">generator</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">))</span>
 </pre></div>
 </div>
 </section>
@@ -262,44 +255,72 @@ details).</p>
 <p>Using the <code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_histograms()</span></code> and
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">get_statistics()</span></code> functions reveals that
 the QM9 dataset has some outlying data entries.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;a&#39;</span><span class="p">))</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;b&#39;</span><span class="p">))</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;c&#39;</span><span class="p">))</span>
-
-<span class="c1"># {&#39;average&#39;: 9.814382088508797, &#39;std&#39;: 1809.4589082320583, &#39;min&#39;: 0.0, &#39;max&#39;: 619867.68314, &#39;average_abs&#39;: 9.814382088508797}</span>
-<span class="c1"># {&#39;average&#39;: 1.4060972645920002, &#39;std&#39;: 1.5837889998648804, &#39;min&#39;: 0.33712, &#39;max&#39;: 437.90386, &#39;average_abs&#39;: 1.4060972645920002}</span>
-<span class="c1"># {&#39;average&#39;: 1.1249210272988013, &#39;std&#39;: 1.0956136904779634, &#39;min&#39;: 0.33118, &#39;max&#39;: 282.94545, &#39;average_abs&#39;: 1.1249210272988013}</span>
-</pre></div>
-</div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">plot_histograms</span><span class="p">([</span>
-    <span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="s1">&#39;b&#39;</span><span class="p">,</span> <span class="s1">&#39;c&#39;</span><span class="p">,</span> <span class="s1">&#39;mu&#39;</span><span class="p">,</span> <span class="s1">&#39;alpha&#39;</span><span class="p">,</span> <span class="s1">&#39;homo&#39;</span><span class="p">,</span> <span class="s1">&#39;lumo&#39;</span><span class="p">,</span> <span class="s1">&#39;r2&#39;</span><span class="p">,</span> <span class="s1">&#39;zpve&#39;</span><span class="p">,</span> <span class="s1">&#39;u0&#39;</span><span class="p">,</span> <span class="s1">&#39;u&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;h&#39;</span><span class="p">,</span> <span class="s1">&#39;g&#39;</span><span class="p">,</span> <span class="s1">&#39;cv&#39;</span>
-<span class="p">])</span>
-</pre></div>
-</div>
-<img alt="_images/qm9_histograms.png" class="align-center" src="_images/qm9_histograms.png" />
-<p>The <code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code> function can be used to
-return a new dataset without the outlying data.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">clean</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
-    <span class="s1">&#39;data&#39;</span><span class="p">,</span>
-    <span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;a&#39;</span><span class="p">][</span><span class="s1">&#39;source-value&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">20</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;b&#39;</span><span class="p">][</span><span class="s1">&#39;source-value&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">10</span><span class="p">),</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span>
+    <span class="p">[</span><span class="s1">&#39;qm9-property.a&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.b&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.c&#39;</span><span class="p">],</span>
+    <span class="n">ids</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">property_ids</span><span class="p">,</span>
     <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+
+<span class="c1"># &#39;qm9-property.a&#39;: {&#39;average&#39;: 9.814382088508797, &#39;std&#39;: 1809.4589082320583, &#39;min&#39;: 0.0, &#39;max&#39;: 619867.68314, &#39;average_abs&#39;: 9.814382088508797}</span>
+<span class="c1"># &#39;qm9-property.b&#39;: {&#39;average&#39;: 1.4060972645920002, &#39;std&#39;: 1.5837889998648804, &#39;min&#39;: 0.33712, &#39;max&#39;: 437.90386, &#39;average_abs&#39;: 1.4060972645920002}</span>
+<span class="c1"># &#39;qm9-property.c&#39;: {&#39;average&#39;: 1.1249210272988013, &#39;std&#39;: 1.0956136904779634, &#39;min&#39;: 0.33118, &#39;max&#39;: 282.94545, &#39;average_abs&#39;: 1.1249210272988013}</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">plot_histograms</span><span class="p">(</span>
+    <span class="p">[</span><span class="s1">&#39;qm9-property.a&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.b&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.c&#39;</span><span class="p">,],</span>
+    <span class="n">ids</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">property_ids</span>
 <span class="p">)</span>
 </pre></div>
 </div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">clean</span><span class="o">.</span><span class="n">plot_histograms</span><span class="p">([</span>
-    <span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="s1">&#39;b&#39;</span><span class="p">,</span> <span class="s1">&#39;c&#39;</span><span class="p">,</span> <span class="s1">&#39;mu&#39;</span><span class="p">,</span> <span class="s1">&#39;alpha&#39;</span><span class="p">,</span> <span class="s1">&#39;homo&#39;</span><span class="p">,</span> <span class="s1">&#39;lumo&#39;</span><span class="p">,</span> <span class="s1">&#39;r2&#39;</span><span class="p">,</span> <span class="s1">&#39;zpve&#39;</span><span class="p">,</span> <span class="s1">&#39;u0&#39;</span><span class="p">,</span> <span class="s1">&#39;u&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;h&#39;</span><span class="p">,</span> <span class="s1">&#39;g&#39;</span><span class="p">,</span> <span class="s1">&#39;cv&#39;</span>
-<span class="p">])</span>
+<img alt="_images/qm9_histograms.png" class="align-center" src="_images/qm9_histograms.png" />
+<p>The <code class="xref py py-meth docutils literal notranslate"><span class="pre">filter_on_properties()</span></code>
+function can be used to filter on the ConfigurationSets and Properties.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">clean_config_sets</span><span class="p">,</span> <span class="n">clean_property_ids</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">filter_on_properties</span><span class="p">(</span>
+    <span class="n">ds_id</span><span class="o">=</span><span class="n">ds_id</span><span class="p">,</span>
+    <span class="n">filter_fxn</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s1">&#39;qm9-property&#39;</span><span class="p">][</span><span class="s1">&#39;a&#39;</span><span class="p">][</span><span class="s1">&#39;source-value&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">20</span><span class="p">)</span> <span class="ow">and</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;qm9-property&#39;</span><span class="p">][</span><span class="s1">&#39;b&#39;</span><span class="p">][</span><span class="s1">&#39;source-value&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">fields</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;qm9-property.a.source-value&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.b.source-value&#39;</span><span class="p">],</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+
+<span class="n">new_cs_ids</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">cs</span> <span class="ow">in</span> <span class="n">clean_config_sets</span><span class="p">:</span>
+    <span class="n">new_cs_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">insert_configuration_set</span><span class="p">(</span>
+            <span class="n">cs</span><span class="o">.</span><span class="n">configuration_ids</span><span class="p">,</span>
+            <span class="n">cs</span><span class="o">.</span><span class="n">description</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="n">ds_id_clean</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">insert_dataset</span><span class="p">(</span>
+            <span class="n">cs_ids</span><span class="o">=</span><span class="n">new_cs_ids</span><span class="p">,</span>
+            <span class="n">pr_ids</span><span class="o">=</span><span class="n">clean_property_ids</span><span class="p">,</span>
+            <span class="n">name</span><span class="o">=</span><span class="s1">&#39;QM9_filtered&#39;</span><span class="p">,</span>
+            <span class="n">authors</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">authors</span><span class="p">,</span>
+            <span class="n">links</span><span class="o">=</span><span class="p">[</span>
+                    <span class="s1">&#39;https://www.nature.com/articles/sdata201422&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;https://figshare.com/collections/Quantum_chemistry_structures_and_properties_of_134_kilo_molecules/978904&#39;</span>
+            <span class="p">],</span>
+            <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The QM9 dataset, filtered by removing values with a&gt;=20 or b&gt;=10&quot;</span><span class="p">,</span>
+            <span class="n">resync</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span>
 </pre></div>
 </div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="n">clean</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;a&#39;</span><span class="p">))</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">clean</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;b&#39;</span><span class="p">))</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">clean</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span><span class="s1">&#39;c&#39;</span><span class="p">))</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">plot_histograms</span><span class="p">(</span>
+    <span class="p">[</span><span class="s1">&#39;qm9-property.a&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.b&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.c&#39;</span><span class="p">,],</span>
+    <span class="n">ids</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">property_ids</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span>
+    <span class="p">[</span><span class="s1">&#39;qm9-property.a&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.b&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.c&#39;</span><span class="p">],</span>
+    <span class="n">ids</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">property_ids</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
 
-<span class="c1"># {&#39;average&#39;: 3.407053427070018, &#39;std&#39;: 1.3368223663235594, &#39;min&#39;: 0.0, &#39;max&#39;: 19.99697, &#39;average_abs&#39;: 3.407053427070018}</span>
-<span class="c1"># {&#39;average&#39;: 1.3966863945821093, &#39;std&#39;: 0.45813797072575396, &#39;min&#39;: 0.33712, &#39;max&#39;: 9.93509, &#39;average_abs&#39;: 1.3966863945821093}</span>
-<span class="c1"># {&#39;average&#39;: 1.1177706236464617, &#39;std&#39;: 0.328798457356026, &#39;min&#39;: 0.33118, &#39;max&#39;: 6.46247, &#39;average_abs&#39;: 1.1177706236464617}</span>
+<span class="c1"># &#39;qm9-property.a&#39;: {&#39;average&#39;: 3.407053427070018, &#39;std&#39;: 1.3368223663235594, &#39;min&#39;: 0.0, &#39;max&#39;: 19.99697, &#39;average_abs&#39;: 3.407053427070018}</span>
+<span class="c1"># &#39;qm9-property.b&#39;: {&#39;average&#39;: 1.3966863945821093, &#39;std&#39;: 0.45813797072575396, &#39;min&#39;: 0.33712, &#39;max&#39;: 9.93509, &#39;average_abs&#39;: 1.3966863945821093}</span>
+<span class="c1"># &#39;qm9-property.c&#39;: {&#39;average&#39;: 1.1177706236464617, &#39;std&#39;: 0.328798457356026, &#39;min&#39;: 0.33118, &#39;max&#39;: 6.46247, &#39;average_abs&#39;: 1.1177706236464617}</span>
 </pre></div>
 </div>
 <img alt="_images/qm9_clean_histograms.png" class="align-center" src="_images/qm9_clean_histograms.png" />

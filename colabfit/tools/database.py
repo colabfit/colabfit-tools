@@ -39,105 +39,107 @@ class MongoDatabase(MongoClient):
 
     The Mongo database has the following structure
 
-    /configurations
-        _id
-        atomic_numbers
-        positions
-        cell
-        pbc
-        names
-        labels
-        elements
-        nelements
-        elements_ratios
-        chemical_formula_reduced
-        chemical_formula_anonymous
-        chemical_formula_hill
-        nsites
-        dimension_types
-        nperiodic_dimensions
-        latice_vectors
-        last_modified
-        relationships
-            properties
-            configuration_sets
+    .. code-block:: text
 
-    /properties
-        _id
-        type
-        property_name
-            each field in the property definition
-        methods
-        labels
-        last_modified
-        relationships
-            property_settings
-            configurations
-
-    /property_settings
-        _id
-        method
-        decription
-        labels
-        files
-            file_name
-            file_contents
-        relationships
-            properties
-
-    /configuration_sets
-        _id
-        last_modified
-        aggregated_info
-            (from configurations)
-            nconfigurations
-            nsites
-            nelements
-            chemical_systems
-            elements
-            individual_elements_ratios
-            total_elements_ratios
+        /configurations
+            _id
+            atomic_numbers
+            positions
+            cell
+            pbc
+            names
             labels
-            labels_counts
-            chemical_formula_reduced
-            chemical_formula_anonymous
-            chemical_formula_hill
-            nperiodic_dimensions
-            dimension_types
-        relationships
-            configurations
-            datasets
-
-    /datasets
-        _id
-        last_modified
-        aggregated_info
-            (from configuration sets)
-            nconfigurations
-            nsites
-            nelements
-            chemical_systems
             elements
-            individual_elements_ratios
-            total_elements_ratios
-            configuration_labels
-            configuration_labels_counts
+            nelements
+            elements_ratios
             chemical_formula_reduced
             chemical_formula_anonymous
             chemical_formula_hill
-            nperiodic_dimensions
+            nsites
             dimension_types
+            nperiodic_dimensions
+            latice_vectors
+            last_modified
+            relationships
+                properties
+                configuration_sets
 
-            (from properties)
-            property_types
-            property_fields
+        /properties
+            _id
+            type
+            property_name
+                each field in the property definition
             methods
-            methods_counts
-            property_labels
-            property_labels_counts
-        relationships
-            properties
-            configuration_sets
+            labels
+            last_modified
+            relationships
+                property_settings
+                configurations
+
+        /property_settings
+            _id
+            method
+            decription
+            labels
+            files
+                file_name
+                file_contents
+            relationships
+                properties
+
+        /configuration_sets
+            _id
+            last_modified
+            aggregated_info
+                (from configurations)
+                nconfigurations
+                nsites
+                nelements
+                chemical_systems
+                elements
+                individual_elements_ratios
+                total_elements_ratios
+                labels
+                labels_counts
+                chemical_formula_reduced
+                chemical_formula_anonymous
+                chemical_formula_hill
+                nperiodic_dimensions
+                dimension_types
+            relationships
+                configurations
+                datasets
+
+        /datasets
+            _id
+            last_modified
+            aggregated_info
+                (from configuration sets)
+                nconfigurations
+                nsites
+                nelements
+                chemical_systems
+                elements
+                individual_elements_ratios
+                total_elements_ratios
+                configuration_labels
+                configuration_labels_counts
+                chemical_formula_reduced
+                chemical_formula_anonymous
+                chemical_formula_hill
+                nperiodic_dimensions
+                dimension_types
+
+                (from properties)
+                property_types
+                property_fields
+                methods
+                methods_counts
+                property_labels
+                property_labels_counts
+            relationships
+                properties
+                configuration_sets
 
     Attributes:
 
@@ -566,7 +568,7 @@ class MongoDatabase(MongoClient):
 
         Example definition:
 
-        ..code-block:: python
+        .. code-block:: python
 
             property_definition = {
                 'property-id': 'default',
@@ -581,6 +583,7 @@ class MongoDatabase(MongoClient):
                 'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
                 'nd-diff-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
             }
+
         """
 
         if self.property_definitions.count_documents(
@@ -694,7 +697,7 @@ class MongoDatabase(MongoClient):
 
         Example:
 
-        ..code-block:: python
+        .. code-block:: python
 
             data = database.get_data(
                 collection_name='properties',
@@ -1677,7 +1680,7 @@ class MongoDatabase(MongoClient):
 
         Example:
 
-        ..code-block:: python
+        .. code-block:: python
 
             data = database.get_data(
                 collection_name='properties',
@@ -1709,7 +1712,8 @@ class MongoDatabase(MongoClient):
 
         Returns:
             results (dict)::
-                ..code-block::
+                .. code-block:: python
+
                     {
                         f:  {
                             'average': np.average(data),
@@ -1719,6 +1723,7 @@ class MongoDatabase(MongoClient):
                             'average_abs': np.average(np.abs(data))
                         } for f in fields
                     }
+
         """
 
         if isinstance(fields, str):
@@ -1753,10 +1758,8 @@ class MongoDatabase(MongoClient):
         returns configuration sets and properties that have been filtered based
         on the given criterion.
 
-            * The returned configuration sets will only include configurations
-            that return True for the filter
-            * The returned property IDs will only include properties that point
-            to a configuration that returned True for the filter.
+            * The returned configuration sets will only include configurations that return True for the filter
+            * The returned property IDs will only include properties that point to a configuration that returned True for the filter.
 
         Args:
 
@@ -1836,14 +1839,12 @@ class MongoDatabase(MongoClient):
         sets and properties that have been filtered based on the given
         criterion.
 
-            * The returned configuration sets will only include configurations
-            that are pointed to by a property that returned True for the filter
-            * The returned property IDs will only include properties that
-            returned True for the filter function.
+            * The returned configuration sets will only include configurations that are pointed to by a property that returned True for the filter
+            * The returned property IDs will only include properties that returned True for the filter function.
 
         Example:
 
-        ..code-block:: python
+        .. code-block:: python
 
             configuration_sets, property_ids = database.filter_on_properties(
                 ds_id=...,
@@ -1965,7 +1966,7 @@ class MongoDatabase(MongoClient):
 
         Example:
 
-        ..code-block:: python
+        .. code-block:: python
 
             # Convert energies to per-atom values
             database.apply_transformation(

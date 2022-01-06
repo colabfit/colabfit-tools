@@ -45,10 +45,11 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Getting started</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#installing-colabfit-tools">Installing colabfit-tools</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#using-pip">Using pip</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#installing-mongo">Installing Mongo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#first-steps">First steps</a></li>
 </ul>
 </li>
@@ -83,8 +84,8 @@
              
   <section id="getting-started">
 <h1>Getting started<a class="headerlink" href="#getting-started" title="Permalink to this headline"></a></h1>
-<section id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline"></a></h2>
+<section id="installing-colabfit-tools">
+<h2>Installing colabfit-tools<a class="headerlink" href="#installing-colabfit-tools" title="Permalink to this headline"></a></h2>
 <p>Currently, installation is only supported using <code class="code docutils literal notranslate"><span class="pre">pip</span></code> to install directly
 from the private GitHub repository.</p>
 <section id="using-pip">
@@ -97,10 +98,31 @@ from the private GitHub repository.</p>
 Personal Access Token that has appropriate permissions.</p>
 </section>
 </section>
+<section id="installing-mongo">
+<h2>Installing Mongo<a class="headerlink" href="#installing-mongo" title="Permalink to this headline"></a></h2>
+<p>See the <a class="reference external" href="https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/">official MongoDB documentation</a> for
+complete installation instructions. For convenience, the shell commands to
+download, install, and start a Mongo server have been included below (for Ubuntu
+20.04).</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># Instructions copied from MongoDB setup tutorial</span>
+wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc <span class="p">|</span> sudo apt-key add
+-
+<span class="nb">echo</span> <span class="s2">&quot;deb [ arch=amd64,arm64  ] https://repo.mongodb.org/apt/ubuntu</span>
+<span class="s2">focal/mongodb-org/5.0 multiverse&quot;</span> <span class="p">|</span> sudo tee
+/etc/apt/sources.list.d/mongodb-org-5.0.list
+sudo apt-get update
+sudo apt-get install -y mongodb-org
+sudo systemctl start mongod
+sudo systemctl status mongod
+</pre></div>
+</div>
+<p>To enable access control (user/password authentication), see <a class="reference external" href="https://docs.mongodb.com/manual/tutorial/enable-authentication/">the following
+section of the MongoDB documentation</a>.</p>
+</section>
 <section id="first-steps">
 <h2>First steps<a class="headerlink" href="#first-steps" title="Permalink to this headline"></a></h2>
 <ul class="simple">
-<li><p>Take a look at the <a class="reference internal" href="overview.html#overview"><span class="std std-ref">Overview</span></a> to see how Datasets are structured.</p></li>
+<li><p>Take a look at the <a class="reference internal" href="overview.html#overview"><span class="std std-ref">Overview</span></a> to see how the Database is structured.</p></li>
 <li><p>Review the <a class="reference internal" href="configuration.html#basics-of-configurations"><span class="std std-ref">Basics of Configurations</span></a> to better understand how data is
 stored when it is first loaded in.</p></li>
 <li><p>Follow the <a class="reference internal" href="basic_example.html#basic-example"><span class="std std-ref">Basic example</span></a></p></li>

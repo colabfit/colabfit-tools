@@ -58,6 +58,7 @@
 <li class="toctree-l2"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="database.html">Database</a></li>
 <li class="toctree-l2"><a class="reference internal" href="converters.html">Converter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="transformations.html">Transform</a></li>
 </ul>
@@ -148,7 +149,7 @@ considered as additional inputs to a calculation</p>
 <p>The most common use-case for building <a class="reference internal" href="#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> objects is to use
 the <a class="reference internal" href="converters.html#colabfit.tools.converters.BaseConverter.load" title="colabfit.tools.converters.BaseConverter.load"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load()</span></code></a> method of a
 <code class="xref py py-class docutils literal notranslate"><span class="pre">colabfit.tools.BaseConverter</span></code> instance (or equivalently, the
-<code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code> function), which will call
+<a class="reference internal" href="database.html#colabfit.tools.database.load_data" title="colabfit.tools.database.load_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code></a> function), which will call
 <a class="reference internal" href="#colabfit.tools.configuration.Configuration.from_ase" title="colabfit.tools.configuration.Configuration.from_ase"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Configuration.from_ase()</span></code></a> on an existing <code class="xref py py-class docutils literal notranslate"><span class="pre">ase.Atoms</span></code> object.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.converters</span> <span class="kn">import</span> <span class="n">EXYZConverter</span>
 
@@ -157,7 +158,7 @@ the <a class="reference internal" href="converters.html#colabfit.tools.converter
 <span class="n">configurations</span> <span class="o">=</span> <span class="n">converter</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
 </pre></div>
 </div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.dataset</span> <span class="kn">import</span> <span class="n">load_data</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.database</span> <span class="kn">import</span> <span class="n">load_data</span>
 
 <span class="n">configurations</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
 </pre></div>
