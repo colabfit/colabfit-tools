@@ -25,7 +25,7 @@ The QM9 dataset contains a large number of computed properties for each
 Configuration, as documented in `its original README <https://figshare.com/articles/dataset/Readme_file_Data_description_for_Quantum_chemistry_structures_and_properties_of_134_kilo_molecules_/1057641?backTo=/collections/Quantum_chemistry_structures_and_properties_of_134_kilo_molecules/978904>`_. 
 
 In order to preserve this information, a custom property can be defined
-(see :ref:`Custom properties` for more information).
+(see :ref:`Property definitions` for more information).
 
 .. code-block:: python
 

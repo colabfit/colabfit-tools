@@ -53,3 +53,4 @@ First steps
   stored when it is first loaded in.
 * Follow the :ref:`Basic example`
 * Continue with the :ref:`QM9 example` and/or the :ref:`Si PRX GAP example`
+* Look at :ref:`Mongo` if you are unfamiliar with Mongo syntax.

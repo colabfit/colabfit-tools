@@ -54,8 +54,8 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP example</a></li>
-<li class="toctree-l2"><a class="reference internal" href="md_file_input.html">Writing an input Markdown file</a></li>
-<li class="toctree-l2"><a class="reference internal" href="custom_property.html">Custom property definition example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_definitions.html">Property definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mongo.html">Mongo</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
@@ -106,7 +106,7 @@ using the following commands:</p>
 <p>The QM9 dataset contains a large number of computed properties for each
 Configuration, as documented in <a class="reference external" href="https://figshare.com/articles/dataset/Readme_file_Data_description_for_Quantum_chemistry_structures_and_properties_of_134_kilo_molecules_/1057641?backTo=/collections/Quantum_chemistry_structures_and_properties_of_134_kilo_molecules/978904">its original README</a>.</p>
 <p>In order to preserve this information, a custom property can be defined
-(see <a class="reference internal" href="usage.html#custom-properties"><span class="std std-ref">Custom properties</span></a> for more information).</p>
+(see <a class="reference internal" href="property_definitions.html#property-definitions"><span class="std std-ref">Property definitions</span></a> for more information).</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">insert_property_definition</span><span class="p">({</span>
     <span class="s1">&#39;property-id&#39;</span><span class="p">:</span> <span class="s1">&#39;qm9-property&#39;</span><span class="p">,</span>
     <span class="s1">&#39;property-title&#39;</span><span class="p">:</span> <span class="s1">&#39;A, B, C, mu, alpha, homo, lumo, gap, r2, zpve, U0, U, H, G, Cv&#39;</span><span class="p">,</span>
