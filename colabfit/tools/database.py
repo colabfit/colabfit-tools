@@ -18,6 +18,7 @@ from plotly.subplots import make_subplots
 
 from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
+from kim_property.create import KIM_PROPERTIES
 
 from colabfit import (
     HASH_SHIFT,
@@ -251,9 +252,7 @@ class MongoDatabase(MongoClient):
 
             property_settings (dict)
                 key = property name (same as top-level keys in property_map).
-                val = property settings ID that has been previously entered into
-                the database using
-                :meth:`~colabfit.tools.database.Database.insert_property_settings`
+                val = a PropertySettings object
 
             generator (bool, default=False):
                 If True, returns a generator of the results; otherwise returns
@@ -561,10 +560,12 @@ class MongoDatabase(MongoClient):
 
         Args:
 
-            definition (dict):
+            definition (dict or string):
                 The map defining the property. See the example below, or the
                 `OpenKIM Properties Framework <https://openkim.org/doc/schema/properties-framework/>`_
-                for more details.
+                for more details. If a string is provided, it must be the name
+                of an existing property definition from the
+                `OpenKIM Properties List <https://openkim.org/properties>`_.
 
         Example definition:
 
@@ -585,6 +586,9 @@ class MongoDatabase(MongoClient):
             }
 
         """
+
+        if isinstance(definition, str):
+            definition = KIM_PROPERTIES[definition]
 
         if self.property_definitions.count_documents(
             {'_id': definition['property-id']}
@@ -689,7 +693,7 @@ class MongoDatabase(MongoClient):
         query=None,
         ids=None,
         keep_ids=False,
-        concatenate=False, ravel=False, verbose=False, cache=False
+        concatenate=False, ravel=False, verbose=False#, cache=False
         ):
         """
         Queries the database and returns the fields specified by `keys` as a
