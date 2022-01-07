@@ -25,4 +25,3 @@ Classes
     :caption: Additional tools
 
     converters
-    transformations

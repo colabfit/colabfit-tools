@@ -42,7 +42,7 @@ See below for the definitions of each of the above keys/values:
 
 * :attr:`<property_field>` should be the name of a field from an property
   definition
-* :attr:`<key_for_info_or_arrays` should be a key for indexing the :attr:`info` or
+* :attr:`<key_for_info_or_arrays>` should be a key for indexing the :attr:`info` or
   :attr:`arrays` dictionaries on a Configuration (see :ref:`Configuration info and
   arrays fields`)
 * :attr:`'field'` is used to specify the key for extracting the property from
