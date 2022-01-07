@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mongo &mdash; ColabFit Tools Documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Usage" href="usage.html" />
+    <link rel="prev" title="Property definitions" href="property_definitions.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> colabfit-tools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="examples.html">Examples</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="basic_example.html">Basic example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_definitions.html">Property definitions</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Mongo</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#find-one">Find one</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#count-documents">Count documents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#get-all-documents">Get all documents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#check-for-multiple-links">Check for multiple links</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#get-distinct-fields">Get distinct fields</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#count-occurrences">Count occurrences</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#get-datasets-linked-to-configurationsets">Get Datasets linked to ConfigurationSets</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="classes.html">Classes</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">colabfit-tools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="examples.html">Examples</a> &raquo;</li>
+      <li>Mongo</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/mongo.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mongo">
+<h1>Mongo<a class="headerlink" href="#mongo" title="Permalink to this headline"></a></h1>
+<p>This section provides examples on how to perform various operations on the
+Database using Mongo. For more details, it is highly suggested that you visit
+<a class="reference external" href="https://docs.mongodb.com/manual/">the MongoDB documentation</a>.</p>
+<p>Recall that when opening a connection to the Database, for example with the
+following code:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.database</span> <span class="kn">import</span> <span class="n">MongoDatabase</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">MongoDatabase</span><span class="p">(</span><span class="s1">&#39;colabfit_database&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>the <code class="code docutils literal notranslate"><span class="pre">client</span></code> object is a Mongo Client connected to the
+<code class="code docutils literal notranslate"><span class="pre">'colabfit_database'</span></code> Database in a running Mongo server. This Database
+will have the following collections: <code class="code docutils literal notranslate"><span class="pre">'configurations'</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">'properties'</span></code>, <code class="code docutils literal notranslate"><span class="pre">'property_settings'</span></code>, <code class="code docutils literal notranslate"><span class="pre">'configuration_sets'</span></code>,
+and <code class="code docutils literal notranslate"><span class="pre">'datasets'</span></code>. which are accessible as attributes. See <a class="reference internal" href="overview.html#mongodb-outline"><span class="std std-ref">MongoDB outline</span></a> for more details.</p>
+<section id="find-one">
+<h2>Find one<a class="headerlink" href="#find-one" title="Permalink to this headline"></a></h2>
+<p>Get an example of a single document in a collection that satisfies the given
+query.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Find a Property document that is linked to the Dataset with an ID of ds_id</span>
+<span class="n">client</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">find_one</span><span class="p">({</span><span class="s1">&#39;relationships.datasets&#39;</span><span class="p">:</span> <span class="n">ds_id</span><span class="p">})</span>
+</pre></div>
+</div>
+</section>
+<section id="count-documents">
+<h2>Count documents<a class="headerlink" href="#count-documents" title="Permalink to this headline"></a></h2>
+<p>Count the number of documents in a collection.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Count the number of Configurations in the Database</span>
+<span class="n">client</span><span class="o">.</span><span class="n">configurations</span><span class="o">.</span><span class="n">count_documents</span><span class="p">({})</span>
+</pre></div>
+</div>
+</section>
+<section id="get-all-documents">
+<h2>Get all documents<a class="headerlink" href="#get-all-documents" title="Permalink to this headline"></a></h2>
+<p>Get a list of all of the Datasets in the Database, then sort by name.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">sorted</span><span class="p">(</span>
+    <span class="nb">list</span><span class="p">(</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">datasets</span><span class="o">.</span><span class="n">find</span><span class="p">({},</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">})</span>
+    <span class="p">),</span>
+    <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="check-for-multiple-links">
+<h2>Check for multiple links<a class="headerlink" href="#check-for-multiple-links" title="Permalink to this headline"></a></h2>
+<p>Similar to what is done in <a class="reference internal" href="usage.html#detecting-duplicates"><span class="std std-ref">detecting duplicates</span></a>,
+the <code class="code docutils literal notranslate"><span class="pre">'relationships'</span></code> field can be useful for finding documents that are
+linked to multiple other documents.</p>
+<p>For example, for finding how many ConfigurationSets are linked to more than one
+Dataset:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">configuration_sets</span><span class="o">.</span><span class="n">count_documents</span><span class="p">(</span>
+    <span class="p">{</span><span class="s1">&#39;relationships.datasets.1&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;$exists&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}}</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="get-distinct-fields">
+<h2>Get distinct fields<a class="headerlink" href="#get-distinct-fields" title="Permalink to this headline"></a></h2>
+<p>Get a set of all existing values of a given field:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Get a list of the unique property types in the Database</span>
+<span class="n">client</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">distinct</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="count-occurrences">
+<h2>Count occurrences<a class="headerlink" href="#count-occurrences" title="Permalink to this headline"></a></h2>
+<p><a class="reference external" href="https://docs.mongodb.com/manual/aggregation/">Aggregation pipelines</a> can be
+extremely useful, but may be more difficult to understand for new users of
+Mongo. The example below shows how to use aggregation to count the occurrences
+of each Configuration label.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cursor</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">configurations</span><span class="o">.</span><span class="n">aggregate</span><span class="p">([</span>
+<span class="c1"># by default, matches to all documents in the collection</span>
+<span class="c1"># $unwind: create a new document, once for each value in the &#39;labels&#39;</span>
+<span class="c1"># field</span>
+        <span class="p">{</span><span class="s1">&#39;$unwind&#39;</span><span class="p">:</span> <span class="s1">&#39;$labels&#39;</span><span class="p">},</span>
+<span class="c1"># $group: group the documents based on their label field, and count</span>
+        <span class="p">{</span><span class="s1">&#39;$group&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;_id&#39;</span><span class="p">:</span> <span class="s1">&#39;$labels&#39;</span><span class="p">,</span> <span class="s1">&#39;count&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;$sum&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}}}</span>
+<span class="p">])</span>
+
+<span class="nb">sorted</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;count&#39;</span><span class="p">],</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="get-datasets-linked-to-configurationsets">
+<h2>Get Datasets linked to ConfigurationSets<a class="headerlink" href="#get-datasets-linked-to-configurationsets" title="Permalink to this headline"></a></h2>
+<p>The example below shows how to use aggregation to obtain a list of all
+ConfigurationSets in the Database, with the names of their linked Datasets.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cursor</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">configuration_sets</span><span class="o">.</span><span class="n">aggregate</span><span class="p">([</span>
+    <span class="c1"># $project: only return the requested fields for each document</span>
+    <span class="p">{</span><span class="s1">&#39;$project&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;relationships.datasets&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}},</span>
+    <span class="c1"># $unwind: create a new document for each element in an array</span>
+    <span class="p">{</span><span class="s1">&#39;$unwind&#39;</span><span class="p">:</span> <span class="s1">&#39;$relationships.datasets&#39;</span><span class="p">},</span>
+    <span class="c1"># $project: only return the renamed field</span>
+    <span class="p">{</span><span class="s1">&#39;$project&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;ds_id&#39;</span><span class="p">:</span> <span class="s1">&#39;$relationships.datasets&#39;</span><span class="p">}},</span>
+    <span class="c1"># $lookup: pull the Dataset document with the given ID</span>
+    <span class="p">{</span><span class="s1">&#39;$lookup&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="c1"># pull from the &#39;datasets&#39; collection</span>
+        <span class="s1">&#39;from&#39;</span><span class="p">:</span> <span class="s1">&#39;datasets&#39;</span><span class="p">,</span>
+        <span class="c1"># match the local field &#39;ds_id&#39; to the &#39;_id&#39; field in &#39;datasets&#39;</span>
+        <span class="s1">&#39;localField&#39;</span><span class="p">:</span> <span class="s1">&#39;ds_id&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;foreignField&#39;</span><span class="p">:</span> <span class="s1">&#39;_id&#39;</span><span class="p">,</span>
+        <span class="c1"># attach the Dataset document under the name &#39;linked_ds&#39;</span>
+        <span class="s1">&#39;as&#39;</span><span class="p">:</span> <span class="s1">&#39;linked_ds&#39;</span>
+    <span class="p">}},</span>
+    <span class="c1"># $project: only return the name of the linke Dataset</span>
+    <span class="p">{</span><span class="s1">&#39;$project&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;ds_name&#39;</span><span class="p">:</span> <span class="s1">&#39;$linked_ds.name&#39;</span><span class="p">}}</span>
+<span class="p">])</span>
+
+<span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">cursor</span><span class="p">),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;ds_name&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="property_definitions.html" class="btn btn-neutral float-left" title="Property definitions" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="usage.html" class="btn btn-neutral float-right" title="Usage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, ColabFit.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

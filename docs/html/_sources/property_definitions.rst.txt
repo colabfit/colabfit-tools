@@ -1,6 +1,6 @@
-==================================
-Custom property definition example
-==================================
+====================
+Property definitions
+====================
 
 Property definitions are necessary to make sure that your data can be loaded
 properly, and to provide future users of your data with good documentation of
