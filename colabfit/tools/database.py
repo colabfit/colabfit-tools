@@ -15,6 +15,7 @@ from pymongo import MongoClient, UpdateOne
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 # import matplotlib.pyplot as plt
+from ase.io import write as ase_write
 
 from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
@@ -64,6 +65,10 @@ class MongoDatabase(MongoClient):
             relationships
                 properties
                 configuration_sets
+
+        /property_definitions
+            _id
+            definition
 
         /properties
             _id
@@ -275,6 +280,9 @@ class MongoDatabase(MongoClient):
             mongo_login = 'mongodb://{}:{}@localhost:{}/'.format(
                 self.user, self.pwrd, self.port
             )
+
+        for pso in property_settings.values():
+            self.insert_property_settings(pso)
 
         if generator:
             return self._insert_data(
@@ -813,14 +821,18 @@ class MongoDatabase(MongoClient):
             return data
 
 
-    def get_configuration(self, i):
+    def get_configuration(self, i, attach_properties=False):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
-        return self.get_configurations([i])[0]
+        return self.get_configurations(
+            [i], attach_properties=attach_properties
+        )[0]
 
 
-    def get_configurations(self, ids, generator=False, verbose=False):
+    def get_configurations(
+        self, ids, attach_properties=False, generator=False, verbose=False
+        ):
         """
         A generator that returns in-memory Configuration objects one at a time
         by loading the atomic numbers, positions, cells, and PBCs.
@@ -830,6 +842,10 @@ class MongoDatabase(MongoClient):
             ids (list or 'all'):
                 A list of string IDs specifying which Configurations to return.
                 If 'all', returns all of the configurations in the database.
+
+            attach_properties (bool, default=False):
+                If True, attaches all the data of any linked Properties directly
+                to the Configuration.
 
             generator (bool, default=False):
                 If True, this function returns a generator of the
@@ -846,7 +862,7 @@ class MongoDatabase(MongoClient):
         """
 
         if ids == 'all':
-            query = {}
+            query = {'_id': {'$exists': True}}
         else:
             if isinstance(ids, str):
                 ids = [ids]
@@ -854,26 +870,78 @@ class MongoDatabase(MongoClient):
             query = {'_id': {'$in': ids}}
 
         if generator:
-            return self._get_configurations(query=query, verbose=verbose)
-        else:
-            return list(self._get_configurations(query=query, verbose=verbose))
-
-
-    def _get_configurations(self, query, verbose=False):
-        for co_doc in tqdm(
-            self.configurations.find(
-                query,
-                {'atomic_numbers': 1, 'positions': 1, 'cell': 1, 'pbc': 1}
-            ),
-            desc='Getting configurations',
-            disable=not verbose
-            ):
-            yield Configuration(
-                symbols=co_doc['atomic_numbers'],
-                positions=co_doc['positions'],
-                cell=co_doc['cell'],
-                pbc=co_doc['pbc'],
+            return self._get_configurations(
+                query=query,
+                attach_properties=attach_properties,
+                verbose=verbose
             )
+        else:
+            return list(self._get_configurations(
+                query=query,
+                attach_properties=attach_properties,
+                verbose=verbose
+            ))
+
+
+    def _get_configurations(self, query, attach_properties, verbose=False):
+        if not attach_properties:
+            for co_doc in tqdm(
+                self.configurations.find(
+                    query,
+                    {'atomic_numbers': 1, 'positions': 1, 'cell': 1, 'pbc': 1}
+                ),
+                desc='Getting configurations',
+                disable=not verbose
+                ):
+                c = Configuration(
+                    symbols=co_doc['atomic_numbers'],
+                    positions=co_doc['positions'],
+                    cell=co_doc['cell'],
+                    pbc=co_doc['pbc'],
+                )
+
+                c.info['_id'] = co_doc['_id']
+                c.info[ATOMS_NAME_FIELD] = co_doc['names']
+                c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
+        else:
+
+            for pr_doc in tqdm(self.properties.aggregate([
+                    {'$unwind': '$relationships.configurations'},
+                    {'$match': {'relationships.configurations': query['_id']}},
+                    {'$lookup': {
+                        'from': 'configurations',
+                        'localField': 'relationships.configurations',
+                        'foreignField': '_id',
+                        'as': 'linked_co'
+                    }},
+                ]),
+                desc='Getting configurations',
+                disable=not verbose
+                ):
+
+                co_doc = pr_doc['linked_co'][0]
+
+                c = Configuration(
+                    symbols=co_doc['atomic_numbers'],
+                    positions=co_doc['positions'],
+                    cell=co_doc['cell'],
+                    pbc=co_doc['pbc'],
+                )
+
+                c.info['_id'] = co_doc['_id']
+                c.info[ATOMS_NAME_FIELD] = co_doc['names']
+                c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
+
+                n = len(c)
+
+                for field_name, field in pr_doc[pr_doc['type']].items():
+                    v = np.atleast_1d(field['source-value'])
+                    if v.shape[0] == n:
+                        c.arrays[field_name] = v
+                    else:
+                        c.info[field_name] = v
+
+                yield c
 
 
     def concatenate_configurations(self):
@@ -1654,18 +1722,21 @@ class MongoDatabase(MongoClient):
 
             if nrows > 1:
                 fig.add_trace(
-                    go.Histogram(x=data, nbinsx=nbins),
+                    go.Histogram(x=data, nbinsx=nbins, name=prop),
                     row=r+1, col=c+1,
                 )
             else:
                 fig.add_trace(
-                    go.Histogram(x=data, nbinsx=nbins),
-                    row=1, col=c+1
+                    go.Histogram(x=data, nbinsx=nbins, name=prop),
+                    row=1, col=c+1,
                 )
 
-        fig.update_layout(showlegend=False)
+        fig.update_layout(
+            showlegend=True,
+        )
         fig.update_xaxes(type=xscale)
         fig.update_yaxes(type=yscale)
+        fig.for_each_annotation(lambda a: a.update(text=""))
         # plt.tight_layout()
 
         return fig
@@ -2094,6 +2165,7 @@ class MongoDatabase(MongoClient):
         data_file_name,
         data_format,
         name_field=ATOMS_NAME_FIELD,
+        yscale='linear',
         ):
         """
         Saves a Dataset and writes a properly formatted markdown file. In the
@@ -2114,16 +2186,25 @@ class MongoDatabase(MongoClient):
             data_file_name (str):
                 Name of file to save configuration and properties to
 
-            data_format (str):
-                Format to use for data file. Default is 'xyz'
+            data_format (str, default='mongo'):
+                Format to use for data file. If 'mongo', does not save the
+                configurations to a new file, and instead adds the ID of the
+                Dataset in the Mongo Database.
 
             name_field (str):
                 The name of the field that should be used to generate
                 configuration names
+
+            yscale (str, default='linear'):
+                Scaling to use for histogram plotting
         """
 
         template = \
 """
+# Name
+
+{}
+
 # Summary
 |||
 |---|---|
@@ -2131,10 +2212,6 @@ class MongoDatabase(MongoClient):
 |Element ratios|{}|
 |# of unique configurations|{}|
 |# of unique atoms|{}|
-
-# Name
-
-{}
 
 # Authors
 
@@ -2148,7 +2225,7 @@ class MongoDatabase(MongoClient):
 
 {}
 
-# Data
+# Storage format
 
 |||
 |---|---|
@@ -2165,31 +2242,29 @@ class MongoDatabase(MongoClient):
 
 # Property settings
 
-|Method|Description|Labels|Files|
-|---|---|---|---|
+|ID|Method|Description|Labels|Files|
+|---|---|---|---|---|
 {}
 
 # Configuration sets
 
-|Regex|Description|# of structures| # of atoms|
+|ID|Description|# of structures| # of atoms|
 |---|---|---|---|
 {}
 
 # Configuration labels
 
-|Regex|Labels|Counts|
-|---|---|---|
+|Labels|Counts|
+|---|---|
 {}
+
+# Figures
+![The results of plot_histograms](histograms.png)
 """
 
         html_file_name = os.path.join(base_folder, html_file_name)
 
-        dataset = self.get_dataset(ds_id)
-
-        definition_files = {
-            pname: json.encode(self.get_property_definition(pname))
-            for pname in dataset.aggregated_info['property_types']
-        }
+        dataset = self.get_dataset(ds_id)['dataset']
 
         definition_files = {}
         for pname in dataset.aggregated_info['property_types']:
@@ -2207,60 +2282,132 @@ class MongoDatabase(MongoClient):
             ):
             if pr_doc['type'] not in property_map:
                 property_map[pr_doc['type']] = {
-                    f: v['source-unit']
-                    for f,v in pr_doc[pr_doc['type']]
+                    f: {'field': f, 'units': v['source-unit']}
+                    for f,v in pr_doc[pr_doc['type']].items()
                 }
 
         agg_info = dataset.aggregated_info
 
-        property_settings = []
+        property_settings = {}
         for pso_doc in self.property_settings.find(
             {'relationships.properties': {'$in': dataset.property_ids}}
             ):
-            property_settings.append(self.get_property_settings(pso_doc['_id']))
+            property_settings[pso_doc['_id']] = self.get_property_settings(
+                pso_doc['_id']
+            )
 
-        configuration_sets = [
-            self.get_configuration_set(csid)
+        configuration_sets = {
+            csid: self.get_configuration_set(csid)['configuration_set']
             for csid in dataset.configuration_set_ids
-        ]
+        }
 
         # Write the markdown file
         with open(html_file_name, 'w') as html:
-            html.write(
-                template.format(
-                    ', '.join(agg_info['chemical_systems']),
-                    ', '.join(['{} ({:.1f}%)'.format(e, er*100) for e, er in zip(agg_info['elements'], agg_info['elements_ratios'])]),
-                    agg_info['nconfigurations'],
-                    agg_info['nsites'],
-                    dataset.name,
-                    '\n\n'.join(dataset.authors),
-                    '\n\n'.join(dataset.links),
-                    dataset.description,
-                    ', '.join(agg_info['elements']),
-                    data_file_name, data_file_name,
-                    data_format,
-                    name_field,
-                    '\n'.join('\n'.join('| {} | {} | {}'.format('[{}]({})'.format(pid, definition_files[pid]), f, v) for f,v in fdict.items()) for pid, fdict in property_map.items()),
-                    '\n'.join('| {} | {} | {} | {} |'.format(pso.method, pso.description, ', '.join(pso.labels), ', '.join('[{}]({})'.format(f, f) for f in pso.files)) for pso in property_settings),
-                    '\n'.join('| {} | {} | {} |'.format(cs.description, cs.aggregated_info['n_configurations'], cs.aggregated_info['n_sites']) for cs in configuration_sets),
-                    '\n'.join('| {} | {} |'.format(l, lc) for l, lc in zip(dataset.aggregated_info['configuration_labels'], dataset.aggregated_info['configuration_labels_counts'])),
-                )
-            )
 
-        data_file_name = os.path.join(base_folder, data_file_name)
+            formatting_arguments = []
+
+            # Name
+            formatting_arguments.append(dataset.name)
+
+            # Summary
+            formatting_arguments.append(', '.join(agg_info['chemical_systems']))
+
+            tmp = []
+            for e, er in agg_info['total_elements_ratios'].items():
+                tmp.append('{} ({:.1f}%)'.format(e, er*100))
+
+            formatting_arguments.append(', '.join(tmp))
+
+            formatting_arguments.append(agg_info['nconfigurations'])
+            formatting_arguments.append(agg_info['nsites'])
+
+            # Authors
+            formatting_arguments.append('\n\n'.join(dataset.authors))
+
+            # Links
+            formatting_arguments.append('\n\n'.join(dataset.links))
+
+            # Description
+            formatting_arguments.append(dataset.description)
+            formatting_arguments.append(', '.join(agg_info['elements']))
+
+            # Storage format
+            if data_format == 'mongo':
+                data_file_name = ds_id
+
+            formatting_arguments.append(data_file_name)
+            formatting_arguments.append(data_file_name) # twice for hyperlink
+
+            formatting_arguments.append(data_format)
+            formatting_arguments.append(name_field)
+
+            tmp = []
+            for pid, fdict in property_map.items():
+                for f,v in fdict.items():
+                    tmp.append(
+                        '| {} | {} | {} | {}'.format(
+                            '[{}]({})'.format(pid, definition_files[pid]),
+                            f,
+                            v['field'],
+                            v['units']
+                        )
+                    )
+
+            formatting_arguments.append('\n'.join(tmp))
+
+            tmp = []
+            for pso_id, pso in property_settings.items():
+                tmp.append('| {} | {} | {} | {} | {} |'.format(
+                    pso_id,
+                    pso.method,
+                    pso.description,
+                    ', '.join(pso.labels),
+                    ', '.join('[{}]({})'.format(f, f) for f in pso.files)
+                ))
+
+            formatting_arguments.append('\n'.join(tmp))
+
+            tmp = []
+            for cs_id, cs in configuration_sets.items():
+                tmp.append('| {} | {} | {} | {} |'.format(
+                    cs_id,
+                    cs.description,
+                    cs.aggregated_info['nconfigurations'],
+                    cs.aggregated_info['nsites']
+                ))
+
+            formatting_arguments.append('\n'.join(tmp))
+
+            tmp = []
+            for l, lc in zip(
+                dataset.aggregated_info['configuration_labels'], dataset.aggregated_info['configuration_labels_counts']
+                ):
+
+                tmp.append('| {} | {} |'.format(l, lc))
+
+            formatting_arguments.append('\n'.join(tmp))
+
+            html.write(template.format(*formatting_arguments))
+
+
+        # Save figures
+        fig = self.plot_histograms(
+            dataset.aggregated_info['property_fields'],
+            ids=dataset.property_ids,
+            yscale=yscale
+        )
+
+        fig.write_image(os.path.join(base_folder, 'histograms.png'))
 
         # Copy any PSO files
         all_file_names = []
-        for pso in property_settings:
+        for pso_id, pso in property_settings.items():
             for fi, f in enumerate(pso.files):
-                new_name = os.path.join(base_folder, os.path.split(f)[-1])
+                new_name = os.path.join(
+                    base_folder,
+                    pso_id + '_' + os.path.split(f)[-1]
+                )
                 shutil.copyfile(f, new_name)
-
-                if new_name in all_file_names:
-                    raise RuntimeError(
-                        "PSO file name {} is used more than once."\
-                        "Use unique file names to avoid errors".format(f)
-                    )
 
                 all_file_names.append(new_name)
                 pso.files[fi] = new_name
@@ -2268,7 +2415,22 @@ class MongoDatabase(MongoClient):
         if data_format == 'xyz':
             data_format = 'extxyz'
 
-        # TODO: how to write configurations; with/without data
+        if data_format != 'mongo':
+            data_file_name = os.path.join(base_folder, data_file_name)
+
+            images = self.get_configurations(
+                ids=list(set(itertools.chain.from_iterable(
+                    cs.configuration_ids for cs in configuration_sets.values()
+                ))),
+                attach_properties=True,
+                generator=True,
+            )
+
+            ase_write(
+                data_file_name,
+                images=images,
+                format=data_format,
+            )
 
 
 def load_data(

@@ -6,6 +6,18 @@ This section provides examples on how to perform various operations on the
 Database using Mongo. For more details, it is highly suggested that you visit
 `the MongoDB documentation <https://docs.mongodb.com/manual/>`_.
 
+Queries
+^^^^^^^
+
+It is extremely important to be able to understand how to formulate at least
+basic Mongo queries. If you are a newcomer to Mongo, one of the best places to
+start would be to look over some of the
+`query tutorials from the official Mongo manual
+<https://docs.mongodb.com/manual/tutorial/query-documents/>`_.
+
+Structure
+^^^^^^^^^
+
 Recall that when opening a connection to the Database, for example with the
 following code:
 

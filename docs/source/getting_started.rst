@@ -13,11 +13,11 @@ Using pip
 
 .. code-block:: console
 
-    $ pip install git+https://<username_or_pat>@github.com/colabfit/colabfit-tools.git
+    $ pip install git+https://<PAT>@github.com/colabfit/colabfit-tools.git
 
 Note that since :code:`colabfit-tools` is currently still a private project,
-:code:`<username_or_pat>` must either be your GitHub username (if you have access to the repository) or a
-Personal Access Token that has appropriate permissions.
+:code:`<PAT>` must either be your a Personal Access Token that has appropriate
+permissions.
 
 Installing Mongo
 ================

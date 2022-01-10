@@ -97,6 +97,10 @@ The underlying Mongo database has the following structure:
             property_settings
             configurations
 
+    /property_definitions
+        _id
+        definition
+
     /property_settings
         _id
         method

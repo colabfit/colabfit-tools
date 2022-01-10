@@ -51,6 +51,8 @@
 <li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="property_definitions.html">Property definitions</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Mongo</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#queries">Queries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#structure">Structure</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#find-one">Find one</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#count-documents">Count documents</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#get-all-documents">Get all documents</a></li>
@@ -96,6 +98,15 @@
 <p>This section provides examples on how to perform various operations on the
 Database using Mongo. For more details, it is highly suggested that you visit
 <a class="reference external" href="https://docs.mongodb.com/manual/">the MongoDB documentation</a>.</p>
+<section id="queries">
+<h2>Queries<a class="headerlink" href="#queries" title="Permalink to this headline"></a></h2>
+<p>It is extremely important to be able to understand how to formulate at least
+basic Mongo queries. If you are a newcomer to Mongo, one of the best places to
+start would be to look over some of the
+<a class="reference external" href="https://docs.mongodb.com/manual/tutorial/query-documents/">query tutorials from the official Mongo manual</a>.</p>
+</section>
+<section id="structure">
+<h2>Structure<a class="headerlink" href="#structure" title="Permalink to this headline"></a></h2>
 <p>Recall that when opening a connection to the Database, for example with the
 following code:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.database</span> <span class="kn">import</span> <span class="n">MongoDatabase</span>
@@ -108,6 +119,7 @@ following code:</p>
 will have the following collections: <code class="code docutils literal notranslate"><span class="pre">'configurations'</span></code>,
 <code class="code docutils literal notranslate"><span class="pre">'properties'</span></code>, <code class="code docutils literal notranslate"><span class="pre">'property_settings'</span></code>, <code class="code docutils literal notranslate"><span class="pre">'configuration_sets'</span></code>,
 and <code class="code docutils literal notranslate"><span class="pre">'datasets'</span></code>. which are accessible as attributes. See <a class="reference internal" href="overview.html#mongodb-outline"><span class="std std-ref">MongoDB outline</span></a> for more details.</p>
+</section>
 <section id="find-one">
 <h2>Find one<a class="headerlink" href="#find-one" title="Permalink to this headline"></a></h2>
 <p>Get an example of a single document in a collection that satisfies the given
