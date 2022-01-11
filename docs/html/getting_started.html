@@ -105,11 +105,8 @@ complete installation instructions. For convenience, the shell commands to
 download, install, and start a Mongo server have been included below (for Ubuntu
 20.04).</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># Instructions copied from MongoDB setup tutorial</span>
-wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc <span class="p">|</span> sudo apt-key add
--
-<span class="nb">echo</span> <span class="s2">&quot;deb [ arch=amd64,arm64  ] https://repo.mongodb.org/apt/ubuntu</span>
-<span class="s2">focal/mongodb-org/5.0 multiverse&quot;</span> <span class="p">|</span> sudo tee
-/etc/apt/sources.list.d/mongodb-org-5.0.list
+wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc <span class="p">|</span> sudo apt-key add -
+<span class="nb">echo</span> <span class="s2">&quot;deb [ arch=amd64,arm64  ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse&quot;</span> <span class="p">|</span> sudo tee /etc/apt/sources.list.d/mongodb-org-5.0.list
 sudo apt-get update
 sudo apt-get install -y mongodb-org
 sudo systemctl start mongod
