@@ -2157,6 +2157,23 @@ class MongoDatabase(MongoClient):
         return res
 
 
+    def dataset_from_markdown(
+        self,
+        html_file_path,
+        verbose=False,
+    ):
+        """
+        Pseudocode:
+
+        Load configurations from file or Database
+
+        Load property definitions; should either be in OpenKIM or a local file
+
+        Load property map from MD
+        """
+        pass
+
+
     def dataset_to_markdown(
         self,
         ds_id,
@@ -2201,17 +2218,14 @@ class MongoDatabase(MongoClient):
 
         template = \
 """
+# Summary
+|Chemical systems|Element ratios|# of configurations|# of atoms|
+|---|---|---|---|
+|{}|{}|{}|{}|
+
 # Name
 
 {}
-
-# Summary
-|||
-|---|---|
-|Chemical systems|{}|
-|Element ratios|{}|
-|# of unique configurations|{}|
-|# of unique atoms|{}|
 
 # Authors
 
@@ -2227,12 +2241,9 @@ class MongoDatabase(MongoClient):
 
 # Storage format
 
-|||
-|---|---|
-|Elements|{}|
-|File|[{}]({})|
-|Format|{}|
-|Name field|{}|
+|Elements|File|Format|Name field|
+|---|---|---|---|
+| {} | {} | {} | {} |
 
 # Properties
 
@@ -2306,9 +2317,6 @@ class MongoDatabase(MongoClient):
 
             formatting_arguments = []
 
-            # Name
-            formatting_arguments.append(dataset.name)
-
             # Summary
             formatting_arguments.append(', '.join(agg_info['chemical_systems']))
 
@@ -2321,6 +2329,9 @@ class MongoDatabase(MongoClient):
             formatting_arguments.append(agg_info['nconfigurations'])
             formatting_arguments.append(agg_info['nsites'])
 
+            # Name
+            formatting_arguments.append(dataset.name)
+
             # Authors
             formatting_arguments.append('\n\n'.join(dataset.authors))
 
@@ -2329,16 +2340,19 @@ class MongoDatabase(MongoClient):
 
             # Description
             formatting_arguments.append(dataset.description)
-            formatting_arguments.append(', '.join(agg_info['elements']))
 
             # Storage format
-            if data_format == 'mongo':
-                data_file_name = ds_id
+            formatting_arguments.append(', '.join(agg_info['elements']))
 
-            formatting_arguments.append(data_file_name)
-            formatting_arguments.append(data_file_name) # twice for hyperlink
+            if data_format == 'mongo':
+                formatting_arguments.append(ds_id)
+            else:
+                formatting_arguments.append(
+                    '[{}]({})'.format(data_file_name, data_file_name)
+                )
 
             formatting_arguments.append(data_format)
+
             formatting_arguments.append(name_field)
 
             tmp = []
