@@ -121,9 +121,10 @@ class EXYZConverter(BaseConverter):
                     [_.strip() for _ in atoms.info[labels_field].split(',')]
                 )
 
-            images[ai] = Configuration.from_ase(atoms)
+            yield Configuration.from_ase(atoms)
+        #     images[ai] = Configuration.from_ase(atoms)
 
-        return images
+        # return images
 
 
 class CFGConverter(BaseConverter):

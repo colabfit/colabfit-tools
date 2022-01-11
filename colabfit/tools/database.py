@@ -1,6 +1,7 @@
 import os
 import json
 import shutil
+import markdown
 import datetime
 import warnings
 import itertools
@@ -10,6 +11,7 @@ import multiprocessing
 from copy import deepcopy
 from hashlib import sha512
 from getpass import getpass
+from ast import literal_eval
 from functools import partial
 from pymongo import MongoClient, UpdateOne
 import plotly.graph_objects as go
@@ -17,6 +19,7 @@ from plotly.subplots import make_subplots
 # import matplotlib.pyplot as plt
 from ase.io import write as ase_write
 
+import kim_edn
 from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
@@ -33,6 +36,9 @@ from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.dataset import Dataset
 from colabfit.tools.property_settings import PropertySettings
+from colabfit.tools.dataset_parser import (
+    DatasetParser, MarkdownFormatError, BadTableFormatting
+)
 
 class MongoDatabase(MongoClient):
     """
@@ -294,10 +300,15 @@ class MongoDatabase(MongoClient):
                 verbose=verbose
             )
         else:
-            configurations = np.array(list(configurations), dtype='object')
+            configurations = list(configurations)
 
-            split_configs = np.array_split(configurations, self.nprocs)
-            split_configs = [_.tolist() for _ in split_configs]
+            n = len(configurations)
+            k = self.nprocs
+
+            split_configs = [
+                configurations[i*(n//k)+min(i, n%k):(i+1)*(n//k)+min(i+1, n%k)]
+                for i in range(k)
+            ]
 
             pfunc = partial(
                 self._insert_data,
@@ -624,7 +635,7 @@ class MongoDatabase(MongoClient):
             {
                 '$setOnInsert': {
                     '_id': definition['property-id'],
-                    'definition': definition
+                    'definition': dummy_dict
                 }
             },
             upsert=True
@@ -2160,18 +2171,202 @@ class MongoDatabase(MongoClient):
     def dataset_from_markdown(
         self,
         html_file_path,
+        generator=False,
         verbose=False,
     ):
         """
-        Pseudocode:
+        Loads a Dataset from a markdown file.
 
-        Load configurations from file or Database
+        Args:
 
-        Load property definitions; should either be in OpenKIM or a local file
+            html_file_path (str):
+                The full path to the markdown file
 
-        Load property map from MD
+            generator (bool, default=False):
+                If True, uses a generator when inserting data.
+
+            verbose (bool, default=False):
+                If True, prints progress bars
+
+        Returns:
+
+            dataset (Dataset):
+                The Dataset object after adding it to the Database
         """
-        pass
+
+        base_path = os.path.split(html_file_path)[0]
+
+        with open(html_file_path, 'r') as f:
+            try:
+                html = markdown.markdown(f.read(), extensions=['tables'])
+            except:
+                raise MarkdownFormatError(
+                    "Markdown file could not be read by markdown.markdown()"
+                )
+
+        # Parse information from markdown file
+        parser = DatasetParser()
+        parser.feed(html)
+
+        storage_info = dict(zip(*parser.get_data('Storage format')))
+
+        # Check if already exists in Database
+        if storage_info['Format'] == 'mongo':
+            return self.get_dataset(
+                storage_info['File'], resync=True, verbose=verbose
+            )['dataset']
+
+        # Else, need to build from scratch
+        try:
+            elements = [l.strip() for l in storage_info['Elements'].split(',')]
+        except:
+            raise BadTableFormatting(
+                "Error when parsing 'Elements' column of 'Storage format' table"
+            )
+
+        for key in ['File', 'Format', 'Name field']:
+            try:
+                storage_info[key]
+            except KeyError:
+                raise BadTableFormatting(
+                    f"Could not find key '{key}' in 'Storage format' table"
+                )
+
+        # Load Configurations
+        images = load_data(
+            file_path=os.path.join(base_path, storage_info['File'][0][1]),
+            file_format=storage_info['Format'],
+            name_field=storage_info['Name field'],
+            elements=elements,
+            default_name=parser.data['Name'],
+            verbose=verbose
+        )
+
+        # Add Property definitions and load property_map
+        property_map = {}
+        for prop in parser.get_data('Properties')[1:]:
+            pid         = prop[0][0]
+            kim_field   = prop[1]
+            ase_field   = prop[2]
+            units       = prop[3]
+
+            if units == 'None':
+                units = None
+
+            # pid, kim_field, ase_field, units = prop
+
+
+            if pid in KIM_PROPERTIES:
+                pname = definition = pid
+            elif isinstance(pid, tuple):
+                pname = pid[0]
+
+                edn_path = os.path.abspath(os.path.join(base_path, pid[1]))
+                definition = kim_edn.load(edn_path)
+
+            definition['property-id'] = pname
+            self.insert_property_definition(definition)
+
+            pid_dict = property_map.setdefault(pname, {})
+
+            if kim_field in pid_dict:
+                raise BadTableFormatting(
+                    "Duplicate property field found"
+                )
+
+            pid_dict[kim_field] = {
+                'field': ase_field,
+                'units': units
+            }
+
+        # Extract property settings
+        property_settings = {}
+        pso_table = parser.get_data('Property settings')
+        header = pso_table[0]
+        for row in pso_table[1:]:
+            files = []
+            if 'Files' in header:
+                for ftup in row[header.index('Files')]:
+                    # Files will be stored as hyperlink tuples
+                    fpath = os.path.abspath(os.path.join(base_path, ftup[1]))
+                    with open(fpath, 'r') as f:
+                        files.append((
+                            ftup[0],
+                            '\n'.join([_.strip() for _ in f.readlines()])
+                        ))
+
+            property_settings[row[header.index('Property')]] = PropertySettings(
+                method=row[header.index('Method')],
+                description=row[header.index('Description')],
+                labels=[
+                    _.strip() for _ in row[header.index('Labels')].split(',')
+                ] if 'Labels' in header else [],
+                files=files,
+            )
+
+        ids = list(self.insert_data(
+            images,
+            property_map=property_map,
+            property_settings=property_settings,
+            generator=generator,
+            verbose=verbose,
+        ))
+
+        all_co_ids, all_pr_ids = list(zip(*ids))
+
+        # Extract configuration sets and trigger CS refresh
+        cs_ids = []
+
+        config_sets = parser.get_data('Configuration sets')
+        header = config_sets[0]
+        for row in config_sets[1:]:
+            query = literal_eval(row[header.index('Query')])
+            query['_id'] = {'$in': all_co_ids}
+
+            co_ids = self.get_data(
+                'configurations',
+                fields='_id',
+                query=query,
+                ravel=True
+            ).tolist()
+
+            cs_id = self.insert_configuration_set(
+                co_ids,
+                description=row[header.index('Description')],
+                verbose=True
+            )
+
+            cs_ids.append(cs_id)
+
+        # Define the Dataset
+        ds_id = self.insert_dataset(
+            cs_ids=cs_ids,
+            pr_ids=all_pr_ids,
+            name='Mo_PRM2019',
+            authors=parser.data['Authors'],
+            links=parser.data['Links'],
+            description=parser.data['Description'],
+            verbose=verbose,
+        )
+
+        # Extract labels and trigger label refresh for configurations
+        labels = parser.get_data('Configuration labels')
+        header = labels[0]
+        for row in labels[1:]:
+            query = literal_eval(row[header.index('Query')])
+            query['_id'] = {'$in': all_co_ids}
+
+            self.apply_labels(
+                dataset_id=ds_id,
+                collection_name='configurations',
+                query=query,
+                labels=[
+                    l.strip() for l in row[header.index('Labels')].split(',')
+                ],
+                verbose=True
+            )
+
+        return self.get_dataset(ds_id, resync=True, verbose=verbose)['dataset']
 
 
     def dataset_to_markdown(

@@ -66,10 +66,25 @@ def build_n(n):
 class TestMongoDatabase:
     database_name = 'colabfit_test'
 
+    def test_from_html(self):
+       with tempfile.TemporaryFile() as tmpfile:
+
+            database = MongoDatabase(self.database_name, drop_database=True)
+
+            # Just makes sure from_markdown doesn't throw an error
+            dataset = database.dataset_from_markdown(
+                'colabfit/tests/files/test.md',
+                generator=True
+            )
+
+            assert 3 == dataset.aggregated_info['nconfigurations']
+            assert 3 == sum(dataset.aggregated_info['property_types_counts'])
+
+
     def test_add_then_update_nochange_config(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             returns = build_n(10)
 
@@ -115,7 +130,7 @@ class TestMongoDatabase:
     def test_add_then_update_with_changes_config(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             returns = build_n(10)
 
@@ -180,7 +195,7 @@ class TestMongoDatabase:
     def test_add_configs_props_diff_def(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             returns = build_n(10)
 
@@ -271,7 +286,7 @@ class TestMongoDatabase:
     def test_add_then_update_with_properties_with_change(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             returns = build_n(10)
 
@@ -418,7 +433,7 @@ class TestMongoDatabase:
     def test_add_then_update_with_properties_nochange(self):
         with tempfile.TemporaryFile() as tmpfile:
 
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             returns = build_n(10)
 
@@ -516,7 +531,7 @@ class TestMongoDatabase:
     def test_get_configurations(self):
 
         with tempfile.TemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             images = build_n(10)[0]
 
@@ -532,7 +547,7 @@ class TestMongoDatabase:
     def test_insert_pso_definition_data(self):
 
         with tempfile.NamedTemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             images = build_n(10)[0]
 
@@ -629,7 +644,7 @@ class TestMongoDatabase:
     def test_insert_cs(self):
 
         with tempfile.NamedTemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             images = build_n(10)[0]
 
@@ -670,7 +685,7 @@ class TestMongoDatabase:
     def test_insert_ds_diff_cs(self):
 
         with tempfile.NamedTemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             database.insert_property_definition(
                 {
@@ -789,7 +804,7 @@ class TestPropertyDefinitionsAndSettings:
 
     def test_invalid_definition(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             property_definition = {
                 'property-id': 'this should throw an error',
@@ -801,7 +816,7 @@ class TestPropertyDefinitionsAndSettings:
 
     def test_definition_setter_getter(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             property_definition = {
                     'property-id': 'default',
@@ -824,7 +839,7 @@ class TestPropertyDefinitionsAndSettings:
 
     def test_settings_setter_getter(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             dummy_file_contents = 'this is a dummy file\nwith nonsense contents'
 
@@ -843,7 +858,7 @@ class TestPropertyDefinitionsAndSettings:
 
     def test_settings_duplicate(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             dummy_file_contents = 'this is a dummy file\nwith nonsense contents'
 
@@ -866,7 +881,7 @@ class TestConfigurationSets:
 
     def test_insert_cs(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             images = build_n(10)[0]
 
@@ -899,7 +914,7 @@ class TestDatasets:
 
     def test_insert_ds(self):
         with tempfile.TemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop=True)
+            database = MongoDatabase(self.database_name, drop_database=True)
 
             images = build_n(10)[0]
 
