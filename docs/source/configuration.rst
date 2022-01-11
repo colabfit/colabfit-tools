@@ -49,11 +49,10 @@ Configuration is instantiated:
 Building Configurations
 =======================
 
-The most common use-case for building :class:`Configuration` objects is to use
-the :meth:`~colabfit.tools.converters.BaseConverter.load` method of a
-:class:`colabfit.tools.BaseConverter` instance (or equivalently, the
-:meth:`~colabfit.tools.database.load_data` function), which will call
-:meth:`Configuration.from_ase` on an existing :class:`ase.Atoms` object.
+The most common way a :class:`Configuration` object is built is by loading data
+files using one of the Converter objects provided in this package. For example,
+if working with an Extended XYZ file containing multiple structures, a list of
+Configurations can be created as below:
 
 .. code-block:: python
 
@@ -63,6 +62,8 @@ the :meth:`~colabfit.tools.converters.BaseConverter.load` method of a
 
    configurations = converter.load(...)
 
+or, equivalently, using the
+:meth:`~colabfit.tools.database.load_data` function.
 
 .. code-block:: python
     

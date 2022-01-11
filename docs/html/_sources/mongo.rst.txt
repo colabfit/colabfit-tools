@@ -1,6 +1,6 @@
-=====
-Mongo
-=====
+============
+Mongo basics
+============
 
 This section provides examples on how to perform various operations on the
 Database using Mongo. For more details, it is highly suggested that you visit

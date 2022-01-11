@@ -55,7 +55,6 @@
 <li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Database</a></li>
 <li class="toctree-l2"><a class="reference internal" href="converters.html">Converter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="transformations.html">Transform</a></li>
 </ul>
 </li>
 </ul>
@@ -115,6 +114,10 @@ provides additinal functionality like filtering and optimized queries.</p>
     relationships
         properties
         configuration_sets
+
+/property_definitions
+    _id
+    definition
 
 /properties
     _id
@@ -486,8 +489,29 @@ fields.</p></li>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.database.MongoDatabase.dataset_from_markdown">
+<span class="sig-name descname"><span class="pre">dataset_from_markdown</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">html_file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.dataset_from_markdown" title="Permalink to this definition"></a></dt>
+<dd><p>Loads a Dataset from a markdown file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>html_file_path</strong> (<em>str</em>) – The full path to the markdown file</p></li>
+<li><p><strong>generator</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, uses a generator when inserting data.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, prints progress bars</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The Dataset object after adding it to the Database</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dataset (<a class="reference internal" href="dataset.html#colabfit.tools.dataset.Dataset" title="colabfit.tools.dataset.Dataset">Dataset</a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.database.MongoDatabase.dataset_to_markdown">
-<span class="sig-name descname"><span class="pre">dataset_to_markdown</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ds_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">html_file_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_file_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_format</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name_field</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'_name'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.dataset_to_markdown" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">dataset_to_markdown</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ds_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">html_file_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_file_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_format</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name_field</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'_name'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yscale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'linear'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.dataset_to_markdown" title="Permalink to this definition"></a></dt>
 <dd><p>Saves a Dataset and writes a properly formatted markdown file. In the
 case of a Dataset that has child Dataset objects, each child Dataset
 is written to a separate sub-folder.</p>
@@ -498,9 +522,12 @@ is written to a separate sub-folder.</p>
 <li><p><strong>base_folder</strong> (<em>str</em>) – Top-level folder in which to save the markdown and data files</p></li>
 <li><p><strong>html_file_name</strong> (<em>str</em>) – Name of file to save markdown to</p></li>
 <li><p><strong>data_file_name</strong> (<em>str</em>) – Name of file to save configuration and properties to</p></li>
-<li><p><strong>data_format</strong> (<em>str</em>) – Format to use for data file. Default is ‘xyz’</p></li>
+<li><p><strong>data_format</strong> (<em>str</em><em>, </em><em>default='mongo'</em>) – Format to use for data file. If ‘mongo’, does not save the
+configurations to a new file, and instead adds the ID of the
+Dataset in the Mongo Database.</p></li>
 <li><p><strong>name_field</strong> (<em>str</em>) – The name of the field that should be used to generate
 configuration names</p></li>
+<li><p><strong>yscale</strong> (<em>str</em><em>, </em><em>default='linear'</em>) – Scaling to use for histogram plotting</p></li>
 </ul>
 </dd>
 </dl>
@@ -597,7 +624,7 @@ number of necessary fields can improve query performance.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.database.MongoDatabase.get_configuration">
-<span class="sig-name descname"><span class="pre">get_configuration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">i</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.get_configuration" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">get_configuration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">i</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attach_properties</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.get_configuration" title="Permalink to this definition"></a></dt>
 <dd><p>Returns a single configuration by calling <a class="reference internal" href="#colabfit.tools.database.MongoDatabase.get_configurations" title="colabfit.tools.database.MongoDatabase.get_configurations"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_configurations()</span></code></a></p>
 </dd></dl>
 
@@ -625,7 +652,7 @@ returning. Default is False.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.database.MongoDatabase.get_configurations">
-<span class="sig-name descname"><span class="pre">get_configurations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.get_configurations" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">get_configurations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attach_properties</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.get_configurations" title="Permalink to this definition"></a></dt>
 <dd><p>A generator that returns in-memory Configuration objects one at a time
 by loading the atomic numbers, positions, cells, and PBCs.</p>
 <dl class="field-list simple">
@@ -633,6 +660,8 @@ by loading the atomic numbers, positions, cells, and PBCs.</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>ids</strong> (<em>list</em><em> or </em><em>'all'</em>) – A list of string IDs specifying which Configurations to return.
 If ‘all’, returns all of the configurations in the database.</p></li>
+<li><p><strong>attach_properties</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, attaches all the data of any linked Properties directly
+to the Configuration.</p></li>
 <li><p><strong>generator</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, this function returns a generator of the
 configurations. This is useful if the configurations can’t all
 fit in memory at the same time.</p></li>

@@ -31,11 +31,8 @@ download, install, and start a Mongo server have been included below (for Ubuntu
 .. code-block:: shell
 
     # Instructions copied from MongoDB setup tutorial
-    wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | sudo apt-key add
-    -
-    echo "deb [ arch=amd64,arm64  ] https://repo.mongodb.org/apt/ubuntu
-    focal/mongodb-org/5.0 multiverse" | sudo tee
-    /etc/apt/sources.list.d/mongodb-org-5.0.list
+    wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | sudo apt-key add -
+    echo "deb [ arch=amd64,arm64  ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-5.0.list
     sudo apt-get update
     sudo apt-get install -y mongodb-org
     sudo systemctl start mongod
@@ -53,4 +50,4 @@ First steps
   stored when it is first loaded in.
 * Follow the :ref:`Basic example`
 * Continue with the :ref:`QM9 example` and/or the :ref:`Si PRX GAP example`
-* Look at :ref:`Mongo` if you are unfamiliar with Mongo syntax.
+* Look at :ref:`Mongo usage` if you are unfamiliar with Mongo syntax.

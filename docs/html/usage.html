@@ -23,7 +23,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Classes" href="classes.html" />
-    <link rel="prev" title="Mongo" href="mongo.html" /> 
+    <link rel="prev" title="Using Markdown files" href="md_file_input.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -124,13 +124,19 @@ that has been added using
 </li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">&lt;property_field&gt;</span></code> should be the name of a field from an property
 definition</p></li>
-<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">&lt;key_for_info_or_arrays</span></code> should be a key for indexing the <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code> or
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">&lt;key_for_info_or_arrays&gt;</span></code> should be a key for indexing the <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code> or
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">arrays</span></code> dictionaries on a Configuration (see <a class="reference internal" href="configuration.html#configuration-info-and-arrays-fields"><span class="std std-ref">Configuration info and arrays fields</span></a>)</p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">'field'</span></code> is used to specify the key for extracting the property from
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code> or <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuartion.arrays</span></code>.</p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">'units'</span></code> should be a string matching one of the units names in
 <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/units.html">ase.units</a>.</p></li>
 </ul>
+<p>Note that <code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_data()</span></code> will attempt to load every Property specified in
+<code class="code docutils literal notranslate"><span class="pre">property_map</span></code> for each Configuration. This means that if there are
+<code class="code docutils literal notranslate"><span class="pre">P</span></code> properties in <code class="code docutils literal notranslate"><span class="pre">property_map</span></code> and <code class="code docutils literal notranslate"><span class="pre">C</span></code> Configurations, a
+maximum of <cite>P*C</cite> Properties will be loaded in total. If a Configuration does not
+have the necessary data for loading a given Property, that Property is skipped
+for the given Configuration and a warning is raised.</p>
 </section>
 <section id="detecting-duplicates">
 <h2>Detecting duplicates<a class="headerlink" href="#detecting-duplicates" title="Permalink to this headline"></a></h2>
@@ -337,7 +343,7 @@ parsing the data.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="mongo.html" class="btn btn-neutral float-left" title="Mongo" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="md_file_input.html" class="btn btn-neutral float-left" title="Using Markdown files" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="classes.html" class="btn btn-neutral float-right" title="Classes" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
