@@ -62,7 +62,7 @@
 <li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="property_definitions.html">Property definitions</a></li>
-<li class="toctree-l2"><a class="reference internal" href="mongo.html">Mongo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="md_file_input.html">Using Markdown files</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
@@ -110,9 +110,22 @@ running Mongo server and attaches to a database with the given name.</p>
 </section>
 <section id="attaching-a-property-definition">
 <h2>Attaching a property definition<a class="headerlink" href="#attaching-a-property-definition" title="Permalink to this headline"></a></h2>
-<p>Property definitions are used to uniquely define the properties that are stored
-in the database. Note that the <code class="code docutils literal notranslate"><span class="pre">property-id</span></code> field must be unique for all
-property definitions in the database. See <a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">the OpenKIM documentation</a> for more details on how
+<p>Property definitions are data structures that are used to concretely define
+material properties that are stored in the Database. Note that the
+<code class="code docutils literal notranslate"><span class="pre">property-id</span></code> field must be unique for all property definitions in the
+Database.</p>
+<p>Ideally, an existing Property Definition from the <a class="reference external" href="https://openkim.org/properties">OpenKIM Property Definition
+list</a> should be used by passing the “Property
+Definition ID” listed on a Property Definition page to the
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_property_definition()</span></code> function. For example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">insert_property_definition</span><span class="p">(</span>
+    <span class="s1">&#39;tag:staff@noreply.openkim.org,2014-04-15:property/bulk-modulus-isothermal-cubic-crystal-npt&#39;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>However, if none of the existing properties seem appropriate, a custom property
+definition can be provided by passing a valid dictionary instead. See
+<a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">the OpenKIM documentation</a> for more details on how
 to write a valid property definition.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">insert_property_definition</span><span class="p">({</span>
     <span class="s1">&#39;property-id&#39;</span><span class="p">:</span> <span class="s1">&#39;energy-forces&#39;</span><span class="p">,</span>
@@ -175,7 +188,11 @@ configurations.</p>
 </section>
 <section id="defining-a-property-map">
 <h3>Defining a property_map<a class="headerlink" href="#defining-a-property-map" title="Permalink to this headline"></a></h3>
-<p>A property map is used to specify how parse a Property from a Configuration.</p>
+<p>A property map is used to specify how parse a Property from a Configuration.
+Below, we define a property map that extracts the <cite>‘energy’</cite> and <cite>‘forces’</cite> keys
+in the <cite>‘energy-forces’</cite> property defined above from the <cite>‘dft_energy’</cite> and
+<cite>‘dft_forces’</cite> fields in the info and arrays attributes of a given
+Configuration.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">property_map</span> <span class="o">=</span> <span class="p">{</span>
     <span class="c1"># property name</span>
     <span class="s1">&#39;energy-forces&#39;</span><span class="p">:</span> <span class="p">{</span>
@@ -226,7 +243,9 @@ objects for providing additional metadata regarding the Properties being loaded.
 <p>A <code class="xref py py-class docutils literal notranslate"><span class="pre">ConfigurationSet</span></code> can be used to
 create groups of configurations for organizational purposes.</p>
 <p>First, use <a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.get_data" title="colabfit.tools.database.MongoDatabase.get_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data()</span></code></a> to extract
-the <code class="code docutils literal notranslate"><span class="pre">_id</span></code> fields for all of the configurations with fewer than 100 atoms.</p>
+the <code class="code docutils literal notranslate"><span class="pre">_id</span></code> fields for all of the configurations with fewer than 100 atoms.
+A Mongo query is passed in as the <code class="code docutils literal notranslate"><span class="pre">query</span></code> argument (see
+<a class="reference internal" href="mongo_overview.html#mongo-usage"><span class="std std-ref">Mongo usage</span></a> for more details).</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">co_ids</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span>
     <span class="s1">&#39;configurations&#39;</span><span class="p">,</span>
     <span class="n">fields</span><span class="o">=</span><span class="s1">&#39;_id&#39;</span><span class="p">,</span>
@@ -284,7 +303,7 @@ list of ConfigurationSet and Property IDs to
 <span class="n">cs_id2</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">insert_configuration_set</span><span class="p">(</span><span class="n">co_ids2</span><span class="p">,</span> <span class="s1">&#39;Big configurations&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Then exctract the Property IDs that are linked to the given Configurations.</p>
+<p>Then extract the Property IDs that are linked to the given Configurations.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pr_ids</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span>
     <span class="s1">&#39;properties&#39;</span><span class="p">,</span>
     <span class="n">fields</span><span class="o">=</span><span class="s1">&#39;_id&#39;</span><span class="p">,</span>
@@ -370,11 +389,13 @@ visualize the property fields.</p>
 <section id="applying-transformations-to-properties">
 <h2>Applying transformations to properties<a class="headerlink" href="#applying-transformations-to-properties" title="Permalink to this headline"></a></h2>
 <p><a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.apply_transformation" title="colabfit.tools.database.MongoDatabase.apply_transformation"><code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_transformation()</span></code></a> can be used
-to modify Properties that have already been loaded into the Database. This
-function uses the <code class="code docutils literal notranslate"><span class="pre">update_map</span></code> argument which is a dictionary where the
-key is a property field, and the value is a callable which takes in the Property
-document (as stored in the Mongo server). Note that the Property document will
-be augmented to include the linked Configuration as specified by
+to modify Properties that have already been loaded into the Database.</p>
+<p>The <code class="code docutils literal notranslate"><span class="pre">update_map</span></code> argument of this function is a dictionary where the key is a
+field from a property definition, and the value is a function that takes two
+inputs: (1) the current value taken by the specified key, and (2) a Property
+document (as stored in the Mongo database). The output of this function will be
+the new value used to overwrite the existing one. Note that the Property
+document will be augmented to include the linked Configuration as specified by
 <code class="code docutils literal notranslate"><span class="pre">configuration_ids</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">all_co_ids</span><span class="p">,</span> <span class="n">all_pr_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">ids</span><span class="p">))</span>
 
@@ -384,7 +405,7 @@ be augmented to include the linked Configuration as specified by
     <span class="n">property_ids</span><span class="o">=</span><span class="n">all_pr_ids</span><span class="p">,</span>
     <span class="n">update_map</span><span class="o">=</span><span class="p">{</span>
         <span class="s1">&#39;energy-forces.energy&#39;</span><span class="p">:</span>
-            <span class="k">lambda</span> <span class="n">f</span><span class="p">,</span> <span class="n">doc</span><span class="p">:</span> <span class="n">f</span><span class="o">/</span><span class="n">doc</span><span class="p">[</span><span class="s1">&#39;configuration&#39;</span><span class="p">][</span><span class="s1">&#39;nsites&#39;</span><span class="p">]</span>
+            <span class="k">lambda</span> <span class="n">current_val</span><span class="p">,</span> <span class="n">pr_doc</span><span class="p">:</span> <span class="n">current_val</span><span class="o">/</span><span class="n">pr_doc</span><span class="p">[</span><span class="s1">&#39;configuration&#39;</span><span class="p">][</span><span class="s1">&#39;nsites&#39;</span><span class="p">]</span>
     <span class="p">},</span>
     <span class="n">configuration_ids</span><span class="o">=</span><span class="n">all_co_ids</span><span class="p">,</span>
 <span class="p">)</span>

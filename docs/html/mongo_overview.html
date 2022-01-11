@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mongo overview &mdash; ColabFit Tools Documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Getting started" href="getting_started.html" />
+    <link rel="prev" title="Database structure" href="database_structure.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> colabfit-tools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="overview.html">Overview</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="database_structure.html">Database structure</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Mongo overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#mongodb-structure">MongoDB structure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#mongo-usage">Mongo usage</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="classes.html">Classes</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">colabfit-tools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="overview.html">Overview</a> &raquo;</li>
+      <li>Mongo overview</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/mongo_overview.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mongo-overview">
+<h1>Mongo overview<a class="headerlink" href="#mongo-overview" title="Permalink to this headline"></a></h1>
+<section id="mongodb-structure">
+<h2>MongoDB structure<a class="headerlink" href="#mongodb-structure" title="Permalink to this headline"></a></h2>
+<p>The structure of the underlying Mongo database is described below. Lines
+preceded by a forward slash (<code class="code docutils literal notranslate"><span class="pre">/</span></code>) denote <a class="reference external" href="https://docs.mongodb.com/manual/core/databases-and-collections/#collections">Mongo collections</a>.
+All other lines denote queryable fields. Indentation denotes sub-fields.</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">/configurations</span></code></dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">_id</span></code>: a unique string identifier</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">atomic_numbers</span></code>: the atomic numbers for each atom</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">positions</span></code>: the Cartesian coordinates of each atom</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">cell</span></code>: the cell lattice vectors</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">pbc</span></code>: periodic boundary conditions along each cell vector</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">names</span></code>: human-readable names for the Configuration</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">labels</span></code>: labels applied to the Configuration to improve queries</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">elements</span></code>: the set of element types in the Configuration</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">nelements</span></code>: the number of unique element types in the Configuration</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">elements_ratios</span></code>: the relative concentrations of each element type</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_formula_reduced</span></code>: a reduced chemical formula</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_formula_anonymous</span></code>: an anonymous chemical formula (without
+specific element types)</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_formula_hill</span></code>: the chemical formula in Hill notation</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">nsites</span></code>: the number of sites (atoms) in the Configuration</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dimension_types</span></code>: same as <code class="code docutils literal notranslate"><span class="pre">pbc</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">nperiodic_dimensions</span></code>: the number of periodic dimensions</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">latice_vectors</span></code>: same as <code class="code docutils literal notranslate"><span class="pre">cell</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">last_modified</span></code>: timestamp of when the entry was modified last</p></li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">relationships</span></code>: pointers to linked entries</dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">properties</span></code>: IDs of linked Properties</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">configuration_sets</span></code>: IDs of linked ConfigurationSets</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">/properties</span></code></dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">_id</span></code>: a unique string identifier</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">type</span></code>: the property type</p></li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">&lt;property_name&gt;</span></code>: the property, with the same name as the contents of <code class="code docutils literal notranslate"><span class="pre">type</span></code></dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">field_name</span></code>: the values of each field in Property definition</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">methods</span></code>: duplication of the <code class="code docutils literal notranslate"><span class="pre">method</span></code> field of any linked
+PropertySettings</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">labels</span></code>: duplication of the <code class="code docutils literal notranslate"><span class="pre">labels</span></code> field of any linked
+PropertySettings</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">last_modified</span></code>: timestamp of when the entry was modified last</p></li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">relationships</span></code>: pointers to linked entries</dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">property_settings</span></code>: IDs of linked PropertySettings</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">configurations</span></code>: IDs of linked Configurations</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">/property_definitions</span></code></dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">_id</span></code>: a unique string identifier</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">definition</span></code>: the full contents of a Property definition</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">/property_settings</span></code></dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">_id</span></code>: a unique string identifier</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">method</span></code>: the method used in the calculation/experiment</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">decription</span></code>: a human-readable description of the
+calculation/experiment</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">labels</span></code>: labels to improve queries</p></li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">files</span></code>: linked files</dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">file_name</span></code>: the name of the file</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">file_contents</span></code>: the contents of the file</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">relationships</span></code>: pointers to linked entries</dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">properties</span></code>: IDs of linked Properties</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">/configuration_sets</span></code></dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">_id</span></code>: a unique string identifier</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">last_modified</span></code>: timestamp of when the entry was modified last</p></li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">aggregated_info</span></code>: information gathered by aggregating the corresponding fields from the linked Configurations</dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">nconfigurations</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">nsites</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">nelements</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_systems</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">elements</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">individual_elements_ratios</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">total_elements_ratios</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">labels</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">labels_counts</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_formula_reduced</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_formula_anonymous</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_formula_hill</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">relationships</span></code>: pointers to linked entries</dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">configurations</span></code>: IDs of linked Configurations</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">datasets</span></code>: IDs of linked Datasets</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">/datasets</span></code></dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">_id</span></code>: a unique string identifier</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">last_modified</span></code>: timestamp of when the entry was modified last</p></li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">aggregated_info</span></code>: information gathered by aggregating the corresponding fields from the linked Configurations and Properties</dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">nconfigurations</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">nsites</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">nelements</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_systems</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">elements</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">individual_elements_ratios</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">total_elements_ratios</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">configuration_labels</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">configuration_labels_counts</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_formula_reduced</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_formula_anonymous</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">chemical_formula_hill</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">nperiodic_dimensions</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">dimension_types</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">property_types</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">property_fields</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">methods</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">methods_counts</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">property_labels</span></code></p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">property_labels_counts</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="code docutils literal notranslate"><span class="pre">relationships</span></code>: pointers to linked entries</dt><dd><ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">properties</span></code>: IDs of linked Properties</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">configuration_sets</span></code>: IDs of linked ConfigurationSets</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="mongo-usage">
+<h2>Mongo usage<a class="headerlink" href="#mongo-usage" title="Permalink to this headline"></a></h2>
+<p>This section provides examples on how to perform various operations on the
+Database using Mongo. For more details, it is highly suggested that you visit
+<a class="reference external" href="https://docs.mongodb.com/manual/">the MongoDB documentation</a>.</p>
+<section id="queries">
+<h3>Queries<a class="headerlink" href="#queries" title="Permalink to this headline"></a></h3>
+<p>It is extremely important to be able to understand how to formulate at least
+basic Mongo queries. If you are a newcomer to Mongo, one of the best places to
+start would be to look over some of the
+<a class="reference external" href="https://docs.mongodb.com/manual/tutorial/query-documents/">query tutorials from the official Mongo manual</a>.</p>
+</section>
+<section id="structure">
+<h3>Structure<a class="headerlink" href="#structure" title="Permalink to this headline"></a></h3>
+<p>Recall that when opening a connection to the Database, for example with the
+following code:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.database</span> <span class="kn">import</span> <span class="n">MongoDatabase</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">MongoDatabase</span><span class="p">(</span><span class="s1">&#39;colabfit_database&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>the <code class="code docutils literal notranslate"><span class="pre">client</span></code> object is a Mongo Client connected to the
+<code class="code docutils literal notranslate"><span class="pre">'colabfit_database'</span></code> Database in a running Mongo server. This Database
+will have the following collections: <code class="code docutils literal notranslate"><span class="pre">'configurations'</span></code>,
+<code class="code docutils literal notranslate"><span class="pre">'properties'</span></code>, <code class="code docutils literal notranslate"><span class="pre">'property_settings'</span></code>, <code class="code docutils literal notranslate"><span class="pre">'configuration_sets'</span></code>,
+and <code class="code docutils literal notranslate"><span class="pre">'datasets'</span></code>. which are accessible as attributes. See <a class="reference internal" href="#mongodb-structure"><span class="std std-ref">MongoDB structure</span></a> for more details.</p>
+</section>
+<section id="find-one">
+<h3>Find one<a class="headerlink" href="#find-one" title="Permalink to this headline"></a></h3>
+<p>Get an example of a single document in a collection that satisfies the given
+query.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Find a Property document that is linked to the Dataset with an ID of ds_id</span>
+<span class="n">client</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">find_one</span><span class="p">({</span><span class="s1">&#39;relationships.datasets&#39;</span><span class="p">:</span> <span class="n">ds_id</span><span class="p">})</span>
+</pre></div>
+</div>
+</section>
+<section id="count-documents">
+<h3>Count documents<a class="headerlink" href="#count-documents" title="Permalink to this headline"></a></h3>
+<p>Count the number of documents in a collection.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Count the number of Configurations in the Database</span>
+<span class="n">client</span><span class="o">.</span><span class="n">configurations</span><span class="o">.</span><span class="n">count_documents</span><span class="p">({})</span>
+</pre></div>
+</div>
+</section>
+<section id="get-all-documents">
+<h3>Get all documents<a class="headerlink" href="#get-all-documents" title="Permalink to this headline"></a></h3>
+<p>Get a list of all of the Datasets in the Database, then sort by name.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">sorted</span><span class="p">(</span>
+    <span class="nb">list</span><span class="p">(</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">datasets</span><span class="o">.</span><span class="n">find</span><span class="p">({},</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">})</span>
+    <span class="p">),</span>
+    <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="check-for-multiple-links">
+<h3>Check for multiple links<a class="headerlink" href="#check-for-multiple-links" title="Permalink to this headline"></a></h3>
+<p>Similar to what is done in <a class="reference internal" href="usage.html#detecting-duplicates"><span class="std std-ref">detecting duplicates</span></a>,
+the <code class="code docutils literal notranslate"><span class="pre">'relationships'</span></code> field can be useful for finding documents that are
+linked to multiple other documents.</p>
+<p>For example, for finding how many ConfigurationSets are linked to more than one
+Dataset:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">configuration_sets</span><span class="o">.</span><span class="n">count_documents</span><span class="p">(</span>
+    <span class="p">{</span><span class="s1">&#39;relationships.datasets.1&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;$exists&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}}</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="get-distinct-fields">
+<h3>Get distinct fields<a class="headerlink" href="#get-distinct-fields" title="Permalink to this headline"></a></h3>
+<p>Get a set of all existing values of a given field:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Get a list of the unique property types in the Database</span>
+<span class="n">client</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">distinct</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="count-occurrences">
+<h3>Count occurrences<a class="headerlink" href="#count-occurrences" title="Permalink to this headline"></a></h3>
+<p><a class="reference external" href="https://docs.mongodb.com/manual/aggregation/">Aggregation pipelines</a> can be
+extremely useful, but may be more difficult to understand for new users of
+Mongo. The example below shows how to use aggregation to count the occurrences
+of each Configuration label.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cursor</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">configurations</span><span class="o">.</span><span class="n">aggregate</span><span class="p">([</span>
+<span class="c1"># by default, matches to all documents in the collection</span>
+<span class="c1"># $unwind: create a new document, once for each value in the &#39;labels&#39;</span>
+<span class="c1"># field</span>
+        <span class="p">{</span><span class="s1">&#39;$unwind&#39;</span><span class="p">:</span> <span class="s1">&#39;$labels&#39;</span><span class="p">},</span>
+<span class="c1"># $group: group the documents based on their label field, and count</span>
+        <span class="p">{</span><span class="s1">&#39;$group&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;_id&#39;</span><span class="p">:</span> <span class="s1">&#39;$labels&#39;</span><span class="p">,</span> <span class="s1">&#39;count&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;$sum&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}}}</span>
+<span class="p">])</span>
+
+<span class="nb">sorted</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;count&#39;</span><span class="p">],</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="get-datasets-linked-to-configurationsets">
+<h3>Get Datasets linked to ConfigurationSets<a class="headerlink" href="#get-datasets-linked-to-configurationsets" title="Permalink to this headline"></a></h3>
+<p>The example below shows how to use aggregation to obtain a list of all
+ConfigurationSets in the Database, with the names of their linked Datasets.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cursor</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">configuration_sets</span><span class="o">.</span><span class="n">aggregate</span><span class="p">([</span>
+    <span class="c1"># $project: only return the requested fields for each document</span>
+    <span class="p">{</span><span class="s1">&#39;$project&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;relationships.datasets&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}},</span>
+    <span class="c1"># $unwind: create a new document for each element in an array</span>
+    <span class="p">{</span><span class="s1">&#39;$unwind&#39;</span><span class="p">:</span> <span class="s1">&#39;$relationships.datasets&#39;</span><span class="p">},</span>
+    <span class="c1"># $project: only return the renamed field</span>
+    <span class="p">{</span><span class="s1">&#39;$project&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;ds_id&#39;</span><span class="p">:</span> <span class="s1">&#39;$relationships.datasets&#39;</span><span class="p">}},</span>
+    <span class="c1"># $lookup: pull the Dataset document with the given ID</span>
+    <span class="p">{</span><span class="s1">&#39;$lookup&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="c1"># pull from the &#39;datasets&#39; collection</span>
+        <span class="s1">&#39;from&#39;</span><span class="p">:</span> <span class="s1">&#39;datasets&#39;</span><span class="p">,</span>
+        <span class="c1"># match the local field &#39;ds_id&#39; to the &#39;_id&#39; field in &#39;datasets&#39;</span>
+        <span class="s1">&#39;localField&#39;</span><span class="p">:</span> <span class="s1">&#39;ds_id&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;foreignField&#39;</span><span class="p">:</span> <span class="s1">&#39;_id&#39;</span><span class="p">,</span>
+        <span class="c1"># attach the Dataset document under the name &#39;linked_ds&#39;</span>
+        <span class="s1">&#39;as&#39;</span><span class="p">:</span> <span class="s1">&#39;linked_ds&#39;</span>
+    <span class="p">}},</span>
+    <span class="c1"># $project: only return the name of the linke Dataset</span>
+    <span class="p">{</span><span class="s1">&#39;$project&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;ds_name&#39;</span><span class="p">:</span> <span class="s1">&#39;$linked_ds.name&#39;</span><span class="p">}}</span>
+<span class="p">])</span>
+
+<span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">cursor</span><span class="p">),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;ds_name&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="database_structure.html" class="btn btn-neutral float-left" title="Database structure" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="getting_started.html" class="btn btn-neutral float-right" title="Getting started" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, ColabFit.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

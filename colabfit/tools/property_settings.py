@@ -33,7 +33,17 @@ class PropertySettings:
         labels=None,
     ):
 
-        if files is None: files = []
+        if files is None:
+            files = []
+
+        if files:
+            for ftup in files:
+                if not isinstance(ftup, tuple):
+                    raise RuntimeError(
+                        "PropertySettings files should be 2-tuples of "\
+                            "(file_name, file_contents)."
+                    )
+
         if labels is None:
             labels = set()
         elif isinstance(labels, str):

@@ -50,6 +50,13 @@ See below for the definitions of each of the above keys/values:
 * :attr:`'units'` should be a string matching one of the units names in
   `ase.units <https://wiki.fysik.dtu.dk/ase/ase/units.html>`_.
 
+Note that :meth:`insert_data` will attempt to load every Property specified in
+:code:`property_map` for each Configuration. This means that if there are
+:code:`P` properties in :code:`property_map` and :code:`C` Configurations, a
+maximum of `P*C` Properties will be loaded in total. If a Configuration does not
+have the necessary data for loading a given Property, that Property is skipped
+for the given Configuration and a warning is raised.
+
 Detecting duplicates
 ====================
 

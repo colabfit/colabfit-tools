@@ -20,11 +20,10 @@ class DatasetParser(HTMLParser):
         'Authors',
         'Links',
         'Description',
-        'Data',
+        'Storage format',
         'Summary',
         'Properties',
         'Property settings',
-        'Property labels',
         'Configuration sets',
         'Configuration labels',
     ]
@@ -81,9 +80,8 @@ class DatasetParser(HTMLParser):
             if self._t == 'h1':
                 # Begin reading new block
                 if data not in self.KNOWN_HEADERS:
-                    raise InvalidHeaderError(
-                        f"Header '{data}' not in {self.KNOWN_HEADERS}"
-                    )
+                    # Unknown sections are ignored
+                    return
                 self._header = data
                 self.data[self._header] = []
 
@@ -96,7 +94,17 @@ class DatasetParser(HTMLParser):
                     # Specifically adding to a table
                     if self._loading_row:
                         if self._href is not None:
-                            self._table[-1].append((data, self._href))
+                            # Hyperlinks in a table (often for files) are
+                            # grouped by column to avoid indexing errors
+
+                            if (len(self._table[-1]) == 0) or not isinstance(
+                                self._table[-1][-1], list):
+                                self._table[-1].append([(data, self._href)])
+                            else:
+                                self._table[-1][-1].append((data, self._href))
+
                             self._href = None
                         else:
-                            self._table[-1].append(data)
+                            if data != ', ':
+                                # ', ' can occur in lists of files
+                                self._table[-1].append(data)

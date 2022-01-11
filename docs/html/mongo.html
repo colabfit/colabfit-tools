@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mongo &mdash; ColabFit Tools Documentation</title>
+  <title>Mongo basics &mdash; ColabFit Tools Documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
@@ -22,7 +22,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Usage" href="usage.html" />
+    <link rel="next" title="Using Markdown files" href="md_file_input.html" />
     <link rel="prev" title="Property definitions" href="property_definitions.html" /> 
 </head>
 
@@ -50,7 +50,9 @@
 <li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="si_prx_gap.html">Si PRX GAP example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="property_definitions.html">Property definitions</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Mongo</a><ul>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Mongo basics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#queries">Queries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#structure">Structure</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#find-one">Find one</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#count-documents">Count documents</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#get-all-documents">Get all documents</a></li>
@@ -60,6 +62,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#get-datasets-linked-to-configurationsets">Get Datasets linked to ConfigurationSets</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="md_file_input.html">Using Markdown files</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
@@ -81,7 +84,7 @@
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
           <li><a href="examples.html">Examples</a> &raquo;</li>
-      <li>Mongo</li>
+      <li>Mongo basics</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/mongo.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -91,11 +94,20 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="mongo">
-<h1>Mongo<a class="headerlink" href="#mongo" title="Permalink to this headline"></a></h1>
+  <section id="mongo-basics">
+<h1>Mongo basics<a class="headerlink" href="#mongo-basics" title="Permalink to this headline"></a></h1>
 <p>This section provides examples on how to perform various operations on the
 Database using Mongo. For more details, it is highly suggested that you visit
 <a class="reference external" href="https://docs.mongodb.com/manual/">the MongoDB documentation</a>.</p>
+<section id="queries">
+<h2>Queries<a class="headerlink" href="#queries" title="Permalink to this headline"></a></h2>
+<p>It is extremely important to be able to understand how to formulate at least
+basic Mongo queries. If you are a newcomer to Mongo, one of the best places to
+start would be to look over some of the
+<a class="reference external" href="https://docs.mongodb.com/manual/tutorial/query-documents/">query tutorials from the official Mongo manual</a>.</p>
+</section>
+<section id="structure">
+<h2>Structure<a class="headerlink" href="#structure" title="Permalink to this headline"></a></h2>
 <p>Recall that when opening a connection to the Database, for example with the
 following code:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.database</span> <span class="kn">import</span> <span class="n">MongoDatabase</span>
@@ -108,6 +120,7 @@ following code:</p>
 will have the following collections: <code class="code docutils literal notranslate"><span class="pre">'configurations'</span></code>,
 <code class="code docutils literal notranslate"><span class="pre">'properties'</span></code>, <code class="code docutils literal notranslate"><span class="pre">'property_settings'</span></code>, <code class="code docutils literal notranslate"><span class="pre">'configuration_sets'</span></code>,
 and <code class="code docutils literal notranslate"><span class="pre">'datasets'</span></code>. which are accessible as attributes. See <a class="reference internal" href="overview.html#mongodb-outline"><span class="std std-ref">MongoDB outline</span></a> for more details.</p>
+</section>
 <section id="find-one">
 <h2>Find one<a class="headerlink" href="#find-one" title="Permalink to this headline"></a></h2>
 <p>Get an example of a single document in a collection that satisfies the given
@@ -213,7 +226,7 @@ ConfigurationSets in the Database, with the names of their linked Datasets.</p>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="property_definitions.html" class="btn btn-neutral float-left" title="Property definitions" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="usage.html" class="btn btn-neutral float-right" title="Usage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="md_file_input.html" class="btn btn-neutral float-right" title="Using Markdown files" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

@@ -1,4 +1,3 @@
-
 # Name
 
 Example_Dataset
@@ -6,7 +5,7 @@ Example_Dataset
 # Authors
 
 A. B. Cee
-E. F. Dee
+E. F. Gee
 H. I. Jay
 
 # Links
@@ -17,39 +16,34 @@ https://www.google.com
 
 This is an example dataset
 
-# Data
-|||
-|---|---|
-|Elements|In, P|
-|File|[test_file.extxyz](test_file.extxyz)|
-|Format|xyz|
-|Name field|name|
+# Storage format
+
+|Elements|File|Format|Name field|
+|---|---|---|---|
+| In, P | [test_file.extxyz](test_file.extxyz) | xyz | name |
 
 # Properties
 
-|Property|Name|Field|Units|
+|Property|KIM field|ASE field|Units
 |---|---|---|---|
-|default|energy|energy|eV|
-|default|forces|forces|eV/Ang|
-|default|stress|virial|kilobar|
-|[my-custom-property](test_property.edn)|a-custom-field-name|field-name|None|
-|[my-custom-property](test_property.edn)|a-custom-1d-array|1d-array|eV|
-|[my-custom-property](test_property.edn)|a-custom-per-atom-array|per-atom-array|eV|
+| [my-custom-property](test_property.edn) | a-custom-field-name | field-name | None
+| [my-custom-property](test_property.edn) | a-custom-1d-array| 1d-array | eV |
+| [my-custom-property](test_property.edn) | a-custom-per-atom-array | per-atom-array | eV |
 
 # Property settings
 
-|Regex|Method|Description|Labels|Files|
-|---|---|----|----|
-|`.*`|VASP|Energies, forces, and stresses computed with VASP using certain settings| PBE, GGA |[INCAR](test_file.INCAR)|
+|Property|Method|Description|Labels|Files|
+|---|---|---|---|---|
+| my-custom-property | VASP | energies/forces/stresses | GGA, PBE | [INCAR1](test_file.INCAR), [INCAR2](test_file.INCAR) |
 
 # Configuration sets
 
-|Regex|Description|
+Query|Description|
 |---|---|
-|`Default`|A default configuration set is required|
+|`{}` | A default configuration set |
 
 # Configuration labels
 
-|Regex|Labels|
+|Query|Labels|
 |---|---|
-|`.*`|dummy_label1, dummy_label2|
+| `{}` | water, molecule |

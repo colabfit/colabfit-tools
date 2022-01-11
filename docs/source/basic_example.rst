@@ -20,9 +20,25 @@ running Mongo server and attaches to a database with the given name.
 Attaching a property definition
 ===============================
 
-Property definitions are used to uniquely define the properties that are stored
-in the database. Note that the :code:`property-id` field must be unique for all
-property definitions in the database. See `the OpenKIM documentation
+Property definitions are data structures that are used to concretely define
+material properties that are stored in the Database. Note that the
+:code:`property-id` field must be unique for all property definitions in the
+Database.
+
+Ideally, an existing Property Definition from the `OpenKIM Property Definition
+list <https://openkim.org/properties>`_ should be used by passing the "Property
+Definition ID" listed on a Property Definition page to the
+:meth:`insert_property_definition` function. For example:
+
+.. code-block:: python
+
+    client.insert_property_definition(
+        'tag:staff@noreply.openkim.org,2014-04-15:property/bulk-modulus-isothermal-cubic-crystal-npt'
+    )
+
+However, if none of the existing properties seem appropriate, a custom property
+definition can be provided by passing a valid dictionary instead. See
+`the OpenKIM documentation
 <https://openkim.org/doc/schema/properties-framework/>`_ for more details on how
 to write a valid property definition.
 
@@ -97,6 +113,10 @@ Defining a property_map
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 A property map is used to specify how parse a Property from a Configuration.
+Below, we define a property map that extracts the `'energy'` and `'forces'` keys
+in the `'energy-forces'` property defined above from the `'dft_energy'` and
+`'dft_forces'` fields in the info and arrays attributes of a given
+Configuration.
 
 .. code-block:: python
 
@@ -154,6 +174,8 @@ create groups of configurations for organizational purposes.
 
 First, use :meth:`~colabfit.tools.database.MongoDatabase.get_data` to extract
 the :code:`_id` fields for all of the configurations with fewer than 100 atoms.
+A Mongo query is passed in as the :code:`query` argument (see
+:ref:`Mongo usage` for more details).
 
 .. code-block:: python
 
@@ -223,7 +245,7 @@ First, define two ConfigurationSets:
     cs_id1 = client.insert_configuration_set(co_ids1, 'Small configurations')
     cs_id2 = client.insert_configuration_set(co_ids2, 'Big configurations')
 
-Then exctract the Property IDs that are linked to the given Configurations.
+Then extract the Property IDs that are linked to the given Configurations.
 
 .. code-block:: python
 
@@ -325,11 +347,14 @@ Applying transformations to properties
 ======================================
 
 :meth:`~colabfit.tools.database.MongoDatabase.apply_transformation` can be used
-to modify Properties that have already been loaded into the Database. This
-function uses the :code:`update_map` argument which is a dictionary where the
-key is a property field, and the value is a callable which takes in the Property
-document (as stored in the Mongo server). Note that the Property document will
-be augmented to include the linked Configuration as specified by
+to modify Properties that have already been loaded into the Database.
+
+The :code:`update_map` argument of this function is a dictionary where the key is a
+field from a property definition, and the value is a function that takes two
+inputs: (1) the current value taken by the specified key, and (2) a Property
+document (as stored in the Mongo database). The output of this function will be
+the new value used to overwrite the existing one. Note that the Property
+document will be augmented to include the linked Configuration as specified by
 :code:`configuration_ids`.
 
 .. code-block:: python
@@ -342,7 +367,7 @@ be augmented to include the linked Configuration as specified by
         property_ids=all_pr_ids,
         update_map={
             'energy-forces.energy':
-                lambda f, doc: f/doc['configuration']['nsites']
+                lambda current_val, pr_doc: current_val/pr_doc['configuration']['nsites']
         },
         configuration_ids=all_co_ids,
     )
