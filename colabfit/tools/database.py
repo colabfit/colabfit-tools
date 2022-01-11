@@ -626,7 +626,12 @@ class MongoDatabase(MongoClient):
             # Invalid ID. Try spoofing it
             dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
             dummy_dict['property-id'] += definition['property-id']
-            warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+            warnings.warn(
+                "Invalid KIM property-id; "\
+                "Temporarily renaming to {}. "\
+                "See https://openkim.org/doc/schema/properties-framework/ "\
+                "for more details.".format(dummy_dict['property-id'])
+            )
 
         check_property_definition(dummy_dict)
 
