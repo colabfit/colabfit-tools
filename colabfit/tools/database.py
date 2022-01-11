@@ -1572,6 +1572,7 @@ class MongoDatabase(MongoClient):
         ds_doc = self.datasets.find_one({'_id': ds_id})
 
         return {
+            '_id': ds_id,
             'last_modified': ds_doc['last_modified'],
             'dataset': Dataset(
                 configuration_set_ids=ds_doc['relationships']['configuration_sets'],
@@ -2214,7 +2215,7 @@ class MongoDatabase(MongoClient):
         if storage_info['Format'] == 'mongo':
             return self.get_dataset(
                 storage_info['File'], resync=True, verbose=verbose
-            )['dataset']
+            )
 
         # Else, need to build from scratch
         try:
@@ -2366,7 +2367,7 @@ class MongoDatabase(MongoClient):
                 verbose=True
             )
 
-        return self.get_dataset(ds_id, resync=True, verbose=verbose)['dataset']
+        return self.get_dataset(ds_id, resync=True, verbose=verbose)
 
 
     def dataset_to_markdown(

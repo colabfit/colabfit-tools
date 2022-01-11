@@ -80,9 +80,8 @@ class DatasetParser(HTMLParser):
             if self._t == 'h1':
                 # Begin reading new block
                 if data not in self.KNOWN_HEADERS:
-                    raise InvalidHeaderError(
-                        f"Header '{data}' not in {self.KNOWN_HEADERS}"
-                    )
+                    # Unknown sections are ignored
+                    return
                 self._header = data
                 self.data[self._header] = []
 
