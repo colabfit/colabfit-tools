@@ -6,7 +6,7 @@ This example will be used to highlight some of the more advanced features of the
 Dataset class using the popular `Si GAP dataset <https://www.repository.cam.ac.uk/handle/1810/317974>`_.
 It is suggested that you go through the :ref:`basic example <Basic example>` first. The complete
 code will not be shown in this example (for the complete code, see the Jupyter
-notebook at :code:`colabfit/examples/si_prx_gap.ipynb`); instead, only the additional features will be
+notebook at :code:`colabfit/examples/Si_PRX_GAP/si_prx_gap.ipynb`); instead, only the additional features will be
 discussed here.
 
 Note that this example assumes that the raw data has already been downloaded

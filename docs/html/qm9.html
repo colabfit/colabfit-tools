@@ -93,7 +93,7 @@
 Dataset class using the popular <a class="reference external" href="https://figshare.com/collections/Quantum_chemistry_structures_and_properties_of_134_kilo_molecules/978904">QM9 dataset</a>.
 It is suggested that you go through the <a class="reference internal" href="basic_example.html#basic-example"><span class="std std-ref">basic example</span></a> first. The complete
 code will not be shown in this example (for the complete code, see the Jupyter
-notebook at <code class="code docutils literal notranslate"><span class="pre">colabfit/examples/qm9.ipynb</span></code>); instead, only the additional features will be
+notebook at <code class="code docutils literal notranslate"><span class="pre">colabfit/examples/QM9/qm9.ipynb</span></code>); instead, only the additional features will be
 discussed here.</p>
 <p>Note that this example assumes that the raw data has already been downloaded
 using the following commands:</p>
@@ -272,7 +272,7 @@ the QM9 dataset has some outlying data entries.</p>
 <span class="p">)</span>
 </pre></div>
 </div>
-<img alt="_images/qm9_histograms.png" class="align-center" src="_images/qm9_histograms.png" />
+<img alt="QM9/histograms.png" class="align-center" src="QM9/histograms.png" />
 <p>The <code class="xref py py-meth docutils literal notranslate"><span class="pre">filter_on_properties()</span></code>
 function can be used to filter on the ConfigurationSets and Properties.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">clean_config_sets</span><span class="p">,</span> <span class="n">clean_property_ids</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">filter_on_properties</span><span class="p">(</span>
@@ -323,7 +323,7 @@ function can be used to filter on the ConfigurationSets and Properties.</p>
 <span class="c1"># &#39;qm9-property.c&#39;: {&#39;average&#39;: 1.1177706236464617, &#39;std&#39;: 0.328798457356026, &#39;min&#39;: 0.33118, &#39;max&#39;: 6.46247, &#39;average_abs&#39;: 1.1177706236464617}</span>
 </pre></div>
 </div>
-<img alt="_images/qm9_clean_histograms.png" class="align-center" src="_images/qm9_clean_histograms.png" />
+<img alt="QM9_filtered/histograms.png" class="align-center" src="QM9_filtered/histograms.png" />
 </section>
 </section>
 

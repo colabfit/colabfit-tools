@@ -6,7 +6,7 @@ This example will be used to highlight some of the more advanced features of the
 Dataset class using the popular `QM9 dataset <https://figshare.com/collections/Quantum_chemistry_structures_and_properties_of_134_kilo_molecules/978904>`_.
 It is suggested that you go through the :ref:`basic example <Basic example>` first. The complete
 code will not be shown in this example (for the complete code, see the Jupyter
-notebook at :code:`colabfit/examples/qm9.ipynb`); instead, only the additional features will be
+notebook at :code:`colabfit/examples/QM9/qm9.ipynb`); instead, only the additional features will be
 discussed here.
 
 Note that this example assumes that the raw data has already been downloaded
@@ -204,7 +204,7 @@ the QM9 dataset has some outlying data entries.
     )
 
 
-.. image:: qm9_histograms.png
+.. image:: QM9/histograms.png
     :align: center
 
 The :meth:`~colabfit.tools.database.MongoeDatabase.filter_on_properties`
@@ -262,7 +262,7 @@ function can be used to filter on the ConfigurationSets and Properties.
     # 'qm9-property.c': {'average': 1.1177706236464617, 'std': 0.328798457356026, 'min': 0.33118, 'max': 6.46247, 'average_abs': 1.1177706236464617}
 
 
-.. image:: qm9_clean_histograms.png
+.. image:: QM9_filtered/histograms.png
     :align: center
 
 
