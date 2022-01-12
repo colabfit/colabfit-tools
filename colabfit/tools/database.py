@@ -381,7 +381,7 @@ class MongoDatabase(MongoClient):
         ai = 1
         for atoms in tqdm(
             configurations,
-            desc='Adding configurations to Database',
+            desc='Preparing to add configurations to Database',
             disable=not verbose,
             ):
 
@@ -2377,6 +2377,7 @@ class MongoDatabase(MongoClient):
         data_file_name,
         data_format,
         name_field=ATOMS_NAME_FIELD,
+        histogram_fields=None,
         yscale='linear',
         ):
         """
@@ -2406,6 +2407,10 @@ class MongoDatabase(MongoClient):
             name_field (str):
                 The name of the field that should be used to generate
                 configuration names
+
+            histogram_fields (list, default=None):
+                The property fields to include in the histogram plot. If None,
+                plots all fields.
 
             yscale (str, default='linear'):
                 Scaling to use for histogram plotting
@@ -2491,7 +2496,10 @@ class MongoDatabase(MongoClient):
             ):
             if pr_doc['type'] not in property_map:
                 property_map[pr_doc['type']] = {
-                    f: {'field': f, 'units': v['source-unit']}
+                    f: {
+                        'field': f,
+                        'units': v['source-unit'] if 'source-unit' in v else None
+                    }
                     for f,v in pr_doc[pr_doc['type']].items()
                 }
 
@@ -2604,8 +2612,11 @@ class MongoDatabase(MongoClient):
 
 
         # Save figures
+        if histogram_fields is None:
+            histogram_fields = dataset.aggregated_info['property_fields']
+
         fig = self.plot_histograms(
-            dataset.aggregated_info['property_fields'],
+            histogram_fields,
             ids=dataset.property_ids,
             yscale=yscale
         )

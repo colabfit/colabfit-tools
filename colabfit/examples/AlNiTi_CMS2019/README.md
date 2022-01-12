@@ -2,7 +2,7 @@
 # Summary
 |Chemical systems|Element ratios|# of properties|# of configurations|# of atoms|
 |---|---|---|---|---|
-|AlNiTi, AlNi, Al, AlTi, Ni, NiTi, Ti|Ni (38.3%), Ti (32.1%), Al (29.6%)|2684|2666|24851|
+|AlNi, Ti, Ni, AlNiTi, NiTi, Al, AlTi|Ni (38.3%), Ti (32.1%), Al (29.6%)|2684|2666|24851|
 
 # Name
 
@@ -38,9 +38,9 @@ This dataset was generated using the following active learning scheme: 1) candid
 
 |Property|KIM field|ASE field|Units
 |---|---|---|---|
-| [energy-forces-stress](/home/josh/colabfit-tools/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | energy | energy | eV
-| [energy-forces-stress](/home/josh/colabfit-tools/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | forces | forces | eV/Ang
-| [energy-forces-stress](/home/josh/colabfit-tools/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | stress | stress | GPa
+| [energy-forces-stress](/home/jvita/scripts/colabfit-tools/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | energy | energy | eV
+| [energy-forces-stress](/home/jvita/scripts/colabfit-tools/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | forces | forces | eV/Ang
+| [energy-forces-stress](/home/jvita/scripts/colabfit-tools/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | stress | stress | GPa
 
 # Property settings
 
