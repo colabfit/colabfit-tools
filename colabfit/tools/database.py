@@ -381,7 +381,7 @@ class MongoDatabase(MongoClient):
         ai = 1
         for atoms in tqdm(
             configurations,
-            desc='Adding configurations to Database',
+            desc='Preparing to add configurations to Database',
             disable=not verbose,
             ):
 
@@ -560,12 +560,6 @@ class MongoDatabase(MongoClient):
                 ordered=False
             )
 
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate property settings detected'.format(nmatch)
-                )
-
         client.close()
         return insertions
 
@@ -626,7 +620,12 @@ class MongoDatabase(MongoClient):
             # Invalid ID. Try spoofing it
             dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
             dummy_dict['property-id'] += definition['property-id']
-            warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+            warnings.warn(
+                "Invalid KIM property-id; "\
+                "Temporarily renaming to {}. "\
+                "See https://openkim.org/doc/schema/properties-framework/ "\
+                "for more details.".format(dummy_dict['property-id'])
+            )
 
         check_property_definition(dummy_dict)
 
@@ -2378,6 +2377,7 @@ class MongoDatabase(MongoClient):
         data_file_name,
         data_format,
         name_field=ATOMS_NAME_FIELD,
+        histogram_fields=None,
         yscale='linear',
         ):
         """
@@ -2408,6 +2408,10 @@ class MongoDatabase(MongoClient):
                 The name of the field that should be used to generate
                 configuration names
 
+            histogram_fields (list, default=None):
+                The property fields to include in the histogram plot. If None,
+                plots all fields.
+
             yscale (str, default='linear'):
                 Scaling to use for histogram plotting
         """
@@ -2415,9 +2419,9 @@ class MongoDatabase(MongoClient):
         template = \
 """
 # Summary
-|Chemical systems|Element ratios|# of configurations|# of atoms|
-|---|---|---|---|
-|{}|{}|{}|{}|
+|Chemical systems|Element ratios|# of properties|# of configurations|# of atoms|
+|---|---|---|---|---|
+|{}|{}|{}|{}|{}|
 
 # Name
 
@@ -2469,6 +2473,9 @@ class MongoDatabase(MongoClient):
 ![The results of plot_histograms](histograms.png)
 """
 
+        if not os.path.isdir(base_folder):
+            os.mkdir(base_folder)
+
         html_file_name = os.path.join(base_folder, html_file_name)
 
         dataset = self.get_dataset(ds_id)['dataset']
@@ -2489,7 +2496,10 @@ class MongoDatabase(MongoClient):
             ):
             if pr_doc['type'] not in property_map:
                 property_map[pr_doc['type']] = {
-                    f: {'field': f, 'units': v['source-unit']}
+                    f: {
+                        'field': f,
+                        'units': v['source-unit'] if 'source-unit' in v else None
+                    }
                     for f,v in pr_doc[pr_doc['type']].items()
                 }
 
@@ -2522,6 +2532,7 @@ class MongoDatabase(MongoClient):
 
             formatting_arguments.append(', '.join(tmp))
 
+            formatting_arguments.append(sum(agg_info['property_types_counts']))
             formatting_arguments.append(agg_info['nconfigurations'])
             formatting_arguments.append(agg_info['nsites'])
 
@@ -2601,8 +2612,11 @@ class MongoDatabase(MongoClient):
 
 
         # Save figures
+        if histogram_fields is None:
+            histogram_fields = dataset.aggregated_info['property_fields']
+
         fig = self.plot_histograms(
-            dataset.aggregated_info['property_fields'],
+            histogram_fields,
             ids=dataset.property_ids,
             yscale=yscale
         )

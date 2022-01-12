@@ -17,9 +17,9 @@ Any files should be provided as links in Markdown as described
 
 The table below will be automatically generated when using `to_markdown()`.
 
-|Chemical systems|Element ratios|# of configurations|# of atoms|
-|---|---|---|---|
-|All chemical systems|Elements and their total concentrations|Number of configurations|Number of atoms|
+|Chemical systems|Element ratios|# of properties|# of configurations|# of atoms|
+|---|---|---|---|---|
+|All chemical systems|Elements and their total concentrations|Number of properties|Number of configurations|Number of atoms|
 
 This section can also include figures. These figures would typically be the
 histograms generated via `MongoDatabase.plot_histograms()`, and will be ignored

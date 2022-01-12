@@ -15,6 +15,7 @@ class Configuration(Atoms):
     A Configuration is an extension of an :class:`ase.Atoms` object that is
     guaranteed to have the following fields in its :attr:`info` dictionary:
 
+    - :attr:`~colabfit.ATOMS_ID_FIELD` = :code:"_id"
     - :attr:`~colabfit.ATOMS_NAME_FIELD` = :code:"_name"
     - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
     - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD` = :code:"_constraints"
@@ -118,7 +119,7 @@ class Configuration(Atoms):
         positions, (atomic) numbers, simulation cell, and periodic
         boundary conditions.
 
-        Note that the positions and cell vectors are rounded to 8 decimal places
+        Note that the positions and cell vectors are rounded to 16 decimal places
         before being compared.
 
         hashlib is used instead of hash() to avoid hash randomisation.
@@ -161,6 +162,12 @@ class Configuration(Atoms):
 
 
     def __eq__(self, other):
+        """
+        Two Configurations are considered to be identical if they have the same
+        hash value. This means that their atomic positions, atomic numbers,
+        simulation cell vectors, and periodic boundary conditions must match to
+        within 16 decimal places.
+        """
         return hash(self) == hash(other)
 
     def __str__(self):
