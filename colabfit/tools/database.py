@@ -560,12 +560,6 @@ class MongoDatabase(MongoClient):
                 ordered=False
             )
 
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate property settings detected'.format(nmatch)
-                )
-
         client.close()
         return insertions
 
@@ -2420,9 +2414,9 @@ class MongoDatabase(MongoClient):
         template = \
 """
 # Summary
-|Chemical systems|Element ratios|# of configurations|# of atoms|
-|---|---|---|---|
-|{}|{}|{}|{}|
+|Chemical systems|Element ratios|# of properties|# of configurations|# of atoms|
+|---|---|---|---|---|
+|{}|{}|{}|{}|{}|
 
 # Name
 
@@ -2473,6 +2467,9 @@ class MongoDatabase(MongoClient):
 # Figures
 ![The results of plot_histograms](histograms.png)
 """
+
+        if not os.path.isdir(base_folder):
+            os.mkdir(base_folder)
 
         html_file_name = os.path.join(base_folder, html_file_name)
 
@@ -2527,6 +2524,7 @@ class MongoDatabase(MongoClient):
 
             formatting_arguments.append(', '.join(tmp))
 
+            formatting_arguments.append(sum(agg_info['property_types_counts']))
             formatting_arguments.append(agg_info['nconfigurations'])
             formatting_arguments.append(agg_info['nsites'])
 
