@@ -204,7 +204,7 @@ the QM9 dataset has some outlying data entries.
     )
 
 
-.. image:: QM9/histograms.png
+.. image:: QM9_histograms.png
     :align: center
 
 The :meth:`~colabfit.tools.database.MongoeDatabase.filter_on_properties`
@@ -262,7 +262,7 @@ function can be used to filter on the ConfigurationSets and Properties.
     # 'qm9-property.c': {'average': 1.1177706236464617, 'std': 0.328798457356026, 'min': 0.33118, 'max': 6.46247, 'average_abs': 1.1177706236464617}
 
 
-.. image:: QM9_filtered/histograms.png
+.. image:: QM9_filtered_histograms.png
     :align: center
 
 

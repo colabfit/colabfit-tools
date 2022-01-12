@@ -511,7 +511,7 @@ fields.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.database.MongoDatabase.dataset_to_markdown">
-<span class="sig-name descname"><span class="pre">dataset_to_markdown</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ds_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">html_file_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_file_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_format</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name_field</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'_name'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yscale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'linear'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.dataset_to_markdown" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">dataset_to_markdown</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ds_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">html_file_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_file_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_format</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name_field</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'_name'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">histogram_fields</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yscale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'linear'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.dataset_to_markdown" title="Permalink to this definition"></a></dt>
 <dd><p>Saves a Dataset and writes a properly formatted markdown file. In the
 case of a Dataset that has child Dataset objects, each child Dataset
 is written to a separate sub-folder.</p>
@@ -527,6 +527,8 @@ configurations to a new file, and instead adds the ID of the
 Dataset in the Mongo Database.</p></li>
 <li><p><strong>name_field</strong> (<em>str</em>) – The name of the field that should be used to generate
 configuration names</p></li>
+<li><p><strong>histogram_fields</strong> (<em>list</em><em>, </em><em>default=None</em>) – The property fields to include in the histogram plot. If None,
+plots all fields.</p></li>
 <li><p><strong>yscale</strong> (<em>str</em><em>, </em><em>default='linear'</em>) – Scaling to use for histogram plotting</p></li>
 </ul>
 </dd>
