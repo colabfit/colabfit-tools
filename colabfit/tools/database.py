@@ -287,6 +287,9 @@ class MongoDatabase(MongoClient):
                 self.user, self.pwrd, self.port
             )
 
+        if property_settings is None:
+            property_settings = {}
+
         for pso in property_settings.values():
             self.insert_property_settings(pso)
 
