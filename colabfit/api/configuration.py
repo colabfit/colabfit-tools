@@ -1,1 +1,0 @@
-from optimade.models import StructureResourceAttributes

@@ -1,0 +1,41 @@
+<!-- <!doctype html> -->
+<!-- <html> -->
+  <!-- <head>
+    <title>File Upload</title>
+  </head>
+  <body>
+    <h1>File Upload</h1>
+    <form method="POST" action="" enctype="multipart/form-data">
+      <p><input type="file" name="file"></p>
+      <p><input type="submit" value="Submit"></p>
+    </form>
+  </body> -->
+  <!-- {{ form }}
+  {{ prop_table }}
+  {{ co_table }}
+</html> -->
+{% from 'bootstrap/form.html' import render_form, render_field %}
+
+{% extends "base.html" %}
+{% block title %}<title>Dataset Upload</title>{% endblock %}
+
+{% block content %}
+   <div class="container">
+      <div class="jumbotron">
+        <h1>ColabFit Dataset Upload</h1>
+        <p>If you're going to updload bad data, at least <i>tell</i> us it's bad...</p>
+      </div>
+   <div class="col-md-12">
+     {% if request.args.get('legacy') -%}
+       {{wtf.quick_form(form, novalidate=True)}}
+     {%- else -%}
+       {{ render_form(form) }}
+     {%- endif %}
+   </div>
+    {% if prop_table is defined %}
+    {{ prop_table }}
+    {% endif %}
+    {% if co_table is defined %}
+    {{ co_table}}
+    {% endif %}
+{%- endblock %}

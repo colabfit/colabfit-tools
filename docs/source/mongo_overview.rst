@@ -81,6 +81,10 @@ All other lines denote queryable fields. Indentation denotes sub-fields.
         * :code:`datasets`: IDs of linked Datasets
 * :code:`/datasets`
     * :code:`_id`: a unique string identifier
+    * :code:`name`: the name of the Dataset
+    * :code:`authors`: the authors of the Dataset
+    * :code:`description`: a human-readable description of the Dataset
+    * :code:`links`: external inks associated with the Dataset
     * :code:`last_modified`: timestamp of when the entry was modified last
     * :code:`aggregated_info`: information gathered by aggregating the corresponding fields from the linked Configurations and Properties
         * :code:`nconfigurations`
