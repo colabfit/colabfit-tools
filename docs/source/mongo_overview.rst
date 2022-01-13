@@ -98,7 +98,9 @@ All other lines denote queryable fields. Indentation denotes sub-fields.
         * :code:`nperiodic_dimensions`
         * :code:`dimension_types`
         * :code:`property_types`
+        * :code:`property_types_counts`
         * :code:`property_fields`
+        * :code:`property_fields_counts`
         * :code:`methods`
         * :code:`methods_counts`
         * :code:`property_labels`

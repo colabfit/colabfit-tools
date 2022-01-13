@@ -169,6 +169,7 @@ Configurations can be created as below:</p>
 <dd><p>A Configuration is an extension of an <code class="xref py py-class docutils literal notranslate"><span class="pre">ase.Atoms</span></code> object that is
 guaranteed to have the following fields in its <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code> dictionary:</p>
 <ul class="simple">
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_ID_FIELD</span></code> = :code:”_id”</p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_NAME_FIELD</span></code> = :code:”_name”</p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_LABELS_FIELD</span></code> = :code:”_labels”</p></li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_CONSTRAINTS_FIELD</span></code> = :code:”_constraints”</p></li>
@@ -176,9 +177,10 @@ guaranteed to have the following fields in its <code class="xref py py-attr docu
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration.__eq__">
 <span class="sig-name descname"><span class="pre">__eq__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration.__eq__" title="Permalink to this definition"></a></dt>
-<dd><p>Check for identity of two atoms objects.</p>
-<p>Identity means: same positions, atomic numbers, unit cell and
-periodic boundary conditions.</p>
+<dd><p>Two Configurations are considered to be identical if they have the same
+hash value. This means that their atomic positions, atomic numbers,
+simulation cell vectors, and periodic boundary conditions must match to
+within 16 decimal places.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -187,7 +189,7 @@ periodic boundary conditions.</p>
 <dd><p>Generates a hash for <code class="code docutils literal notranslate"><span class="pre">self</span></code> by hashing its length
 positions, (atomic) numbers, simulation cell, and periodic
 boundary conditions.</p>
-<p>Note that the positions and cell vectors are rounded to 8 decimal places
+<p>Note that the positions and cell vectors are rounded to 16 decimal places
 before being compared.</p>
 <p>hashlib is used instead of hash() to avoid hash randomisation.</p>
 </dd></dl>
