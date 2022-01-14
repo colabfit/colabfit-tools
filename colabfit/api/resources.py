@@ -108,6 +108,16 @@ class ConfigurationsTable(Table):
     labels = Col('Labels')
 
 
+class DefinitionsTable(Table):
+    classes = ['table', 'table-striped', 'table-bordered', 'table-condensed']
+    # classes = ['table-wrapper-scroll-y', 'table-striped', 'table-bordered', 'table-condensed']
+    name = Col('Name')
+    elements = Col('Elements')
+    natoms = Col('N_atoms')
+    labels = Col('Labels')
+
+
+
 class DatasetsTable(Table):
     classes = ['table', 'table-striped', 'table-bordered', 'table-condensed']
     # classes = ['table-wrapper-scroll-y', 'table-striped', 'table-bordered', 'table-condensed']

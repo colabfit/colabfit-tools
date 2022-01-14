@@ -1,41 +1,125 @@
-<!-- <!doctype html> -->
-<!-- <html> -->
-  <!-- <head>
-    <title>File Upload</title>
-  </head>
-  <body>
-    <h1>File Upload</h1>
-    <form method="POST" action="" enctype="multipart/form-data">
-      <p><input type="file" name="file"></p>
-      <p><input type="submit" value="Submit"></p>
-    </form>
-  </body> -->
-  <!-- {{ form }}
-  {{ prop_table }}
-  {{ co_table }}
-</html> -->
 {% from 'bootstrap/form.html' import render_form, render_field %}
 
 {% extends "base.html" %}
 {% block title %}<title>Dataset Upload</title>{% endblock %}
 
 {% block content %}
-   <div class="container">
-      <div class="jumbotron">
-        <h1>ColabFit Dataset Upload</h1>
-        <p>If you're going to updload bad data, at least <i>tell</i> us it's bad...</p>
-      </div>
-   <div class="col-md-12">
-     {% if request.args.get('legacy') -%}
-       {{wtf.quick_form(form, novalidate=True)}}
-     {%- else -%}
-       {{ render_form(form) }}
-     {%- endif %}
-   </div>
-    {% if prop_table is defined %}
-    {{ prop_table }}
-    {% endif %}
-    {% if co_table is defined %}
-    {{ co_table}}
-    {% endif %}
+  <div class="container">
+     <div class="jumbotron">
+       <h1>ColabFit Dataset Upload</h1>
+       <p>If you're going to updload bad data, at least <i>tell</i> us it's bad...</p>
+     </div>
+
+
+  <form action="" method="post" class="form" enctype="multipart/form-data" role="form">
+    {{ render_field(full_form.authors) }}
+    {{ render_field(full_form.links) }}
+    {{ render_field(full_form.description) }}
+    {{ render_field(full_form.elements) }}
+    {{ render_field(full_form.data_upload) }}
+    {{ render_field(full_form.definitions_upload) }}
+
+    <br></br>
+    <table id="property_map_table" class="table table-striped">
+      <thead>
+        <tr>
+          <th>Property name</th>
+          <th>KIM field</th>
+          <th>ASE field</th>
+          <th>Units</th>
+          <th> </th>
+        </tr>
+      </thead>
+      <tbody>
+
+      </tbody>
+    </table>
+
+    <button type="button" class="btn btn-info" onclick="addPropertyMapRow()">
+        Add Row <i class="fas fa-plus"></i>
+    </button>
+
+    <br></br>
+    <table id="property_settings_table" class="table table-striped">
+      <thead>
+        <tr>
+          <th>Property name</th>
+          <th>Method</th>
+          <th>Description</th>
+          <th>Labels</th>
+          <th>Files</th>
+          <th> </th>
+        </tr>
+      </thead>
+      <tbody>
+
+      </tbody>
+    </table>
+
+    <button type="button" class="btn btn-info" onclick="addPropertySettingsRow()">
+        Add Row <i class="fas fa-plus"></i>
+    </button>
+
+    <br></br>
+    {{ render_field(full_form.submit) }}
+  </form>
 {%- endblock %}
+
+{% block scripts %}
+  <script>
+    $(document).ready(function () {
+      $('#property_map_table').DataTable();
+    });
+
+    // Function to add a row to the Extra Properties Table
+    function addPropertyMapRow() {
+        let table = document.getElementById("property_map_table");
+        let row = table.insertRow(-1);
+        row.contentEditable = "true";
+        let cell0 = row.insertCell(0);
+        cell0.innerHTML = "<input type=\"Property name\" name=\"full_form.pmc0\">"
+        let cell1 = row.insertCell(1);
+        cell1.innerHTML = "<input type=\"KIM field\" name=\"full_form.pmc1\">"
+        let cell2 = row.insertCell(2);
+        cell2.innerHTML = "<input type=\"ASE field\" name=\"full_form.pmc2\">"
+        let cell3 = row.insertCell(3);
+        cell3.innerHTML = "<input type=\"Units\" name=\"full_form.pmc4\">"
+        let cell4 = row.insertCell(4);
+        cell4.innerHTML = "<button type=\"button\" class=\"btn btn-danger\" onclick=\"removePropertyMapRow(this)\"> Remove <i class=\"fas fa-minus\"></i> </button>";
+    }
+
+    // Function to remove a row from the extra properties table
+    function removePropertyMapRow(x) {
+        let i = x.parentNode.parentNode["rowIndex"];
+        let table = document.getElementById("property_map_table");
+        table.deleteRow(i);
+    }
+
+    // Function to add a row to the Extra Properties Table
+    function addPropertySettingsRow() {
+        let table = document.getElementById("property_settings_table");
+        let row = table.insertRow(-1);
+        row.contentEditable = "true";
+        let cell0 = row.insertCell(0);
+        cell0.innerHTML = "<input type=\"Property name\" name=\"full_form.psc0\">";
+        let cell1 = row.insertCell(1);
+        cell1.innerHTML = "<input type=\"Description\" name=\"full_form.psc1\">";
+        let cell2 = row.insertCell(2);
+        cell2.innerHTML = "<input type=\"Labels\" name=\"full_form.psc2\">";
+        let cell3 = row.insertCell(3);
+        cell3.innerHTML = "<input type=\"Files\" name=\"full_form.psc3\">";
+        let cell4 = row.insertCell(4);
+        cell4.innerHTML = "<input type=\"Method\" name=\"full_form.psc4\">";
+        let cell = row.insertCell(5);
+        cell.innerHTML = "<button type=\"button\" class=\"btn btn-danger\" onclick=\"removePropertySettingsRow(this)\"> Remove <i class=\"fas fa-minus\"></i> </button>";
+    }
+
+    // Function to remove a row from the extra properties table
+    function removePropertySettingsRow(x) {
+        let i = x.parentNode.parentNode["rowIndex"];
+        let table = document.getElementById("property_settings_table");
+        table.deleteRow(i);
+    }
+
+  </script>
+{% endblock %}

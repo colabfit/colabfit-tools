@@ -6,7 +6,9 @@ from flask import Blueprint, request, redirect, flash, render_template
 from flask_nav.elements import Navbar, View, Subgroup, Link, Text, Separator
 from werkzeug.utils import secure_filename
 
-from .forms import UploadForm
+from wtforms import FieldList, FormField
+
+from .forms import UploadForm, PropertyMapForm, PropertySettingsForm
 from .nav import nav
 
 from ..tools.database import MongoDatabase, load_data
@@ -61,49 +63,80 @@ def allowed_file(filename):
 # Shows a long signup form, demonstrating form rendering.
 @frontend.route('/publish/', methods=('GET', 'POST'))
 def publish():
-    form = UploadForm(csrf_enabled=False)
+    full_form = UploadForm(csrf_enabled=False)
 
     if request.method == 'POST':
-        filename = secure_filename(form.upload.name)
-        filename = os.path.join(UPLOAD_FOLDER, filename)
 
-        form.upload.data.save(filename)
+        if full_form.validate_on_submit():
 
-        configurations = load_data(
-            file_path='/home/jvita/scripts/colabfit/data/gubaev/AlNiTi/train_2nd_stage.cfg',
-            file_format='cfg',
-            name_field=None,
-            elements=['Al', 'Ni', 'Ti'],
-            default_name='train_2nd_stage',
-            verbose=True,
-        )
+            if full_form.definitions_upload:
+                for f in full_form.definitions_upload.data:
+                    filename = secure_filename(f.name)
+                    filename = os.path.join(UPLOAD_FOLDER, filename)
 
-        # prop_table = PropertiesTable(
-        #     [dict(name=p, units='Unspecified') for p in properties],
-        #     border=True,
-        # )
+                    f.data.save(filename)
 
-        co_table = ConfigurationsTable(
-            [
-                dict(
-                    name=co.attributes.colabfit_description[0],
-                    elements=', '.join(co.attributes.elements),
-                    natoms=co.attributes.nsites,
-                    labels=', '.join(co.attributes.colabfit_labels),
-                )
-                for co in configurations
-            ],
-            border=True,
-        )
+            if full_form.data_upload:
+                for f in full_form.data_upload.data:
+                    filename = secure_filename(f.name)
+                    filename = os.path.join(UPLOAD_FOLDER, filename)
+
+                    f.data.save(filename)
+
+            print('THE FORM:', full_form)
+
+            real_property_map = {}
+            for k, v in request.form.items():
+                print(k, v)
+
+                # pname       = row.property_name
+                # kim_field   = row.kim_field
+                # ase_field   = row.ase_field
+                # units       = row.units
+
+                # if units in ['None', '']:
+                #     units = None
+
+                # pid_dict = real_property_map .setdefault(pname, {})
+
+                # pid_dict[kim_field] = {
+                #     'field': ase_field,
+                #     'units': units
+                # }
+
+            print('REAL PROPERTY MAP:', real_property_map)
+
+            # configurations = load_data(
+            #     file_path='/home/jvita/scripts/colabfit/data/gubaev/AlNiTi/train_2nd_stage.cfg',
+            #     file_format='cfg',
+            #     name_field=None,
+            #     elements=['Al', 'Ni', 'Ti'],
+            #     default_name='train_2nd_stage',
+            #     verbose=True,
+            # )
+
+            # co_table = ConfigurationsTable(
+            #     [
+            #         dict(
+            #             name=co.info['_name'],
+            #             elements=sorted(list(set(co.get_chemical_symbols()))),
+            #             natoms=len(co),
+            #             labels=co.info['_labels']
+            #         )
+            #         for co in configurations
+            #     ],
+            #     border=True,
+            # )
 
         return render_template(
             'publish.html',
-            form=form,
-            prop_table=prop_table,
-            co_table=co_table,
+            full_form=full_form,
         )
 
-    return render_template('publish.html', form=form)
+    return render_template(
+        'publish.html',
+        full_form=full_form,
+    )
 
 
 # @frontend.route('/api/configurations/')
