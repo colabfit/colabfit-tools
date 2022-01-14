@@ -3,8 +3,8 @@ Database structure
 ==================
 
 .. figure:: ds_diagram_cropped.png
-    :width: 485
-    :height: 480
+    :width: 593
+    :height: 677
     :align: center
     :alt: A diagram showing the relationship between the five core data structures that make up a Database.
 

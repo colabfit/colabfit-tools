@@ -171,13 +171,13 @@ name_field (or None) should be provided to specify the names of the loaded
 configurations.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ase.io</span> <span class="kn">import</span> <span class="n">write</span>
 
-<span class="n">write</span><span class="p">(</span><span class="s1">&#39;/content/example.extxyz&#39;</span><span class="p">,</span> <span class="n">images</span><span class="p">)</span>
+<span class="n">write</span><span class="p">(</span><span class="s1">&#39;/tmp/example.extxyz&#39;</span><span class="p">,</span> <span class="n">images</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.database</span> <span class="kn">import</span> <span class="n">load_data</span>
 
 <span class="n">images</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span>
-        <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;/content/example.extxyz&#39;</span><span class="p">,</span>
+        <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;/tmp/example.extxyz&#39;</span><span class="p">,</span>
         <span class="n">file_format</span><span class="o">=</span><span class="s1">&#39;xyz&#39;</span><span class="p">,</span>
         <span class="n">name_field</span><span class="o">=</span><span class="s1">&#39;_name&#39;</span><span class="p">,</span>
         <span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;H&#39;</span><span class="p">],</span>
@@ -265,7 +265,7 @@ Configuration IDs to include, and a description of the ConfigurationSet.</p>
 </div>
 <p>Note that <code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_configuration_set()</span></code> returns the ID of the inserted
 ConfigurationSet, which can be used to obtain the newly-added ConfigurationSet</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">get_configuration_set</span><span class="p">(</span><span class="n">cs_id</span><span class="p">)[</span><span class="s1">&#39;configuration_set&#39;</span><span class="p">]</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cs</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_configuration_set</span><span class="p">(</span><span class="n">cs_id</span><span class="p">)[</span><span class="s1">&#39;configuration_set&#39;</span><span class="p">]</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="n">cs</span><span class="o">.</span><span class="n">description</span><span class="p">)</span>
 </pre></div>
@@ -390,13 +390,38 @@ visualize the property fields.</p>
 <h2>Applying transformations to properties<a class="headerlink" href="#applying-transformations-to-properties" title="Permalink to this headline"></a></h2>
 <p><a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.apply_transformation" title="colabfit.tools.database.MongoDatabase.apply_transformation"><code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_transformation()</span></code></a> can be used
 to modify Properties that have already been loaded into the Database.</p>
-<p>The <code class="code docutils literal notranslate"><span class="pre">update_map</span></code> argument of this function is a dictionary where the key is a
-field from a property definition, and the value is a function that takes two
-inputs: (1) the current value taken by the specified key, and (2) a Property
-document (as stored in the Mongo database). The output of this function will be
-the new value used to overwrite the existing one. Note that the Property
-document will be augmented to include the linked Configuration as specified by
-<code class="code docutils literal notranslate"><span class="pre">configuration_ids</span></code>.</p>
+<p>First, define the functions that will be used to update the Properties. In this
+example, we will show how to convert supercell energies to per-atom energies.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="n">current_val</span><span class="p">,</span> <span class="n">property_doc</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Update functions MUST take exactly two arguments.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        current_val (object):</span>
+<span class="sd">            The value to update. This will be the contents of the</span>
+<span class="sd">            &#39;source-value&#39; field of a Property field.</span>
+
+<span class="sd">        property_doc (dict):</span>
+<span class="sd">            The full Mongo Property document with the Configuration</span>
+<span class="sd">            specified by the `configuration_ids` argument to</span>
+<span class="sd">            `apply_transformation` attached as the &#39;configuration&#39; field.</span>
+<span class="sd">            This argument is used to provide access to any necessary related</span>
+<span class="sd">            data.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The new value to assign to the &#39;source-value&#39; field of the given</span>
+<span class="sd">        Property field</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">current_val</span><span class="o">/</span><span class="n">pr_doc</span><span class="p">[</span><span class="s1">&#39;configuration&#39;</span><span class="p">][</span><span class="s1">&#39;nsites&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Then, pass the transformation functions into <code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_transformation()</span></code>. Note
+the use of <code class="code docutils literal notranslate"><span class="pre">ds_id</span></code> and <code class="code docutils literal notranslate"><span class="pre">all_pr_ids</span></code> to limit the operations to only
+act on the properties in the given Dataset with the given Property IDs. Also
+note the use of <code class="code docutils literal notranslate"><span class="pre">configuration_ids</span></code> to specify which Configurations should
+be attached to which Properties for use in the tranformation function (see code
+block above).</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">all_co_ids</span><span class="p">,</span> <span class="n">all_pr_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">ids</span><span class="p">))</span>
 
 <span class="c1"># Convert to per-atom energies</span>
