@@ -1,20 +1,21 @@
 import os
 from getpass import getpass
+from ast import literal_eval
 from collections import namedtuple
 
 from flask import Blueprint, request, redirect, flash, render_template
 from flask_nav.elements import Navbar, View, Subgroup, Link, Text, Separator
 from werkzeug.utils import secure_filename
 
-from wtforms import FieldList, FormField
-
-from .forms import UploadForm, PropertyMapForm, PropertySettingsForm
+from .forms import UploadForm
 from .nav import nav
 
 from ..tools.database import MongoDatabase, load_data
+from ..tools.property_settings import PropertySettings
 from .resources import (
     CollectionsAPI, DatasetsTable, PropertiesTable, ConfigurationsTable
 )
+
 
 # Prepare DatasetManager
 # user = input("mongodb username: ")
@@ -67,66 +68,97 @@ def publish():
 
     if request.method == 'POST':
 
-        if full_form.validate_on_submit():
+        for f in full_form.data_upload.data:
+            filename = secure_filename(f.filename)
+            filename = os.path.join(UPLOAD_FOLDER, filename)
 
-            if full_form.definitions_upload:
-                for f in full_form.definitions_upload.data:
-                    filename = secure_filename(f.name)
-                    filename = os.path.join(UPLOAD_FOLDER, filename)
+            f.save(filename)
 
-                    f.data.save(filename)
+        for f in full_form.definitions_upload.data:
+            filename = secure_filename(f.filename)
+            filename = os.path.join(UPLOAD_FOLDER, filename)
 
-            if full_form.data_upload:
-                for f in full_form.data_upload.data:
-                    filename = secure_filename(f.name)
-                    filename = os.path.join(UPLOAD_FOLDER, filename)
+            f.save(filename)
 
-                    f.data.save(filename)
+        property_map = {}
+        property_settings = {}
+        configuration_sets = []
+        configuration_labels = []
+        for k, v in request.form.items():
+            print(k, v)
+            if 'pmc0' in k:
+                pname = v
+            elif 'pmc1' in k:
+                kim_field = v
+            elif 'pmc2' in k:
+                ase_field = v
+            elif 'pmc3' in k:
+                units = v
 
-            print('THE FORM:', full_form)
+                if units in ['None', '']:
+                    units = None
 
-            real_property_map = {}
-            for k, v in request.form.items():
-                print(k, v)
+                pid_dict = property_map.setdefault(pname, {})
 
-                # pname       = row.property_name
-                # kim_field   = row.kim_field
-                # ase_field   = row.ase_field
-                # units       = row.units
+                pid_dict[kim_field] = {
+                    'field': ase_field,
+                    'units': units
+                }
+            elif 'psc0' in k:
+                pname = v
+            elif 'psc1' in k:
+                method = v
+            elif 'psc2' in k:
+                desc = v
+            elif 'psc3' in k:
+                labels = [_.strip() for _ in v.split(',')]
+            elif 'psc4' in k:
+                # The file upload doesn't work yet...
+                files = None
 
-                # if units in ['None', '']:
-                #     units = None
+                property_settings[pname] = PropertySettings(
+                    method=method,
+                    description=desc,
+                    labels=labels,
+                    files=files
+                )
+            elif 'csc0' in k:
+                cs_query = literal_eval(v)
+            elif 'csc1' in k:
+                cs_desc = v
 
-                # pid_dict = real_property_map .setdefault(pname, {})
+                configuration_sets.append((cs_query, cs_desc))
+            elif 'clc0' in k:
+                cl_query = literal_eval(v)
+            elif 'clc1' in k:
+                cl_labels = [_.strip() for _ in v.split(',')]
 
-                # pid_dict[kim_field] = {
-                #     'field': ase_field,
-                #     'units': units
-                # }
+        print('PROPERTY MAP:', property_map)
+        print('PROPERTY SETTINGS:', property_settings)
+        print('CONFIGURATION SETS:', configuration_sets)
+        print('CONFIGURATION LABELS:', configuration_labels)
 
-            print('REAL PROPERTY MAP:', real_property_map)
+        # configurations = load_data(
+        #     file_path='/home/jvita/scripts/colabfit/data/gubaev/AlNiTi/train_2nd_stage.cfg',
+        #     file_format='cfg',
+        #     name_field=None,
+        #     elements=['Al', 'Ni', 'Ti'],
+        #     default_name='train_2nd_stage',
+        #     verbose=True,
+        # )
 
-            # configurations = load_data(
-            #     file_path='/home/jvita/scripts/colabfit/data/gubaev/AlNiTi/train_2nd_stage.cfg',
-            #     file_format='cfg',
-            #     name_field=None,
-            #     elements=['Al', 'Ni', 'Ti'],
-            #     default_name='train_2nd_stage',
-            #     verbose=True,
-            # )
-
-            # co_table = ConfigurationsTable(
-            #     [
-            #         dict(
-            #             name=co.info['_name'],
-            #             elements=sorted(list(set(co.get_chemical_symbols()))),
-            #             natoms=len(co),
-            #             labels=co.info['_labels']
-            #         )
-            #         for co in configurations
-            #     ],
-            #     border=True,
-            # )
+        # co_table = ConfigurationsTable(
+        #     [
+        #         dict(
+        #             name=co.info['_name'],
+        #             elements=sorted(list(set(co.get_chemical_symbols()))),
+        #             natoms=len(co),
+        #             labels=co.info['_labels']
+        #         )
+        #         for co in configurations
+        #     ],
+        #     border=True,
+        # )
 
         return render_template(
             'publish.html',

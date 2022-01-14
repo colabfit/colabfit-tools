@@ -6,9 +6,9 @@ from wtforms import (
 from flask_wtf import FlaskForm
 
 class PropertyMapRow(FlaskForm):
-    property_name   = StringField('Property name')
-    kim_field       = StringField('KIM field')
-    ase_field       = StringField('ASE field')
+    property_name   = StringField('Property name', [validators.InputRequired()])
+    kim_field       = StringField('KIM field', [validators.InputRequired()])
+    ase_field       = StringField('ASE field', [validators.InputRequired()])
     units           = StringField('Units')
 
 class PropertySettingsRow(FlaskForm):
@@ -18,12 +18,9 @@ class PropertySettingsRow(FlaskForm):
     labels          = StringField('Labels')
     files           = MultipleFileField('Files')
 
-
-class PropertySettingsForm(FlaskForm):
-    rows = FieldList(FormField(PropertySettingsRow))
-
-class PropertyMapForm(FlaskForm):
-    rows = FieldList(FormField(PropertyMapRow))
+class ConfigurationSetsRow(FlaskForm):
+    query       = StringField('Mongo query')
+    description = StringField('Description')
 
 class PropertySettingsForm(FlaskForm):
     calculation_method      = StringField('Calculation method')
