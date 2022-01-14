@@ -62,6 +62,7 @@ All other lines denote queryable fields. Indentation denotes sub-fields.
         * :code:`properties`: IDs of linked Properties
 * :code:`/configuration_sets`
     * :code:`_id`: a unique string identifier
+    * :code:`description`: a human-readable description
     * :code:`last_modified`: timestamp of when the entry was modified last
     * :code:`aggregated_info`: information gathered by aggregating the corresponding fields from the linked Configurations
         * :code:`nconfigurations`
