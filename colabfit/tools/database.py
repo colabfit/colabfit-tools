@@ -287,6 +287,38 @@ class MongoDatabase(MongoClient):
                 self.user, self.pwrd, self.port
             )
 
+        if property_map is None:
+            property_map = {}
+
+        # Sanity checks for property map
+        for pname, pdict in property_map.items():
+            pd_doc = self.property_definitions.find_one({'_id': pname})
+
+            if pd_doc:
+                # property_field_name, {'ase_field': ..., 'units': ...}
+                for k, pd in pdict.items():
+                    if k not in pd_doc['definition']:
+                        warnings.warn(
+                            'Provided field "{}" in property_map does not match '\
+                            'property definition'.format(k)
+                        )
+
+                    if ('field' not in pd) or (pd['field'] is None):
+                        raise RuntimeError(
+                            "Must specify all 'field' sections in property_map"
+                        )
+
+                    if 'units' not in pd:
+                        raise RuntimeError(
+                            "Must specify all 'units' sections in "\
+                            "property_map. Set value to None if no units."
+                        )
+            else:
+                warnings.warn(
+                    'Property name "{}" in property_map does not have an '\
+                    'existing definition in the database.'.format(pname)
+                )
+
         if property_settings is None:
             property_settings = {}
 
@@ -901,7 +933,10 @@ class MongoDatabase(MongoClient):
             for co_doc in tqdm(
                 self.configurations.find(
                     query,
-                    {'atomic_numbers': 1, 'positions': 1, 'cell': 1, 'pbc': 1}
+                    {
+                        'atomic_numbers', 'positions', 'cell', 'pbc', 'names',
+                        'labels'
+                    }
                 ),
                 desc='Getting configurations',
                 disable=not verbose

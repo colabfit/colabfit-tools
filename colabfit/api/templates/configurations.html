@@ -1,0 +1,67 @@
+{% extends "table_base.html" %}
+
+{% block content %}
+  <table id="data" class="table table-striped">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Elements</th>
+        <th># atoms</th>
+        <th># periodic dimensions</th>
+        <th>Names</th>
+        <th>Labels</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- {% for co in configurations%}
+        <tr>
+          <td>{{ co.id }}</td>
+          <td>
+            {% for item in co.elements %}
+                {{ item }}
+                {%- if not loop.last -%}
+                  ,
+                {% endif %}
+            {% endfor %}
+          </td>
+          <td>{{ co.atoms }}</td>
+          <td>{{ co.nperiodic }}</td>
+          <td>
+            {% for item in co.names %}
+                {{ item }}
+                {%- if not loop.last -%}
+                  ,
+                {% endif %}
+            {% endfor %}
+          </td>
+          <td>
+            {% for item in co.labels %}
+                {{ item }}
+                {%- if not loop.last -%}
+                  ,
+                {% endif %}
+            {% endfor %}
+          </td>
+        </tr>
+      {% endfor %} -->
+    </tbody>
+  </table>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    $(document).ready(function () {
+      $('#data').DataTable({
+        ajax: '/api/configurations',
+        serverSide: true,
+        columns: [
+          {data: 'id'},
+          {data: 'elements'},
+          {data: 'atoms'},
+          {data: 'nperiodic'},
+          {data: 'labels'}
+        ],
+      });
+    });
+  </script>
+{% endblock %}

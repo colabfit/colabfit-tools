@@ -106,6 +106,64 @@ def publish():
     return render_template('publish.html', form=form)
 
 
+# @frontend.route('/api/configurations/')
+# def api_configurations():
+
+#     # This function was part of an attempt to be able to handle a paginated
+#     # table of potentially millions of entries. It isn't ready yet
+
+#     co_cursor = database.configurations.find({})
+
+#     return {
+#         'configurations': [
+#             {
+#                 'id':           co_doc['_id'],
+#                 'elements':     co_doc['elements'],
+#                 'atoms':        co_doc['nsites'],
+#                 'nperiodic':    co_doc['nperiodic_dimensions'],
+#                 'names':        co_doc['names'],
+#                 'labels':       co_doc['labels'],
+#             }
+#         for co_doc in co_cursor]
+#     }
+
+
+# @frontend.route('/configurations/')
+# def configurations():
+#     return render_template(
+#         'configurations.html',
+#         title='Configurations',
+#     )
+
+@frontend.route('/configuration_sets/')
+def configuration_sets():
+
+    cs_cursor = database.configuration_sets.find({})
+
+    ConfigurationSetWrapper = namedtuple(
+        'ConfigurationSetWrapper',
+        [
+            'id', 'description', 'configurations', 'atoms',
+            'elements', 'labels',
+        ]
+    )
+
+    configuration_sets = (ConfigurationSetWrapper(
+        id=cs_doc['_id'],
+        description=cs_doc['description'],
+        configurations=cs_doc['aggregated_info']['nconfigurations'],
+        atoms=cs_doc['aggregated_info']['nsites'],
+        elements=cs_doc['aggregated_info']['elements'],
+        labels=cs_doc['aggregated_info']['labels'],
+    ) for cs_doc in cs_cursor)
+
+    return render_template(
+        'configuration_sets.html',
+        title='Configuration Sets',
+        configuration_sets=configuration_sets
+    )
+
+
 @frontend.route('/datasets/')
 def datasets():
 
