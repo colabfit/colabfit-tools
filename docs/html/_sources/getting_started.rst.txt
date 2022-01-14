@@ -45,6 +45,54 @@ section of the MongoDB documentation
 First steps
 ===========
 
+Start your local Mongo server and confirm that it's running.
+
+.. code-block:: console
+
+    $ sudo systemctl start mongod
+    $ sudo systemctl status mongod
+
+Open a connection to the Mongo server from inside your Python script.
+
+.. code-block:: python
+
+    from colabfit.tools.database import MongoDatabase
+
+    client = MongoDatabase('my_database')
+
+Build a Configuration just like you would build an `ASE Atoms object
+<https://wiki.fysik.dtu.dk/ase/ase/atoms.html>`_
+
+.. code-block:: python
+
+    import numpy as np
+    from colabfit.tools.configuration import Configuration
+
+    atoms = Configuration(symbols='H2O', positions=np.random.random((3, 3)))
+
+And finally, add the Configuration into the Database.
+
+.. code-block:: python
+
+    client.insert_data(
+        [atoms],
+        generator=False,
+        verbose=True
+    )
+
+Use `mongosh` for external verification that the data was added to your local
+database.
+
+.. code-block:: console
+    
+    # In a Mongo terminal opened using the `mongosh` command-line-tool
+    $ show dbs
+    $ use my_database
+    $ my_database.configurations.findOne()
+
+Next steps
+==========
+
 * Take a look at the :ref:`Overview` to see how the Database is structured.
 * Review the :ref:`Basics of Configurations` to better understand how data is
   stored when it is first loaded in.

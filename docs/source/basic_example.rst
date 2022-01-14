@@ -95,14 +95,14 @@ configurations.
 
 	from ase.io import write
 
-	write('/content/example.extxyz', images)
+	write('/tmp/example.extxyz', images)
 
 .. code-block:: python
 
 	from colabfit.tools.database import load_data
 
 	images = load_data(
-		file_path='/content/example.extxyz',
+		file_path='/tmp/example.extxyz',
 		file_format='xyz',
 		name_field='_name',
 		elements=['H'],
@@ -202,7 +202,7 @@ ConfigurationSet, which can be used to obtain the newly-added ConfigurationSet
 
 .. code-block:: python
 
-    client.get_configuration_set(cs_id)['configuration_set']
+    cs = client.get_configuration_set(cs_id)['configuration_set']
 
     print(cs.description)
 
@@ -349,13 +349,40 @@ Applying transformations to properties
 :meth:`~colabfit.tools.database.MongoDatabase.apply_transformation` can be used
 to modify Properties that have already been loaded into the Database.
 
-The :code:`update_map` argument of this function is a dictionary where the key is a
-field from a property definition, and the value is a function that takes two
-inputs: (1) the current value taken by the specified key, and (2) a Property
-document (as stored in the Mongo database). The output of this function will be
-the new value used to overwrite the existing one. Note that the Property
-document will be augmented to include the linked Configuration as specified by
-:code:`configuration_ids`.
+First, define the functions that will be used to update the Properties. In this
+example, we will show how to convert supercell energies to per-atom energies.
+
+.. code-block:: python
+
+    def transform(current_val, property_doc):
+        """
+        Update functions MUST take exactly two arguments.
+
+        Args:
+            current_val (object):
+                The value to update. This will be the contents of the
+                'source-value' field of a Property field.
+
+            property_doc (dict):
+                The full Mongo Property document with the Configuration
+                specified by the `configuration_ids` argument to
+                `apply_transformation` attached as the 'configuration' field.
+                This argument is used to provide access to any necessary related
+                data.
+
+        Returns:
+            The new value to assign to the 'source-value' field of the given
+            Property field
+        """
+
+        return current_val/pr_doc['configuration']['nsites']
+
+Then, pass the transformation functions into :meth:`apply_transformation`. Note
+the use of :code:`ds_id` and :code:`all_pr_ids` to limit the operations to only
+act on the properties in the given Dataset with the given Property IDs. Also
+note the use of :code:`configuration_ids` to specify which Configurations should
+be attached to which Properties for use in the tranformation function (see code
+block above).
 
 .. code-block:: python
 
