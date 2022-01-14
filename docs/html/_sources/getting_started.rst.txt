@@ -70,7 +70,8 @@ Build a Configuration just like you would build an `ASE Atoms object
 
     atoms = Configuration(symbols='H2O', positions=np.random.random((3, 3)))
 
-And finally, add the Configuration into the Database.
+And finally, add the Configuration into the Database. Note that this command
+will not work if you haven't first :ref:`installed Mongo <Installing Mongo>`.
 
 .. code-block:: python
 
@@ -80,7 +81,7 @@ And finally, add the Configuration into the Database.
         verbose=True
     )
 
-Use `mongosh` for external verification that the data was added to your local
+Use :code:`mongosh` for external verification that the data was added to your local
 database.
 
 .. code-block:: console

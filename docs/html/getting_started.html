@@ -137,7 +137,8 @@ section of the MongoDB documentation</a>.</p>
 <span class="n">atoms</span> <span class="o">=</span> <span class="n">Configuration</span><span class="p">(</span><span class="n">symbols</span><span class="o">=</span><span class="s1">&#39;H2O&#39;</span><span class="p">,</span> <span class="n">positions</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">)))</span>
 </pre></div>
 </div>
-<p>And finally, add the Configuration into the Database.</p>
+<p>And finally, add the Configuration into the Database. Note that this command
+will not work if you haven’t first <a class="reference internal" href="#installing-mongo"><span class="std std-ref">installed Mongo</span></a>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">insert_data</span><span class="p">(</span>
     <span class="p">[</span><span class="n">atoms</span><span class="p">],</span>
     <span class="n">generator</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
@@ -145,7 +146,7 @@ section of the MongoDB documentation</a>.</p>
 <span class="p">)</span>
 </pre></div>
 </div>
-<p>Use <cite>mongosh</cite> for external verification that the data was added to your local
+<p>Use <code class="code docutils literal notranslate"><span class="pre">mongosh</span></code> for external verification that the data was added to your local
 database.</p>
 <div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp"># </span>In a Mongo terminal opened using the <span class="sb">`</span>mongosh<span class="sb">`</span> command-line-tool
 <span class="gp">$ </span>show dbs
