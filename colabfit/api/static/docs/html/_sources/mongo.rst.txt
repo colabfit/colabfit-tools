@@ -1,0 +1,149 @@
+============
+Mongo basics
+============
+
+This section provides examples on how to perform various operations on the
+Database using Mongo. For more details, it is highly suggested that you visit
+`the MongoDB documentation <https://docs.mongodb.com/manual/>`_.
+
+Queries
+^^^^^^^
+
+It is extremely important to be able to understand how to formulate at least
+basic Mongo queries. If you are a newcomer to Mongo, one of the best places to
+start would be to look over some of the
+`query tutorials from the official Mongo manual
+<https://docs.mongodb.com/manual/tutorial/query-documents/>`_.
+
+Structure
+^^^^^^^^^
+
+Recall that when opening a connection to the Database, for example with the
+following code:
+
+.. code-block:: python
+
+    from colabfit.tools.database import MongoDatabase
+
+    client = MongoDatabase('colabfit_database')
+
+the :code:`client` object is a Mongo Client connected to the
+:code:`'colabfit_database'` Database in a running Mongo server. This Database
+will have the following collections: :code:`'configurations'`,
+:code:`'properties'`, :code:`'property_settings'`, :code:`'configuration_sets'`,
+and :code:`'datasets'`. which are accessible as attributes. See :ref:`MongoDB
+outline` for more details.
+
+Find one
+^^^^^^^^
+
+Get an example of a single document in a collection that satisfies the given
+query.
+
+.. code-block:: python
+
+    # Find a Property document that is linked to the Dataset with an ID of ds_id
+    client.properties.find_one({'relationships.datasets': ds_id})
+
+Count documents
+^^^^^^^^^^^^^^^
+
+Count the number of documents in a collection.
+
+.. code-block:: python
+
+    # Count the number of Configurations in the Database
+    client.configurations.count_documents({})
+
+Get all documents
+^^^^^^^^^^^^^^^^^
+
+Get a list of all of the Datasets in the Database, then sort by name.
+
+.. code-block:: python
+
+    sorted(
+        list(
+            client.datasets.find({}, {'name'})
+        ),
+        key=lambda x: x['name'].lower()
+    )
+
+
+Check for multiple links
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Similar to what is done in :ref:`detecting duplicates <Detecting duplicates>`,
+the :code:`'relationships'` field can be useful for finding documents that are
+linked to multiple other documents.
+
+For example, for finding how many ConfigurationSets are linked to more than one
+Dataset:
+
+.. code-block:: python
+
+    client.configuration_sets.count_documents(
+        {'relationships.datasets.1': {'$exists': True}}
+    )
+
+Get distinct fields
+^^^^^^^^^^^^^^^^^^^
+
+Get a set of all existing values of a given field:
+
+.. code-block:: python
+
+    # Get a list of the unique property types in the Database
+    client.properties.distinct('type')
+
+Count occurrences
+^^^^^^^^^^^^^^^^^
+
+`Aggregation pipelines <https://docs.mongodb.com/manual/aggregation/>`_ can be
+extremely useful, but may be more difficult to understand for new users of
+Mongo. The example below shows how to use aggregation to count the occurrences
+of each Configuration label.
+
+.. code-block:: python
+
+	cursor = client.configurations.aggregate([
+        # by default, matches to all documents in the collection
+        # $unwind: create a new document, once for each value in the 'labels'
+        # field
+		{'$unwind': '$labels'},
+        # $group: group the documents based on their label field, and count
+		{'$group': {'_id': '$labels', 'count': {'$sum': 1}}}
+	])
+
+	sorted(cursor, key=lambda x: x['count'], reverse=True)
+
+Get Datasets linked to ConfigurationSets
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The example below shows how to use aggregation to obtain a list of all
+ConfigurationSets in the Database, with the names of their linked Datasets.
+
+.. code-block:: python
+
+    cursor = client.configuration_sets.aggregate([
+        # $project: only return the requested fields for each document
+        {'$project': {'relationships.datasets': 1}},
+        # $unwind: create a new document for each element in an array
+        {'$unwind': '$relationships.datasets'},
+        # $project: only return the renamed field
+        {'$project': {'ds_id': '$relationships.datasets'}},
+        # $lookup: pull the Dataset document with the given ID
+        {'$lookup': {
+            # pull from the 'datasets' collection
+            'from': 'datasets',
+            # match the local field 'ds_id' to the '_id' field in 'datasets'
+            'localField': 'ds_id',
+            'foreignField': '_id',
+            # attach the Dataset document under the name 'linked_ds'
+            'as': 'linked_ds'
+        }},
+        # $project: only return the name of the linke Dataset
+        {'$project': {'ds_name': '$linked_ds.name'}}
+    ])
+
+    sorted(list(cursor), key=lambda x: x['ds_name'][0].lower())

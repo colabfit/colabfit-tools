@@ -59,7 +59,10 @@ nav.register_element('frontend_top', Navbar(
 @frontend.route('/')
 @frontend.route('/index')
 def index():
-    return "Welcome to the ColabFit database. Try looking at `/collections?collection=datasets`!"
+    return render_template(
+        'home.html',
+    )
+
 
 
 def allowed_file(filename):
@@ -122,15 +125,12 @@ def publish():
         pmc_pname = None
         psc_pname = None
         for k, v in request.form.items():
-            print(k, v)
             if 'pmc0' in k:
                 pmc_pname = v
                 pid_dict = property_map.setdefault(pmc_pname, {})
-                print('PNAME CHANGE:', pmc_pname)
             elif 'pmc1' in k:
                 pmc_field = v
                 field_dict = pid_dict.setdefault(pmc_field, {})
-                print('FIELD CHANGE:', pmc_field)
             elif 'pmc2' in k:
                 field_dict['field'] = v
             elif 'pmc3' in k:
@@ -184,33 +184,6 @@ def publish():
                 labels=pdict['labels'],
                 files=pdict['files'] if 'files' in pdict else None
             )
-
-        print('PROPERTY MAP:', property_map)
-        print('PROPERTY SETTINGS:', property_settings)
-        print('CONFIGURATION SETS:', configuration_sets)
-        print('CONFIGURATION LABELS:', configuration_labels)
-
-        # configurations = load_data(
-        #     file_path='/home/jvita/scripts/colabfit/data/gubaev/AlNiTi/train_2nd_stage.cfg',
-        #     file_format='cfg',
-        #     name_field=None,
-        #     elements=['Al', 'Ni', 'Ti'],
-        #     default_name='train_2nd_stage',
-        #     verbose=True,
-        # )
-
-        # co_table = ConfigurationsTable(
-        #     [
-        #         dict(
-        #             name=co.info['_name'],
-        #             elements=sorted(list(set(co.get_chemical_symbols()))),
-        #             natoms=len(co),
-        #             labels=co.info['_labels']
-        #         )
-        #         for co in configurations
-        #     ],
-        #     border=True,
-        # )
 
         template = \
 """

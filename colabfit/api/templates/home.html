@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}<title>ColabFit Data Repository</title>{% endblock %}
+
+{% block content %}
+<div class="container px-4 px-lg-5">
+        <!-- Heading Row-->
+        <div class="row gx-4 gx-lg-5 align-items-center my-5">
+            <div class="col-lg-7 align-items-center">
+                <img class="img-fluid rounded mb-4 mb-lg-0"
+                src="{{ url_for('static', filename='assets/favicon.ico') }}"
+                alt="..."
+                width="35%"
+                />
+            </div>
+            <div class="col-lg-5">
+                <h1 class="font-weight-light">ColabFit Data Repository</h1>
+                <p>The ColabFit Data Repository is a collection of datasets
+                intended for training, testing, and validating data-driven
+                interatomic potentials. The data in this
+                repository was curated by <a href='https://colabfit.org' target="_blank">the ColabFit group at the University
+                of Minnesota</a>, and is drawn from the literature and user
+                submissions.</p>
+                <p> This website is currently styled after the free <a
+                href="https://startbootstrap.com/template/small-business"
+                target="_blank">"Small Business" Bootstrap template</a>.</p>
+                <!-- <a class="btn btn-primary" href="#!">Call to Action!</a> -->
+            </div>
+        </div>
+        <!-- Call to Action-->
+        <div class="card text-white bg-secondary my-5 py-4 text-center">
+            <div class="card-body"><p class="text-white m-0">Providing open,
+            equal access to materials data in order to improve visibility and
+            reproducibility in materials research</p></div>
+        </div>
+        <!-- Content Row-->
+        <div class="row gx-4 gx-lg-5">
+            <div class="col-md-4 mb-5">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h2 class="card-title">Query</h2>
+                        <p class="card-text">Explore the Mongo database to
+                        discover data that has been previously published to the
+                        ColabFit Data Repository. </p>
+                    </div>
+                    <div class="card-footer"><a class="btn btn-primary btn-sm" href="/query">Query</a></div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-5">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h2 class="card-title">Publish</h2>
+                        <p class="card-text">Submit your own data to the
+                        repository to promote accessibilty and improve
+                        visibility of your work. </p>
+                    </div>
+                    <div class="card-footer"><a class="btn btn-primary btn-sm" href="/publish">Publish</a></div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-5">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h2 class="card-title">colabfit-tools</h2>
+                    <p class="card-text">See the documentation for
+                    <code>colabfit-tools</code>, a Python package for constructing,
+                    manipulating, and exploring Datasets from the ColabFit Data
+                    Repository</p>
+                    </div>
+                    <div class="card-footer"><a class="btn btn-primary btn-sm"
+                    href="{{ url_for('static', filename='docs/index.html') }}"
+                    target='_blank'>Documentation</a></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}

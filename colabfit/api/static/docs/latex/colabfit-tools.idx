@@ -1,0 +1,121 @@
+\indexentry{module@\spxentry{module}!colabfit.tools.configuration@\spxentry{colabfit.tools.configuration}|hyperpage}{23}
+\indexentry{colabfit.tools.configuration@\spxentry{colabfit.tools.configuration}!module@\spxentry{module}|hyperpage}{23}
+\indexentry{Configuration (class in colabfit.tools.configuration)@\spxentry{Configuration}\spxextra{class in colabfit.tools.configuration}|hyperpage}{23}
+\indexentry{\_\_hash\_\_() (colabfit.tools.configuration.Configuration method)@\spxentry{\_\_hash\_\_()}\spxextra{colabfit.tools.configuration.Configuration method}|hyperpage}{23}
+\indexentry{\_\_init\_\_() (colabfit.tools.configuration.Configuration method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.configuration.Configuration method}|hyperpage}{23}
+\indexentry{from\_ase() (colabfit.tools.configuration.Configuration class method)@\spxentry{from\_ase()}\spxextra{colabfit.tools.configuration.Configuration class method}|hyperpage}{23}
+\indexentry{module@\spxentry{module}!colabfit.tools.property@\spxentry{colabfit.tools.property}|hyperpage}{23}
+\indexentry{colabfit.tools.property@\spxentry{colabfit.tools.property}!module@\spxentry{module}|hyperpage}{23}
+\indexentry{Property (class in colabfit.tools.property)@\spxentry{Property}\spxextra{class in colabfit.tools.property}|hyperpage}{24}
+\indexentry{edn (colabfit.tools.property.Property attribute)@\spxentry{edn}\spxextra{colabfit.tools.property.Property attribute}|hyperpage}{24}
+\indexentry{property\_map (colabfit.tools.property.Property attribute)@\spxentry{property\_map}\spxextra{colabfit.tools.property.Property attribute}|hyperpage}{24}
+\indexentry{configurations (colabfit.tools.property.Property attribute)@\spxentry{configurations}\spxextra{colabfit.tools.property.Property attribute}|hyperpage}{24}
+\indexentry{settings (colabfit.tools.property.Property attribute)@\spxentry{settings}\spxextra{colabfit.tools.property.Property attribute}|hyperpage}{24}
+\indexentry{\_\_delitem\_\_() (colabfit.tools.property.Property method)@\spxentry{\_\_delitem\_\_()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{24}
+\indexentry{\_\_eq\_\_() (colabfit.tools.property.Property method)@\spxentry{\_\_eq\_\_()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{24}
+\indexentry{\_\_getitem\_\_() (colabfit.tools.property.Property method)@\spxentry{\_\_getitem\_\_()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{25}
+\indexentry{\_\_hash\_\_() (colabfit.tools.property.Property method)@\spxentry{\_\_hash\_\_()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{25}
+\indexentry{\_\_init\_\_() (colabfit.tools.property.Property method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{25}
+\indexentry{\_\_repr\_\_() (colabfit.tools.property.Property method)@\spxentry{\_\_repr\_\_()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{25}
+\indexentry{\_\_setitem\_\_() (colabfit.tools.property.Property method)@\spxentry{\_\_setitem\_\_()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{25}
+\indexentry{\_\_str\_\_() (colabfit.tools.property.Property method)@\spxentry{\_\_str\_\_()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{25}
+\indexentry{\_\_weakref\_\_ (colabfit.tools.property.Property attribute)@\spxentry{\_\_weakref\_\_}\spxextra{colabfit.tools.property.Property attribute}|hyperpage}{25}
+\indexentry{convert\_units() (colabfit.tools.property.Property method)@\spxentry{convert\_units()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{25}
+\indexentry{from\_definition() (colabfit.tools.property.Property class method)@\spxentry{from\_definition()}\spxextra{colabfit.tools.property.Property class method}|hyperpage}{25}
+\indexentry{get\_data() (colabfit.tools.property.Property method)@\spxentry{get\_data()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{25}
+\indexentry{keys() (colabfit.tools.property.Property method)@\spxentry{keys()}\spxextra{colabfit.tools.property.Property method}|hyperpage}{25}
+\indexentry{module@\spxentry{module}!colabfit.tools.property\_settings@\spxentry{colabfit.tools.property\_settings}|hyperpage}{25}
+\indexentry{colabfit.tools.property\_settings@\spxentry{colabfit.tools.property\_settings}!module@\spxentry{module}|hyperpage}{25}
+\indexentry{PropertySettings (class in colabfit.tools.property\_settings)@\spxentry{PropertySettings}\spxextra{class in colabfit.tools.property\_settings}|hyperpage}{26}
+\indexentry{method (colabfit.tools.property\_settings.PropertySettings attribute)@\spxentry{method}\spxextra{colabfit.tools.property\_settings.PropertySettings attribute}|hyperpage}{26}
+\indexentry{description (colabfit.tools.property\_settings.PropertySettings attribute)@\spxentry{description}\spxextra{colabfit.tools.property\_settings.PropertySettings attribute}|hyperpage}{26}
+\indexentry{files (colabfit.tools.property\_settings.PropertySettings attribute)@\spxentry{files}\spxextra{colabfit.tools.property\_settings.PropertySettings attribute}|hyperpage}{26}
+\indexentry{labels (colabfit.tools.property\_settings.PropertySettings attribute)@\spxentry{labels}\spxextra{colabfit.tools.property\_settings.PropertySettings attribute}|hyperpage}{26}
+\indexentry{\_\_eq\_\_() (colabfit.tools.property\_settings.PropertySettings method)@\spxentry{\_\_eq\_\_()}\spxextra{colabfit.tools.property\_settings.PropertySettings method}|hyperpage}{26}
+\indexentry{\_\_hash\_\_() (colabfit.tools.property\_settings.PropertySettings method)@\spxentry{\_\_hash\_\_()}\spxextra{colabfit.tools.property\_settings.PropertySettings method}|hyperpage}{26}
+\indexentry{\_\_init\_\_() (colabfit.tools.property\_settings.PropertySettings method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.property\_settings.PropertySettings method}|hyperpage}{26}
+\indexentry{\_\_repr\_\_() (colabfit.tools.property\_settings.PropertySettings method)@\spxentry{\_\_repr\_\_()}\spxextra{colabfit.tools.property\_settings.PropertySettings method}|hyperpage}{26}
+\indexentry{\_\_str\_\_() (colabfit.tools.property\_settings.PropertySettings method)@\spxentry{\_\_str\_\_()}\spxextra{colabfit.tools.property\_settings.PropertySettings method}|hyperpage}{26}
+\indexentry{\_\_weakref\_\_ (colabfit.tools.property\_settings.PropertySettings attribute)@\spxentry{\_\_weakref\_\_}\spxextra{colabfit.tools.property\_settings.PropertySettings attribute}|hyperpage}{26}
+\indexentry{module@\spxentry{module}!colabfit.tools.configuration\_sets@\spxentry{colabfit.tools.configuration\_sets}|hyperpage}{26}
+\indexentry{colabfit.tools.configuration\_sets@\spxentry{colabfit.tools.configuration\_sets}!module@\spxentry{module}|hyperpage}{26}
+\indexentry{ConfigurationSet (class in colabfit.tools.configuration\_sets)@\spxentry{ConfigurationSet}\spxextra{class in colabfit.tools.configuration\_sets}|hyperpage}{26}
+\indexentry{configurations (colabfit.tools.configuration\_sets.ConfigurationSet attribute)@\spxentry{configurations}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}|hyperpage}{26}
+\indexentry{description (colabfit.tools.configuration\_sets.ConfigurationSet attribute)@\spxentry{description}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}|hyperpage}{26}
+\indexentry{labels (colabfit.tools.configuration\_sets.ConfigurationSet attribute)@\spxentry{labels}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}|hyperpage}{26}
+\indexentry{labels\_counts (colabfit.tools.configuration\_sets.ConfigurationSet attribute)@\spxentry{labels\_counts}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}|hyperpage}{27}
+\indexentry{elements (colabfit.tools.configuration\_sets.ConfigurationSet attribute)@\spxentry{elements}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}|hyperpage}{27}
+\indexentry{elements\_ratios (colabfit.tools.configuration\_sets.ConfigurationSet attribute)@\spxentry{elements\_ratios}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}|hyperpage}{27}
+\indexentry{chemical\_systems (colabfit.tools.configuration\_sets.ConfigurationSet attribute)@\spxentry{chemical\_systems}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}|hyperpage}{27}
+\indexentry{n\_sites (colabfit.tools.configuration\_sets.ConfigurationSet attribute)@\spxentry{n\_sites}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}|hyperpage}{27}
+\indexentry{\_\_init\_\_() (colabfit.tools.configuration\_sets.ConfigurationSet method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet method}|hyperpage}{27}
+\indexentry{\_\_repr\_\_() (colabfit.tools.configuration\_sets.ConfigurationSet method)@\spxentry{\_\_repr\_\_()}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet method}|hyperpage}{27}
+\indexentry{\_\_str\_\_() (colabfit.tools.configuration\_sets.ConfigurationSet method)@\spxentry{\_\_str\_\_()}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet method}|hyperpage}{27}
+\indexentry{\_\_weakref\_\_ (colabfit.tools.configuration\_sets.ConfigurationSet attribute)@\spxentry{\_\_weakref\_\_}\spxextra{colabfit.tools.configuration\_sets.ConfigurationSet attribute}|hyperpage}{27}
+\indexentry{Dataset (class in colabfit.tools.dataset)@\spxentry{Dataset}\spxextra{class in colabfit.tools.dataset}|hyperpage}{27}
+\indexentry{\_\_hash\_\_ (colabfit.tools.dataset.Dataset attribute)@\spxentry{\_\_hash\_\_}\spxextra{colabfit.tools.dataset.Dataset attribute}|hyperpage}{27}
+\indexentry{\_\_init\_\_() (colabfit.tools.dataset.Dataset method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{27}
+\indexentry{add\_configurations() (colabfit.tools.dataset.Dataset method)@\spxentry{add\_configurations()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{27}
+\indexentry{aggregate\_metadata() (colabfit.tools.dataset.Dataset method)@\spxentry{aggregate\_metadata()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{27}
+\indexentry{apply\_transformation() (colabfit.tools.dataset.Dataset method)@\spxentry{apply\_transformation()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{27}
+\indexentry{attach\_configuration\_labels() (colabfit.tools.dataset.Dataset method)@\spxentry{attach\_configuration\_labels()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{28}
+\indexentry{attach\_dataset() (colabfit.tools.dataset.Dataset method)@\spxentry{attach\_dataset()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{28}
+\indexentry{attach\_property\_settings() (colabfit.tools.dataset.Dataset method)@\spxentry{attach\_property\_settings()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{28}
+\indexentry{check\_if\_is\_parent\_dataset() (colabfit.tools.dataset.Dataset method)@\spxentry{check\_if\_is\_parent\_dataset()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{28}
+\indexentry{clean() (colabfit.tools.dataset.Dataset method)@\spxentry{clean()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{28}
+\indexentry{clear\_config\_labels() (colabfit.tools.dataset.Dataset method)@\spxentry{clear\_config\_labels()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{28}
+\indexentry{configuration\_label\_regexes (colabfit.tools.dataset.Dataset property)@\spxentry{configuration\_label\_regexes}\spxextra{colabfit.tools.dataset.Dataset property}|hyperpage}{28}
+\indexentry{configuration\_set\_regexes (colabfit.tools.dataset.Dataset property)@\spxentry{configuration\_set\_regexes}\spxextra{colabfit.tools.dataset.Dataset property}|hyperpage}{28}
+\indexentry{convert\_units() (colabfit.tools.dataset.Dataset method)@\spxentry{convert\_units()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{28}
+\indexentry{dataset\_from\_config\_sets() (colabfit.tools.dataset.Dataset method)@\spxentry{dataset\_from\_config\_sets()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{28}
+\indexentry{define\_configuration\_set() (colabfit.tools.dataset.Dataset method)@\spxentry{define\_configuration\_set()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{29}
+\indexentry{delete\_config\_label\_regex() (colabfit.tools.dataset.Dataset method)@\spxentry{delete\_config\_label\_regex()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{29}
+\indexentry{filter() (colabfit.tools.dataset.Dataset method)@\spxentry{filter()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{29}
+\indexentry{flatten() (colabfit.tools.dataset.Dataset method)@\spxentry{flatten()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{30}
+\indexentry{from\_markdown() (colabfit.tools.dataset.Dataset class method)@\spxentry{from\_markdown()}\spxextra{colabfit.tools.dataset.Dataset class method}|hyperpage}{30}
+\indexentry{get\_available\_configuration\_fields() (colabfit.tools.dataset.Dataset method)@\spxentry{get\_available\_configuration\_fields()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{30}
+\indexentry{get\_configuration\_field() (colabfit.tools.dataset.Dataset method)@\spxentry{get\_configuration\_field()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{30}
+\indexentry{get\_data() (colabfit.tools.dataset.Dataset method)@\spxentry{get\_data()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{30}
+\indexentry{get\_statistics() (colabfit.tools.dataset.Dataset method)@\spxentry{get\_statistics()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{isdisjoint() (colabfit.tools.dataset.Dataset method)@\spxentry{isdisjoint()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{issubset() (colabfit.tools.dataset.Dataset method)@\spxentry{issubset()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{issuperset() (colabfit.tools.dataset.Dataset method)@\spxentry{issuperset()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{merge() (colabfit.tools.dataset.Dataset method)@\spxentry{merge()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{parse\_data() (colabfit.tools.dataset.Dataset method)@\spxentry{parse\_data()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{plot\_histograms() (colabfit.tools.dataset.Dataset method)@\spxentry{plot\_histograms()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{print\_configuration\_sets() (colabfit.tools.dataset.Dataset method)@\spxentry{print\_configuration\_sets()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{property\_settings\_regexes (colabfit.tools.dataset.Dataset property)@\spxentry{property\_settings\_regexes}\spxextra{colabfit.tools.dataset.Dataset property}|hyperpage}{31}
+\indexentry{refresh\_config\_labels() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_config\_labels()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{refresh\_config\_sets() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_config\_sets()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{refresh\_property\_map() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_property\_map()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{refresh\_property\_settings() (colabfit.tools.dataset.Dataset method)@\spxentry{refresh\_property\_settings()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{rename\_configuration\_field() (colabfit.tools.dataset.Dataset method)@\spxentry{rename\_configuration\_field()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{31}
+\indexentry{rename\_property() (colabfit.tools.dataset.Dataset method)@\spxentry{rename\_property()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{32}
+\indexentry{resync() (colabfit.tools.dataset.Dataset method)@\spxentry{resync()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{32}
+\indexentry{summary() (colabfit.tools.dataset.Dataset method)@\spxentry{summary()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{32}
+\indexentry{to\_markdown() (colabfit.tools.dataset.Dataset method)@\spxentry{to\_markdown()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{32}
+\indexentry{train\_test\_split() (colabfit.tools.dataset.Dataset method)@\spxentry{train\_test\_split()}\spxextra{colabfit.tools.dataset.Dataset method}|hyperpage}{32}
+\indexentry{module@\spxentry{module}!colabfit.tools.dataset@\spxentry{colabfit.tools.dataset}|hyperpage}{32}
+\indexentry{colabfit.tools.dataset@\spxentry{colabfit.tools.dataset}!module@\spxentry{module}|hyperpage}{32}
+\indexentry{load\_data() (in module colabfit.tools.dataset)@\spxentry{load\_data()}\spxextra{in module colabfit.tools.dataset}|hyperpage}{32}
+\indexentry{module@\spxentry{module}!colabfit.tools.converters@\spxentry{colabfit.tools.converters}|hyperpage}{33}
+\indexentry{colabfit.tools.converters@\spxentry{colabfit.tools.converters}!module@\spxentry{module}|hyperpage}{33}
+\indexentry{BaseConverter (class in colabfit.tools.converters)@\spxentry{BaseConverter}\spxextra{class in colabfit.tools.converters}|hyperpage}{33}
+\indexentry{load() (colabfit.tools.converters.BaseConverter method)@\spxentry{load()}\spxextra{colabfit.tools.converters.BaseConverter method}|hyperpage}{33}
+\indexentry{CFGConverter (class in colabfit.tools.converters)@\spxentry{CFGConverter}\spxextra{class in colabfit.tools.converters}|hyperpage}{33}
+\indexentry{EXYZConverter (class in colabfit.tools.converters)@\spxentry{EXYZConverter}\spxextra{class in colabfit.tools.converters}|hyperpage}{33}
+\indexentry{FolderConverter (class in colabfit.tools.converters)@\spxentry{FolderConverter}\spxextra{class in colabfit.tools.converters}|hyperpage}{33}
+\indexentry{\_\_init\_\_() (colabfit.tools.converters.FolderConverter method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.converters.FolderConverter method}|hyperpage}{33}
+\indexentry{\_load() (colabfit.tools.converters.FolderConverter method)@\spxentry{\_load()}\spxextra{colabfit.tools.converters.FolderConverter method}|hyperpage}{33}
+\indexentry{module@\spxentry{module}!colabfit.tools.transformations@\spxentry{colabfit.tools.transformations}|hyperpage}{33}
+\indexentry{colabfit.tools.transformations@\spxentry{colabfit.tools.transformations}!module@\spxentry{module}|hyperpage}{33}
+\indexentry{BaseTransform (class in colabfit.tools.transformations)@\spxentry{BaseTransform}\spxextra{class in colabfit.tools.transformations}|hyperpage}{34}
+\indexentry{\_\_init\_\_() (colabfit.tools.transformations.BaseTransform method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.transformations.BaseTransform method}|hyperpage}{34}
+\indexentry{SubtractDivide (class in colabfit.tools.transformations)@\spxentry{SubtractDivide}\spxextra{class in colabfit.tools.transformations}|hyperpage}{34}
+\indexentry{\_\_init\_\_() (colabfit.tools.transformations.SubtractDivide method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.transformations.SubtractDivide method}|hyperpage}{34}
+\indexentry{PerAtomEnergies (class in colabfit.tools.transformations)@\spxentry{PerAtomEnergies}\spxextra{class in colabfit.tools.transformations}|hyperpage}{34}
+\indexentry{\_\_init\_\_() (colabfit.tools.transformations.PerAtomEnergies method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.transformations.PerAtomEnergies method}|hyperpage}{34}
+\indexentry{ReshapeForces (class in colabfit.tools.transformations)@\spxentry{ReshapeForces}\spxextra{class in colabfit.tools.transformations}|hyperpage}{34}
+\indexentry{\_\_init\_\_() (colabfit.tools.transformations.ReshapeForces method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.transformations.ReshapeForces method}|hyperpage}{34}
+\indexentry{Sequential (class in colabfit.tools.transformations)@\spxentry{Sequential}\spxextra{class in colabfit.tools.transformations}|hyperpage}{34}
+\indexentry{\_\_init\_\_() (colabfit.tools.transformations.Sequential method)@\spxentry{\_\_init\_\_()}\spxextra{colabfit.tools.transformations.Sequential method}|hyperpage}{34}
