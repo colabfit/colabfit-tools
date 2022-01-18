@@ -39,7 +39,7 @@ class Configuration(Atoms):
 
         if ATOMS_NAME_FIELD in self.info:
             v = self.info[ATOMS_NAME_FIELD]
-            if isinstance(v, str):
+            if not isinstance(v, list):
                 v = set([v])
             else:
                 v = set(v)
