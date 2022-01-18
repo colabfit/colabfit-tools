@@ -63,6 +63,8 @@ Columns:
 * `Name field`: the key to use with `Configuration.info` for accessing the name
   of the configuration (`None` if name is not included).
 
+Multiple rows can be included if data is stored in multiple files.
+
 |||||
 |---|---|---|---|
 |Elements|File|Format|Name field|

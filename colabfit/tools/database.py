@@ -2246,39 +2246,36 @@ class MongoDatabase(MongoClient):
         parser = DatasetParser()
         parser.feed(html)
 
-        storage_info = dict(zip(*parser.get_data('Storage format')))
+        images = []
+        storage_table = parser.get_data('Storage format')
+        header = storage_table[0]
+        for row in storage_table:
 
-        # Check if already exists in Database
-        if storage_info['Format'] == 'mongo':
-            return self.get_dataset(
-                storage_info['File'], resync=True, verbose=verbose
-            )
-
-        # Else, need to build from scratch
-        try:
-            elements = [l.strip() for l in storage_info['Elements'].split(',')]
-        except:
-            raise BadTableFormatting(
-                "Error when parsing 'Elements' column of 'Storage format' table"
-            )
-
-        for key in ['File', 'Format', 'Name field']:
-            try:
-                storage_info[key]
-            except KeyError:
-                raise BadTableFormatting(
-                    f"Could not find key '{key}' in 'Storage format' table"
+            # Check if already exists in Database
+            if row[header.index('Format')] == 'mongo':
+                return self.get_dataset(
+                    row[header.index('File')], resync=True, verbose=verbose
                 )
 
-        # Load Configurations
-        images = load_data(
-            file_path=os.path.join(base_path, storage_info['File'][0][1]),
-            file_format=storage_info['Format'],
-            name_field=storage_info['Name field'],
-            elements=elements,
-            default_name=parser.data['Name'],
-            verbose=verbose
-        )
+            # Else, need to build from scratch
+            try:
+                elements = [l.strip() for l in row[header.index('Elements')].split(',')]
+            except:
+                raise BadTableFormatting(
+                    "Error when parsing 'Elements' column of 'Storage format' table"
+                )
+
+            # Load Configurations
+            images.append(load_data(
+                file_path=os.path.join(base_path, row[header.index('File')][0][1]),
+                file_format=row[header.index('Format')],
+                name_field=row[header.index('Name field')],
+                elements=elements,
+                default_name=parser.data['Name'],
+                verbose=verbose
+            ))
+
+        images = itertools.chain.from_iterable(images)
 
         # Add Property definitions and load property_map
         property_map = {}

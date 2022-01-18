@@ -13,6 +13,8 @@ def create_app(configfile=None):
 
     app = Flask(__name__)
 
+    app.jinja_env.filters['zip'] = zip
+
     SECRET_KEY = os.urandom(32)
     app.config['SECRET_KEY'] = SECRET_KEY
 

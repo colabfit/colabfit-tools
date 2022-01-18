@@ -1,14 +1,20 @@
 import os
+from xml.dom.expatbuilder import parseString
+import markdown
 from getpass import getpass
 from ast import literal_eval
 from collections import namedtuple
+from tkinter import W
 
-from flask import Blueprint, request, redirect, flash, render_template
+from flask import Blueprint, request, render_template, send_from_directory
 from flask_nav.elements import Navbar, View, Subgroup, Link, Text, Separator
 from werkzeug.utils import secure_filename
 
-from .forms import UploadForm
+from .forms import UploadForm, QueryForm
 from .nav import nav
+
+import kim_edn
+from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 from ..tools.database import MongoDatabase, load_data
 from ..tools.property_settings import PropertySettings
@@ -68,70 +74,116 @@ def publish():
 
     if request.method == 'POST':
 
-        for f in full_form.data_upload.data:
-            filename = secure_filename(f.filename)
-            filename = os.path.join(UPLOAD_FOLDER, filename)
+        tmp = os.path.join(UPLOAD_FOLDER, full_form.name.data)
+        if os.path.isdir(tmp):
+            base_folder = tmp
+            # counter = 1
+            # base_folder = '{}({})'.format(tmp, counter)
 
-            f.save(filename)
+            # while os.path.isdir(base_folder):
+            #     counter += 1
+            #     base_folder = '{}({})'.format(tmp, counter)
+        else:
+            base_folder = tmp
+            os.mkdir(base_folder)
 
-        for f in full_form.definitions_upload.data:
-            filename = secure_filename(f.filename)
-            filename = os.path.join(UPLOAD_FOLDER, filename)
+        data_filenames = []
+        if full_form.data_upload.data:
+            for f in full_form.data_upload.data:
+                if not f.filename:
+                    continue
 
-            f.save(filename)
+                filename = secure_filename(f.filename)
+                filename = os.path.join(base_folder, filename)
+
+                data_filenames.append(filename)
+
+                f.save(filename)
+
+        definition_files = {}
+        if full_form.definitions_upload.data:
+            for f in full_form.definitions_upload.data:
+                if not f.filename:
+                    continue
+
+                filename = secure_filename(f.filename)
+                filename = os.path.join(base_folder, filename)
+
+                f.save(filename)
+
+                definition = kim_edn.load(filename)['definition']
+                definition_files[definition['property-id']] = filename
 
         property_map = {}
         property_settings = {}
         configuration_sets = []
         configuration_labels = []
+
+        pmc_pname = None
+        psc_pname = None
         for k, v in request.form.items():
             print(k, v)
             if 'pmc0' in k:
-                pname = v
+                pmc_pname = v
+                pid_dict = property_map.setdefault(pmc_pname, {})
+                print('PNAME CHANGE:', pmc_pname)
             elif 'pmc1' in k:
-                kim_field = v
+                pmc_field = v
+                field_dict = pid_dict.setdefault(pmc_field, {})
+                print('FIELD CHANGE:', pmc_field)
             elif 'pmc2' in k:
-                ase_field = v
+                field_dict['field'] = v
             elif 'pmc3' in k:
-                units = v
+                pmc_units = v
 
-                if units in ['None', '']:
-                    units = None
+                if pmc_units in ['None', '']:
+                    pmc_units = None
 
-                pid_dict = property_map.setdefault(pname, {})
+                field_dict['units'] = v
 
-                pid_dict[kim_field] = {
-                    'field': ase_field,
-                    'units': units
-                }
             elif 'psc0' in k:
-                pname = v
+                psc_pname = v
+                pso_dict = property_settings.setdefault(psc_pname, {})
             elif 'psc1' in k:
-                method = v
+                pso_dict['method'] = v
             elif 'psc2' in k:
-                desc = v
+                pso_dict['description'] = v
             elif 'psc3' in k:
-                labels = [_.strip() for _ in v.split(',')]
+                pso_dict['labels'] = [
+                    _.strip() for _ in v.split(',')
+                ]
             elif 'psc4' in k:
                 # The file upload doesn't work yet...
-                files = None
+                pso_dict['files'] = None
 
-                property_settings[pname] = PropertySettings(
-                    method=method,
-                    description=desc,
-                    labels=labels,
-                    files=files
-                )
             elif 'csc0' in k:
                 cs_query = literal_eval(v)
+
+                # If a string is passed, does regex matching on names
+                if isinstance(cs_query, str):
+                    cs_query = {'names': {'$regex': cs_query}}
             elif 'csc1' in k:
                 cs_desc = v
 
                 configuration_sets.append((cs_query, cs_desc))
             elif 'clc0' in k:
                 cl_query = literal_eval(v)
+
+                # If a string is passed, does regex matching on names
+                if isinstance(cl_query, str):
+                    cl_query = {'names': {'$regex': cl_query}}
             elif 'clc1' in k:
                 cl_labels = [_.strip() for _ in v.split(',')]
+                configuration_labels.append((cl_query, cl_labels))
+
+        # Build PSO objects
+        for pname, pdict in property_settings.items():
+            property_settings[pname] = PropertySettings(
+                method=pdict['method'],
+                description=pdict['description'],
+                labels=pdict['labels'],
+                files=pdict['files'] if 'files' in pdict else None
+            )
 
         print('PROPERTY MAP:', property_map)
         print('PROPERTY SETTINGS:', property_settings)
@@ -160,10 +212,132 @@ def publish():
         #     border=True,
         # )
 
-        return render_template(
-            'publish.html',
-            full_form=full_form,
-        )
+        template = \
+"""
+# Name
+
+{}
+
+# Authors
+
+{}
+
+# Links
+
+{}
+
+# Description
+
+{}
+
+# Storage format
+
+|Elements|File|Format|Name field|
+|---|---|---|---|
+{}
+
+# Properties
+
+|Property|KIM field|ASE field|Units
+|---|---|---|---|
+{}
+
+# Property settings
+
+|Method|Description|Labels|Files|
+|---|---|---|---|
+{}
+
+# Configuration sets
+
+|Query|Description|
+|---|---|
+{}
+
+# Configuration labels
+
+|Query|Labels|
+|---|---|
+{}
+"""
+
+        if full_form.config_name_field.data:
+            config_name = full_form.config_name_field.data
+        else:
+            config_name = '_name'
+
+        formatting_arguments = []
+
+        formatting_arguments.append(full_form.name.data)
+        formatting_arguments.append(full_form.authors.data)
+        formatting_arguments.append(full_form.links.data)
+        formatting_arguments.append(full_form.description.data)
+
+        # Storage format table
+        formatting_arguments.append('\n'.join(
+            '| {} | {} | {} | {} |'.format(
+                full_form.elements.data,
+                data_fname,
+                'xyz',
+                config_name,
+            )
+            for data_fname in data_filenames
+        ))
+
+        # Properties table
+        tmp = []
+        for pid, fdict in property_map.items():
+            for f,v in fdict.items():
+                if VALID_KIM_ID.match(pid) is None:
+                    spoofed = 'tag:@,0000-00-00:property/' + pid
+                else:
+                    spoofed = pid
+
+                tmp.append(
+                    '| {} | {} | {} | {}'.format(
+                        '[{}]({})'.format(pid, definition_files[spoofed]),
+                        f,
+                        v['field'],
+                        v['units']
+                    )
+                )
+
+        formatting_arguments.append('\n'.join(tmp))
+
+        # Properties settings table
+        tmp = []
+        for pso in property_settings.values():
+            tmp.append('| {} | {} | {} | {} |'.format(
+                pso.method,
+                pso.description,
+                ', '.join(pso.labels),
+                ', '.join('[{}]({})'.format(f, f) for f in pso.files)
+            ))
+
+        formatting_arguments.append('\n'.join(tmp))
+
+        # ConfigurationSets table
+        tmp = []
+        for (cs_query, cs_desc) in configuration_sets:
+            tmp.append('| `{}` | {} |'.format(
+                cs_query,
+                cs_desc,
+            ))
+
+        formatting_arguments.append('\n'.join(tmp))
+
+        # Configuration labels table
+        tmp = []
+        for (cl_query, cl_labels) in configuration_labels:
+            tmp.append('| `{}` | {} |'.format(cl_query, ', '.join(cl_labels)))
+
+        formatting_arguments.append('\n'.join(tmp))
+
+        html_file_name = os.path.join(base_folder, 'README.md')
+        with open(html_file_name, 'w') as html:
+            html.write(template.format(*formatting_arguments))
+
+        return send_from_directory(base_folder, 'README.md')
 
     return render_template(
         'publish.html',
@@ -229,36 +403,88 @@ def configuration_sets():
     )
 
 
-@frontend.route('/datasets/')
-def datasets():
+# @frontend.route('/datasets/')
+# def datasets():
 
-    ds_cursor = database.datasets.find({})
+#     ds_cursor = database.datasets.find({})
 
-    DatasetWrapper = namedtuple(
-        'DatasetWrapper',
-        [
-            'name', 'authors', 'links', 'elements', 'properties',
-            'configurations', 'atoms'
-        ]
-    )
+#     DatasetWrapper = namedtuple(
+#         'DatasetWrapper',
+#         [
+#             'name', 'authors', 'links', 'elements', 'properties',
+#             'configurations', 'atoms'
+#         ]
+#     )
 
-    datasets = (DatasetWrapper(
-        name=ds_doc['name'],
-        authors=ds_doc['authors'],
-        links=ds_doc['links'],
-        elements=ds_doc['aggregated_info']['elements'],
-        properties=sum(ds_doc['aggregated_info']['property_types_counts']),
-        configurations=ds_doc['aggregated_info']['nconfigurations'],
-        atoms=ds_doc['aggregated_info']['nsites'],
-    ) for ds_doc in ds_cursor)
+#     datasets = (DatasetWrapper(
+#         name=ds_doc['name'],
+#         authors=ds_doc['authors'],
+#         links=ds_doc['links'],
+#         elements=ds_doc['aggregated_info']['elements'],
+#         properties=sum(ds_doc['aggregated_info']['property_types_counts']),
+#         configurations=ds_doc['aggregated_info']['nconfigurations'],
+#         atoms=ds_doc['aggregated_info']['nsites'],
+#     ) for ds_doc in ds_cursor)
+
+#     return render_template(
+#         'datasets.html',
+#         title='Datasets',
+#         datasets=datasets
+#     )
+
+
+@frontend.route('/query/', methods=('GET', 'POST'))
+def query():
+    form = QueryForm()
+
+    if request.method == 'POST':
+        # TODO: maybe configurations could return more info
+        """
+        count | labels | elements (ratios) | nsites |
+
+        Also add ratios to CSs
+        """
+        if form.query.data:
+            query = literal_eval(form.query.data)
+        else:
+            query = {}
+
+        collection = getattr(database, form.collection.data)
+
+        if form.collection.data  == 'configurations':
+            extra = {
+                'nconfigurations': collection.count_documents(query),
+                'nsites':
+                    next(collection.aggregate([
+                        {'$match': query},
+                        {'$group': {'_id': None, 'sum': {'$sum': '$nsites'}}},
+                    ]))['sum'],
+                'elements': collection.distinct('elements', query),
+                'labels':   collection.distinct('labels', query),
+            }
+        elif form.collection.data  == 'properties':
+            extra = {
+                'nproperties':  collection.count_documents(query),
+                'types':        collection.distinct('type', query),
+                'methods':      collection.distinct('methods', query),
+                'labels':       collection.distinct('labels', query),
+            }
+        else:
+            extra = None
+
+        return render_template(
+            'query.html',
+            form=form,
+            collection=form.collection.data,
+            data=collection.find(query)
+                if form.collection.data in ['datasets', 'configuration_sets']
+                else collection.count_documents(query),
+            extra=extra,
+        )
+
 
     return render_template(
-        'datasets.html',
-        title='Datasets',
-        datasets=datasets
+        'query.html',
+        form=form,
     )
 
-
-@frontend.route('/query/')
-def query():
-    return collections.get()
