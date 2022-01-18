@@ -130,6 +130,7 @@ dmypy.json
 
 # local data repository
 /data
+colabfit/api/data/uploads
 
 # vim
 .swp
