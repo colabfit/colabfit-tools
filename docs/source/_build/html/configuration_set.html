@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ConfigurationSet &mdash; ColabFit Tools Documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Dataset" href="dataset.html" />
+    <link rel="prev" title="PropertySettings" href="property_settings.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> colabfit-tools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property.html">Property</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ConfigurationSet</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#basics-of-configuration-sets">Basics of Configuration Sets</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="database.html">Database</a></li>
+<li class="toctree-l2"><a class="reference internal" href="converters.html">Converter</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">colabfit-tools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="classes.html">Classes</a> &raquo;</li>
+      <li>ConfigurationSet</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/configuration_set.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <span class="target" id="module-colabfit.tools.configuration_set"></span><section id="configurationset">
+<h1>ConfigurationSet<a class="headerlink" href="#configurationset" title="Permalink to this headline"></a></h1>
+<p>A ConfigurationSet defines a relationship between a group of Configurations.
+This is useful when organizing a Dataset and can help future users of the
+dataset better understand its contents.</p>
+<p>The most important functionality of a ConfigurationSet is provided by its
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate()</span></code> method,
+which accumulates critical information about its group of configurations.</p>
+<section id="basics-of-configuration-sets">
+<h2>Basics of Configuration Sets<a class="headerlink" href="#basics-of-configuration-sets" title="Permalink to this headline"></a></h2>
+<p>The most often use-case is for a ConfigurationSet to be built by specifying the
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_set_regexes</span></code> dictionary of
+a Dataset. For more details about how to build ConfigurationSets,
+see <a class="reference internal" href="usage.html#building-configuration-sets"><span class="std std-ref">Building configuration sets</span></a>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="colabfit.tools.configuration_set.ConfigurationSet">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.configuration_set.</span></span><span class="sig-name descname"><span class="pre">ConfigurationSet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">configuration_ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aggregated_info</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration_set.ConfigurationSet" title="Permalink to this definition"></a></dt>
+<dd><p>A configuration set defines a group of configurations and aggregates
+information about those configurations to improve queries.</p>
+<p>Note that a configuration set should only be constructed by loading from an
+existing database (in order to aggregate the info)</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.configuration_set.ConfigurationSet.configuration_ids">
+<span class="sig-name descname"><span class="pre">configuration_ids</span></span><a class="headerlink" href="#colabfit.tools.configuration_set.ConfigurationSet.configuration_ids" title="Permalink to this definition"></a></dt>
+<dd><p>A list of all attached configuration IDs</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.configuration_set.ConfigurationSet.description">
+<span class="sig-name descname"><span class="pre">description</span></span><a class="headerlink" href="#colabfit.tools.configuration_set.ConfigurationSet.description" title="Permalink to this definition"></a></dt>
+<dd><p>A human-readable description of the configuration set</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.configuration_set.ConfigurationSet.aggregated_info">
+<span class="sig-name descname"><span class="pre">aggregated_info</span></span><a class="headerlink" href="#colabfit.tools.configuration_set.ConfigurationSet.aggregated_info" title="Permalink to this definition"></a></dt>
+<dd><p>A dictionary of information that was aggregated from all of the
+attached configurations. Contains the following information:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>nconfigurations: the total number of configurations</p></li>
+<li><p>nsites: the total number of sites</p></li>
+<li><p>nelements: the total number of unique element types</p></li>
+<li><p>elements: the element types</p></li>
+<li><p>individual_elements_ratios: a set of elements ratios generated by looping over each configuration, extracting its concentration of each element, and adding the tuple of concentrations to the set</p></li>
+<li><p>total_elements_ratios: the ratio of the total count of atoms of each element type over nsites</p></li>
+<li><p>labels: the union of all configuration labels</p></li>
+<li><p>labels_counts: the total count of each label</p></li>
+<li><p>chemical_formula_reduced: the set of all reduced chemical formulae</p></li>
+<li><p>chemical_formula_anonymous: the set of all anonymous chemical formulae</p></li>
+<li><p>chemical_formula_hill: the set of all hill chemical formulae</p></li>
+<li><p>nperiodic_dimensions: the set of all numbers of periodic dimensions</p></li>
+<li><p>dimension_types: the set of all periodic boundary choices</p></li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.configuration_set.ConfigurationSet.__hash__">
+<span class="sig-name descname"><span class="pre">__hash__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration_set.ConfigurationSet.__hash__" title="Permalink to this definition"></a></dt>
+<dd><p>Return hash(self).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.configuration_set.ConfigurationSet.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">configuration_ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aggregated_info</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration_set.ConfigurationSet.__init__" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.configuration_set.ConfigurationSet.__weakref__">
+<span class="sig-name descname"><span class="pre">__weakref__</span></span><a class="headerlink" href="#colabfit.tools.configuration_set.ConfigurationSet.__weakref__" title="Permalink to this definition"></a></dt>
+<dd><p>list of weak references to the object (if defined)</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="property_settings.html" class="btn btn-neutral float-left" title="PropertySettings" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="dataset.html" class="btn btn-neutral float-right" title="Dataset" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, ColabFit.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

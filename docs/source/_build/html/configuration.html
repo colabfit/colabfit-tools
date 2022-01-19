@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configuration &mdash; ColabFit Tools Documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Property" href="property.html" />
+    <link rel="prev" title="Classes" href="classes.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> colabfit-tools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="classes.html">Classes</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#configuration-info-and-arrays-fields">Configuration info and arrays fields</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#basics-of-configurations">Basics of Configurations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#building-configurations">Building Configurations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="property.html">Property</a></li>
+<li class="toctree-l2"><a class="reference internal" href="property_settings.html">PropertySettings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration_set.html">ConfigurationSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dataset.html">Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="database.html">Database</a></li>
+<li class="toctree-l2"><a class="reference internal" href="converters.html">Converter</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">colabfit-tools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="classes.html">Classes</a> &raquo;</li>
+      <li>Configuration</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/configuration.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <span class="target" id="module-colabfit.tools.configuration"></span><section id="configuration">
+<h1>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline"></a></h1>
+<section id="configuration-info-and-arrays-fields">
+<h2>Configuration info and arrays fields<a class="headerlink" href="#configuration-info-and-arrays-fields" title="Permalink to this headline"></a></h2>
+<p>Configurations inherit directly from <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/atoms.html?highlight=self%20arrays#the-atoms-object">ase.Atoms</a> objects.
+Because of this, a Configuration can use its <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code> and <code class="xref py py-attr docutils literal notranslate"><span class="pre">arrays</span></code>
+dictionaries to store a large variety of information about the inputs/outputs
+and metadata of a calculation.</p>
+<ul class="simple">
+<li><p>The <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code> dictionary uses strings as keys, and stores any
+arbitrary information about the Configuration as a whole (e.g., its name,
+computed energy, metadata labels, …)</p></li>
+<li><p>The <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.arrays</span></code> dictionary uses strings as keys, and stores
+arrays of per-atom data (e.g., atomic numbers, positions, computed forces,
+…)</p></li>
+</ul>
+</section>
+<section id="basics-of-configurations">
+<h2>Basics of Configurations<a class="headerlink" href="#basics-of-configurations" title="Permalink to this headline"></a></h2>
+<p>A <a class="reference internal" href="#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> stores all of the information about an atomic
+structure, i.e., the input to a calculation. The <a class="reference internal" href="#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> class
+inherits from the <code class="xref py py-class docutils literal notranslate"><span class="pre">ase.Atoms</span></code> class, and populates some required fields
+in its <code class="xref py py-attr docutils literal notranslate"><span class="pre">Atoms.info</span></code> dictionary.</p>
+<p>Configurations have four required fields, that are automatically created when a
+Configuration is instantiated:</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt><code class="xref py py-attr docutils literal notranslate"><span class="pre">ASE_ID_FIELD</span></code> = <code class="code docutils literal notranslate"><span class="pre">&quot;_id&quot;</span></code>:</dt><dd><p>An <a class="reference external" href="https://pymongo.readthedocs.io/en/stable/api/bson/objectid.html">ObjectId</a>
+that is created when the Configuration is instantiated, then never changed.
+Useful for uniquely identifying the Configuration when stored in a database.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref py py-attr docutils literal notranslate"><span class="pre">ASE_NAME_FIELD</span></code> = <code class="code docutils literal notranslate"><span class="pre">&quot;_name&quot;</span></code>:</dt><dd><p>An arbitrary string, often specified by the creator of the Configuration. This
+should usually be a human-readable string.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref py py-attr docutils literal notranslate"><span class="pre">ASE_LABELS_FIELD</span></code> = <code class="code docutils literal notranslate"><span class="pre">&quot;_labels&quot;</span></code>:</dt><dd><p>A set of short strings used for providing queryable metadata about the
+Configuration.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref py py-attr docutils literal notranslate"><span class="pre">ASE_CONSTRAINTS_FIELD</span></code> = <code class="code docutils literal notranslate"><span class="pre">&quot;_constraints&quot;</span></code>:</dt><dd><p>A set of strings that can be used as keys for <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code> or
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.arrays</span></code>, specifying that the given fields should be
+considered as additional inputs to a calculation</p>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="building-configurations">
+<h2>Building Configurations<a class="headerlink" href="#building-configurations" title="Permalink to this headline"></a></h2>
+<p>The most common way a <a class="reference internal" href="#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> object is built is by loading data
+files using one of the Converter objects provided in this package. For example,
+if working with an Extended XYZ file containing multiple structures, a list of
+Configurations can be created as below:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.converters</span> <span class="kn">import</span> <span class="n">EXYZConverter</span>
+
+<span class="n">converter</span> <span class="o">=</span> <span class="n">EXYZConverter</span><span class="p">()</span>
+
+<span class="n">configurations</span> <span class="o">=</span> <span class="n">converter</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>or, equivalently, using the
+<a class="reference internal" href="database.html#colabfit.tools.database.load_data" title="colabfit.tools.database.load_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code></a> function.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.database</span> <span class="kn">import</span> <span class="n">load_data</span>
+
+<span class="n">configurations</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.configuration.</span></span><span class="sig-name descname"><span class="pre">Configuration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration" title="Permalink to this definition"></a></dt>
+<dd><p>A Configuration is an extension of an <code class="xref py py-class docutils literal notranslate"><span class="pre">ase.Atoms</span></code> object that is
+guaranteed to have the following fields in its <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code> dictionary:</p>
+<ul class="simple">
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_ID_FIELD</span></code> = :code:”_id”</p></li>
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_NAME_FIELD</span></code> = :code:”_name”</p></li>
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_LABELS_FIELD</span></code> = :code:”_labels”</p></li>
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">ATOMS_CONSTRAINTS_FIELD</span></code> = :code:”_constraints”</p></li>
+</ul>
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration.__eq__">
+<span class="sig-name descname"><span class="pre">__eq__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration.__eq__" title="Permalink to this definition"></a></dt>
+<dd><p>Two Configurations are considered to be identical if they have the same
+hash value. This means that their atomic positions, atomic numbers,
+simulation cell vectors, and periodic boundary conditions must match to
+within 16 decimal places.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration.__hash__">
+<span class="sig-name descname"><span class="pre">__hash__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration.__hash__" title="Permalink to this definition"></a></dt>
+<dd><p>Generates a hash for <code class="code docutils literal notranslate"><span class="pre">self</span></code> by hashing its length
+positions, (atomic) numbers, simulation cell, and periodic
+boundary conditions.</p>
+<p>Note that the positions and cell vectors are rounded to 16 decimal places
+before being compared.</p>
+<p>hashlib is used instead of hash() to avoid hash randomisation.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">constraints</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration.__init__" title="Permalink to this definition"></a></dt>
+<dd><p>Constructs a Configuration. Calls <code class="xref py py-meth docutils literal notranslate"><span class="pre">ase.Atoms.__init__()</span></code>, then
+populates the additional required fields.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>description</strong> (<em>str</em>) – A human-readable description. Can also be a list of strings.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration.__str__">
+<span class="sig-name descname"><span class="pre">__str__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration.__str__" title="Permalink to this definition"></a></dt>
+<dd><p>Return str(self).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="colabfit.tools.configuration.Configuration.from_ase">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_ase</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atoms</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.configuration.Configuration.from_ase" title="Permalink to this definition"></a></dt>
+<dd><p>Generates a <a class="reference internal" href="#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><code class="xref py py-class docutils literal notranslate"><span class="pre">Configuration</span></code></a> from an <code class="code docutils literal notranslate"><span class="pre">ase.Atoms</span></code> object.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="classes.html" class="btn btn-neutral float-left" title="Classes" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="property.html" class="btn btn-neutral float-right" title="Property" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, ColabFit.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

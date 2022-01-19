@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Usage &mdash; ColabFit Tools Documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/copybutton.css" type="text/css" />
+    <link rel="shortcut icon" href="_static/colabfit-logo.png"/>
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/clipboard.min.js"></script>
+        <script src="_static/copybutton.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Classes" href="classes.html" />
+    <link rel="prev" title="Using Markdown files" href="md_file_input.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> colabfit-tools
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#parsing-data">Parsing data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#detecting-duplicates">Detecting duplicates</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#synchronizing-a-dataset">Synchronizing a Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#applying-configuration-labels">Applying configuration labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#building-configuration-sets">Building configuration sets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#attaching-property-settings">Attaching property settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#data-exploration">Data exploration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#filtering-a-dataset">Filtering a Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#data-transformations">Data transformations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#supported-file-formats">Supported file formats</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="classes.html">Classes</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">colabfit-tools</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Usage</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/usage.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="usage">
+<h1>Usage<a class="headerlink" href="#usage" title="Permalink to this headline"></a></h1>
+<p>This section describes the core usage of the <code class="code docutils literal notranslate"><span class="pre">colabfit-tools</span></code> package.</p>
+<section id="parsing-data">
+<h2>Parsing data<a class="headerlink" href="#parsing-data" title="Permalink to this headline"></a></h2>
+<p>Properties can be added into the Database is by creating or loading a
+Configuration object, attaching the Property data to the <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code>
+and/or <code class="xref py py-attr docutils literal notranslate"><span class="pre">arrays</span></code> dictionaries of the Configuration (see <a class="reference internal" href="configuration.html#configuration-info-and-arrays-fields"><span class="std std-ref">here</span></a> for more details), then using the
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.insert_data" title="colabfit.tools.database.MongoDatabase.insert_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_data()</span></code></a> method.</p>
+<p>In addition to the Configuration with attached Property information,
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.insert_data" title="colabfit.tools.database.MongoDatabase.insert_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_data()</span></code></a> will also require a
+property map describing how to map the attached Property information onto an
+existing property definition (see <a class="reference internal" href="property_definitions.html#property-definitions"><span class="std std-ref">Property definitions</span></a>).</p>
+<p>A property map should have the following structure:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="o">&lt;</span><span class="n">property_name</span><span class="o">&gt;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="o">&lt;</span><span class="n">property_field</span><span class="o">&gt;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">key_for_info_or_arrays</span><span class="o">&gt;</span><span class="p">,</span>
+            <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">ase_readable_units</span><span class="o">&gt;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>See below for the definitions of each of the above keys/values:</p>
+<ul>
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">&lt;property_name&gt;</span></code> should be one of the following:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>The name of an OpenKIM Property Definition from the <a class="reference external" href="https://openkim.org/properties">list of approved OpenKIM Property Definitions</a></p></li>
+<li><p>The name of a locally-defined property (see <a class="reference internal" href="property_definitions.html#property-definitions"><span class="std std-ref">Property definitions</span></a>)
+that has been added using
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.insert_property_definition" title="colabfit.tools.database.MongoDatabase.insert_property_definition"><code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_property_definition()</span></code></a></p></li>
+</ol>
+</div></blockquote>
+</li>
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">&lt;property_field&gt;</span></code> should be the name of a field from an property
+definition</p></li>
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">&lt;key_for_info_or_arrays&gt;</span></code> should be a key for indexing the <code class="xref py py-attr docutils literal notranslate"><span class="pre">info</span></code> or
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">arrays</span></code> dictionaries on a Configuration (see <a class="reference internal" href="configuration.html#configuration-info-and-arrays-fields"><span class="std std-ref">Configuration info and arrays fields</span></a>)</p></li>
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">'field'</span></code> is used to specify the key for extracting the property from
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code> or <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuartion.arrays</span></code>.</p></li>
+<li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">'units'</span></code> should be a string matching one of the units names in
+<a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/units.html">ase.units</a>.</p></li>
+</ul>
+<p>Note that <code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_data()</span></code> will attempt to load every Property specified in
+<code class="code docutils literal notranslate"><span class="pre">property_map</span></code> for each Configuration. This means that if there are
+<code class="code docutils literal notranslate"><span class="pre">P</span></code> properties in <code class="code docutils literal notranslate"><span class="pre">property_map</span></code> and <code class="code docutils literal notranslate"><span class="pre">C</span></code> Configurations, a
+maximum of <cite>P*C</cite> Properties will be loaded in total. If a Configuration does not
+have the necessary data for loading a given Property, that Property is skipped
+for the given Configuration and a warning is raised.</p>
+</section>
+<section id="detecting-duplicates">
+<h2>Detecting duplicates<a class="headerlink" href="#detecting-duplicates" title="Permalink to this headline"></a></h2>
+<p>All entities in the Database (Configuration, Property, PropertySetting,
+ConfigurationSet, and Dataset) are stored with a unique ID that is generated by
+hashing the corresponding entity (see the documentation for their respective
+hash functions for more detail). Because of this, if two entities are identical,
+they will only be stored once in the Database. This can be useful when trying to
+remove duplicate data in a Dataset, as it ensures that no duplicates are added
+during <a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.insert_data" title="colabfit.tools.database.MongoDatabase.insert_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_data()</span></code></a>.</p>
+<p>For example, this enables a user to take advantage of the Mongo
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">count_documents()</span></code> function to see if a Configuration is linked to more
+than one Property</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">configurations</span><span class="o">.</span><span class="n">count_documents</span><span class="p">(</span>
+    <span class="p">{</span><span class="s1">&#39;relationships.properties.2&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;$exists&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}}</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Similarly, the <code class="code docutils literal notranslate"><span class="pre">'relationships'</span></code> fields of entities can be used to check
+if two Datasets have any common Configurations.</p>
+</section>
+<section id="synchronizing-a-dataset">
+<h2>Synchronizing a Dataset<a class="headerlink" href="#synchronizing-a-dataset" title="Permalink to this headline"></a></h2>
+<p>When working with a Dataset, it is important to make sure that the dataset has
+been “synchronized” in order to ensure that all of the data (configuration
+labels, configuration sets, aggregated metadata, …) have been properly updated
+to reflect any recent changes to the Dataset.</p>
+<p>There are three points in the Database where data aggregation is performed (and
+thus where care must be taken to ensure synchronization):</p>
+<ul class="simple">
+<li><p>ConfigurationSets aggregating Configuration information
+(<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.aggregate_configuration_info" title="colabfit.tools.database.MongoDatabase.aggregate_configuration_info"><code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate_configuration_info()</span></code></a>)</p></li>
+<li><p>Datasets aggregating ConfigurationSet information
+(<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.aggregate_configuration_set_info" title="colabfit.tools.database.MongoDatabase.aggregate_configuration_set_info"><code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate_configuration_set_info()</span></code></a>)</p></li>
+<li><p>Datasets aggregating Property information
+(<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.aggregate_property_info" title="colabfit.tools.database.MongoDatabase.aggregate_property_info"><code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate_property_info()</span></code></a>)</p></li>
+</ul>
+<p>Synchronization can be performed by using the <code class="code docutils literal notranslate"><span class="pre">resync=True</span></code> argument when
+calling <a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.get_configuration_set" title="colabfit.tools.database.MongoDatabase.get_configuration_set"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_configuration_set()</span></code></a> and
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.get_dataset" title="colabfit.tools.database.MongoDatabase.get_dataset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_dataset()</span></code></a>. Aggregation is
+automatically performed when inserting ConfigurationSets. Aggregation is <em>not</em>
+automatically performed when inserting Datasets in order to avoid re-aggregating
+ConfigurationSet information unnecessarily; therefore <code class="code docutils literal notranslate"><span class="pre">resync=True</span></code> may
+also be used for <a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.insert_dataset" title="colabfit.tools.database.MongoDatabase.insert_dataset"><code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_dataset()</span></code></a>.</p>
+<p>In order to re-synchronize the entities without using the <code class="xref py py-meth docutils literal notranslate"><span class="pre">get_*()</span></code> methods,
+call the <code class="xref py py-meth docutils literal notranslate"><span class="pre">aggregate_*()</span></code> methods directly. A common scenario where this may
+be necessary is when using
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.apply_labels" title="colabfit.tools.database.MongoDatabase.apply_labels"><code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_labels()</span></code></a> in order to make
+sure that the changes are reflected in the ConfigurationSets and Datasets.</p>
+</section>
+<section id="applying-configuration-labels">
+<h2>Applying configuration labels<a class="headerlink" href="#applying-configuration-labels" title="Permalink to this headline"></a></h2>
+<p>Configuration labels should be applied using the
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.apply_labels" title="colabfit.tools.database.MongoDatabase.apply_labels"><code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_labels()</span></code></a> method.</p>
+<p>An example <code class="xref py py-attr docutils literal notranslate"><span class="pre">configuration_label_regexes</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">apply_labels</span><span class="p">(</span>
+    <span class="n">dataset_id</span><span class="o">=</span><span class="n">ds_id</span><span class="p">,</span>
+    <span class="n">collection_name</span><span class="o">=</span><span class="s1">&#39;configurations&#39;</span><span class="p">,</span>
+    <span class="n">query</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;nsites&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;$lt&#39;</span><span class="p">:</span> <span class="mi">100</span><span class="p">}},</span>
+    <span class="n">labels</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;small&#39;</span><span class="p">},</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="si_prx_gap.html#manually-applied-configuration-labels"><span class="std std-ref">the Si PRX GAP tutorial</span></a> for a
+more complete example.</p>
+</section>
+<section id="building-configuration-sets">
+<h2>Building configuration sets<a class="headerlink" href="#building-configuration-sets" title="Permalink to this headline"></a></h2>
+<p>There are two steps to building a ConfigurationSet:</p>
+<p>First, extracting the IDs of the Configurations that should be included in the
+ConfigurationSet:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">co_ids</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span>
+    <span class="s1">&#39;configurations&#39;</span><span class="p">,</span>
+    <span class="n">fields</span><span class="o">=</span><span class="s1">&#39;_id&#39;</span><span class="p">,</span>
+    <span class="n">query</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;_id&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;$in&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">all_co_ids_in_dataset</span><span class="o">&gt;</span><span class="p">},</span> <span class="s1">&#39;nsites&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;$lt&#39;</span><span class="p">:</span> <span class="mi">100</span><span class="p">}},</span>
+    <span class="n">ravel</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>And second, calling
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.insert_configuration_set" title="colabfit.tools.database.MongoDatabase.insert_configuration_set"><code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_configuration_set()</span></code></a>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cs_id</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">insert_configuration_set</span><span class="p">(</span>
+    <span class="n">co_ids</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s1">&#39;Configurations with fewer than 100 atoms&#39;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that in the first step, <code class="code docutils literal notranslate"><span class="pre">'_id':</span> <span class="pre">{'$in':</span> <span class="pre">&lt;all_co_ids_in_dataset&gt;}</span></code> is
+used in order to limit the query to include only the Configurations within a
+given Dataset, rather than all of the Configurations in the entire Database.</p>
+<p>See <a class="reference internal" href="si_prx_gap.html#manually-constructed-configurationsets"><span class="std std-ref">the Si PRX GAP tutorial</span></a> for
+a more complete example.</p>
+</section>
+<section id="attaching-property-settings">
+<h2>Attaching property settings<a class="headerlink" href="#attaching-property-settings" title="Permalink to this headline"></a></h2>
+<p>A <a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a> object can be
+attached to a Property by specifying the <code class="code docutils literal notranslate"><span class="pre">property_settings</span></code> argument
+in <a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.insert_data" title="colabfit.tools.database.MongoDatabase.insert_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_data()</span></code></a>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pso</span> <span class="o">=</span> <span class="n">PropertySettings</span><span class="p">(</span>
+    <span class="n">method</span><span class="o">=</span><span class="s1">&#39;VASP&#39;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s1">&#39;A basic VASP calculation&#39;</span><span class="p">,</span>
+    <span class="n">files</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;PBE&#39;</span><span class="p">,</span> <span class="s1">&#39;GGA&#39;</span><span class="p">],</span>
+<span class="p">)</span>
+
+<span class="n">client</span><span class="o">.</span><span class="n">insert_data</span><span class="p">(</span>
+    <span class="n">images</span><span class="p">,</span>
+    <span class="n">property_map</span><span class="o">=...</span><span class="p">,</span>
+    <span class="n">property_settings</span><span class="o">=</span><span class="p">{</span>
+        <span class="o">&lt;</span><span class="n">property_name</span><span class="o">&gt;</span><span class="p">:</span> <span class="n">pso</span><span class="p">,</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="data-exploration">
+<h2>Data exploration<a class="headerlink" href="#data-exploration" title="Permalink to this headline"></a></h2>
+<p>The <a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.get_data" title="colabfit.tools.database.MongoDatabase.get_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data()</span></code></a>,
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.plot_histograms" title="colabfit.tools.database.MongoDatabase.plot_histograms"><code class="xref py py-meth docutils literal notranslate"><span class="pre">plot_histograms()</span></code></a>,
+and <a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.get_statistics" title="colabfit.tools.database.MongoDatabase.get_statistics"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_statistics()</span></code></a> functions can
+be extremely useful for quickly visualizing your data and detecting outliers.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">energies</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="s1">&#39;properties&#39;</span><span class="p">,</span> <span class="s1">&#39;&lt;property_name&gt;.energy&#39;</span><span class="p">,</span> <span class="n">ravel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">forces</span>   <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="s1">&#39;properties&#39;</span><span class="p">,</span> <span class="s1">&#39;&lt;property_name&gt;.forces&#39;</span><span class="p">,</span> <span class="n">concatenate</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># From the QM9 example</span>
+
+    <span class="n">client</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">(</span>
+            <span class="p">[</span><span class="s1">&#39;qm9-property.a&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.b&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.c&#39;</span><span class="p">],</span>
+            <span class="n">ids</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">property_ids</span><span class="p">,</span>
+            <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
+
+    <span class="n">client</span><span class="o">.</span><span class="n">plot_histograms</span><span class="p">(</span>
+            <span class="p">[</span><span class="s1">&#39;qm9-property.a&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.b&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.c&#39;</span><span class="p">,],</span>
+            <span class="n">ids</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">property_ids</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+<img alt="_images/qm9_histograms.png" class="align-center" src="_images/qm9_histograms.png" />
+<p>See the <a class="reference internal" href="qm9.html#qm9-example"><span class="std std-ref">QM9 example</span></a> and the <a class="reference internal" href="si_prx_gap.html#si-prx-gap-example"><span class="std std-ref">Si PRX GAP example</span></a> to further explore
+the benefits of these functions.</p>
+</section>
+<section id="filtering-a-dataset">
+<h2>Filtering a Dataset<a class="headerlink" href="#filtering-a-dataset" title="Permalink to this headline"></a></h2>
+<p>Datasets can be easily filtered to remove unwanted entries or extract subsets of
+interest. Filtering can be done using the
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.filter_on_properties" title="colabfit.tools.database.MongoDatabase.filter_on_properties"><code class="xref py py-meth docutils literal notranslate"><span class="pre">filter_on_properties()</span></code></a> or
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.filter_on_configurations" title="colabfit.tools.database.MongoDatabase.filter_on_configurations"><code class="xref py py-meth docutils literal notranslate"><span class="pre">filter_on_configurations()</span></code></a>
+methods.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># From the QM9 example</span>
+
+<span class="n">clean_config_sets</span><span class="p">,</span> <span class="n">clean_property_ids</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">filter_on_properties</span><span class="p">(</span>
+    <span class="n">ds_id</span><span class="o">=</span><span class="n">ds_id</span><span class="p">,</span>
+    <span class="n">filter_fxn</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s1">&#39;qm9-property&#39;</span><span class="p">][</span><span class="s1">&#39;a&#39;</span><span class="p">][</span><span class="s1">&#39;source-value&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">20</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;qm9-property&#39;</span><span class="p">][</span><span class="s1">&#39;b&#39;</span><span class="p">][</span><span class="s1">&#39;source-value&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">fields</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;qm9-property.a.source-value&#39;</span><span class="p">,</span> <span class="s1">&#39;qm9-property.b.source-value&#39;</span><span class="p">],</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Note the use of the <code class="code docutils literal notranslate"><span class="pre">ds_id</span></code> argument, which makes sure that the returned
+ConfigurationSet IDs and Property IDs are only those that are contained within
+the given Dataset.</p>
+</section>
+<section id="data-transformations">
+<h2>Data transformations<a class="headerlink" href="#data-transformations" title="Permalink to this headline"></a></h2>
+<p>It is often necessary to transform the data in a Dataset in order to improve
+performance when fitting models to the data, or to convert the data into a
+different format. This can be done using the
+<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.apply_transformation" title="colabfit.tools.database.MongoDatabase.apply_transformation"><code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_transformation()</span></code></a> function:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Convert to per-atom energies</span>
+<span class="n">client</span><span class="o">.</span><span class="n">apply_transformation</span><span class="p">(</span>
+        <span class="n">dataset_id</span><span class="o">=</span><span class="n">ds_id</span><span class="p">,</span>
+        <span class="n">property_ids</span><span class="o">=</span><span class="n">all_pr_ids</span><span class="p">,</span>
+        <span class="n">update_map</span><span class="o">=</span><span class="p">{</span>
+                <span class="s1">&#39;energy-forces.energy&#39;</span><span class="p">:</span>
+                <span class="k">lambda</span> <span class="n">f</span><span class="p">,</span> <span class="n">doc</span><span class="p">:</span> <span class="n">f</span><span class="o">/</span><span class="n">doc</span><span class="p">[</span><span class="s1">&#39;configuration&#39;</span><span class="p">][</span><span class="s1">&#39;nsites&#39;</span><span class="p">]</span>
+        <span class="p">},</span>
+        <span class="n">configuration_ids</span><span class="o">=</span><span class="n">all_co_ids</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Note the use of <code class="code docutils literal notranslate"><span class="pre">dataset_id</span></code>, which serves as a safety measure to ensure
+that only the properties of the given Dataset are updated.</p>
+</section>
+<section id="supported-file-formats">
+<h2>Supported file formats<a class="headerlink" href="#supported-file-formats" title="Permalink to this headline"></a></h2>
+<p>Ideally, raw data should be stored in <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/io/formatoptions.html#extxyz">Extended XYZ format</a>. This is the
+default format used by <code class="code docutils literal notranslate"><span class="pre">colabfit-tools</span></code>, and should be suitable for almost
+all use cases. CFG files (used by Moment Tensor Potentials) are also supported,
+but are not recommended.</p>
+<p>Data that is in a custom format (e.g., JSON, HDF5, …) that cannot be easily
+read by
+<a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.read">ase.io.read</a> will
+require the use of a <a class="reference internal" href="converters.html#colabfit.tools.converters.FolderConverter" title="colabfit.tools.converters.FolderConverter"><code class="xref py py-class docutils literal notranslate"><span class="pre">FolderConverter</span></code></a>
+instance, which needs to be supplied with a custom <code class="xref py py-meth docutils literal notranslate"><span class="pre">reader()</span></code> function for
+parsing the data.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="md_file_input.html" class="btn btn-neutral float-left" title="Using Markdown files" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="classes.html" class="btn btn-neutral float-right" title="Classes" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, ColabFit.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
