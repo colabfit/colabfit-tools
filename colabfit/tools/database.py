@@ -16,7 +16,7 @@ from functools import partial
 from pymongo import MongoClient, UpdateOne
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from ase.io import write as ase_write
 
 import kim_edn
@@ -1712,7 +1712,10 @@ class MongoDatabase(MongoClient):
         query=None,
         ids=None,
         verbose=False,
-        nbins=100, xscale='linear', yscale='linear'
+        nbins=100,
+        xscale='linear',
+        yscale='linear',
+        method='plotly'
         ):
         """
         Generates histograms of the given fields.
@@ -1740,6 +1743,9 @@ class MongoDatabase(MongoClient):
 
             yscale (str):
                 Scaling for y-axes. One of ['linear', 'log'].
+
+            method (str, default='plotly')
+                Package to use for plotting. 'plotly' or 'matplotlib'.
         """
         if fields is None:
             fields = self.property_fields
@@ -1751,9 +1757,13 @@ class MongoDatabase(MongoClient):
         nrows = max(1, int(np.ceil(nfields/3)))
         ncols = max(3, nfields%3)
 
-        fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
-        # fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(4*ncols, 2*nrows))
-        # axes = np.atleast_2d(axes)
+        if method == 'plotly':
+            fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
+        elif method == 'matplotlib':
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(4*ncols, 2*nrows))
+            axes = np.atleast_2d(axes)
+        else:
+            raise RuntimeError('Unsupported plotting method')
 
         for i, prop in enumerate(fields):
             data = self.get_data(
@@ -1761,32 +1771,43 @@ class MongoDatabase(MongoClient):
                 query=query, ids=ids, verbose=verbose, ravel=True
             )
 
-            # nbins = max(data.shape[0]//1000, 100)
-
             c = i % 3
             r = i // 3
 
-            # ax = axes[r][c]
-            # _ = ax.hist(data, bins=nbins)
 
             if nrows > 1:
-                fig.add_trace(
-                    go.Histogram(x=data, nbinsx=nbins, name=prop),
-                    row=r+1, col=c+1,
-                )
-            else:
-                fig.add_trace(
-                    go.Histogram(x=data, nbinsx=nbins, name=prop),
-                    row=1, col=c+1,
-                )
 
-        fig.update_layout(
-            showlegend=True,
-        )
-        fig.update_xaxes(type=xscale)
-        fig.update_yaxes(type=yscale)
-        fig.for_each_annotation(lambda a: a.update(text=""))
-        # plt.tight_layout()
+                if method == 'plotly':
+                    fig.add_trace(
+                        go.Histogram(x=data, nbinsx=nbins, name=prop),
+                        row=r+1, col=c+1,
+                    )
+                else:
+                    _ = axes[r][c].hist(data, bins=nbins)
+                    axes[r][c].set_title(prop)
+                    axes[r][c].set_xscale(xscale)
+                    axes[r][c].set_yscale(yscale)
+            else:
+                if method == 'plotly':
+                    fig.add_trace(
+                        go.Histogram(x=data, nbinsx=nbins, name=prop),
+                        row=1, col=c+1,
+                    )
+                else:
+                    _ = axes[0][c].hist(data, bins=nbins)
+                    axes[r][c].set_title(prop)
+                    axes[r][c].set_xscale(xscale)
+                    axes[r][c].set_yscale(yscale)
+
+        if method == 'plotly':
+            fig.update_layout(
+                showlegend=True,
+            )
+            fig.update_xaxes(type=xscale)
+            fig.update_yaxes(type=yscale)
+            fig.for_each_annotation(lambda a: a.update(text=""))
+        else:
+            plt.tight_layout()
 
         return fig
 
