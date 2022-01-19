@@ -866,17 +866,21 @@ class MongoDatabase(MongoClient):
             return data
 
 
-    def get_configuration(self, i, attach_properties=False):
+    def get_configuration(self, i, property_ids=None, attach_properties=False):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
         return self.get_configurations(
-            [i], attach_properties=attach_properties
+            [i], property_ids=property_ids, attach_properties=attach_properties
         )[0]
 
 
     def get_configurations(
-        self, ids, attach_properties=False, generator=False, verbose=False
+        self, configuration_ids,
+        property_ids=None,
+        attach_properties=False,
+        generator=False,
+        verbose=False
         ):
         """
         A generator that returns in-memory Configuration objects one at a time
@@ -884,13 +888,18 @@ class MongoDatabase(MongoClient):
 
         Args:
 
-            ids (list or 'all'):
+            configuration_ids (list or 'all'):
                 A list of string IDs specifying which Configurations to return.
                 If 'all', returns all of the configurations in the database.
 
+            property_ids (list, default=None):
+                A list of Property IDs. Used for limiting searches when
+                :code:`attach_properties==True`.  If None,
+                :code:`attach_properties` will attach all linked Properties.
+
             attach_properties (bool, default=False):
-                If True, attaches all the data of any linked Properties directly
-                to the Configuration.
+                If True, attaches all the data of any linked properties from 
+                :code:`property_ids`.
 
             generator (bool, default=False):
                 If True, this function returns a generator of the
@@ -906,29 +915,31 @@ class MongoDatabase(MongoClient):
                 A list or generator of the re-constructed configurations
         """
 
-        if ids == 'all':
+        if configuration_ids == 'all':
             query = {'_id': {'$exists': True}}
         else:
-            if isinstance(ids, str):
-                ids = [ids]
+            if isinstance(configuration_ids, str):
+                configuration_ids = [configuration_ids]
 
-            query = {'_id': {'$in': ids}}
+            query = {'_id': {'$in': configuration_ids}}
 
         if generator:
             return self._get_configurations(
                 query=query,
+                property_ids=property_ids,
                 attach_properties=attach_properties,
                 verbose=verbose
             )
         else:
             return list(self._get_configurations(
                 query=query,
+                property_ids=property_ids,
                 attach_properties=attach_properties,
                 verbose=verbose
             ))
 
 
-    def _get_configurations(self, query, attach_properties, verbose=False):
+    def _get_configurations(self, query, property_ids, attach_properties, verbose=False):
         if not attach_properties:
             for co_doc in tqdm(
                 self.configurations.find(
@@ -951,11 +962,18 @@ class MongoDatabase(MongoClient):
                 c.info['_id'] = co_doc['_id']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
                 c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
+
+                yield c
         else:
+
+            property_match = { 'relationships.configurations': query['_id']}
+
+            if property_ids is not None:
+                property_match['_id'] = {'$in': property_ids}
 
             for pr_doc in tqdm(self.properties.aggregate([
                     {'$unwind': '$relationships.configurations'},
-                    {'$match': {'relationships.configurations': query['_id']}},
+                    {'$match': property_match},
                     {'$lookup': {
                         'from': 'configurations',
                         'localField': 'relationships.configurations',
