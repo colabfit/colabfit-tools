@@ -175,7 +175,10 @@
         </table>
     {% endif %}
 
-    <a class="btn btn-primary btn-sm">Download</a>
+    {% if collection %}
+        <a class="btn btn-primary btn-sm">Download</a>
+    {% endif %}
+
     <br></br>
 
 {% endblock %}

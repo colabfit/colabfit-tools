@@ -24,7 +24,12 @@
 
     <h2>Property map</h2>
 
+    <button type="button" id="addPropertyField">
+      Add property field<i class="fas fa-plus"></i>
+    </button>
+
     <br></br>
+
     <table id="property_map_table" name="property_map_table"
     class="table table-striped">
       <thead>
@@ -33,21 +38,19 @@
           <th>KIM field</th>
           <th>ASE field</th>
           <th>Units</th>
-          <th> </th>
+          <th></th>
         </tr>
       </thead>
-      <tbody>
-
-      </tbody>
     </table>
-
-    <button type="button" class="btn btn-info" onclick="addPropertyMapRow()">
-        Add property field<i class="fas fa-plus"></i>
-    </button>
 
     <h2>Property settings</h2>
 
+    <button type="button" id="addPropertySettings">
+      Add property settings<i class="fas fa-plus"></i>
+    </button>
+
     <br></br>
+
     <table id="property_settings_table" class="table table-striped">
       <thead>
         <tr>
@@ -64,13 +67,14 @@
       </tbody>
     </table>
 
-    <button type="button" class="btn btn-info" onclick="addPropertySettingsRow()">
-        Add property settings<i class="fas fa-plus"></i>
-    </button>
-
     <h2>Configuration sets</h2>
 
+    <button type="button" id="addConfigurationSet">
+      Add configuration set<i class="fas fa-plus"></i>
+    </button>
+
     <br></br>
+
     <table id="configuration_sets_table" class="table table-striped">
       <thead>
         <tr>
@@ -84,13 +88,14 @@
       </tbody>
     </table>
 
-    <button type="button" class="btn btn-info" onclick="addConfigurationSetsRow()">
-        Add Row <i class="fas fa-plus"></i>
-    </button>
-
     <h2>Configuration labels</h2>
 
+    <button type="button" id="addConfigurationLabels">
+      Add configuration labels<i class="fas fa-plus"></i>
+    </button>
+
     <br></br>
+
     <table id="configuration_labels_table" class="table table-striped">
       <thead>
         <tr>
@@ -104,115 +109,103 @@
       </tbody>
     </table>
 
-    <button type="button" class="btn btn-info" onclick="addConfigurationLabelsRow()">
-        Add Row <i class="fas fa-plus"></i>
-    </button>
-
     <br></br>
     {{ render_field(full_form.submit) }}
+    <br></br>
+
   </form>
 {%- endblock %}
 
 {% block scripts %}
+  <script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.js"></script>
+  <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap5.js"></script>
+  <!-- <script type="text/javascript" src="https://cdn.datatables.net/v/dt/dt-1.11.3/sc-2.0.5/datatables.min.js"></script> -->
+  <script type="text/javascript" src="https://cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
+
   <script>
-    $(document).ready(function () {
-      $('#property_map_table').DataTable();
+    $(document).ready(function() {
+      var property_map          = $('#property_map_table').DataTable();
+      var property_settings     = $('#property_settings_table').DataTable();
+      var configuration_sets    = $('#configuration_sets_table').DataTable();
+      var configuration_labels  = $('#configuration_labels_table').DataTable();
+
+      $('#addPropertyField').on('click', function () {
+        let nrows = property_map.rows.length + 1;
+
+        property_map.row.add([
+          '<input type="text" id="pmc0_'+nrows.toString()+'" name="pmc0_'+nrows.toString()+'" value="">',
+          '<input type="text" id="pmc1_'+nrows.toString()+'" name="pmc1_'+nrows.toString()+'" value="">',
+          '<input type="text" id="pmc2_'+nrows.toString()+'" name="pmc2_'+nrows.toString()+'" value="">',
+          '<input type="text" id="pmc3_'+nrows.toString()+'" name="pmc3_'+nrows.toString()+'" value="">',
+          '<button class="remove" id="pmc4_'+nrows.toString()+'" name="pmc4_'+nrows.toString()+'">Remove</button>',
+        ]).draw(false)
+      } );
+
+      $('#addPropertySettings').on('click', function () {
+        let nrows = property_settings.rows.length + 1;
+
+        property_settings.row.add([
+          '<input type="text" id="psc0_'+nrows.toString()+'" name="psc0_'+nrows.toString()+'" value="">',
+          '<input type="text" id="psc1_'+nrows.toString()+'" name="psc1_'+nrows.toString()+'" value="">',
+          '<input type="text" id="psc2_'+nrows.toString()+'" name="psc2_'+nrows.toString()+'" value="">',
+          '<input type="text" id="psc3_'+nrows.toString()+'" name="psc3_'+nrows.toString()+'" value="">',
+          '<input type="file" id="psc4_'+nrows.toString()+'" name="psc4_'+nrows.toString()+'" value="">',
+          '<button class="remove" id="psc5_'+nrows.toString()+'" name="psc5_'+nrows.toString()+'">Remove</button>',
+        ]).draw(false)
+      } );
+       
+      $('#addConfigurationSet').on('click', function () {
+        let nrows = configuration_sets.rows.length + 1;
+
+        configuration_sets.row.add([
+          '<input type="text" id="csc0_'+nrows.toString()+'" name="csc0_'+nrows.toString()+'" value="">',
+          '<input type="text" id="csc1_'+nrows.toString()+'" name="csc1_'+nrows.toString()+'" value="">',
+          '<button class="remove" id="csc2_'+nrows.toString()+'" name="csc2_'+nrows.toString()+'">Remove</button>',
+        ]).draw(false)
+      } );
+       
+      $('#addConfigurationLabels').on('click', function () {
+        let nrows = configuration_labels.rows.length + 1;
+
+        configuration_labels.row.add([
+          '<input type="text" id="clc0_'+nrows.toString()+'" name="clc0_'+nrows.toString()+'" value="">',
+          '<input type="text" id="clc1_'+nrows.toString()+'" name="clc1_'+nrows.toString()+'" value="">',
+          '<button class="remove" id="clc2_'+nrows.toString()+'" name="clc2_'+nrows.toString()+'">Remove</button>',
+        ]).draw(false)
+      } );
+       
+      $('#property_map_table').on('click', '.remove', function () {
+       property_map 
+          .row($(this).parents('tr'))
+          .remove()
+        .draw();
+      });
+        
+      $('#property_settings_table').on('click', '.remove', function () {
+        property_settings
+          .row($(this).parents('tr'))
+          .remove()
+        .draw();
+      });
+
+     
+      $('#configuration_sets_table').on('click', '.remove', function () {
+        configuration_sets
+          .row($(this).parents('tr'))
+          .remove()
+        .draw();
+      });
+
+     
+      $('#configuration_labels_table').on('click', '.remove', function () {
+        configuration_labels
+          .row($(this).parents('tr'))
+          .remove()
+        .draw();
+      });
+
     });
-
-    // Function to add a row to the Extra Properties Table
-    function addPropertyMapRow() {
-        let table = document.getElementById("property_map_table");
-        let pmc = table.rows.length + 1;
-        let row = table.insertRow(-1);
-        row.contentEditable = "true";
-        let cell0 = row.insertCell(0);
-        cell0.innerHTML = "<input type=\"Property name\" name=\"full_form.pmc0_"+pmc.toString()+"\">"
-        let cell1 = row.insertCell(1);
-        cell1.innerHTML = "<input type=\"KIM field\" name=\"full_form.pmc1_"+pmc.toString()+"\">"
-        let cell2 = row.insertCell(2);
-        cell2.innerHTML = "<input type=\"ASE field\" name=\"full_form.pmc2_"+pmc.toString()+"\">"
-        let cell3 = row.insertCell(3);
-        cell3.innerHTML = "<input type=\"Units\" name=\"full_form.pmc3_"+pmc.toString()+"\">"
-        let cell4 = row.insertCell(4);
-        cell4.innerHTML = "<button type=\"button\" class=\"btn btn-danger\" onclick=\"removePropertyMapRow(this)\"> Remove <i class=\"fas fa-minus\"></i> </button>";
-    }
-
-    // Function to remove a row from the extra properties table
-    function removePropertyMapRow(x) {
-        let i = x.parentNode.parentNode["rowIndex"];
-        let table = document.getElementById("property_map_table");
-        table.deleteRow(i);
-    }
-
-    // Function to add a row to the Extra Properties Table
-    function addPropertySettingsRow() {
-        let table = document.getElementById("property_settings_table");
-        let psc = table.rows.length + 1;
-        let row = table.insertRow(-1);
-        row.contentEditable = "true";
-        let cell0 = row.insertCell(0);
-        cell0.innerHTML = "<input type=\"Property name\" name=\"full_form.psc0_"+psc.toString()+"\">";
-        let cell1 = row.insertCell(1);
-        cell1.innerHTML = "<input type=\"Method\" name=\"full_form.psc1_"+psc.toString()+"\">";
-        let cell2 = row.insertCell(2);
-        cell2.innerHTML = "<input type=\"Description\" name=\"full_form.psc2_"+psc.toString()+"\">";
-        let cell3 = row.insertCell(3);
-        cell3.innerHTML = "<input type=\"Labels\" name=\"full_form.psc3_"+psc.toString()+"\">";
-        let cell4 = row.insertCell(4);
-        cell4.innerHTML = "<input type=\"file\" name=\"full_form.psc4_"+psc.toString()+"\" multiple>";
-        let cell = row.insertCell(5);
-        cell.innerHTML = "<button type=\"button\" class=\"btn btn-danger\" onclick=\"removePropertySettingsRow(this)\"> Remove <i class=\"fas fa-minus\"></i> </button>";
-    }
-
-    // Function to remove a row from the extra properties table
-    function removePropertySettingsRow(x) {
-        let i = x.parentNode.parentNode["rowIndex"];
-        let table = document.getElementById("property_settings_table");
-        table.deleteRow(i);
-    }
-
-    // Function to add a row to the Extra Properties Table
-    function addConfigurationSetsRow() {
-        let table = document.getElementById("configuration_sets_table");
-        let cs = table.rows.length + 1;
-        let row = table.insertRow(-1);
-        row.contentEditable = "true";
-        let cell0 = row.insertCell(0);
-        cell0.innerHTML = "<input type=\"Mongo query\" name=\"full_form.csc0_"+cs.toString()+"\">";
-        let cell1 = row.insertCell(1);
-        cell1.innerHTML = "<input type=\"Description\" name=\"full_form.csc1_"+cs.toString()+"\">";
-        let cell = row.insertCell(5);
-        cell.innerHTML = "<button type=\"button\" class=\"btn btn-danger\" onclick=\"removeConfigurationSetsRow(this)\"> Remove <i class=\"fas fa-minus\"></i> </button>";
-    }
-
-    // Function to remove a row from the extra properties table
-    function removeConfigurationSetsRow(x) {
-        let i = x.parentNode.parentNode["rowIndex"];
-        let table = document.getElementById("configuration_sets_table");
-        table.deleteRow(i);
-    }
-
-    // Function to add a row to the Extra Properties Table
-    function addConfigurationLabelsRow() {
-        let table = document.getElementById("configuration_labels_table");
-        let cl = table.rows.length + 1;
-        let row = table.insertRow(-1);
-        row.contentEditable = "true";
-        let cell0 = row.insertCell(0);
-        cell0.innerHTML = "<input type=\"Mongo query\" name=\"full_form.clc0_"+cl.toString+"\">";
-        let cell1 = row.insertCell(1);
-        cell1.innerHTML = "<input type=\"Description\" name=\"full_form.clc1_"+cl.toString+"\">";
-        let cell = row.insertCell(5);
-        cell.innerHTML = "<button type=\"button\" class=\"btn btn-danger\" onclick=\"removeConfigurationLabelsRow(this)\"> Remove <i class=\"fas fa-minus\"></i> </button>";
-    }
-
-    // Function to remove a row from the extra properties table
-    function removeConfigurationLabelsRow(x) {
-        let i = x.parentNode.parentNode["rowIndex"];
-        let table = document.getElementById("configuration_labels_table");
-        table.deleteRow(i);
-    }
-
 
   </script>
 {% endblock %}
