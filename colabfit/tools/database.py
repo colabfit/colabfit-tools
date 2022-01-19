@@ -2701,6 +2701,7 @@ def load_data(
     labels_field=None,
     reader=None,
     glob_string=None,
+    generator=True,
     verbose=False,
     **kwargs,
     ):
@@ -2742,6 +2743,10 @@ def load_data(
             generate a list of files to be passed to `self.reader`. Only used
             for `file_format == 'folder'`.
 
+        generator (bool, default=True):
+            If True, returns a generator of Configurations. If False, returns a
+            list.
+
         verbose (bool):
             If True, prints progress bar.
 
@@ -2763,7 +2768,7 @@ def load_data(
 
         converter = FolderConverter(reader)
 
-        return converter.load(
+        results = converter.load(
             file_path,
             name_field=name_field,
             elements=elements,
@@ -2774,20 +2779,27 @@ def load_data(
             **kwargs,
         )
 
+    elif file_format in ['xyz', 'extxyz', 'cfg']:
+        if file_format in ['xyz', 'extxyz']:
+            converter = EXYZConverter()
+        elif file_format == 'cfg':
+            converter = CFGConverter()
 
-    if file_format in ['xyz', 'extxyz']:
-        converter = EXYZConverter()
-    elif file_format == 'cfg':
-        converter = CFGConverter()
+        results = converter.load(
+            file_path,
+            name_field=name_field,
+            elements=elements,
+            default_name=default_name,
+            labels_field=labels_field,
+            verbose=verbose,
+        )
+    else:
+        raise RuntimeError(
+            "Invalid `file_format`. Must be one of "\
+                "['xyz', 'extxyz', 'cfg', 'folder']"
+        )
 
-    return converter.load(
-        file_path,
-        name_field=name_field,
-        elements=elements,
-        default_name=default_name,
-        labels_field=labels_field,
-        verbose=verbose,
-    )
+    return results if generator else list(results)
 
 class ConcatenationException(Exception):
     pass

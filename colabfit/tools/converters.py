@@ -136,9 +136,14 @@ class CFGConverter(BaseConverter):
         verbose
         ):
 
-        images = []
         with open(file_path) as cfg_file:
-            for line in cfg_file:
+            ai = 0
+
+            for line in tqdm(
+                cfg_file,
+                desc='Reading lines of CFG file ',
+                disable=not verbose
+                ):
                 line = line.strip()
 
                 # Skip blank lines
@@ -259,7 +264,7 @@ class CFGConverter(BaseConverter):
 
                     # Parse name, if it exists
                     if name_field is None:
-                        atoms.info[ATOMS_NAME_FIELD] = f"{default_name}_{len(images)}"
+                        atoms.info[ATOMS_NAME_FIELD] = f"{default_name}_{ai}"
                     else:
                         if name_field in atoms.info:
                             name = atoms.info[name_field]
@@ -268,7 +273,7 @@ class CFGConverter(BaseConverter):
                         else:
                             raise RuntimeError(
                                 f"Field {name_field} not in atoms.info for index "\
-                                    f"{len(images)}. Set `name_field=None` "\
+                                    f"{ai}. Set `name_field=None` "\
                                         "to use `default_name`."
                             )
 
@@ -279,17 +284,8 @@ class CFGConverter(BaseConverter):
                             [_.strip() for _ in atoms.info[labels_field].split(',')]
                         )
 
-                    images.append(atoms)
-
-        for ai, atoms in enumerate(tqdm(
-            images,
-            desc='Loading data',
-            disable=not verbose
-            )):
-            images[ai] = Configuration.from_ase(atoms)
-
-        return images
-
+                    yield Configuration.from_ase(atoms)
+                    ai += 1
 
 class FolderConverter(BaseConverter):
     """
