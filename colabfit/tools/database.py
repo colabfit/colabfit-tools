@@ -234,7 +234,7 @@ class MongoDatabase(MongoClient):
 
     def insert_data(
         self, configurations, property_map=None, property_settings=None,
-        generator=False, verbose=True
+        transform=None, generator=False, verbose=True
         ):
         """
         A wrapper to Database.insert_data() which also adds important queryable
@@ -264,6 +264,12 @@ class MongoDatabase(MongoClient):
             property_settings (dict)
                 key = property name (same as top-level keys in property_map).
                 val = a PropertySettings object
+
+            transform (callable, default=None):
+                If provided, `transform` will be called on each configuration in
+                :code:`configurations` as :code:`transform(configuration)`.
+                Note that this happens before anything else is done. `transform`
+                should modify the Configuration in-place.
 
             generator (bool, default=False):
                 If True, returns a generator of the results; otherwise returns
@@ -332,6 +338,7 @@ class MongoDatabase(MongoClient):
                 configurations=configurations,
                 property_map=property_map,
                 property_settings=property_settings,
+                transform=transform,
                 verbose=verbose
             )
         else:
@@ -351,6 +358,7 @@ class MongoDatabase(MongoClient):
                 database_name=self.database_name,
                 property_map=property_map,
                 property_settings=property_settings,
+                transform=transform,
                 verbose=verbose
             )
 
@@ -364,7 +372,7 @@ class MongoDatabase(MongoClient):
     @staticmethod
     def _insert_data(
         configurations, database_name, mongo_login,
-        property_map=None, property_settings=None,
+        property_map=None, property_settings=None, transform=None,
         verbose=False
         ):
 
@@ -419,6 +427,9 @@ class MongoDatabase(MongoClient):
             desc='Preparing to add configurations to Database',
             disable=not verbose,
             ):
+
+            if transform:
+                transform(atoms)
 
             cid = str(hash(atoms))
 
