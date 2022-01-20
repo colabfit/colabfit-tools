@@ -49,8 +49,21 @@ For installation without :code:`sudo` or :code:`apt-get`, it is suggested to use
     # Start the server without using sudo or systemctl
     mongod --dbpath <path_to_folder_for_storing_mongo_data>
 
+To confirm that this has been set up correctly, try opening a connection:
+
+.. code-block:: python
+
+    database = MongoDatabase('test')
+
+The logs from the `mongod` command should show the new connection, with output
+looking something like this:
+
+.. code-block:: shell
+
+    2022-01-20T10:41:14.785-0600 I NETWORK  [conn1] received client metadata from 127.0.0.1:59890 conn1: { driver: { name: "PyMongo", version: "4.0.1" }, os: { type: "Linux", name: "Linux", architecture: "ppc64le", version: "4.18.0-305.3.1.el8_4.ppc64le" }, platform: "CPython 3.7.10.final.0" }
+
 **Note:** in order for the :class:`~colabfit.tools.database.MongoDatabase` to be
-able to access the Mongo server, it must be able to open an SSH connection to 
+able to access the Mongo server, it must be able to open an SSH connection to
 the machine where the :code:`mongod` command was run from. Refer to the `PyMongo
 documentation <https://pymongo.readthedocs.io/en/stable/tutorial.html>`_ for
 more details regarding setting up a connection to the Mongo server.
@@ -102,7 +115,7 @@ Use :code:`mongosh` for external verification that the data was added to your lo
 database.
 
 .. code-block:: console
-    
+
     # In a Mongo terminal opened using the `mongosh` command-line-tool
     $ show dbs
     $ use my_database

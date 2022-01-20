@@ -154,7 +154,7 @@
           '<button class="remove" id="psc5_'+nrows.toString()+'" name="psc5_'+nrows.toString()+'">Remove</button>',
         ]).draw(false)
       } );
-       
+
       $('#addConfigurationSet').on('click', function () {
         let nrows = configuration_sets.rows.length + 1;
 
@@ -164,7 +164,7 @@
           '<button class="remove" id="csc2_'+nrows.toString()+'" name="csc2_'+nrows.toString()+'">Remove</button>',
         ]).draw(false)
       } );
-       
+
       $('#addConfigurationLabels').on('click', function () {
         let nrows = configuration_labels.rows.length + 1;
 
@@ -174,14 +174,14 @@
           '<button class="remove" id="clc2_'+nrows.toString()+'" name="clc2_'+nrows.toString()+'">Remove</button>',
         ]).draw(false)
       } );
-       
+
       $('#property_map_table').on('click', '.remove', function () {
-       property_map 
+       property_map
           .row($(this).parents('tr'))
           .remove()
         .draw();
       });
-        
+
       $('#property_settings_table').on('click', '.remove', function () {
         property_settings
           .row($(this).parents('tr'))
@@ -189,7 +189,7 @@
         .draw();
       });
 
-     
+
       $('#configuration_sets_table').on('click', '.remove', function () {
         configuration_sets
           .row($(this).parents('tr'))
@@ -197,7 +197,7 @@
         .draw();
       });
 
-     
+
       $('#configuration_labels_table').on('click', '.remove', function () {
         configuration_labels
           .row($(this).parents('tr'))

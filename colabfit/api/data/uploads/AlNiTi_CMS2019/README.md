@@ -19,20 +19,19 @@ A dataset that Josh uploaded
 
 |Elements|File|Format|Name field|
 |---|---|---|---|
-
+| Ni, Ti, Al | ./data/uploads/AlNiTi_CMS2019/AlNiTi_CMS2019.xyz | xyz | _name |
 
 # Properties
 
 |Property|KIM field|ASE field|Units
 |---|---|---|---|
 | [energy-forces-stress](./data/uploads/AlNiTi_CMS2019/energy-forces-stress.edn) | energy | energy | eV
-| [energy-forces-stress](./data/uploads/AlNiTi_CMS2019/energy-forces-stress.edn) | forces | forces | eV/Ang
 
 # Property settings
 
 |Method|Description|Labels|Files|
 |---|---|---|---|
-| VASP | A VASP calculation | GGA, PBE |  |
+| VASP | A VASP calculation | PBE, GGA |  |
 
 # Configuration sets
 

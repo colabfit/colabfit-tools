@@ -63,8 +63,6 @@ def index():
         'home.html',
     )
 
-
-
 def allowed_file(filename):
     return '.' in filename and \
         filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -461,3 +459,9 @@ def query():
         form=form,
     )
 
+
+@frontend.route('/configurations')
+def configurations():
+    query = literal_eval(request.args.get('query'))
+
+    return list(database.configurations.find(query))

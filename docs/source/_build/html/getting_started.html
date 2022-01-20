@@ -123,6 +123,15 @@ conda install -c conda-forge mongodb
 mongod --dbpath &lt;path_to_folder_for_storing_mongo_data&gt;
 </pre></div>
 </div>
+<p>To confirm that this has been set up correctly, try opening a connection:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">database</span> <span class="o">=</span> <span class="n">MongoDatabase</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The logs from the <cite>mongod</cite> command should show the new connection, with output
+looking something like this:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="m">2022</span>-01-20T10:41:14.785-0600 I NETWORK  <span class="o">[</span>conn1<span class="o">]</span> received client metadata from <span class="m">127</span>.0.0.1:59890 conn1: <span class="o">{</span> driver: <span class="o">{</span> name: <span class="s2">&quot;PyMongo&quot;</span>, version: <span class="s2">&quot;4.0.1&quot;</span> <span class="o">}</span>, os: <span class="o">{</span> type: <span class="s2">&quot;Linux&quot;</span>, name: <span class="s2">&quot;Linux&quot;</span>, architecture: <span class="s2">&quot;ppc64le&quot;</span>, version: <span class="s2">&quot;4.18.0-305.3.1.el8_4.ppc64le&quot;</span> <span class="o">}</span>, platform: <span class="s2">&quot;CPython 3.7.10.final.0&quot;</span> <span class="o">}</span>
+</pre></div>
+</div>
 <p><strong>Note:</strong> in order for the <a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase" title="colabfit.tools.database.MongoDatabase"><code class="xref py py-class docutils literal notranslate"><span class="pre">MongoDatabase</span></code></a> to be
 able to access the Mongo server, it must be able to open an SSH connection to
 the machine where the <code class="code docutils literal notranslate"><span class="pre">mongod</span></code> command was run from. Refer to the <a class="reference external" href="https://pymongo.readthedocs.io/en/stable/tutorial.html">PyMongo
