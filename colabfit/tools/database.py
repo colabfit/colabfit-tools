@@ -746,7 +746,10 @@ class MongoDatabase(MongoClient):
         query=None,
         ids=None,
         keep_ids=False,
-        concatenate=False, ravel=False, verbose=False#, cache=False
+        concatenate=False,
+        ravel=False,
+        unpack_properties=True,
+        verbose=False,
         ):
         """
         Queries the database and returns the fields specified by `keys` as a
@@ -790,14 +793,15 @@ class MongoDatabase(MongoClient):
             ravel (bool, default=False):
                 If True, concatenates and ravels the data before returning.
 
+            unpack_properties (bool, default=True):
+                If True, returns only the contents of the :code:`'source-value'`
+                key for each field in :attr:`fields` (assuming
+                :code:`'source-value'` exists). Users who wish to return the
+                full dictionaries for fields should set
+                :code:`unpack_properties=False`.
+
             verbose (bool, default=False):
                 If True, prints a progress bar
-
-            # cache (bool, default=False):
-            #     If True, caches the results in-memory for faster access later.
-            #     Results are cached by hashing the Mongo query that was used to
-            #     obtain the results and the requested keys, then storing the list
-            #     of returned data.
 
         Returns:
 
@@ -848,7 +852,8 @@ class MongoDatabase(MongoClient):
 
                 if not missing:
                     if isinstance(v, dict):
-                        v = v['source-value']
+                        if unpack_properties and ('source-value' in v):
+                            v = v['source-value']
 
                     data[k].append(np.atleast_1d(v))
 
@@ -898,7 +903,7 @@ class MongoDatabase(MongoClient):
                 :code:`attach_properties` will attach all linked Properties.
 
             attach_properties (bool, default=False):
-                If True, attaches all the data of any linked properties from 
+                If True, attaches all the data of any linked properties from
                 :code:`property_ids`.
 
             generator (bool, default=False):
