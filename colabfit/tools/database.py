@@ -901,10 +901,17 @@ class MongoDatabase(MongoClient):
                 A list of Property IDs. Used for limiting searches when
                 :code:`attach_properties==True`.  If None,
                 :code:`attach_properties` will attach all linked Properties.
+                Note that this only attaches one property per Configuration, so
+                if multiple properties point to the same Configuration, that
+                Configuration will be returned multiple times.
 
             attach_properties (bool, default=False):
                 If True, attaches all the data of any linked properties from
-                :code:`property_ids`.
+                :code:`property_ids`. The property data will either be added to
+                the :code:`arrays` dictionary on a Configuration (if it can be
+                converted to a matrix where the first dimension is the same
+                as the number of atoms in the Configuration) or the :code:`info`
+                dictionary (if it wasn't added to :code:`arrays`).
 
             generator (bool, default=False):
                 If True, this function returns a generator of the
@@ -1007,10 +1014,10 @@ class MongoDatabase(MongoClient):
 
                 for field_name, field in pr_doc[pr_doc['type']].items():
                     v = np.atleast_1d(field['source-value'])
-                    if v.shape[0] == n:
-                        c.arrays[field_name] = v
-                    else:
+                    if (v.dtype == 'O') or v.shape[0] != n:
                         c.info[field_name] = v
+                    else:
+                        c.arrays[field_name] = v
 
                 yield c
 
