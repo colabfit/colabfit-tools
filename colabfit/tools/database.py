@@ -233,8 +233,13 @@ class MongoDatabase(MongoClient):
 
 
     def insert_data(
-        self, configurations, property_map=None, property_settings=None,
-        transform=None, generator=False, verbose=True
+        self,
+        configurations,
+        property_map=None,
+        property_settings=None,
+        transform=None,
+        generator=False,
+        verbose=True
         ):
         """
         A wrapper to Database.insert_data() which also adds important queryable
@@ -273,7 +278,9 @@ class MongoDatabase(MongoClient):
 
             generator (bool, default=False):
                 If True, returns a generator of the results; otherwise returns
-                a list.
+                a list. If True, uses :code:`update_one` instead of
+                :code:`bulk_write` to avoid having to store update documents in
+                memory.
 
             verbose (bool, default=False):
                 If True, prints a progress bar
@@ -332,7 +339,7 @@ class MongoDatabase(MongoClient):
             self.insert_property_settings(pso)
 
         if generator:
-            return self._insert_data(
+            return self._insert_data_generator(
                 mongo_login=mongo_login,
                 database_name=self.database_name,
                 configurations=configurations,
@@ -367,6 +374,232 @@ class MongoDatabase(MongoClient):
             return list(itertools.chain.from_iterable(
                 pool.map(pfunc, split_configs)
             ))
+
+
+    @staticmethod
+    def _insert_data_generator(
+        configurations, database_name, mongo_login,
+        property_map=None, property_settings=None, transform=None,
+        verbose=False
+        ):
+
+        if isinstance(mongo_login, int):
+            client = MongoClient('localhost', mongo_login)
+        else:
+            client = MongoClient(mongo_login)
+
+        coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
+        coll_properties             = client[database_name][_PROPS_COLLECTION]
+        coll_property_definitions   = client[database_name][_PROPDEFS_COLLECTION]
+        coll_property_settings      = client[database_name][_PROPSETTINGS_COLLECTION]
+
+        if isinstance(configurations, Configuration):
+            configurations = [configurations]
+
+        if property_map is None:
+            property_map = {}
+
+        if property_settings is None:
+            property_settings = {}
+
+        property_definitions = {
+            pname: coll_property_definitions.find_one({'_id': pname})['definition']
+            for pname in property_map
+        }
+
+        ignore_keys = {
+            'property-id', 'property-title', 'property-description',
+            'last_modified', 'definition', '_id'
+        }
+
+        expected_keys = {
+            pname: set(
+                property_map[pname][f]['field']
+                for f in property_definitions[pname].keys() - ignore_keys
+                if property_definitions[pname][f]['required']
+            )
+            for pname in property_map
+        }
+
+        settings_docs   = {}
+
+        # Add all of the configurations into the Mongo server
+        ai = 1
+        for atoms in tqdm(
+            configurations,
+            desc='Preparing to add configurations to Database',
+            disable=not verbose,
+            ):
+
+            if transform:
+                transform(atoms)
+
+            cid = str(hash(atoms))
+
+            processed_fields = process_species_list(atoms)
+
+            # Add if doesn't exist, else update (since last-modified changed)
+            c_update_doc =  {  # update document
+                    '$setOnInsert': {
+                        '_id': cid,
+                        'atomic_numbers': atoms.get_atomic_numbers().tolist(),
+                        'positions': atoms.get_positions().tolist(),
+                        'cell': np.array(atoms.get_cell()).tolist(),
+                        'pbc': atoms.get_pbc().astype(int).tolist(),
+                        'elements': processed_fields['elements'],
+                        'nelements': processed_fields['nelements'],
+                        'elements_ratios': processed_fields['elements_ratios'],
+                        'chemical_formula_reduced': processed_fields['chemical_formula_reduced'],
+                        'chemical_formula_anonymous': processed_fields['chemical_formula_anonymous'],
+                        'chemical_formula_hill': atoms.get_chemical_formula(),
+                        'nsites': len(atoms),
+                        'dimension_types': atoms.get_pbc().astype(int).tolist(),
+                        'nperiodic_dimensions': int(sum(atoms.get_pbc())),
+                        'lattice_vectors': np.array(atoms.get_cell()).tolist(),
+                    },
+                    '$set': {
+                        'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                    },
+                    '$addToSet': {
+                        'names': {
+                            '$each': list(atoms.info[ATOMS_NAME_FIELD])
+                        },
+                        'labels': {
+                            '$each': list(atoms.info[ATOMS_LABELS_FIELD])
+                        },
+                        'relationships.properties': {
+                            '$each': []
+                        }
+                    }
+                }
+
+            available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
+
+            pid = None
+
+            for pname, pmap in property_map.items():
+
+                # Pre-check to avoid having to delete partially-added properties
+                missing_keys = expected_keys[pname] - available_keys
+                if missing_keys:
+                    warnings.warn(
+                        "Configuration is missing keys {} during "\
+                        "insert_data. Available keys: {}. Skipping".format(
+                            missing_keys, available_keys
+                        )
+                        # "Configuration {} is missing keys {} during "\
+                        # "insert_data. Available keys: {}. Skipping".format(
+                        #     ai, missing_keys, available_keys
+                        # )
+                    )
+                    continue
+
+                prop = Property.from_definition(
+                    pname, property_definitions[pname],
+                    atoms, pmap
+                )
+
+                # NOTE: property ID does not depend upon linked settings
+                pid = str(hash(prop))
+
+                # Attach property settings, if any were given
+                labels = []
+                methods = []
+                settings_id = []
+                if pname in property_settings:
+                    settings_id = str(hash(property_settings[pname]))
+
+                    labels = list(property_settings[pname].labels)
+                    methods = [property_settings[pname].method]
+
+                    # Tracker for updating PSO->PR relationships
+                    if settings_id in settings_docs:
+                        settings_docs[settings_id].append(pid)
+                    else:
+                        settings_docs[settings_id] = [pid]
+
+                    settings_id = [settings_id]
+
+                # Prepare the EDN document
+                setOnInsert = {}
+                for k in property_map[pname]:
+                    if k not in prop.keys():
+                        # To allow for missing non-required keys.
+                        # Required keys checked for in Property.from_definition
+                        continue
+
+                    if isinstance(prop[k]['source-value'], (int, float, str)):
+                        # Add directly
+                        setOnInsert[k] = {
+                            'source-value': prop[k]['source-value']
+                        }
+                    else:
+                        # Then it's array-like and should be converted to a list
+                        setOnInsert[k] = {
+                            'source-value': np.atleast_1d(
+                                prop[k]['source-value']
+                            ).tolist()
+                        }
+
+                    if 'source-unit' in prop[k]:
+                        setOnInsert[k]['source-unit'] = prop[k]['source-unit']
+
+                    p_update_doc = {
+                        '$addToSet': {
+                            'methods': {'$each': methods},
+                            'labels': {'$each': labels},
+                            # PR -> PSO pointer
+                            'relationships.property_settings': {
+                                '$each': settings_id
+                            },
+                            'relationships.configurations': cid,
+                        },
+                        '$setOnInsert': {
+                            '_id': pid,
+                            'type': pname,
+                            pname: setOnInsert
+                        },
+                        '$set': {
+                            'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                        }
+                    }
+
+                coll_properties.update_one(
+                    {'_id': pid},
+                    p_update_doc,
+                    upsert=True
+                )
+
+                c_update_doc['$addToSet']['relationships.properties']['$each'].append(
+                    pid
+                )
+
+                yield (cid, pid)
+
+            coll_configurations.update_one(
+                {'_id': cid},
+                c_update_doc,
+                upsert=True
+            )
+
+            if not pid:
+                # Only yield if something wasn't yielded earlier
+                yield (cid, pid)
+
+            ai += 1
+
+        if settings_docs:
+            coll_property_settings.bulk_write(
+                [
+                    UpdateOne(
+                        {'_id': sid},
+                        {'$addToSet': {'relationships.properties': {'$each': lst}}}
+                    ) for sid, lst in settings_docs.items()
+                ],
+                ordered=False
+            )
+
+        client.close()
 
 
     @staticmethod
@@ -541,9 +774,7 @@ class MongoDatabase(MongoClient):
                     if 'source-unit' in prop[k]:
                         setOnInsert[k]['source-unit'] = prop[k]['source-unit']
 
-                property_docs.append(UpdateOne(
-                    {'_id': pid},
-                    {
+                    p_update_doc = {
                         '$addToSet': {
                             'methods': {'$each': methods},
                             'labels': {'$each': labels},
@@ -561,7 +792,11 @@ class MongoDatabase(MongoClient):
                         '$set': {
                             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                         }
-                    },
+                    }
+
+                property_docs.append(UpdateOne(
+                    {'_id': pid},
+                    p_update_doc,
                     upsert=True,
                 ))
 
@@ -595,6 +830,7 @@ class MongoDatabase(MongoClient):
                 warnings.warn(
                     '{} duplicate properties detected'.format(nmatch)
                 )
+
         if settings_docs:
             res = coll_property_settings.bulk_write(
                 [
@@ -2137,135 +2373,135 @@ class MongoDatabase(MongoClient):
         return configuration_sets, property_ids
 
 
-    def apply_transformation(
-        self,
-        dataset_id,
-        property_ids,
-        configuration_ids,
-        update_map,
-        ):
-        """
-        This function works by looping over the properties that match the
-        provided query and updating them by applying the updated rule. Fields
-        from the linked configurations can also be used for the update rule if
-        by setting configuration_fields.
+    # def apply_transformation(
+    #     self,
+    #     dataset_id,
+    #     property_ids,
+    #     configuration_ids,
+    #     update_map,
+    #     ):
+    #     """
+    #     This function works by looping over the properties that match the
+    #     provided query and updating them by applying the updated rule. Fields
+    #     from the linked configurations can also be used for the update rule if
+    #     by setting configuration_fields.
 
-        Example:
+    #     Example:
 
-        .. code-block:: python
+    #     .. code-block:: python
 
-            # Convert energies to per-atom values
-            database.apply_transformation(
-                dataset_id=<dataset_id>,
+    #         # Convert energies to per-atom values
+    #         database.apply_transformation(
+    #             dataset_id=<dataset_id>,
 
-                query={'_id': <property_ids>},
-                update={
-                    'property-name.energy':
-                    lambda fv, doc: fv/doc['configuration']['nsites']
-                }
-            )
+    #             query={'_id': <property_ids>},
+    #             update={
+    #                 'property-name.energy':
+    #                 lambda fv, doc: fv/doc['configuration']['nsites']
+    #             }
+    #         )
 
-        Args:
+    #     Args:
 
-            dataset_id (str):
-                The ID of the dataset. Used as a safety measure to only update
-                entries for the given dataset.
+    #         dataset_id (str):
+    #             The ID of the dataset. Used as a safety measure to only update
+    #             entries for the given dataset.
 
-            property_ids (list or str):
-                The IDs of the properties to be updated.
+    #         property_ids (list or str):
+    #             The IDs of the properties to be updated.
 
-            update_map (dict):
-                A dictionary where the keys are the name of a field to update
-                (omitting "source-value"), and the values are callable functions
-                that take the field value and property document as arguments.
+    #         update_map (dict):
+    #             A dictionary where the keys are the name of a field to update
+    #             (omitting "source-value"), and the values are callable functions
+    #             that take the field value and property document as arguments.
 
-            configuration_ids (list, default=None):
-                The IDs of the configurations to use for each property update.
-                Must be the same length as :code:`pr_ids`. Note that the fields
-                of configuration :code:`co_ids[i]` will be accessible for the
-                update command of property :code:`pr_ids[i]` using the
-                :code:`configuration.<field>` notation. If None, applies the
-                updates to the properties without using any configuration
-                fields.
+    #         configuration_ids (list, default=None):
+    #             The IDs of the configurations to use for each property update.
+    #             Must be the same length as :code:`pr_ids`. Note that the fields
+    #             of configuration :code:`co_ids[i]` will be accessible for the
+    #             update command of property :code:`pr_ids[i]` using the
+    #             :code:`configuration.<field>` notation. If None, applies the
+    #             updates to the properties without using any configuration
+    #             fields.
 
-        Returns:
+    #     Returns:
 
-            update_results (dict):
-                The results of a Mongo bulkWrite operation
-        """
+    #         update_results (dict):
+    #             The results of a Mongo bulkWrite operation
+    #     """
 
-        dataset = self.get_dataset(dataset_id)['dataset']
+    #     dataset = self.get_dataset(dataset_id)['dataset']
 
-        pipeline = [
-            # Filter on the dataset properties
-            {'$match': {'_id': {'$in': dataset.property_ids}}},
-            # Filter on the specified properties
-            {'$match': {'_id': {'$in': property_ids}}},
-        ]
+    #     pipeline = [
+    #         # Filter on the dataset properties
+    #         {'$match': {'_id': {'$in': dataset.property_ids}}},
+    #         # Filter on the specified properties
+    #         {'$match': {'_id': {'$in': property_ids}}},
+    #     ]
 
-        if configuration_ids:
-            # Attach the linked configuration documents
-            pipeline.append(
-                {'$lookup': {
-                    'from': 'configurations',
-                    'localField': 'relationships.configurations',
-                    'foreignField': '_id',
-                    'as': 'configuration'
-                }}
-            )
-            pipeline.append(
-                {'$unwind': '$configuration'}
-            )
-        else:
-            configuration_ids = [None]*len(property_ids)
+    #     if configuration_ids:
+    #         # Attach the linked configuration documents
+    #         pipeline.append(
+    #             {'$lookup': {
+    #                 'from': 'configurations',
+    #                 'localField': 'relationships.configurations',
+    #                 'foreignField': '_id',
+    #                 'as': 'configuration'
+    #             }}
+    #         )
+    #         pipeline.append(
+    #             {'$unwind': '$configuration'}
+    #         )
+    #     else:
+    #         configuration_ids = [None]*len(property_ids)
 
-        pr_to_co_map = {p:c for p,c in zip(property_ids, configuration_ids)}
+    #     pr_to_co_map = {p:c for p,c in zip(property_ids, configuration_ids)}
 
-        updates = []
-        for pr_doc in self.properties.aggregate(pipeline):
-            link_cid = pr_to_co_map[pr_doc['_id']]
+    #     updates = []
+    #     for pr_doc in self.properties.aggregate(pipeline):
+    #         link_cid = pr_to_co_map[pr_doc['_id']]
 
-            # Only perform the operation for the desired configurations
-            if (link_cid is None) or (pr_doc['configuration']['_id'] == link_cid):
-                for key, fxn in update_map.items():
-                    fv = pr_doc
-                    missing = False
-                    for k in key.split('.'):
-                        if k in fv:
-                            fv = fv[k]
-                        else:
-                            # Does not have necessary data
-                            missing = True
+    #         # Only perform the operation for the desired configurations
+    #         if (link_cid is None) or (pr_doc['configuration']['_id'] == link_cid):
+    #             for key, fxn in update_map.items():
+    #                 fv = pr_doc
+    #                 missing = False
+    #                 for k in key.split('.'):
+    #                     if k in fv:
+    #                         fv = fv[k]
+    #                     else:
+    #                         # Does not have necessary data
+    #                         missing = True
 
-                    if missing: continue
+    #                 if missing: continue
 
-                    if isinstance(fv, dict):
-                        # Handle case where "source-value" isn't at end of key
-                        fv = fv['source-value']
-                        key += '.source-value'
+    #                 if isinstance(fv, dict):
+    #                     # Handle case where "source-value" isn't at end of key
+    #                     fv = fv['source-value']
+    #                     key += '.source-value'
 
-                    data = fxn(fv, pr_doc)
+    #                 data = fxn(fv, pr_doc)
 
-                    if isinstance(data, (np.ndarray, list)):
-                        data = np.atleast_1d(data).tolist()
-                    elif isinstance(data, (str, bool, int, float)):
-                        pass
-                    elif np.issubdtype(data.dtype, np.integer):
-                        data = int(data)
-                    elif np.issubdtype(data.dtype, np.float):
-                        data = float(data)
+    #                 if isinstance(data, (np.ndarray, list)):
+    #                     data = np.atleast_1d(data).tolist()
+    #                 elif isinstance(data, (str, bool, int, float)):
+    #                     pass
+    #                 elif np.issubdtype(data.dtype, np.integer):
+    #                     data = int(data)
+    #                 elif np.issubdtype(data.dtype, np.float):
+    #                     data = float(data)
 
-                    updates.append(UpdateOne(
-                        {'_id': pr_doc['_id']},
-                        {'$set': {key: data}}
-                    ))
+    #                 updates.append(UpdateOne(
+    #                     {'_id': pr_doc['_id']},
+    #                     {'$set': {key: data}}
+    #                 ))
 
-        res = self.properties.bulk_write(updates, ordered=False)
-        nmatch = res.bulk_api_result['nMatched']
-        if nmatch:
-            warnings.warn('Modified {} properties'.format(nmatch))
+    #     res = self.properties.bulk_write(updates, ordered=False)
+    #     nmatch = res.bulk_api_result['nMatched']
+    #     if nmatch:
+    #         warnings.warn('Modified {} properties'.format(nmatch))
 
-        return res
+    #     return res
 
 
     def dataset_from_markdown(

@@ -2,7 +2,8 @@ __version__ = "0.0.1"
 __author__  = "ColabFit"
 __credit__  = "University of Minnesota"
 
-HASH_SHIFT = 2**63
+HASH_SHIFT = 0
+# HASH_SHIFT = 2**63
 
 MAX_STRING_LENGTH = 128
 STRING_DTYPE_SPECIFIER = f'S{MAX_STRING_LENGTH}'

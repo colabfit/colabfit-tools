@@ -404,8 +404,8 @@ def configuration_sets():
 #     )
 
 
-@frontend.route('/query/', methods=('GET', 'POST'))
-def query():
+@frontend.route('/search/', methods=('GET', 'POST'))
+def search():
     form = QueryForm()
 
     if request.method == 'POST':
@@ -444,7 +444,7 @@ def query():
             extra = None
 
         return render_template(
-            'query.html',
+            'search.html',
             form=form,
             collection=form.collection.data,
             data=collection.find(query)
@@ -455,7 +455,7 @@ def query():
 
 
     return render_template(
-        'query.html',
+        'search.html',
         form=form,
     )
 
