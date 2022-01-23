@@ -1158,7 +1158,12 @@ class MongoDatabase(MongoClient):
                 the :code:`arrays` dictionary on a Configuration (if it can be
                 converted to a matrix where the first dimension is the same
                 as the number of atoms in the Configuration) or the :code:`info`
-                dictionary (if it wasn't added to :code:`arrays`).
+                dictionary (if it wasn't added to :code:`arrays`). Property
+                fields in a list to accomodate the possibility of multiple
+                properties of the same type pointing to the same configuration.
+                WARNING: don't use this option if multiple properties of the
+                same type point to the same Configuration, but the properties
+                don't have values for all of their fields.
 
             generator (bool, default=False):
                 If True, this function returns a generator of the
@@ -1175,7 +1180,7 @@ class MongoDatabase(MongoClient):
         """
 
         if configuration_ids == 'all':
-            query = {'_id': {'$exists': True}}
+            query = {}
         else:
             if isinstance(configuration_ids, str):
                 configuration_ids = [configuration_ids]
@@ -1225,27 +1230,26 @@ class MongoDatabase(MongoClient):
                 yield c
         else:
 
-            property_match = { 'relationships.configurations': query['_id']}
+            # property_match = { 'relationships.configurations': query['_id']}
 
-            if property_ids is not None:
-                property_match['_id'] = {'$in': property_ids}
+            # if property_ids is not None:
+            #     property_match['_id'] = {'$in': property_ids}
 
-            for pr_doc in tqdm(self.properties.aggregate([
-                    {'$unwind': '$relationships.configurations'},
-                    {'$match': property_match},
+            for co_doc in tqdm(self.configurations.aggregate([
+                    {'$match': query},
                     {'$lookup': {
-                        'from': 'configurations',
-                        'localField': 'relationships.configurations',
+                        'from': 'properties',
+                        'localField': 'relationships.properties',
                         'foreignField': '_id',
-                        'as': 'linked_co'
+                        'as': 'linked_properties'
                     }},
-                ]),
-                desc='Getting configurations',
-                disable=not verbose
+                    # {'$match': {'linked_properties._id': property_match}},
+                    {'$match': {'linked_properties._id': {'$in': property_ids}}},
+                    ]),
+                    desc='Getting configurations',
+                    disable=not verbose
                 ):
-
-                co_doc = pr_doc['linked_co'][0]
-
+                
                 c = Configuration(
                     symbols=co_doc['atomic_numbers'],
                     positions=co_doc['positions'],
@@ -1259,13 +1263,25 @@ class MongoDatabase(MongoClient):
 
                 n = len(c)
 
-                for field_name, field in pr_doc[pr_doc['type']].items():
-                    v = np.atleast_1d(field['source-value'])
-                    if (v.dtype == 'O') or v.shape[0] != n:
-                        c.info[field_name] = v
-                    else:
-                        c.arrays[field_name] = v
+                for pr_doc in co_doc['linked_properties']:
+                    for field_name, field in pr_doc[pr_doc['type']].items():
+                        v = np.atleast_1d(field['source-value'])
+                        
+                        if (v.dtype == 'O') or v.shape[0] != n:
+                            dct = c.info
+                        else:
+                            dct = c.arrays
 
+                        field_name = f'{pr_doc["type"]}.{field_name}'
+                        
+                        if field_name in dct:
+                            # Then this is a duplicate property
+                            dct[field_name].append(v)
+                        else:
+                            # Then this is the first time
+                            # the property of this type is being added
+                            dct[field_name] = [v]
+                        
                 yield c
 
 
