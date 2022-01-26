@@ -1249,7 +1249,7 @@ class MongoDatabase(MongoClient):
                     desc='Getting configurations',
                     disable=not verbose
                 ):
-                
+
                 c = Configuration(
                     symbols=co_doc['atomic_numbers'],
                     positions=co_doc['positions'],
@@ -1266,14 +1266,14 @@ class MongoDatabase(MongoClient):
                 for pr_doc in co_doc['linked_properties']:
                     for field_name, field in pr_doc[pr_doc['type']].items():
                         v = np.atleast_1d(field['source-value'])
-                        
+
                         if (v.dtype == 'O') or v.shape[0] != n:
                             dct = c.info
                         else:
                             dct = c.arrays
 
                         field_name = f'{pr_doc["type"]}.{field_name}'
-                        
+
                         if field_name in dct:
                             # Then this is a duplicate property
                             dct[field_name].append(v)
@@ -1281,7 +1281,7 @@ class MongoDatabase(MongoClient):
                             # Then this is the first time
                             # the property of this type is being added
                             dct[field_name] = [v]
-                        
+
                 yield c
 
 

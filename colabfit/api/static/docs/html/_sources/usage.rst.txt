@@ -255,24 +255,21 @@ Data transformations
 
 It is often necessary to transform the data in a Dataset in order to improve
 performance when fitting models to the data, or to convert the data into a
-different format. This can be done using the
-:meth:`~colabfit.tools.database.MongoDatabase.apply_transformation` function:
+different format. This can be done using the `transfom` argument of the
+:meth:`~colabfit.tools.database.insert_data` function. The `transform` argument
+should be a callable function that modifies the Configuration in-place:
 
 .. code-block:: python
 
-	# Convert to per-atom energies
-	client.apply_transformation(
-		dataset_id=ds_id,
-		property_ids=all_pr_ids,
-		update_map={
-			'energy-forces.energy':
-			lambda f, doc: f/doc['configuration']['nsites']
-		},
-		configuration_ids=all_co_ids,
-	)
+    def per_atom(c):
+        c.info['energy'] /= len(c)
 
-Note the use of :code:`dataset_id`, which serves as a safety measure to ensure
-that only the properties of the given Dataset are updated.
+    client.insert_data(
+        configurations,
+        property_map=property_map,
+        property_settings=property_settings,
+        transform=per_atom,
+    )
 
 Supported file formats
 ======================

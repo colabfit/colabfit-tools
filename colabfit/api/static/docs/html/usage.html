@@ -307,22 +307,20 @@ the given Dataset.</p>
 <h2>Data transformations<a class="headerlink" href="#data-transformations" title="Permalink to this headline"></a></h2>
 <p>It is often necessary to transform the data in a Dataset in order to improve
 performance when fitting models to the data, or to convert the data into a
-different format. This can be done using the
-<a class="reference internal" href="database.html#colabfit.tools.database.MongoDatabase.apply_transformation" title="colabfit.tools.database.MongoDatabase.apply_transformation"><code class="xref py py-meth docutils literal notranslate"><span class="pre">apply_transformation()</span></code></a> function:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Convert to per-atom energies</span>
-<span class="n">client</span><span class="o">.</span><span class="n">apply_transformation</span><span class="p">(</span>
-        <span class="n">dataset_id</span><span class="o">=</span><span class="n">ds_id</span><span class="p">,</span>
-        <span class="n">property_ids</span><span class="o">=</span><span class="n">all_pr_ids</span><span class="p">,</span>
-        <span class="n">update_map</span><span class="o">=</span><span class="p">{</span>
-                <span class="s1">&#39;energy-forces.energy&#39;</span><span class="p">:</span>
-                <span class="k">lambda</span> <span class="n">f</span><span class="p">,</span> <span class="n">doc</span><span class="p">:</span> <span class="n">f</span><span class="o">/</span><span class="n">doc</span><span class="p">[</span><span class="s1">&#39;configuration&#39;</span><span class="p">][</span><span class="s1">&#39;nsites&#39;</span><span class="p">]</span>
-        <span class="p">},</span>
-        <span class="n">configuration_ids</span><span class="o">=</span><span class="n">all_co_ids</span><span class="p">,</span>
+different format. This can be done using the <cite>transfom</cite> argument of the
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_data()</span></code> function. The <cite>transform</cite> argument
+should be a callable function that modifies the Configuration in-place:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">per_atom</span><span class="p">(</span><span class="n">c</span><span class="p">):</span>
+    <span class="n">c</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;energy&#39;</span><span class="p">]</span> <span class="o">/=</span> <span class="nb">len</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+
+<span class="n">client</span><span class="o">.</span><span class="n">insert_data</span><span class="p">(</span>
+    <span class="n">configurations</span><span class="p">,</span>
+    <span class="n">property_map</span><span class="o">=</span><span class="n">property_map</span><span class="p">,</span>
+    <span class="n">property_settings</span><span class="o">=</span><span class="n">property_settings</span><span class="p">,</span>
+    <span class="n">transform</span><span class="o">=</span><span class="n">per_atom</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
-<p>Note the use of <code class="code docutils literal notranslate"><span class="pre">dataset_id</span></code>, which serves as a safety measure to ensure
-that only the properties of the given Dataset are updated.</p>
 </section>
 <section id="supported-file-formats">
 <h2>Supported file formats<a class="headerlink" href="#supported-file-formats" title="Permalink to this headline"></a></h2>
