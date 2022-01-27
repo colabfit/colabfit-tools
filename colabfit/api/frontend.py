@@ -1,4 +1,5 @@
 import os
+import datetime
 from xml.dom.expatbuilder import parseString
 import markdown
 from getpass import getpass
@@ -31,7 +32,7 @@ database = MongoDatabase('colabfit_database')
 collections = CollectionsAPI(database)
 
 ALLOWED_EXTENSIONS = {'extxyz', 'xyz',}
-UPLOAD_FOLDER = './data/uploads'
+UPLOAD_FOLDER = '/colabfit/data/uploads'
 
 frontend = Blueprint('frontend', __name__)
 
@@ -75,7 +76,10 @@ def publish():
 
     if request.method == 'POST':
 
-        tmp = os.path.join(UPLOAD_FOLDER, full_form.name.data)
+        now = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        folder_name = f'{now}_{full_form.name.data}'
+
+        tmp = os.path.join(UPLOAD_FOLDER, folder_name)
         if os.path.isdir(tmp):
             base_folder = tmp
             # counter = 1
