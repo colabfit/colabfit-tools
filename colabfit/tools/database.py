@@ -2107,9 +2107,10 @@ class MongoDatabase(MongoClient):
                     axes[r][c].set_xscale(xscale)
                     axes[r][c].set_yscale(yscale)
 
+        c += 1
         while c < 3:
             if method == 'matplotlib':
-                axes[r][c].off()
+                axes[r][c].axis('off')
             c += 1
 
         if method == 'plotly':
