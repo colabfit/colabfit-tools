@@ -261,6 +261,21 @@ class MongoDatabase(MongoClient):
                 the map must be the names of properties that have been
                 previously defined using
                 :meth:`~colabfit.tools.database.Database.add_property_definition`.
+                
+                Example:
+
+                    .. code-block:: python
+
+                    property_map = {
+                        'energy-forces-stress': {
+                            # ColabFit name: {'field': ASE field name, 'units': str}
+                            'energy':   {'field': 'energy',  'units': 'eV'},
+                            'forces':   {'field': 'forces',  'units': 'eV/Ang'},
+                            'stress':   {'field': 'virial',  'units': 'GPa'},
+                            'per-atom': {'field': 'per-atom', 'units': None},
+                        }
+                    }
+
 
                 If None, only loads the configuration information (atomic
                 numbers, positions, lattice vectors, and periodic boundary
@@ -2091,6 +2106,11 @@ class MongoDatabase(MongoClient):
                     axes[r][c].set_title(prop)
                     axes[r][c].set_xscale(xscale)
                     axes[r][c].set_yscale(yscale)
+
+        while c < 3:
+            if method == 'matplotlib':
+                axes[r][c].off()
+            c += 1
 
         if method == 'plotly':
             fig.update_layout(
