@@ -2063,7 +2063,7 @@ class MongoDatabase(MongoClient):
         nfields = len(fields)
 
         nrows = max(1, int(np.ceil(nfields/3)))
-        ncols = max(3, nfields%3)
+        ncols = min(3, nfields%3)
 
         if method == 'plotly':
             fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
