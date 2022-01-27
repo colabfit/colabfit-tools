@@ -2,7 +2,7 @@
 # Summary
 |Chemical systems|Element ratios|# of properties|# of configurations|# of atoms|
 |---|---|---|---|---|
-|AlNiTi, Ti, Ni, AlNi, NiTi, AlTi, Al|Ni (38.3%), Ti (32.1%), Al (29.6%)|2684|2666|24851|
+|AlNiTi, AlNi, Al, Ti, AlTi, Ni, NiTi|Al (29.6%), Ni (38.3%), Ti (32.1%)|2684|2666|24851|
 
 # Name
 
@@ -32,29 +32,29 @@ This dataset was generated using the following active learning scheme: 1) candid
 
 |Elements|File|Format|Name field|
 |---|---|---|---|
-| Ni, Ti, Al | 8024633491454427016 | mongo | _name |
+| Al, Ni, Ti | 6589720036545643874 | mongo | _name |
 
 # Properties
 
 |Property|KIM field|ASE field|Units
 |---|---|---|---|
-| [energy-forces-stress](/home/jvita/scripts/colabfit/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | energy | energy | eV
-| [energy-forces-stress](/home/jvita/scripts/colabfit/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | forces | forces | eV/Ang
-| [energy-forces-stress](/home/jvita/scripts/colabfit/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | stress | stress | GPa
+| [energy-forces-stress](/home/josh/colabfit/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | energy | energy | eV
+| [energy-forces-stress](/home/josh/colabfit/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | forces | forces | eV/Ang
+| [energy-forces-stress](/home/josh/colabfit/colabfit/examples/AlNiTi_CMS2019/energy-forces-stress.edn) | stress | stress | GPa
 
 # Property settings
 
 |ID|Method|Description|Labels|Files|
 |---|---|---|---|---|
-| 2231808486057270801 | VASP | energies/forces/stresses | LDA, PBE, GGA |  |
+| 2231808486057270805 | VASP | energies/forces/stresses |  |  |
 
 # Configuration sets
 
 |ID|Description|# of structures| # of atoms|
 |---|---|---|---|
-| 6873314056031893128 | Configurations generated using active learning by iteratively fitting a MTP model, identifying configurations that required the MTP to extrapolate, re-computing the energies/forces/structures of those configurations with DFT, then retraining the MTP model. | 2666 | 24851 |
-| 2025718299560966014 | Configurations used in the first stage of training | 1706 | 16186 |
-| -1964656355228270700 | Configurations used in the second stage of training | 963 | 8669 |
+| 14800131593698748322 | Configurations generated using active learning by iteratively fitting a MTP model, identifying configurations that required the MTP to extrapolate, re-computing the energies/forces/structures of those configurations with DFT, then retraining the MTP model. | 2666 | 24851 |
+| 17149226581667820657 | Configurations used in the first stage of training | 1706 | 16186 |
+| 16126802810655439255 | Configurations used in the second stage of training | 963 | 8669 |
 
 # Configuration labels
 

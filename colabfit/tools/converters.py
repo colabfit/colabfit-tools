@@ -333,13 +333,9 @@ class FolderConverter(BaseConverter):
         """
 
         ai = 0
-        # images = []
         files = list(Path(file_path).rglob(glob_string))
-        for fi, fpath in enumerate(tqdm(
-            files,
-            desc='Loading data',
-            disable=not verbose
-            )):
+        nf = len(files)
+        for fi, fpath in enumerate(files):
             new = self.reader(fpath, **kwargs)
 
             # if not isinstance(new, list):
@@ -347,7 +343,7 @@ class FolderConverter(BaseConverter):
 
             for atoms in tqdm(
                 new,
-                desc='Loading file {}'.format(fi),
+                desc='Loading file {}/{}'.format(fi+1, nf),
                 disable=not verbose
                 ):
 
