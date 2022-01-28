@@ -261,7 +261,7 @@ class MongoDatabase(MongoClient):
                 the map must be the names of properties that have been
                 previously defined using
                 :meth:`~colabfit.tools.database.Database.add_property_definition`.
-                
+
                 Example:
 
                     .. code-block:: python
@@ -2987,10 +2987,12 @@ class MongoDatabase(MongoClient):
         fig = self.plot_histograms(
             histogram_fields,
             ids=dataset.property_ids,
-            yscale=yscale
+            yscale=yscale,
+            method='matplotlib'
         )
 
-        fig.write_image(os.path.join(base_folder, 'histograms.png'))
+        # fig.write_image(os.path.join(base_folder, 'histograms.png'))
+        plt.savefig(os.path.join(base_folder, 'histograms.png'))
 
         # Copy any PSO files
         all_file_names = []
