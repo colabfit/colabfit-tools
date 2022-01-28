@@ -2023,7 +2023,7 @@ class MongoDatabase(MongoClient):
         nbins=100,
         xscale='linear',
         yscale='linear',
-        method='plotly'
+        method='matplotlib'
         ):
         """
         Generates histograms of the given fields.
@@ -2063,7 +2063,10 @@ class MongoDatabase(MongoClient):
         nfields = len(fields)
 
         nrows = max(1, int(np.ceil(nfields/3)))
-        ncols = 3 if nrows > 1 else min(3, nfields%3)
+        if (nrows > 1) or (nfields%3 == 0):
+            ncols = 3
+        else:
+            ncols = nfields%3
 
         if method == 'plotly':
             fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
@@ -2108,7 +2111,7 @@ class MongoDatabase(MongoClient):
                     axes[r][c].set_yscale(yscale)
 
         c += 1
-        while c < 3:
+        while c < ncols:
             if method == 'matplotlib':
                 axes[r][c].axis('off')
             c += 1
@@ -2985,15 +2988,17 @@ class MongoDatabase(MongoClient):
         if histogram_fields is None:
             histogram_fields = dataset.aggregated_info['property_fields']
 
-        fig = self.plot_histograms(
-            histogram_fields,
-            ids=dataset.property_ids,
-            yscale=yscale,
-            method='matplotlib'
-        )
+        if len(histogram_fields) > 0:
+            fig = self.plot_histograms(
+                histogram_fields,
+                ids=dataset.property_ids,
+                yscale=yscale,
+                method='matplotlib'
+            )
 
-        # fig.write_image(os.path.join(base_folder, 'histograms.png'))
-        plt.savefig(os.path.join(base_folder, 'histograms.png'))
+            # fig.write_image(os.path.join(base_folder, 'histograms.png'))
+            plt.savefig(os.path.join(base_folder, 'histograms.png'))
+            plt.close()
 
         # Copy any PSO files
         all_file_names = []
