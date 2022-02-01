@@ -13,7 +13,7 @@ and/or :attr:`arrays` dictionaries of the Configuration (see :ref:`here
 <Configuration info and arrays fields>` for more details), then using the
 :meth:`~colabfit.tools.database.MongoDatabase.insert_data` method.
 
-In addition to the Configuration with attached Property information, 
+In addition to the Configuration with attached Property information,
 :meth:`~colabfit.tools.database.MongoDatabase.insert_data` will also require a
 property map describing how to map the attached Property information onto an
 existing property definition (see :ref:`Property definitions`).
@@ -21,7 +21,7 @@ existing property definition (see :ref:`Property definitions`).
 A property map should have the following structure:
 
 .. code-block:: python
-    
+
     {
         <property_name>: {
             <property_field>: {
@@ -93,9 +93,9 @@ thus where care must be taken to ensure synchronization):
 
 * ConfigurationSets aggregating Configuration information
   (:meth:`~colabfit.tools.database.MongoDatabase.aggregate_configuration_info`)
-* Datasets aggregating ConfigurationSet information 
+* Datasets aggregating ConfigurationSet information
   (:meth:`~colabfit.tools.database.MongoDatabase.aggregate_configuration_set_info`)
-* Datasets aggregating Property information 
+* Datasets aggregating Property information
   (:meth:`~colabfit.tools.database.MongoDatabase.aggregate_property_info`)
 
 Synchronization can be performed by using the :code:`resync=True` argument when
@@ -205,7 +205,7 @@ be extremely useful for quickly visualizing your data and detecting outliers.
     forces   = client.get_data('properties', '<property_name>.forces', concatenate=True)
 
 .. code-block:: python
-    
+
     # From the QM9 example
 
 	client.get_statistics(
@@ -224,6 +224,23 @@ be extremely useful for quickly visualizing your data and detecting outliers.
 
 See the :ref:`QM9 example` and the :ref:`Si PRX GAP example` to further explore
 the benefits of these functions.
+
+Since Configurations inherit from :class:`ase.Atoms` objects, they work
+seamlessly with ASE's visualization tools.
+
+.. code-block:: python
+
+    # Run inside of a Jupyter Notebook
+
+    configurations = client.get_configurations(configuration_ids)
+
+    from ase.visualize import view
+
+    # Creates a Jupyter Widget; may require `pip install nglview` first
+    view(configurations, viewer='nglview')
+
+.. image:: db_viewer_example.gif
+    :align: center
 
 Filtering a Dataset
 ===================

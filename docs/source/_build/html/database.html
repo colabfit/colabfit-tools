@@ -626,7 +626,12 @@ Configuration will be returned multiple times.</p></li>
 the <code class="code docutils literal notranslate"><span class="pre">arrays</span></code> dictionary on a Configuration (if it can be
 converted to a matrix where the first dimension is the same
 as the number of atoms in the Configuration) or the <code class="code docutils literal notranslate"><span class="pre">info</span></code>
-dictionary (if it wasn’t added to <code class="code docutils literal notranslate"><span class="pre">arrays</span></code>).</p></li>
+dictionary (if it wasn’t added to <code class="code docutils literal notranslate"><span class="pre">arrays</span></code>). Property
+fields in a list to accomodate the possibility of multiple
+properties of the same type pointing to the same configuration.
+WARNING: don’t use this option if multiple properties of the
+same type point to the same Configuration, but the properties
+don’t have values for all of their fields.</p></li>
 <li><p><strong>generator</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, this function returns a generator of the
 configurations. This is useful if the configurations can’t all
 fit in memory at the same time.</p></li>
@@ -803,6 +808,23 @@ property off of a configuration. Note that the top-level keys in
 the map must be the names of properties that have been
 previously defined using
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">add_property_definition()</span></code>.</p>
+<p class="rubric">Example</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>
+</pre></div>
+</div>
+<dl>
+<dt>property_map = {</dt><dd><dl class="simple">
+<dt>‘energy-forces-stress’: {</dt><dd><p># ColabFit name: {‘field’: ASE field name, ‘units’: str}
+‘energy’:   {‘field’: ‘energy’,  ‘units’: ‘eV’},
+‘forces’:   {‘field’: ‘forces’,  ‘units’: ‘eV/Ang’},
+‘stress’:   {‘field’: ‘virial’,  ‘units’: ‘GPa’},
+‘per-atom’: {‘field’: ‘per-atom’, ‘units’: None},</p>
+</dd>
+</dl>
+<p>}</p>
+</dd>
+</dl>
+<p>}</p>
 <p>If None, only loads the configuration information (atomic
 numbers, positions, lattice vectors, and periodic boundary
 conditions).</p>

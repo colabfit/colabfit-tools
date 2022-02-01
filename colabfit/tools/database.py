@@ -2994,6 +2994,7 @@ class MongoDatabase(MongoClient):
 
         # fig.write_image(os.path.join(base_folder, 'histograms.png'))
         plt.savefig(os.path.join(base_folder, 'histograms.png'))
+        plt.close()
 
         # Copy any PSO files
         all_file_names = []
