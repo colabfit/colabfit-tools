@@ -8,7 +8,7 @@ Tools for constructing and manipulating datasets for fitting interatomic potenti
 4. `python -c 'import colabfit; print(colabfit.__version__)'` to confirm installation was successful
 
 # Documentation
-Since this package has not been made public yet, an online version of the documentation cannot be provided. For an offline version of the documentation, download [the documentation folder](docs) and open [docs/index.html](docs/index.html) in any browser.
+An online version of the documentation has not been set up yet. For an offline version of the documentation, download [the documentation folder](docs) and open [docs/index.html](docs/index.html) in any browser.
 
 # Example data
 Contact [Josh](https://github.com/jvita/) if you would like access to the datasets associated with [the provided examples](colabfit/examples).
