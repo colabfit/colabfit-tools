@@ -96,33 +96,35 @@ supplying a dictionary that has been formatted according to the
 <a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">KIM Properties Framework</a>.</p>
 <p>An example dictionary is shown below, and can be modified to fit most use cases.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">definition</span> <span class="o">=</span> <span class="p">{</span>
-  <span class="s2">&quot;property-id&quot;</span><span class="p">:</span> <span class="s2">&quot;my-custom-property&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;property-id&quot;</span><span class="p">:</span> <span class="s2">&quot;my-custom-property&quot;</span><span class="p">,</span>
 
-  <span class="s2">&quot;property-title&quot;</span><span class="p">:</span> <span class="s2">&quot;Some short title&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;property-title&quot;</span><span class="p">:</span> <span class="s2">&quot;Some short title&quot;</span><span class="p">,</span>
 
-  <span class="s2">&quot;property-description&quot;</span><span class="p">:</span> <span class="s2">&quot;A custom, user-provided Property Definition. See https://openkim.org/doc/schema/properties-framework/ for instructions on how to build these files.&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;property-description&quot;</span><span class="p">:</span> <span class="s2">&quot;A custom, user-provided Property Definition. See https://openkim.org/doc/schema/properties-framework/ for instructions on how to build these files.&quot;</span><span class="p">,</span>
 
-  <span class="s2">&quot;a-custom-field-name&quot;</span> <span class="p">{</span>
-    <span class="s2">&quot;type&quot;</span><span class="p">:</span>         <span class="s2">&quot;string&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;has-unit&quot;</span><span class="p">:</span>     <span class="n">false</span><span class="p">,</span>
-    <span class="s2">&quot;extent&quot;</span><span class="p">:</span>       <span class="p">[],</span>
-    <span class="s2">&quot;required&quot;</span><span class="p">:</span>     <span class="n">false</span><span class="p">,</span>
-    <span class="s2">&quot;description&quot;</span><span class="p">:</span>  <span class="s2">&quot;The description of the custom field&quot;</span><span class="p">,</span>
-  <span class="p">},</span>
-  <span class="s2">&quot;a-custom-1d-array&quot;</span> <span class="p">{</span>
-    <span class="s2">&quot;type&quot;</span><span class="p">:</span>         <span class="s2">&quot;float&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;has-unit&quot;</span><span class="p">:</span>     <span class="n">true</span><span class="p">,</span>
-    <span class="s2">&quot;extent&quot;</span><span class="p">:</span>       <span class="p">[</span><span class="s2">&quot;:&quot;</span><span class="p">],</span>
-    <span class="s2">&quot;required&quot;</span><span class="p">:</span>     <span class="n">true</span><span class="p">,</span>
-    <span class="s2">&quot;description&quot;</span><span class="p">:</span>  <span class="s2">&quot;This should be a 1D vector of floats&quot;</span><span class="p">,</span>
-  <span class="p">},</span>
-  <span class="s2">&quot;a-custom-per-atom-array&quot;</span> <span class="p">{</span>
-    <span class="s2">&quot;type&quot;</span><span class="p">:</span>         <span class="s2">&quot;float&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;has-unit&quot;</span><span class="p">:</span>     <span class="n">true</span><span class="p">,</span>
-    <span class="s2">&quot;extent&quot;</span><span class="p">:</span>       <span class="p">[</span><span class="s2">&quot;:&quot;</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span>
-    <span class="s2">&quot;required&quot;</span><span class="p">:</span>     <span class="n">true</span><span class="p">,</span>
-    <span class="s2">&quot;description&quot;</span><span class="p">:</span>  <span class="s2">&quot;This is a 2D array of floats, where the second dimension has a length of 3&quot;</span><span class="p">,</span>
-  <span class="p">},</span>
+    <span class="s2">&quot;a-custom-field-name&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span>         <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;has-unit&quot;</span><span class="p">:</span>     <span class="kc">False</span><span class="p">,</span>
+        <span class="s2">&quot;extent&quot;</span><span class="p">:</span>       <span class="p">[],</span>
+        <span class="s2">&quot;required&quot;</span><span class="p">:</span>     <span class="kc">False</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span>  <span class="s2">&quot;The description of the custom field&quot;</span><span class="p">,</span>
+    <span class="p">},</span>
+
+    <span class="s2">&quot;a-custom-1d-array&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span>         <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;has-unit&quot;</span><span class="p">:</span>     <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;extent&quot;</span><span class="p">:</span>       <span class="p">[</span><span class="s2">&quot;:&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;required&quot;</span><span class="p">:</span>     <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span>  <span class="s2">&quot;This should be a 1D vector of floats&quot;</span><span class="p">,</span>
+    <span class="p">},</span>
+
+    <span class="s2">&quot;a-custom-per-atom-array&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span>         <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;has-unit&quot;</span><span class="p">:</span>     <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;extent&quot;</span><span class="p">:</span>       <span class="p">[</span><span class="s2">&quot;:&quot;</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span>
+        <span class="s2">&quot;required&quot;</span><span class="p">:</span>     <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;description&quot;</span><span class="p">:</span>  <span class="s2">&quot;This is a 2D array of floats, where the second dimension has a length of 3&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
 <span class="p">}</span>
 </pre></div>
 </div>

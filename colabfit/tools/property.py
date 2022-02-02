@@ -109,7 +109,7 @@ class Property(dict):
         Args:
             name (str): Short OpenKIM Property Definition name
 
-            configurations (list): A list of ColabFit Configuration object
+            configurations (list): A list of ColabFit Configuration objects
 
             property_map (dict): A property map as described in the Property attributes section.
 
@@ -208,12 +208,27 @@ class Property(dict):
 
     @classmethod
     def from_definition(
-        cls, name, definition, conf, property_map,
+        cls, name, definition, configuration, property_map,
         settings=None, instance_id=1, convert_units=False
     ):
 
         """
-        Custom properties shouldn't have to satisfy the OpenKIM requirements
+        A function for constructing a Property given a configuration, a property
+        definition, and a property map.
+
+
+        Args:
+
+            name (str):
+                The short name of the property type. Should usually match
+                :code:`definition['property-id']`.
+
+            configuration (Configuration):
+                A Configuration objects from which to extract the property data
+
+            property_map (dict):
+                A property map as described in the Property attributes section.
+
         """
 
         global KIM_PROPERTIES
@@ -275,13 +290,13 @@ class Property(dict):
                     property_name=tmp.name,
                 ))[0]
 
-        update_edn_with_conf(edn, conf)
+        update_edn_with_conf(edn, configuration)
 
         for key, val in property_map.items():
-            if val['field'] in conf.info:
-                data = conf.info[val['field']]
-            elif val['field'] in conf.arrays:
-                data = conf.arrays[val['field']]
+            if val['field'] in configuration.info:
+                data = configuration.info[val['field']]
+            elif val['field'] in configuration.arrays:
+                data = configuration.arrays[val['field']]
             else:
                 # Key not found on configurations. Will be checked later
                 continue
@@ -307,7 +322,7 @@ class Property(dict):
 
         return cls(
             name=name,
-            configurations=[conf],
+            configurations=[configuration],
             property_map=property_map,
             settings=settings,
             edn=edn,

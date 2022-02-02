@@ -90,3 +90,14 @@ class Dataset:
             ds_hash.update(str(i).encode('utf-8'))
 
         return int(ds_hash.hexdigest()[:16], 16)-HASH_SHIFT
+
+
+    def __str__(self):
+        return "Dataset(description='{}', nconfiguration_sets={}, nproperties={})".format(
+            self.description,
+            len(self.configuration_set_ids),
+            len(self.property_ids),
+        )
+
+    def __repr__(self):
+        return str(self)

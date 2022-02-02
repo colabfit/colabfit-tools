@@ -54,3 +54,12 @@ class ConfigurationSet:
             cs_hash.update(str(i).encode('utf-8'))
 
         return int(cs_hash.hexdigest()[:16], 16)-HASH_SHIFT
+
+    def __str__(self):
+        return "ConfigurationSet(description='{}', nconfigurations={})".format(
+            self.description,
+            len(self.configuration_ids),
+        )
+
+    def __repr__(self):
+        return str(self)

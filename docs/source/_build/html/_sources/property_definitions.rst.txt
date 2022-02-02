@@ -19,33 +19,35 @@ An example dictionary is shown below, and can be modified to fit most use cases.
 .. code-block:: python
 
     definition = {
-      "property-id": "my-custom-property",
+        "property-id": "my-custom-property",
+    
+        "property-title": "Some short title",
+    
+        "property-description": "A custom, user-provided Property Definition. See https://openkim.org/doc/schema/properties-framework/ for instructions on how to build these files.",
+    
+        "a-custom-field-name": {
+            "type":         "string",
+            "has-unit":     False,
+            "extent":       [],
+            "required":     False,
+            "description":  "The description of the custom field",
+        },
 
-      "property-title": "Some short title",
+        "a-custom-1d-array": {
+            "type":         "float",
+            "has-unit":     True,
+            "extent":       [":"],
+            "required":     True,
+            "description":  "This should be a 1D vector of floats",
+        },
 
-      "property-description": "A custom, user-provided Property Definition. See https://openkim.org/doc/schema/properties-framework/ for instructions on how to build these files.",
-
-      "a-custom-field-name" {
-        "type":         "string",
-        "has-unit":     false,
-        "extent":       [],
-        "required":     false,
-        "description":  "The description of the custom field",
-      },
-      "a-custom-1d-array" {
-        "type":         "float",
-        "has-unit":     true,
-        "extent":       [":"],
-        "required":     true,
-        "description":  "This should be a 1D vector of floats",
-      },
-      "a-custom-per-atom-array" {
-        "type":         "float",
-        "has-unit":     true,
-        "extent":       [":",3],
-        "required":     true,
-        "description":  "This is a 2D array of floats, where the second dimension has a length of 3",
-      },
+        "a-custom-per-atom-array": {
+            "type":         "float",
+            "has-unit":     True,
+            "extent":       [":",3],
+            "required":     True,
+            "description":  "This is a 2D array of floats, where the second dimension has a length of 3",
+        }
     }
 
 A real-world example definition can be found in the :ref:`QM9 example`.
