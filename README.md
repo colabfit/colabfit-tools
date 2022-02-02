@@ -7,6 +7,8 @@ Tools for constructing and manipulating datasets for fitting interatomic potenti
 3. `pip install -e .`
 4. `python -c 'import colabfit; print(colabfit.__version__)'` to confirm installation was successful
 
+You should also follow the instructions in the documentation for [installing and running a Mongo server](https://colabfit.github.io/colabfit-tools/html/getting_started.html#installing-mongo)
+
 # Documentation
 The documentation can be found online at https://colabfit.github.io/colabfit-tools/.
 
