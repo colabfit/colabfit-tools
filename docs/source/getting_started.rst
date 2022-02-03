@@ -5,19 +5,14 @@ Getting started
 Installing colabfit-tools
 =========================
 
-Currently, installation is only supported using :code:`pip` to install directly
-from the private GitHub repository.
+Install directly from the GitHub repository using :code:`pip`.
 
 Using pip
 ^^^^^^^^^
 
 .. code-block:: console
 
-    $ pip install git+https://<PAT>@github.com/colabfit/colabfit-tools.git
-
-Note that since :code:`colabfit-tools` is currently still a private project,
-:code:`<PAT>` must either be your a Personal Access Token that has appropriate
-permissions.
+    $ pip install git+https://github.com/colabfit/colabfit-tools.git@master
 
 Installing Mongo
 ================
@@ -36,7 +31,6 @@ download, install, and start a Mongo server have been included below (for Ubuntu
     sudo apt-get update
     sudo apt-get install -y mongodb-org
     sudo systemctl start mongod
-    sudo systemctl status mongod
 
 For installation without :code:`sudo` or :code:`apt-get`, it is suggested to use
 :code:`conda``:
