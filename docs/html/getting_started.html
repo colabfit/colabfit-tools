@@ -87,16 +87,12 @@
 <h1>Getting started<a class="headerlink" href="#getting-started" title="Permalink to this headline"></a></h1>
 <section id="installing-colabfit-tools">
 <h2>Installing colabfit-tools<a class="headerlink" href="#installing-colabfit-tools" title="Permalink to this headline"></a></h2>
-<p>Currently, installation is only supported using <code class="code docutils literal notranslate"><span class="pre">pip</span></code> to install directly
-from the private GitHub repository.</p>
+<p>Install directly from the GitHub repository using <code class="code docutils literal notranslate"><span class="pre">pip</span></code>.</p>
 <section id="using-pip">
 <h3>Using pip<a class="headerlink" href="#using-pip" title="Permalink to this headline"></a></h3>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>pip install git+https://&lt;PAT&gt;@github.com/colabfit/colabfit-tools.git
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>pip install git+https://github.com/colabfit/colabfit-tools.git@master
 </pre></div>
 </div>
-<p>Note that since <code class="code docutils literal notranslate"><span class="pre">colabfit-tools</span></code> is currently still a private project,
-<code class="code docutils literal notranslate"><span class="pre">&lt;PAT&gt;</span></code> must either be your a Personal Access Token that has appropriate
-permissions.</p>
 </section>
 </section>
 <section id="installing-mongo">
@@ -111,7 +107,6 @@ wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc <span class="p">|</
 sudo apt-get update
 sudo apt-get install -y mongodb-org
 sudo systemctl start mongod
-sudo systemctl status mongod
 </pre></div>
 </div>
 <p>For installation without <code class="code docutils literal notranslate"><span class="pre">sudo</span></code> or <code class="code docutils literal notranslate"><span class="pre">apt-get</span></code>, it is suggested to use

@@ -280,6 +280,19 @@ be extremely useful for quickly visualizing your data and detecting outliers.</p
 <img alt="_images/qm9_histograms.png" class="align-center" src="_images/qm9_histograms.png" />
 <p>See the <a class="reference internal" href="qm9.html#qm9-example"><span class="std std-ref">QM9 example</span></a> and the <a class="reference internal" href="si_prx_gap.html#si-prx-gap-example"><span class="std std-ref">Si PRX GAP example</span></a> to further explore
 the benefits of these functions.</p>
+<p>Since Configurations inherit from <code class="xref py py-class docutils literal notranslate"><span class="pre">ase.Atoms</span></code> objects, they work
+seamlessly with ASE’s visualization tools.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Run inside of a Jupyter Notebook</span>
+
+<span class="n">configurations</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_configurations</span><span class="p">(</span><span class="n">configuration_ids</span><span class="p">)</span>
+
+<span class="kn">from</span> <span class="nn">ase.visualize</span> <span class="kn">import</span> <span class="n">view</span>
+
+<span class="c1"># Creates a Jupyter Widget; may require `pip install nglview` first</span>
+<span class="n">view</span><span class="p">(</span><span class="n">configurations</span><span class="p">,</span> <span class="n">viewer</span><span class="o">=</span><span class="s1">&#39;nglview&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<img alt="_images/db_viewer_example.gif" class="align-center" src="_images/db_viewer_example.gif" />
 </section>
 <section id="filtering-a-dataset">
 <h2>Filtering a Dataset<a class="headerlink" href="#filtering-a-dataset" title="Permalink to this headline"></a></h2>

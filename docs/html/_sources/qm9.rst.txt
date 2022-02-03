@@ -204,7 +204,7 @@ the QM9 dataset has some outlying data entries.
     )
 
 
-.. image:: QM9_histograms.png
+.. image:: qm9_histograms.png
     :align: center
 
 The :meth:`~colabfit.tools.database.MongoeDatabase.filter_on_properties`

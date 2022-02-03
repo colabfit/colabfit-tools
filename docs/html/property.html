@@ -221,7 +221,7 @@ underlying configurations are different.</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – Short OpenKIM Property Definition name</p></li>
-<li><p><strong>configurations</strong> (<em>list</em>) – A list of ColabFit Configuration object</p></li>
+<li><p><strong>configurations</strong> (<em>list</em>) – A list of ColabFit Configuration objects</p></li>
 <li><p><strong>property_map</strong> (<em>dict</em>) – A property map as described in the Property attributes section.</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><em>PropertySettings</em></a>) – A <cite>colabfit.property.PropertySettings</cite> objects specifying how to
 compute the property.</p></li>
@@ -267,8 +267,19 @@ from its original units to the expected ColabFit-compliant units.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.property.Property.from_definition">
-<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_definition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">definition</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conf</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convert_units</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.from_definition" title="Permalink to this definition"></a></dt>
-<dd><p>Custom properties shouldn’t have to satisfy the OpenKIM requirements</p>
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_definition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">definition</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configuration</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convert_units</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property.Property.from_definition" title="Permalink to this definition"></a></dt>
+<dd><p>A function for constructing a Property given a configuration, a property
+definition, and a property map.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – The short name of the property type. Should usually match
+<code class="code docutils literal notranslate"><span class="pre">definition['property-id']</span></code>.</p></li>
+<li><p><strong>configuration</strong> (<a class="reference internal" href="configuration.html#colabfit.tools.configuration.Configuration" title="colabfit.tools.configuration.Configuration"><em>Configuration</em></a>) – A Configuration objects from which to extract the property data</p></li>
+<li><p><strong>property_map</strong> (<em>dict</em>) – A property map as described in the Property attributes section.</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
