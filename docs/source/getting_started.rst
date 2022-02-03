@@ -5,10 +5,10 @@ Getting started
 Installing colabfit-tools
 =========================
 
-Install directly from the GitHub repository using :code:`pip`.
-
 Using pip
 ^^^^^^^^^
+
+Install directly from the GitHub repository using :code:`pip`.
 
 .. code-block:: console
 
@@ -33,7 +33,7 @@ download, install, and start a Mongo server have been included below (for Ubuntu
     sudo systemctl start mongod
 
 For installation without :code:`sudo` or :code:`apt-get`, it is suggested to use
-:code:`conda``:
+:code:`conda`:
 
 .. code-block:: shell
 
@@ -46,6 +46,8 @@ For installation without :code:`sudo` or :code:`apt-get`, it is suggested to use
 To confirm that this has been set up correctly, try opening a connection:
 
 .. code-block:: python
+
+    from colabfit.tools.database import MongoDatabase
 
     database = MongoDatabase('test')
 
