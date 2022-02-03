@@ -1117,11 +1117,11 @@ class MongoDatabase(MongoClient):
                         if unpack_properties and ('source-value' in v):
                             v = v['source-value']
 
-                    data[k].append(np.atleast_1d(v))
+                    data[k].append(v)
 
         if concatenate or ravel:
             for k,v in data.items():
-                data[k] = np.concatenate(v)
+                data[k] = np.vstack(v)
 
         if ravel:
             for k,v in data.items():
@@ -3047,7 +3047,7 @@ def load_data(
     **kwargs,
     ):
     """
-    Loads configurations as a list of ase.Atoms objects.
+    Loads a list of Configuration objects.
 
     Args:
         file_path (str):
