@@ -266,15 +266,15 @@ class MongoDatabase(MongoClient):
 
                     .. code-block:: python
 
-                    property_map = {
-                        'energy-forces-stress': {
-                            # ColabFit name: {'field': ASE field name, 'units': str}
-                            'energy':   {'field': 'energy',  'units': 'eV'},
-                            'forces':   {'field': 'forces',  'units': 'eV/Ang'},
-                            'stress':   {'field': 'virial',  'units': 'GPa'},
-                            'per-atom': {'field': 'per-atom', 'units': None},
+                        property_map = {
+                            'energy-forces-stress': {
+                                # ColabFit name: {'field': ASE field name, 'units': str}
+                                'energy':   {'field': 'energy',  'units': 'eV'},
+                                'forces':   {'field': 'forces',  'units': 'eV/Ang'},
+                                'stress':   {'field': 'virial',  'units': 'GPa'},
+                                'per-atom': {'field': 'per-atom', 'units': None},
+                            }
                         }
-                    }
 
 
                 If None, only loads the configuration information (atomic
@@ -510,8 +510,9 @@ class MongoDatabase(MongoClient):
                     continue
 
                 prop = Property.from_definition(
-                    pname, property_definitions[pname],
-                    atoms, pmap
+                    definition=property_definitions[pname],
+                    configuration=atoms,
+                    property_map=pmap
                 )
 
                 # NOTE: property ID does not depend upon linked settings
@@ -740,8 +741,9 @@ class MongoDatabase(MongoClient):
                     continue
 
                 prop = Property.from_definition(
-                    pname, property_definitions[pname],
-                    atoms, pmap
+                    definition=property_definitions[pname],
+                    configuration=atoms,
+                    property_map=pmap
                 )
 
                 # NOTE: property ID does not depend upon linked settings
