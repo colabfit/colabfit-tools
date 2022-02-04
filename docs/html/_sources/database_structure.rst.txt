@@ -8,8 +8,8 @@ Database structure
     :align: center
     :alt: A diagram showing the relationship between the five core data structures that make up a Database.
 
-    A diagram showing the relationship between the five core data structures
-    that make up a Database.
+    A diagram showing the relationship between the core components of a
+    Database.
 
 The Database structure was designed to be able to be as flexible as possible to
 incorporate different types of data (computational/experimental) while also
