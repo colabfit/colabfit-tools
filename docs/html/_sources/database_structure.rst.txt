@@ -3,8 +3,8 @@ Database structure
 ==================
 
 .. figure:: ds_diagram_cropped.png
-    :width: 593
-    :height: 677
+    :width: 626
+    :height: 703
     :align: center
     :alt: A diagram showing the relationship between the five core data structures that make up a Database.
 
@@ -37,6 +37,12 @@ stored as a Mongo database with  five core data structures:
       event that these inputs serve as constraints, the output values will be
       equal to the input values). Generally, it is best practice for a property
       to point to a :class:`PropertySettings` object.
+* :class:`Property Definition` (PD, :code:`collection_name='property_definitions'`):
+      A Python dictionary that specifies details about the contents of a
+      Property, including the name of the property type, a description of the
+      property, and information about each of the computed fields in the
+      property (data type, data shape, if the field has units, if the field is
+      required, and a human-readable description of the field).
 * :class:`~colabfit.tools.property_settings.PropertySettings` (PS, :code:`collection_name='property_settings'`):
       Additional metadata useful for setting up the calculation or experiment
       (e.g., the name of the software package(s) used, their versions, input

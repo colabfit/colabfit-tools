@@ -82,7 +82,7 @@
   <section id="database-structure">
 <h1>Database structure<a class="headerlink" href="#database-structure" title="Permalink to this headline"></a></h1>
 <figure class="align-center" id="id1">
-<a class="reference internal image-reference" href="_images/ds_diagram_cropped.png"><img alt="A diagram showing the relationship between the five core data structures that make up a Database." src="_images/ds_diagram_cropped.png" style="width: 593px; height: 677px;" /></a>
+<a class="reference internal image-reference" href="_images/ds_diagram_cropped.png"><img alt="A diagram showing the relationship between the five core data structures that make up a Database." src="_images/ds_diagram_cropped.png" style="width: 626px; height: 703px;" /></a>
 <figcaption>
 <p><span class="caption-text">A diagram showing the relationship between the five core data structures
 that make up a Database.</span><a class="headerlink" href="#id1" title="Permalink to this image"></a></p>
@@ -117,6 +117,15 @@ property must contain an associated output value for each of them (in the
 event that these inputs serve as constraints, the output values will be
 equal to the input values). Generally, it is best practice for a property
 to point to a <code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code> object.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="xref py py-class docutils literal notranslate"><span class="pre">Property</span> <span class="pre">Definition</span></code> (PD, <code class="code docutils literal notranslate"><span class="pre">collection_name='property_definitions'</span></code>):</dt><dd><p>A Python dictionary that specifies details about the contents of a
+Property, including the name of the property type, a description of the
+property, and information about each of the computed fields in the
+property (data type, data shape, if the field has units, if the field is
+required, and a human-readable description of the field).</p>
 </dd>
 </dl>
 </li>
