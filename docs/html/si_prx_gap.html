@@ -49,8 +49,8 @@
 <li class="toctree-l2"><a class="reference internal" href="basic_example.html">Basic example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="qm9.html">QM9 example</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Si PRX GAP example</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#loading-from-a-file">Loading from a file</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#using-multiple-property-definitions">Using multiple property definitions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#loading-from-a-file">Loading from a file</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#identifying-duplicate-configurations">Identifying duplicate configurations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#manually-constructed-configurationsets">Manually constructed ConfigurationSets</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#manually-applied-configuration-labels">Manually applied Configuration labels</a></li>
@@ -105,52 +105,6 @@ using the following commands:</p>
 <span class="gp">$ </span><span class="nb">cd</span> si_prx_gap <span class="o">&amp;&amp;</span> unzip Si_PRX_GAP.zip
 </pre></div>
 </div>
-<section id="loading-from-a-file">
-<h2>Loading from a file<a class="headerlink" href="#loading-from-a-file" title="Permalink to this headline"></a></h2>
-<p>This example uses <a class="reference internal" href="database.html#colabfit.tools.database.load_data" title="colabfit.tools.database.load_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code></a> to load the data
-from an existing Extended XYZ file. Note that the raw data includes the
-<code class="code docutils literal notranslate"><span class="pre">config_type</span></code> field, which is used to generate the names of the loaded
-Configurations. A <code class="xref py py-attr docutils literal notranslate"><span class="pre">default_name</span></code> is also provided to handle the
-configurations that do not have a <code class="code docutils literal notranslate"><span class="pre">config_type</span></code> field.
-<code class="code docutils literal notranslate"><span class="pre">verbose=True</span></code> is used here since the dataset is large enough to warrant a
-progress bar.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configurations</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span>
-        <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;./si_prx_gap/gp_iter6_sparse9k.xml.xyz&#39;</span><span class="p">,</span>
-        <span class="n">file_format</span><span class="o">=</span><span class="s1">&#39;xyz&#39;</span><span class="p">,</span>
-        <span class="n">name_field</span><span class="o">=</span><span class="s1">&#39;config_type&#39;</span><span class="p">,</span>  <span class="c1"># key in Configuration.info to use as the Configuration name</span>
-        <span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Si&#39;</span><span class="p">],</span>
-        <span class="n">default_name</span><span class="o">=</span><span class="s1">&#39;Si_PRX_GAP&#39;</span><span class="p">,</span>  <span class="c1"># default name with `name_field` not found</span>
-        <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
-<span class="p">)</span>
-</pre></div>
-</div>
-<p>Some of the data fields need to be cleaned before use</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Data stored on atoms needs to be cleaned</span>
-<span class="k">for</span> <span class="n">img</span> <span class="ow">in</span> <span class="n">images</span><span class="p">:</span>
-    <span class="k">if</span> <span class="s1">&#39;DFT_energy&#39;</span> <span class="ow">in</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">:</span>
-        <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;dft_energy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;DFT_energy&#39;</span><span class="p">]</span>
-        <span class="k">del</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;DFT_energy&#39;</span><span class="p">]</span>
-
-    <span class="k">if</span> <span class="s1">&#39;DFT_force&#39;</span> <span class="ow">in</span> <span class="n">img</span><span class="o">.</span><span class="n">arrays</span><span class="p">:</span>
-        <span class="n">img</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="s1">&#39;dft_force&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="s1">&#39;DFT_force&#39;</span><span class="p">]</span>
-        <span class="k">del</span> <span class="n">img</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="s1">&#39;DFT_force&#39;</span><span class="p">]</span>
-
-    <span class="k">if</span> <span class="s1">&#39;DFT_virial&#39;</span> <span class="ow">in</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">:</span>
-        <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;dft_virial&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;DFT_virial&#39;</span><span class="p">]</span>
-        <span class="k">del</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;DFT_virial&#39;</span><span class="p">]</span>
-
-    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">[</span>
-        <span class="s1">&#39;md_temperature&#39;</span><span class="p">,</span> <span class="s1">&#39;md_cell_t&#39;</span><span class="p">,</span> <span class="s1">&#39;smearing_width&#39;</span><span class="p">,</span> <span class="s1">&#39;md_delta_t&#39;</span><span class="p">,</span>
-        <span class="s1">&#39;md_ion_t&#39;</span><span class="p">,</span> <span class="s1">&#39;cut_off_energy&#39;</span><span class="p">,</span> <span class="s1">&#39;elec_energy_tol&#39;</span><span class="p">,</span>
-        <span class="p">]:</span>
-        <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">:</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
-            <span class="k">except</span><span class="p">:</span>
-                <span class="k">pass</span>
-</pre></div>
-</div>
-</section>
 <section id="using-multiple-property-definitions">
 <h2>Using multiple property definitions<a class="headerlink" href="#using-multiple-property-definitions" title="Permalink to this headline"></a></h2>
 <p>This Dataset contains the common energy/forces/virial data, but also includes a
@@ -159,13 +113,63 @@ stored as a separate Property. Note that this information is not suitable for a
 PropertySettings object because some of it dependent upon the output of a
 calculation (not the input), and is therefore better suited as a Property.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">base_definition</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="s1">&#39;property-id&#39;</span><span class="p">:</span> <span class="s1">&#39;energy-forces-virial&#39;</span><span class="p">,</span>
-        <span class="s1">&#39;property-title&#39;</span><span class="p">:</span> <span class="s1">&#39;A default property for storing energies, forces, and virial&#39;</span><span class="p">,</span>
-        <span class="s1">&#39;property-description&#39;</span><span class="p">:</span> <span class="s1">&#39;Energies and forces computed using DFT&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;property-id&#39;</span><span class="p">:</span> <span class="s1">&#39;energy-forces-stress&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;property-title&#39;</span><span class="p">:</span> <span class="s1">&#39;Basic outputs from a static calculation&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;property-description&#39;</span><span class="p">:</span>
+                <span class="s1">&#39;Energy, forces, and stresses from a calculation of a &#39;</span>\
+                <span class="s1">&#39;static configuration. Energies must be specified to be &#39;</span>\
+                <span class="s1">&#39;per-atom or supercell. If a reference energy has been &#39;</span>\
+                <span class="s1">&#39;used, this must be specified as well.&#39;</span><span class="p">,</span>
 
-        <span class="s1">&#39;energy&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span>      <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Cohesive energy&#39;</span><span class="p">},</span>
-        <span class="s1">&#39;forces&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;:&#39;</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Atomic forces&#39;</span><span class="p">},</span>
-        <span class="s1">&#39;virial&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span> <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">6</span><span class="p">],</span>     <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Virial stress&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;energy&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span>
+                <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s1">&#39;description&#39;</span><span class="p">:</span>
+                        <span class="s1">&#39;The potential energy of the system.&#39;</span>
+        <span class="p">},</span>
+        <span class="s1">&#39;forces&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;:&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+                <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s1">&#39;description&#39;</span><span class="p">:</span>
+                        <span class="s1">&#39;The [x,y,z] components of the force on each particle.&#39;</span>
+        <span class="p">},</span>
+        <span class="s1">&#39;stress&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+                <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s1">&#39;description&#39;</span><span class="p">:</span>
+                        <span class="s1">&#39;The full Cauchy stress tensor of the simulation cell&#39;</span>
+        <span class="p">},</span>
+
+        <span class="s1">&#39;per-atom&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;bool&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span>
+                <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s1">&#39;description&#39;</span><span class="p">:</span>
+                        <span class="s1">&#39;If True, &quot;energy&quot; is the total energy of the system, &#39;</span>\
+                        <span class="s1">&#39;and has NOT been divided by the number of atoms in the &#39;</span>\
+                        <span class="s1">&#39;configuration.&#39;</span>
+        <span class="p">},</span>
+        <span class="s1">&#39;reference-energy&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;float&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;has-unit&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s1">&#39;extent&#39;</span><span class="p">:</span> <span class="p">[],</span>
+                <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s1">&#39;description&#39;</span><span class="p">:</span>
+                        <span class="s1">&#39;If provided, then &quot;energy&quot; is the energy (either of &#39;</span>\
+                        <span class="s1">&#39;the whole system, or per-atom) LESS the energy of &#39;</span>\
+                        <span class="s1">&#39;a reference configuration (E = E_0 - E_reference). &#39;</span>\
+                        <span class="s1">&#39;Note that &quot;reference-energy&quot; is just provided for &#39;</span>\
+                        <span class="s1">&#39;documentation, and that &quot;energy&quot; should already have &#39;</span>\
+                        <span class="s1">&#39;this value subtracted off. The reference energy must &#39;</span>\
+                        <span class="s1">&#39;have the same units as &quot;energy&quot;.&#39;</span>
+        <span class="p">},</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -247,6 +251,76 @@ calculation (not the input), and is therefore better suited as a Property.</p>
 <span class="p">}</span>
 </pre></div>
 </div>
+<p>In order to satisfy the formatting requirements specified by the <a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">OpenKIM
+Properties Framework</a>,
+the field names in the property defintion should not include underscores
+(<code class="code docutils literal notranslate"><span class="pre">'_'</span></code>).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Can&#39;t use underscores in field names</span>
+<span class="n">extra_stuff_definition</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">k</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">extra_stuff_definition</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">insert_property_definition</span><span class="p">(</span><span class="n">base_definition</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">insert_property_definition</span><span class="p">(</span><span class="n">extra_stuff_definition</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="loading-from-a-file">
+<h2>Loading from a file<a class="headerlink" href="#loading-from-a-file" title="Permalink to this headline"></a></h2>
+<p>This example uses <a class="reference internal" href="database.html#colabfit.tools.database.load_data" title="colabfit.tools.database.load_data"><code class="xref py py-meth docutils literal notranslate"><span class="pre">load_data()</span></code></a> to load the data
+from an existing Extended XYZ file. Note that the raw data includes the
+<code class="code docutils literal notranslate"><span class="pre">config_type</span></code> field, which is used to generate the names of the loaded
+Configurations. A <code class="xref py py-attr docutils literal notranslate"><span class="pre">default_name</span></code> is also provided to handle the
+configurations that do not have a <code class="code docutils literal notranslate"><span class="pre">config_type</span></code> field.
+<code class="code docutils literal notranslate"><span class="pre">verbose=True</span></code> is used here since the dataset is large enough to warrant a
+progress bar.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dataset</span><span class="o">.</span><span class="n">configurations</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span>
+        <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;./si_prx_gap/gp_iter6_sparse9k.xml.xyz&#39;</span><span class="p">,</span>
+        <span class="n">file_format</span><span class="o">=</span><span class="s1">&#39;xyz&#39;</span><span class="p">,</span>
+        <span class="n">name_field</span><span class="o">=</span><span class="s1">&#39;config_type&#39;</span><span class="p">,</span>  <span class="c1"># key in Configuration.info to use as the Configuration name</span>
+        <span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Si&#39;</span><span class="p">],</span>
+        <span class="n">default_name</span><span class="o">=</span><span class="s1">&#39;Si_PRX_GAP&#39;</span><span class="p">,</span>  <span class="c1"># default name with `name_field` not found</span>
+        <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Some of the data fields need to be cleaned before use</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Data stored on atoms needs to be cleaned</span>
+<span class="k">def</span> <span class="nf">tform</span><span class="p">(</span><span class="n">img</span><span class="p">):</span>
+        <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;per-atom&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="c1"># Renaming some fields to be consistent</span>
+        <span class="k">if</span> <span class="s1">&#39;DFT_energy&#39;</span> <span class="ow">in</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">:</span>
+                <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;dft_energy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;DFT_energy&#39;</span><span class="p">]</span>
+                <span class="k">del</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;DFT_energy&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="s1">&#39;DFT_force&#39;</span> <span class="ow">in</span> <span class="n">img</span><span class="o">.</span><span class="n">arrays</span><span class="p">:</span>
+                <span class="n">img</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="s1">&#39;dft_force&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="s1">&#39;DFT_force&#39;</span><span class="p">]</span>
+                <span class="k">del</span> <span class="n">img</span><span class="o">.</span><span class="n">arrays</span><span class="p">[</span><span class="s1">&#39;DFT_force&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="s1">&#39;DFT_virial&#39;</span> <span class="ow">in</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">:</span>
+                <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;dft_virial&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;DFT_virial&#39;</span><span class="p">]</span>
+                <span class="k">del</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;DFT_virial&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Converting some string values to floats</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">[</span>
+                <span class="s1">&#39;md_temperature&#39;</span><span class="p">,</span> <span class="s1">&#39;md_cell_t&#39;</span><span class="p">,</span> <span class="s1">&#39;smearing_width&#39;</span><span class="p">,</span> <span class="s1">&#39;md_delta_t&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;md_ion_t&#39;</span><span class="p">,</span> <span class="s1">&#39;cut_off_energy&#39;</span><span class="p">,</span> <span class="s1">&#39;elec_energy_tol&#39;</span><span class="p">,</span>
+                <span class="p">]:</span>
+                <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">:</span>
+                        <span class="k">try</span><span class="p">:</span>
+                                <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+                        <span class="k">except</span><span class="p">:</span>
+                                <span class="k">pass</span>
+
+        <span class="c1"># Reshaping shape (9,) stress vector to (3, 3) to match definition</span>
+        <span class="k">if</span> <span class="s1">&#39;dft_virial&#39;</span> <span class="ow">in</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">:</span>
+                <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;dft_virial&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;dft_virial&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Now we can build the property map to tell <code class="xref py py-meth docutils literal notranslate"><span class="pre">insert_data()</span></code> how to build the
+properties.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">units</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s1">&#39;energy&#39;</span><span class="p">:</span> <span class="s1">&#39;eV&#39;</span><span class="p">,</span>
         <span class="s1">&#39;forces&#39;</span><span class="p">:</span> <span class="s1">&#39;eV/Ang&#39;</span><span class="p">,</span>
@@ -292,20 +366,6 @@ calculation (not the input), and is therefore better suited as a Property.</p>
                 <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">extra_stuff_definition</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span><span class="s1">&#39;property-id&#39;</span><span class="p">,</span> <span class="s1">&#39;property-title&#39;</span><span class="p">,</span> <span class="s1">&#39;property-description&#39;</span><span class="p">}</span>
         <span class="p">}</span>
 <span class="p">}</span>
-</pre></div>
-</div>
-<p>In order to satisfy the formatting requirements specified by the <a class="reference external" href="https://openkim.org/doc/schema/properties-framework/">OpenKIM
-Properties Framework</a>,
-the field names in the property defintion should not include underscores
-(<code class="code docutils literal notranslate"><span class="pre">'_'</span></code>).</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Can&#39;t use underscores in field names</span>
-<span class="n">extra_stuff_definition</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="n">k</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">extra_stuff_definition</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
-<span class="p">}</span>
-</pre></div>
-</div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">client</span><span class="o">.</span><span class="n">insert_property_definition</span><span class="p">(</span><span class="n">base_definition</span><span class="p">)</span>
-<span class="n">client</span><span class="o">.</span><span class="n">insert_property_definition</span><span class="p">(</span><span class="n">extra_stuff_definition</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>

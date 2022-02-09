@@ -18,56 +18,6 @@ using the following commands:
     $ cd si_prx_gap && wget -O Si_PRX_GAP.zip https://www.repository.cam.ac.uk/bitstream/handle/1810/317974/Si_PRX_GAP.zip?sequence=1&isAllowed=yield
     $ cd si_prx_gap && unzip Si_PRX_GAP.zip
 
-Loading from a file
-===================
-
-This example uses :meth:`~colabfit.tools.database.load_data` to load the data
-from an existing Extended XYZ file. Note that the raw data includes the
-:code:`config_type` field, which is used to generate the names of the loaded
-Configurations. A :attr:`default_name` is also provided to handle the
-configurations that do not have a :code:`config_type` field.
-:code:`verbose=True` is used here since the dataset is large enough to warrant a
-progress bar.
-
-.. code-block:: python
-
-	dataset.configurations = load_data(
-		file_path='./si_prx_gap/gp_iter6_sparse9k.xml.xyz',
-		file_format='xyz',
-		name_field='config_type',  # key in Configuration.info to use as the Configuration name
-		elements=['Si'],
-		default_name='Si_PRX_GAP',  # default name with `name_field` not found
-		verbose=True
-	)
-
-Some of the data fields need to be cleaned before use
-
-.. code-block:: python
-
-    # Data stored on atoms needs to be cleaned
-    for img in images:
-        if 'DFT_energy' in img.info:
-            img.info['dft_energy'] = img.info['DFT_energy']
-            del img.info['DFT_energy']
-
-        if 'DFT_force' in img.arrays:
-            img.arrays['dft_force'] = img.arrays['DFT_force']
-            del img.arrays['DFT_force']
-
-        if 'DFT_virial' in img.info:
-            img.info['dft_virial'] = img.info['DFT_virial']
-            del img.info['DFT_virial']
-
-        for k in [
-            'md_temperature', 'md_cell_t', 'smearing_width', 'md_delta_t',
-            'md_ion_t', 'cut_off_energy', 'elec_energy_tol',
-            ]:
-            if k in img.info:
-                try:
-                    img.info[k] = float(img.info[k].split(' ')[0])
-                except:
-                    pass
-
 Using multiple property definitions
 ===================================
 
@@ -80,15 +30,65 @@ calculation (not the input), and is therefore better suited as a Property.
 .. code-block:: python
 
 	base_definition = {
-		'property-id': 'energy-forces-virial',
-		'property-title': 'A default property for storing energies, forces, and virial',
-		'property-description': 'Energies and forces computed using DFT',
-		
-		'energy': {'type': 'float', 'has-unit': True, 'extent': [],      'required': True, 'description': 'Cohesive energy'},
-		'forces': {'type': 'float', 'has-unit': True, 'extent': [':',3], 'required': True, 'description': 'Atomic forces'},
-		'virial': {'type': 'float', 'has-unit': True, 'extent': [6],     'required': False, 'description': 'Virial stress'},
+		'property-id': 'energy-forces-stress',
+		'property-title': 'Basic outputs from a static calculation',
+		'property-description':
+			'Energy, forces, and stresses from a calculation of a '\
+			'static configuration. Energies must be specified to be '\
+			'per-atom or supercell. If a reference energy has been '\
+			'used, this must be specified as well.',
+
+		'energy': {
+			'type': 'float',
+			'has-unit': True,
+			'extent': [],
+			'required': False,
+			'description':
+				'The potential energy of the system.'
+		},
+		'forces': {
+			'type': 'float',
+			'has-unit': True,
+			'extent': [":", 3],
+			'required': False,
+			'description':
+				'The [x,y,z] components of the force on each particle.'
+		},
+		'stress': {
+			'type': 'float',
+			'has-unit': True,
+			'extent': [3, 3],
+			'required': False,
+			'description':
+				'The full Cauchy stress tensor of the simulation cell'
+		},
+
+		'per-atom': {
+			'type': 'bool',
+			'has-unit': False,
+			'extent': [],
+			'required': True,
+			'description':
+				'If True, "energy" is the total energy of the system, '\
+				'and has NOT been divided by the number of atoms in the '\
+				'configuration.'
+		},
+		'reference-energy': {
+			'type': 'float',
+			'has-unit': True,
+			'extent': [],
+			'required': False,
+			'description':
+				'If provided, then "energy" is the energy (either of '\
+				'the whole system, or per-atom) LESS the energy of '\
+				'a reference configuration (E = E_0 - E_reference). '\
+				'Note that "reference-energy" is just provided for '\
+				'documentation, and that "energy" should already have '\
+				'this value subtracted off. The reference energy must '\
+				'have the same units as "energy".'
+		},
 	}
-	   
+   
 
 .. code-block:: python
 
@@ -169,6 +169,84 @@ calculation (not the input), and is therefore better suited as a Property.
 		'acc':                        {'type': 'float',  'has-unit': False, 'extent': [":",3], 'required': False, 'description': ''},
 	}
 
+In order to satisfy the formatting requirements specified by the `OpenKIM
+Properties Framework <https://openkim.org/doc/schema/properties-framework/>`_,
+the field names in the property defintion should not include underscores
+(:code:`'_'`).
+
+.. code-block:: python
+
+	# Can't use underscores in field names
+	extra_stuff_definition = {
+		k.replace('_', '-').lower(): v for k,v in extra_stuff_definition.items()
+	}
+
+.. code-block:: python
+
+    client.insert_property_definition(base_definition)
+    client.insert_property_definition(extra_stuff_definition)
+
+Loading from a file
+===================
+
+This example uses :meth:`~colabfit.tools.database.load_data` to load the data
+from an existing Extended XYZ file. Note that the raw data includes the
+:code:`config_type` field, which is used to generate the names of the loaded
+Configurations. A :attr:`default_name` is also provided to handle the
+configurations that do not have a :code:`config_type` field.
+:code:`verbose=True` is used here since the dataset is large enough to warrant a
+progress bar.
+
+.. code-block:: python
+
+	dataset.configurations = load_data(
+		file_path='./si_prx_gap/gp_iter6_sparse9k.xml.xyz',
+		file_format='xyz',
+		name_field='config_type',  # key in Configuration.info to use as the Configuration name
+		elements=['Si'],
+		default_name='Si_PRX_GAP',  # default name with `name_field` not found
+		verbose=True
+	)
+
+Some of the data fields need to be cleaned before use
+
+.. code-block:: python
+
+	# Data stored on atoms needs to be cleaned
+	def tform(img):
+		img.info['per-atom'] = False
+		
+		# Renaming some fields to be consistent
+		if 'DFT_energy' in img.info:
+			img.info['dft_energy'] = img.info['DFT_energy']
+			del img.info['DFT_energy']
+			
+		if 'DFT_force' in img.arrays:
+			img.arrays['dft_force'] = img.arrays['DFT_force']
+			del img.arrays['DFT_force']
+			
+		if 'DFT_virial' in img.info:
+			img.info['dft_virial'] = img.info['DFT_virial']
+			del img.info['DFT_virial']
+			
+		# Converting some string values to floats
+		for k in [
+			'md_temperature', 'md_cell_t', 'smearing_width', 'md_delta_t',
+			'md_ion_t', 'cut_off_energy', 'elec_energy_tol',
+			]:
+			if k in img.info:
+				try:
+					img.info[k] = float(img.info[k].split(' ')[0])
+				except:
+					pass
+		
+		# Reshaping shape (9,) stress vector to (3, 3) to match definition
+		if 'dft_virial' in img.info:
+			img.info['dft_virial'] = img.info['dft_virial'].reshape((3,3))
+
+Now we can build the property map to tell :meth:`insert_data` how to build the
+properties.
+
 .. code-block:: python
 
 	units = {
@@ -217,23 +295,6 @@ calculation (not the input), and is therefore better suited as a Property.
 			for k in extra_stuff_definition if k not in {'property-id', 'property-title', 'property-description'}
 		}
 	}
-
-In order to satisfy the formatting requirements specified by the `OpenKIM
-Properties Framework <https://openkim.org/doc/schema/properties-framework/>`_,
-the field names in the property defintion should not include underscores
-(:code:`'_'`).
-
-.. code-block:: python
-
-	# Can't use underscores in field names
-	extra_stuff_definition = {
-		k.replace('_', '-').lower(): v for k,v in extra_stuff_definition.items()
-	}
-
-.. code-block:: python
-
-    client.insert_property_definition(base_definition)
-    client.insert_property_definition(extra_stuff_definition)
 
 Identifying duplicate configurations
 ====================================
