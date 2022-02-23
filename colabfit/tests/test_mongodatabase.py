@@ -536,6 +536,111 @@ class TestMongoDatabase:
             assert count == 10
 
 
+    def test_get_configurations_attach_settings(self):
+
+        database = MongoDatabase(self.database_name, drop_database=True)
+
+        images = build_n(10)[0]
+
+        database.insert_property_definition(
+            {
+                'property-id': 'default',
+                'property-title': 'A default property used for testing',
+                'property-description': 'A description of the property',
+
+                'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+
+                # 'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                # 'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                # 'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                # 'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                # 'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                # 'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+            }
+        )
+
+        property_map = {
+            'default': {
+                'energy': {'field': 'energy', 'units': 'eV'},
+                'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                'stress': {'field': 'stress', 'units': 'GPa'},
+
+                '_settings': {
+
+                    '_method': 'VASP',
+                    '_description': 'A basic test calculation',
+                    '_files': [('dummy_name', 'dummy file contents')],
+                    '_labels': ['ps_label1', 'ps_label2'],
+
+                    'name':             {'required': False, 'field': 'name', 'units': None},
+                    'nd-same-shape':    {'required': False, 'field': 'nd-same-shape', 'units': 'eV'},
+                    'nd-diff-shapes':   {'required': False, 'field': 'nd-diff-shapes', 'units': 'eV'},
+                    'nd-same-shape-arr':    {'required': False, 'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                    'nd-diff-shapes-arr':   {'required': False, 'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                }
+            }
+        }
+
+        for i, img in enumerate(images):
+            img.info[ATOMS_NAME_FIELD].add(f'config_{i}')
+            img.info[ATOMS_LABELS_FIELD].add('a_label')
+
+        ids = database.insert_data(
+            images,
+            property_map=property_map,
+        )
+
+        rebuilt_configs = database.get_configurations(
+            [_[0] for _ in ids],
+            attach_properties=True,
+            attach_settings=True,
+        )
+
+        for i, ((cid, pid), config) in enumerate(zip(ids, images)):
+            config_doc = next(database.configurations.find({'_id': cid}))
+            prop_doc   = next(database.properties.find({'_id': pid}))
+
+            pn = database.get_data(
+                'properties', 'default.forces', ids=[pid], concatenate=True
+            ).shape[0]
+
+            na = len(config)
+            assert config_doc['nsites'] == na
+            assert pn == na
+
+            assert config_doc['chemical_formula_anonymous'] == 'A'
+            assert config_doc['chemical_formula_hill'] == config.get_chemical_formula()
+            assert config_doc['chemical_formula_reduced'] == 'H'
+            assert config_doc['dimension_types'] == [0, 0, 0]
+            assert config_doc['elements'] == ['H']
+            assert config_doc['elements_ratios'] == [1.0]
+            assert {'a_label'}.issubset(config_doc['labels'])
+            np.testing.assert_allclose(
+                config_doc['lattice_vectors'],
+                np.array(config.get_cell())
+            )
+            assert config_doc['names'] == [f'config_{i}']
+            assert config_doc['nsites'] == len(config)
+            assert config_doc['nelements'] == 1
+            assert config_doc['nperiodic_dimensions'] == 0
+            assert {pid}.issubset(config_doc['relationships']['properties'])
+
+            assert {cid}.issubset(prop_doc['relationships']['configurations'])
+
+            assert database.property_settings.count_documents({
+                'relationships.properties': pid
+            })
+
+
+            assert rebuilt_configs[i].info['_settings._method'] == 'VASP'
+            assert rebuilt_configs[i].info['_settings._description'] == 'A basic test calculation'
+            assert set(rebuilt_configs[i].info['_settings._labels']) == {'ps_label1', 'ps_label2'}
+
+        database.drop_database(database.database_name)
+
+
     def test_insert_pso_definition_data(self):
 
         with tempfile.NamedTemporaryFile() as tmpfile:

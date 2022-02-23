@@ -818,7 +818,7 @@ class MongoDatabase(MongoClient):
                         ps_update_doc =  {  # update document
                                 '$setOnInsert': {
                                     '_id': ps_id,
-                                    'method':       ps.method,
+                                    '_method':       ps.method,
                                     '_description': ps.description,
                                     '_files':       ps.files,
                                 },
@@ -826,7 +826,7 @@ class MongoDatabase(MongoClient):
                                     'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                                 },
                                 '$addToSet': {
-                                    'labels': {
+                                    '_labels': {
                                         '$each': list(ps.labels)
                                     },
                                     'relationships.properties': {
@@ -1245,6 +1245,7 @@ class MongoDatabase(MongoClient):
         self, configuration_ids,
         property_ids=None,
         attach_properties=False,
+        attach_settings=False,
         generator=False,
         verbose=False
         ):
@@ -1278,6 +1279,12 @@ class MongoDatabase(MongoClient):
                 WARNING: don't use this option if multiple properties of the
                 same type point to the same Configuration, but the properties
                 don't have values for all of their fields.
+
+            attach_settings (bool, default=False):
+                If True, attaches all of the fields of the property settings
+                that are linked to the attached property instances. If
+                :code:`attach_settings=True`, must also have
+                :code:`attach_properties=True`.
 
             generator (bool, default=False):
                 If True, this function returns a generator of the
@@ -1313,11 +1320,19 @@ class MongoDatabase(MongoClient):
                 query=query,
                 property_ids=property_ids,
                 attach_properties=attach_properties,
+                attach_settings=attach_settings,
                 verbose=verbose
             ))
 
 
-    def _get_configurations(self, query, property_ids, attach_properties, verbose=False):
+    def _get_configurations(
+        self,
+        query,
+        property_ids,
+        attach_properties,
+        attach_settings,
+        verbose=False
+        ):
         if not attach_properties:
             for co_doc in tqdm(
                 self.configurations.find(
@@ -1344,22 +1359,40 @@ class MongoDatabase(MongoClient):
                 yield c
         else:
 
-            # property_match = { 'relationships.configurations': query['_id']}
+            property_match = { 'relationships.configurations': query['_id']}
 
-            # if property_ids is not None:
-            #     property_match['_id'] = {'$in': property_ids}
+            if property_ids is not None:
+                property_match['_id'] = {'$in': property_ids}
 
-            for co_doc in tqdm(self.configurations.aggregate([
-                    {'$match': query},
+            pipeline = [
+                {'$match': query},
+                {'$lookup': {
+                    'from': 'properties',
+                    'localField': 'relationships.properties',
+                    'foreignField': '_id',
+                    'as': 'linked_properties'
+                }},
+                # {'$match': {'linked_properties._id': property_match}},
+                # {'$match': {'linked_properties._id': {'$in': property_ids}}},
+            ]
+
+            if property_ids is not None:
+                pipeline.append(
+                    {'$match': {'linked_properties._id': {'$in': property_ids}}}
+                )
+
+            if attach_settings:
+                pipeline.append(
                     {'$lookup': {
-                        'from': 'properties',
-                        'localField': 'relationships.properties',
+                        'from': 'property_settings',
+                        'localField': 'linked_properties.relationships.property_settings',
                         'foreignField': '_id',
-                        'as': 'linked_properties'
-                    }},
-                    # {'$match': {'linked_properties._id': property_match}},
-                    {'$match': {'linked_properties._id': {'$in': property_ids}}},
-                    ]),
+                        'as': 'linked_property_settings'
+                    }}
+                )
+
+            for co_doc in tqdm(
+                    self.configurations.aggregate(pipeline),
                     desc='Getting configurations',
                     disable=not verbose
                 ):
@@ -1395,6 +1428,25 @@ class MongoDatabase(MongoClient):
                             # Then this is the first time
                             # the property of this type is being added
                             dct[field_name] = [v]
+                
+                if attach_settings:
+                    for ps_doc in co_doc['linked_property_settings']:
+                        for k,v in ps_doc.items():
+                            if k in [
+                                '_id', '_description', '_labels', '_method'
+                                ]:
+                                c.info['_settings.'+k] = v
+                            elif k in ['_files', 'last_modified', 'relationships']:
+                                pass
+                            else:
+                                v = np.atleast_1d(field['source-value'])
+
+                                if (v.dtype == 'O') or v.shape[0] != n:
+                                    dct = c.info
+                                else:
+                                    dct = c.arrays
+
+                                dct[k] = v
 
                 yield c
 
