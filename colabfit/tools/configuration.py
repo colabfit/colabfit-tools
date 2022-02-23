@@ -4,7 +4,7 @@ from ase import Atoms
 from string import ascii_lowercase, ascii_uppercase
 
 from colabfit import (
-    HASH_SHIFT,
+    HASH_LENGTH, HASH_SHIFT,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
     ATOMS_CONSTRAINTS_FIELD
 )
@@ -148,7 +148,7 @@ class Configuration(Atoms):
         _hash.update(np.round_(np.array(self.cell), decimals=16).data.tobytes()),
         _hash.update(np.array(self.pbc).data.tobytes()),
 
-        return int(_hash.hexdigest()[:16], 16)-HASH_SHIFT
+        return int(_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
 
         # return sha512((
         #     len(self),

@@ -1,8 +1,7 @@
-import json
+import numpy as np
 from hashlib import sha512
 
-from colabfit import HASH_SHIFT
-
+from colabfit import HASH_LENGTH, HASH_SHIFT, STRING_DTYPE_SPECIFIER
 class PropertySettings:
     """
     This class is used to store information useful for reproducing a Property.
@@ -15,6 +14,17 @@ class PropertySettings:
 
         description (str):
             A human-readable description of the settings.
+
+        fields (dict):
+            A dictionary of additional information. key = name of the field;
+            value = {
+                'source-value': <key_for_extracting_from_configuration>,
+                'source-units': <string_specifying_units> or None
+                }
+            For more details onw how to build this dictionary, refer to the
+            "property map" description in the documentation, which follows a
+            similar structure. These fields will be used to extract data from a
+            Configuration object when inserting into the database.
 
         files (list):
             A list of 2-tuples, where the first value of each tuple is the name
@@ -29,6 +39,7 @@ class PropertySettings:
         self,
         method='',
         description='',
+        fields=[],
         files=None,
         labels=None,
     ):
@@ -52,6 +63,7 @@ class PropertySettings:
             labels = set(labels)
 
         self.method         = method
+        self.fields         = fields
         self.files          = files
         self.description    = description
         self.labels         = labels
@@ -65,21 +77,43 @@ class PropertySettings:
 
     def __hash__(self,):
         """
-        Hashes method, description, and file contents. Not labels. Returns a
-        string
+        Hashes method, description, field contents, and file contents.
+        Does NOT use the description or the labels for hashing.
         """
 
         _hash = sha512()
 
         file_hashes = []
+
+        for k, vdict in self.fields.items():
+            _hash.update(k.encode('utf-8'))
+
+            try:
+                hashval =  np.round_(
+                    np.array(vdict['source-value']), decimals=12
+                ).data.tobytes()
+            except:
+                try:
+                    hashval = np.array(
+                        vdict['source-value'], dtype=STRING_DTYPE_SPECIFIER
+                    ).data.tobytes()
+                except:
+                    raise PropertySettingsHashError(
+                        "Could not hash key {}: {}".format(k, vdict)
+                    )
+
+            _hash.update(hashval)
+            _hash.update(str(vdict['source-unit']).encode('utf-8'))
+
+
         for (fname, contents) in self.files:
             file_hashes.append(_hash.update(contents.encode('utf-8')))
 
         _hash.update(self.method.encode('utf-8'))
-        _hash.update(self.description.encode('utf-8'))
+        # _hash.update(self.description.encode('utf-8'))
 
         # convert a base-16 int string to an int, take first 16 digits and shift
-        return int(_hash.hexdigest()[:16], 16)-HASH_SHIFT
+        return int(_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
 
 
     def __eq__(self, other):
@@ -98,3 +132,7 @@ class PropertySettings:
 
     def __repr__(self):
         return str(self)
+
+
+class PropertySettingsHashError(Exception):
+    pass

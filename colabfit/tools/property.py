@@ -18,7 +18,7 @@ from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
 
 from colabfit import (
-    HASH_SHIFT,
+    HASH_LENGTH, HASH_SHIFT,
     DEFAULT_PROPERTY_NAME, STRING_DTYPE_SPECIFIER, UNITS,
     OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
 )
@@ -581,10 +581,13 @@ class Property(dict):
 
             _hash.update(hashval)
 
+            if 'source-unit' in val:
+                _hash.update(str(val['source-unit']).encode('utf-8'))
+
         for cid in self.configuration_ids:
             _hash.update(cid.encode('utf-8'))
 
-        return int(_hash.hexdigest()[:16], 16)-HASH_SHIFT
+        return int(_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
 
 
     def __eq__(self, other):

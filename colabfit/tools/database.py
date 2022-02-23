@@ -25,7 +25,9 @@ from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
 
 from colabfit import (
+    HASH_LENGTH,
     HASH_SHIFT,
+    ID_FORMAT_STRING,
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
@@ -273,6 +275,13 @@ class MongoDatabase(MongoClient):
                                 'forces':   {'field': 'forces',  'units': 'eV/Ang'},
                                 'stress':   {'field': 'virial',  'units': 'GPa'},
                                 'per-atom': {'field': 'per-atom', 'units': None},
+                            
+                                '_settings': {
+                                    '_method': 'VASP',
+                                    '_description': 'A static VASP calculation',
+                                    '_files': None,
+                                    '_labels': ['Monkhorst-Pack'],
+                                }
                             }
                         }
 
@@ -281,9 +290,12 @@ class MongoDatabase(MongoClient):
                 numbers, positions, lattice vectors, and periodic boundary
                 conditions).
 
-            property_settings (dict)
-                key = property name (same as top-level keys in property_map).
-                val = a PropertySettings object
+                The '_settings' key is a special key that can be used to specify
+                the contents of a PropertySettings object that will be
+                constructed and linked to each associated property instance.
+
+            property_settings (list)
+                A list of PropertySettings objects.
 
             transform (callable, default=None):
                 If provided, `transform` will be called on each configuration in
@@ -318,6 +330,11 @@ class MongoDatabase(MongoClient):
         if property_map is None:
             property_map = {}
 
+        ignore_keys = {
+            'property-id', 'property-title', 'property-description',
+            'last_modified', 'definition', '_id', '_settings'
+        }
+
         # Sanity checks for property map
         for pname, pdict in property_map.items():
             pd_doc = self.property_definitions.find_one({'_id': pname})
@@ -325,6 +342,9 @@ class MongoDatabase(MongoClient):
             if pd_doc:
                 # property_field_name, {'ase_field': ..., 'units': ...}
                 for k, pd in pdict.items():
+                    if k in ignore_keys:
+                        continue
+
                     if k not in pd_doc['definition']:
                         warnings.warn(
                             'Provided field "{}" in property_map does not match '\
@@ -348,10 +368,10 @@ class MongoDatabase(MongoClient):
                 )
 
         if property_settings is None:
-            property_settings = {}
+            property_settings = []
 
-        for pso in property_settings.values():
-            self.insert_property_settings(pso)
+        # for pso in property_settings.values():
+        #     self.insert_property_settings(pso)
 
         if generator:
             return self._insert_data_generator(
@@ -415,7 +435,7 @@ class MongoDatabase(MongoClient):
             property_map = {}
 
         if property_settings is None:
-            property_settings = {}
+            property_settings = []
 
         property_definitions = {
             pname: coll_property_definitions.find_one({'_id': pname})['definition']
@@ -449,7 +469,7 @@ class MongoDatabase(MongoClient):
             if transform:
                 transform(atoms)
 
-            cid = str(hash(atoms))
+            cid = ID_FORMAT_STRING.format('CO', str(hash(atoms)), 0)
 
             processed_fields = process_species_list(atoms)
 
@@ -516,7 +536,7 @@ class MongoDatabase(MongoClient):
                 )
 
                 # NOTE: property ID does not depend upon linked settings
-                pid = str(hash(prop))
+                pid = ID_FORMAT_STRING.format('PI', str(hash(prop)), 0)
 
                 # Attach property settings, if any were given
                 labels = []
@@ -621,7 +641,7 @@ class MongoDatabase(MongoClient):
     @staticmethod
     def _insert_data(
         configurations, database_name, mongo_login,
-        property_map=None, property_settings=None, transform=None,
+        property_map=None, transform=None,
         verbose=False
         ):
 
@@ -641,8 +661,8 @@ class MongoDatabase(MongoClient):
         if property_map is None:
             property_map = {}
 
-        if property_settings is None:
-            property_settings = {}
+        # if property_settings is None:
+        #     property_settings = []
 
         property_definitions = {
             pname: coll_property_definitions.find_one({'_id': pname})['definition']
@@ -651,7 +671,7 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
-            'last_modified', 'definition', '_id'
+            'last_modified', 'definition', '_id', '_settings'
         }
 
         expected_keys = {
@@ -667,7 +687,7 @@ class MongoDatabase(MongoClient):
 
         config_docs     = []
         property_docs   = []
-        settings_docs   = {}
+        settings_docs   = []
 
         # Add all of the configurations into the Mongo server
         ai = 1
@@ -680,7 +700,7 @@ class MongoDatabase(MongoClient):
             if transform:
                 transform(atoms)
 
-            cid = str(hash(atoms))
+            cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
             processed_fields = process_species_list(atoms)
 
@@ -723,51 +743,114 @@ class MongoDatabase(MongoClient):
 
             pid = None
 
+            new_pids = []
             for pname, pmap in property_map.items():
+                pmap_copy = dict(pmap)
+                if '_settings' in pmap_copy:
+                    del pmap_copy['_settings']
 
                 # Pre-check to avoid having to delete partially-added properties
                 missing_keys = expected_keys[pname] - available_keys
                 if missing_keys:
                     warnings.warn(
-                        "Configuration is missing keys {} during "\
-                        "insert_data. Available keys: {}. Skipping".format(
+                        "Configuration is missing keys {} for Property"\
+                        "Instance construction. Available keys: {}. "\
+                        "Skipping".format(
                             missing_keys, available_keys
                         )
-                        # "Configuration {} is missing keys {} during "\
-                        # "insert_data. Available keys: {}. Skipping".format(
-                        #     ai, missing_keys, available_keys
-                        # )
                     )
                     continue
 
                 prop = Property.from_definition(
                     definition=property_definitions[pname],
                     configuration=atoms,
-                    property_map=pmap
+                    property_map=pmap_copy
                 )
 
-                # NOTE: property ID does not depend upon linked settings
-                pid = str(hash(prop))
+                pid = ID_FORMAT_STRING.format('PI', hash(prop), 0)
 
-                # Attach property settings, if any were given
+                new_pids.append(pid)
+
                 labels = []
                 methods = []
-                settings_id = []
-                if pname in property_settings:
-                    settings_id = str(hash(property_settings[pname]))
+                settings_ids = []
 
-                    labels = list(property_settings[pname].labels)
-                    methods = [property_settings[pname].method]
+                # Attach property settings, if any were given
+                if '_settings' in pmap:
+                    pso_map = pmap['_settings']
 
-                    # Tracker for updating PSO->PR relationships
-                    if settings_id in settings_docs:
-                        settings_docs[settings_id].append(pid)
-                    else:
-                        settings_docs[settings_id] = [pid]
+                    all_ps_fields = set(pso_map.keys()) - {
+                        '_method', '_description', '_files', '_labels'
+                    }
 
-                    settings_id = [settings_id]
+                    ps_not_required = {
+                        psk for psk in all_ps_fields if not pso_map[psk]['required']
+                    }
 
-                # Prepare the EDN document
+                    ps_missing_keys = all_ps_fields  - available_keys - ps_not_required
+
+                    if not ps_missing_keys:
+                        # Has all of the required PS keys
+
+                        gathered_fields = {}
+                        for ps_field in all_ps_fields:
+                            psf_key = pso_map[ps_field]['field']
+                            psf_units = pso_map[ps_field]['field']
+
+                            if ps_field in atoms.info:
+                                v = atoms.info[psf_key]
+                            elif ps_field in atoms.arrays:
+                                v = atoms.arrays[psf_units]
+                            else:
+                                # Then this key is not required
+                                continue
+
+                            gathered_fields[ps_field] = {
+                                'source-value': v,
+                                'source-unit': psf_units
+                            }
+
+                        ps = PropertySettings(
+                            method=pso_map['_method'] if '_method' in pso_map else None,
+                            description=pso_map['_description'] if '_description' in pso_map else None,
+                            files=pso_map['_files'] if '_files' in pso_map else None,
+                            labels=pso_map['_labels'] if '_labels' in pso_map else None,
+                            fields=gathered_fields,
+                        )
+
+                        ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
+
+                        ps_update_doc =  {  # update document
+                                '$setOnInsert': {
+                                    '_id': ps_id,
+                                    'method':       ps.method,
+                                    '_description': ps.description,
+                                    '_files':       ps.files,
+                                },
+                                '$set': {
+                                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                                },
+                                '$addToSet': {
+                                    'labels': {
+                                        '$each': list(ps.labels)
+                                    },
+                                    'relationships.properties': {
+                                        '$each': [pid]
+                                    }
+                                }
+                            }
+
+                        settings_docs.append(UpdateOne(
+                            {'_id': ps_id},
+                            ps_update_doc,
+                            upsert=True,
+                        ))
+
+                        methods.append(ps.method)
+                        labels += list(ps.labels)
+                        settings_ids.append(ps_id)
+
+                # Prepare the property instance EDN document
                 setOnInsert = {}
                 for k in property_map[pname]:
                     if k not in prop.keys():
@@ -797,7 +880,7 @@ class MongoDatabase(MongoClient):
                             'labels': {'$each': labels},
                             # PR -> PSO pointer
                             'relationships.property_settings': {
-                                '$each': settings_id
+                                '$each': settings_ids
                             },
                             'relationships.configurations': cid,
                         },
@@ -850,14 +933,21 @@ class MongoDatabase(MongoClient):
 
         if settings_docs:
             res = coll_property_settings.bulk_write(
-                [
-                    UpdateOne(
-                        {'_id': sid},
-                        {'$addToSet': {'relationships.properties': {'$each': lst}}}
-                    ) for sid, lst in settings_docs.items()
-                ],
+                settings_docs,
+                # [
+                #     UpdateOne(
+                #         {'_id': sid},
+                #         {'$addToSet': {'relationships.properties': {'$each': lst}}}
+                #     ) for sid, lst in settings_docs.items()
+                # ],
                 ordered=False
             )
+            nmatch = res.bulk_api_result['nMatched']
+            if nmatch:
+                warnings.warn(
+                    '{} duplicate property settings detected'.format(nmatch)
+                )
+
 
         client.close()
         return insertions
@@ -944,14 +1034,14 @@ class MongoDatabase(MongoClient):
         return self.property_definitions.find_one({'_id': name})
 
 
-    def insert_property_settings(self, pso_object):
+    def insert_property_settings(self, ps_object):
         """
         Inserts a new property settings object into the database by creating
         and populating the necessary groups in :code:`/root/property_settings`.
 
         Args:
 
-            pso_object (PropertySettings)
+            ps_object (PropertySettings)
                 The :class:`~colabfit.tools.property_settings.PropertySettings`
                 object to insert into the database.
 
@@ -963,30 +1053,30 @@ class MongoDatabase(MongoClient):
                 of the object.
         """
 
-        pso_id = str(hash(pso_object))
+        ps_id = ID_FORMAT_STRING.format('PS', hash(ps_object), 0)
 
         self.property_settings.update_one(
-            {'_id': pso_id},
+            {'_id': ps_id},
             {
                 '$addToSet': {
-                    'labels': {'$each': list(pso_object.labels)}
+                    'labels': {'$each': list(ps_object.labels)}
                 },
                 '$setOnInsert': {
-                    '_id': pso_id,
-                    'method': pso_object.method,
-                    'description': pso_object.description,
+                    '_id': ps_id,
+                    'method': ps_object.method,
+                    'description': ps_object.description,
                     'files': [
                         {
                             'file_name': ftup[0],
                             'file_contents': ftup[1],
-                        } for ftup in pso_object.files
+                        } for ftup in ps_object.files
                     ],
                 }
             },
             upsert=True
         )
 
-        return pso_id
+        return ps_id
 
 
     def get_property_settings(self, pso_id):
@@ -1335,7 +1425,8 @@ class MongoDatabase(MongoClient):
         for i in sorted(ids):
             cs_hash.update(str(i).encode('utf-8'))
 
-        cs_id = str(int(cs_hash.hexdigest()[:16], 16)-HASH_SHIFT)
+        cs_hash = int(cs_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
+        cs_id = ID_FORMAT_STRING.format('CS', cs_hash, 0)
 
         # Check for duplicates
         if self.configuration_sets.count_documents({'_id': cs_id}):
@@ -1813,7 +1904,8 @@ class MongoDatabase(MongoClient):
         for pi in sorted(pr_ids):
             ds_hash.update(str(pi).encode('utf-8'))
 
-        ds_id = str(int(ds_hash.hexdigest()[:16], 16)-HASH_SHIFT)
+        ds_hash = int(ds_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
+        ds_id = ID_FORMAT_STRING.format('DS', ds_hash, 0)
 
         # Check for duplicates
         if self.datasets.count_documents({'_id': ds_id}):
