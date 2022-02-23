@@ -238,7 +238,6 @@ class MongoDatabase(MongoClient):
         self,
         configurations,
         property_map=None,
-        property_settings=None,
         transform=None,
         generator=False,
         verbose=True
@@ -281,6 +280,8 @@ class MongoDatabase(MongoClient):
                                     '_description': 'A static VASP calculation',
                                     '_files': None,
                                     '_labels': ['Monkhorst-Pack'],
+
+                                    'xc-functional': {'field': 'xcf', 'units': None}
                                 }
                             }
                         }
@@ -293,9 +294,6 @@ class MongoDatabase(MongoClient):
                 The '_settings' key is a special key that can be used to specify
                 the contents of a PropertySettings object that will be
                 constructed and linked to each associated property instance.
-
-            property_settings (list)
-                A list of PropertySettings objects.
 
             transform (callable, default=None):
                 If provided, `transform` will be called on each configuration in
@@ -367,9 +365,6 @@ class MongoDatabase(MongoClient):
                     'existing definition in the database.'.format(pname)
                 )
 
-        # for pso in property_settings.values():
-        #     self.insert_property_settings(pso)
-
         if generator:
             return self._insert_data_generator(
                 mongo_login=mongo_login,
@@ -412,6 +407,8 @@ class MongoDatabase(MongoClient):
         property_map=None, property_settings=None, transform=None,
         verbose=False
         ):
+
+        raise NotImplementedError('Generator version not ready yet')
 
         if isinstance(mongo_login, int):
             client = MongoClient('localhost', mongo_login)
@@ -815,13 +812,32 @@ class MongoDatabase(MongoClient):
 
                     ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
 
+                    ps_set_on_insert = {
+                        '_id': ps_id,
+                        '_method':       ps.method,
+                        '_description': ps.description,
+                        '_files':       ps.files,
+                    }
+
+                    for gf, gf_dict in gathered_fields.items():
+                        if isinstance(gf_dict['source-value'], (int, float, str)):
+                            # Add directly
+                            ps_set_on_insert[gf] = {
+                                'source-value': gf_dict['source-value']
+                            }
+                        else:
+                            # Then it's array-like and should be converted to a list
+                            ps_set_on_insert[gf] = {
+                                'source-value': np.atleast_1d(
+                                    gf_dict['source-value']
+                                ).tolist()
+                            }
+
+                        if 'source-unit' in gf_dict:
+                            ps_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
+
                     ps_update_doc =  {  # update document
-                            '$setOnInsert': {
-                                '_id': ps_id,
-                                '_method':       ps.method,
-                                '_description': ps.description,
-                                '_files':       ps.files,
-                            },
+                            '$setOnInsert': ps_set_on_insert,
                             '$set': {
                                 'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                             },
