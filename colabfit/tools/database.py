@@ -778,72 +778,72 @@ class MongoDatabase(MongoClient):
                         '_method', '_description', '_files', '_labels'
                     }
 
-                    ps_not_required = {
-                        psk for psk in all_ps_fields if not pso_map[psk]['required']
-                    }
+                    # ps_not_required = {
+                    #     psk for psk in all_ps_fields if not pso_map[psk]['required']
+                    # }
 
-                    ps_missing_keys = all_ps_fields  - available_keys - ps_not_required
+                    # ps_missing_keys = all_ps_fields  - available_keys - ps_not_required
 
-                    if not ps_missing_keys:
-                        # Has all of the required PS keys
+                    # if not ps_missing_keys:
+                    #     # Has all of the required PS keys
 
-                        gathered_fields = {}
-                        for ps_field in all_ps_fields:
-                            psf_key = pso_map[ps_field]['field']
-                            psf_units = pso_map[ps_field]['field']
+                    gathered_fields = {}
+                    for ps_field in all_ps_fields:
+                        psf_key = pso_map[ps_field]['field']
 
-                            if ps_field in atoms.info:
-                                v = atoms.info[psf_key]
-                            elif ps_field in atoms.arrays:
-                                v = atoms.arrays[psf_units]
-                            else:
-                                # Then this key is not required
-                                continue
+                        if ps_field in atoms.info:
+                            v = atoms.info[psf_key]
+                        elif ps_field in atoms.arrays:
+                            v = atoms.arrays[psf_key]
+                        else:
+                            # Then this key is not required
+                            continue
 
-                            gathered_fields[ps_field] = {
-                                'source-value': v,
-                                'source-unit': psf_units
-                            }
+                        gathered_fields[ps_field] = {
+                            # 'required': pso_map[ps_field]['required'],
+                            'source-value': v,
+                            'source-unit':  pso_map[ps_field]['units'],
+                        }
 
-                        ps = PropertySettings(
-                            method=pso_map['_method'] if '_method' in pso_map else None,
-                            description=pso_map['_description'] if '_description' in pso_map else None,
-                            files=pso_map['_files'] if '_files' in pso_map else None,
-                            labels=pso_map['_labels'] if '_labels' in pso_map else None,
-                            fields=gathered_fields,
-                        )
+                    ps = PropertySettings(
+                        method=pso_map['_method'] if '_method' in pso_map else None,
+                        description=pso_map['_description'] if '_description' in pso_map else None,
+                        files=pso_map['_files'] if '_files' in pso_map else None,
+                        labels=pso_map['_labels'] if '_labels' in pso_map else None,
+                        fields=gathered_fields,
+                    )
 
-                        ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
+                    ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
 
-                        ps_update_doc =  {  # update document
-                                '$setOnInsert': {
-                                    '_id': ps_id,
-                                    '_method':       ps.method,
-                                    '_description': ps.description,
-                                    '_files':       ps.files,
+                    ps_update_doc =  {  # update document
+                            '$setOnInsert': {
+                                '_id': ps_id,
+                                '_method':       ps.method,
+                                '_description': ps.description,
+                                '_files':       ps.files,
+                            },
+                            '$set': {
+                                'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                            },
+                            '$addToSet': {
+                                '_labels': {
+                                    '$each': list(ps.labels)
                                 },
-                                '$set': {
-                                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                                },
-                                '$addToSet': {
-                                    '_labels': {
-                                        '$each': list(ps.labels)
-                                    },
-                                    'relationships.properties': {
-                                        '$each': [pid]
-                                    }
+                                'relationships.properties': {
+                                    '$each': [pid]
                                 }
                             }
+                        }
 
-                        settings_docs.append(UpdateOne(
-                            {'_id': ps_id},
-                            ps_update_doc,
-                            upsert=True,
-                        ))
+                    settings_docs.append(UpdateOne(
+                        {'_id': ps_id},
+                        ps_update_doc,
+                        upsert=True,
+                    ))
 
-                        methods.append(ps.method)
-                        labels += list(ps.labels)
-                        settings_ids.append(ps_id)
+                    methods.append(ps.method)
+                    labels += list(ps.labels)
+                    settings_ids.append(ps_id)
 
                 # Prepare the property instance EDN document
                 setOnInsert = {}
@@ -3034,20 +3034,49 @@ class MongoDatabase(MongoClient):
 
         agg_info = dataset.aggregated_info
 
-        # TODO: property settings should just be attached to the atoms?
+        # TODO: property settings should populate the MD file table
 
-        # TODO: how will you handle property settings? They are now fields on a
-        # CO, so should you store them in the XYZ file? Should
-        # get_configurations also have an attach_settings option??
-        # This could duplicate a lot of data. Could just export PSOs as separate files
-
-        property_settings = {}
-        for pso_doc in self.property_settings.find(
-            {'relationships.properties': {'$in': dataset.property_ids}}
-            ):
-            property_settings[pso_doc['_id']] = self.get_property_settings(
-                pso_doc['_id']
+        # property_settings = {}
+        # for pso_doc in self.property_settings.find(
+        #     {'relationships.properties': {'$in': dataset.property_ids}}
+        #     ):
+        #     property_settings[pso_doc['_id']] = self.get_property_settings(
+        #         pso_doc['_id']
+        #     )
+        
+        property_settings = list(
+            self.property_settings.find(
+                {'relationships.properties': {'$in': dataset.property_ids}}
             )
+        )
+
+        # Build Property Settings table
+
+        ps_table = []
+        for pso_id, pso in property_settings.items():
+            ps_table.append('| {} | {} | {} | {} | {} |'.format(
+                pso_id,
+                pso.method,
+                pso.description,
+                ', '.join(pso.labels),
+                ', '.join('[{}]({})'.format(f, f) for f in pso.files)
+            ))
+
+
+        for pr_doc in self.properties.aggregate([
+                {'$match': {'$in': dataset.property_ids}},
+                {'$lookup': {
+                    'from': 'property_settings',
+                    'localField': 'relationships.property_settings',
+                    'foreignField': '_id',
+                    'as': 'linked_settings'
+                }},
+            ]):
+
+            for ps_doc in pr_doc['linked_settings']:
+                pass
+
+        # TODO: get the types of the properties linked to the PSs
 
         configuration_sets = {
             csid: self.get_configuration_set(csid)['configuration_set']
@@ -3185,6 +3214,7 @@ class MongoDatabase(MongoClient):
                 ids=list(set(itertools.chain.from_iterable(
                     cs.configuration_ids for cs in configuration_sets.values()
                 ))),
+                attach_settings=True,
                 attach_properties=True,
                 generator=True,
             )
