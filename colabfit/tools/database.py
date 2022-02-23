@@ -367,9 +367,6 @@ class MongoDatabase(MongoClient):
                     'existing definition in the database.'.format(pname)
                 )
 
-        if property_settings is None:
-            property_settings = []
-
         # for pso in property_settings.values():
         #     self.insert_property_settings(pso)
 
@@ -379,7 +376,6 @@ class MongoDatabase(MongoClient):
                 database_name=self.database_name,
                 configurations=configurations,
                 property_map=property_map,
-                property_settings=property_settings,
                 transform=transform,
                 verbose=verbose
             )
@@ -399,7 +395,6 @@ class MongoDatabase(MongoClient):
                 mongo_login=mongo_login,
                 database_name=self.database_name,
                 property_map=property_map,
-                property_settings=property_settings,
                 transform=transform,
                 verbose=verbose
             )
@@ -1048,7 +1043,7 @@ class MongoDatabase(MongoClient):
 
         Returns:
 
-            pso_id (str):
+            ps_id (str):
                 The ID of the inserted property settings object. Equals the hash
                 of the object.
         """
@@ -1101,6 +1096,7 @@ class MongoDatabase(MongoClient):
         ids=None,
         keep_ids=False,
         concatenate=False,
+        vstack=False,
         ravel=False,
         unpack_properties=True,
         verbose=False,
@@ -1143,6 +1139,9 @@ class MongoDatabase(MongoClient):
 
             concatenate (bool, default=False):
                 If True, concatenates the data before returning.
+
+            vstack (bool, default=False):
+                If True, calls np.vstack on data before returning.
 
             ravel (bool, default=False):
                 If True, concatenates and ravels the data before returning.
@@ -1211,8 +1210,13 @@ class MongoDatabase(MongoClient):
 
                     data[k].append(v)
 
-        if concatenate or ravel:
-            for k,v in data.items():
+        for k,v in data.items():
+            data[k] = np.array(data[k])
+
+            if concatenate:
+                data[k] = np.concatenate(v)
+
+            if vstack:
                 data[k] = np.vstack(v)
 
         if ravel:

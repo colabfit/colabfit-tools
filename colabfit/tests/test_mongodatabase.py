@@ -6,7 +6,7 @@ import random
 random.seed(42)
 from ase import Atoms
 
-from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
+from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ID_FORMAT_STRING
 from colabfit.tools.configuration import Configuration
 from colabfit.tools.database import MongoDatabase
 from colabfit.tools.property_settings import PropertySettings
@@ -66,19 +66,19 @@ def build_n(n):
 class TestMongoDatabase:
     database_name = 'colabfit_test'
 
-    def test_from_html(self):
-       with tempfile.TemporaryFile() as tmpfile:
+    # def test_from_html(self):
+    #    with tempfile.TemporaryFile() as tmpfile:
 
-            database = MongoDatabase(self.database_name, drop_database=True)
+    #         database = MongoDatabase(self.database_name, drop_database=True)
 
-            # Just makes sure from_markdown doesn't throw an error
-            dataset = database.dataset_from_markdown(
-                'colabfit/tests/files/test.md',
-                generator=True
-            )
+    #         # Just makes sure from_markdown doesn't throw an error
+    #         dataset = database.dataset_from_markdown(
+    #             'colabfit/tests/files/test.md',
+    #             generator=True
+    #         )
 
-            assert 3 == dataset.aggregated_info['nconfigurations']
-            assert 3 == sum(dataset.aggregated_info['property_types_counts'])
+    #         assert 3 == dataset.aggregated_info['nconfigurations']
+    #         assert 3 == sum(dataset.aggregated_info['property_types_counts'])
 
 
     def test_add_then_update_nochange_config(self):
@@ -122,8 +122,8 @@ class TestMongoDatabase:
                 np.concatenate([_.get_cell() for _ in images])
             )
             np.testing.assert_allclose(
-                database.get_data('configurations', 'pbc', concatenate=True),
-                np.concatenate([_.get_pbc() for _ in images]).astype(int)
+                database.get_data('configurations', 'pbc', vstack=True),
+                np.vstack([_.get_pbc() for _ in images]).astype(int)
             )
 
 
@@ -187,9 +187,10 @@ class TestMongoDatabase:
                 np.concatenate([_.get_cell() for _ in images])
             )
             np.testing.assert_allclose(
-                database.get_data('configurations', 'pbc', concatenate=True),
-                np.concatenate([_.get_pbc() for _ in images]).astype(int)
+                database.get_data('configurations', 'pbc', vstack=True),
+                np.vstack([_.get_pbc() for _ in images]).astype(int)
             )
+
 
 
     def test_add_configs_props_diff_def(self):
@@ -252,19 +253,19 @@ class TestMongoDatabase:
             )))
 
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.energy', concatenate=True),
+                database.get_data('properties', 'default.energy', ravel=True),
                 np.hstack(energies)
             )
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.stress', concatenate=True),
+                database.get_data('properties', 'default.stress', ravel=True),
                 np.hstack(stress)
             )
-            decoded_names = database.get_data('properties', 'default.name', concatenate=True)
+            decoded_names = database.get_data('properties', 'default.name', ravel=True)
             decoded_names = decoded_names.tolist()
             assert decoded_names == names
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.nd-same-shape', concatenate=True),
-                np.concatenate(nd_same_shape)
+                database.get_data('properties', 'default.nd-same-shape', ravel=True),
+                np.concatenate(nd_same_shape).ravel()
             )
             data = database.get_data('properties', 'default.nd-diff-shapes')
             for a1, a2 in zip(data, nd_diff_shape):
@@ -326,21 +327,18 @@ class TestMongoDatabase:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+
+                    '_settings': {
+                        '_method': 'VASP',
+                        '_description': 'A basic test calculation',
+                        '_files': [('dummy_name', 'dummy file contents')],
+                    }
                 }
             }
 
-            pso = PropertySettings(
-                method='VASP',
-                description='A basic test calculation',
-                files=[('dummy_name', 'dummy file contents')],
-            )
-
-            pso_id = database.insert_property_settings(pso)
-
             database.insert_data(
                 images,
                 property_map=property_map,
-                property_settings={'default': pso_id}
             )
 
             for img in images:
@@ -349,7 +347,6 @@ class TestMongoDatabase:
             database.insert_data(
                 images,
                 property_map=property_map,
-                property_settings={'default': pso_id}
             )
 
             for img in images:
@@ -358,7 +355,6 @@ class TestMongoDatabase:
             database.insert_data(
                 images,
                 property_map=property_map,
-                property_settings={'default': pso_id}
             )
 
             np.testing.assert_allclose(
@@ -379,12 +375,12 @@ class TestMongoDatabase:
             )
 
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.energy', concatenate=True),
+                database.get_data('properties', 'default.energy', ravel=True),
                 np.concatenate([
                     np.hstack(energies),
                     np.hstack(energies)+100000,
                     np.hstack(energies)+200000
-                ])
+                ]).ravel()
             )
             np.testing.assert_allclose(
                 database.get_data('properties', 'default.stress', concatenate=True),
@@ -394,7 +390,7 @@ class TestMongoDatabase:
                     np.hstack(stress),
                 ])
             )
-            decoded_names = database.get_data('properties', 'default.name', concatenate=True)
+            decoded_names = database.get_data('properties', 'default.name')
             decoded_names = decoded_names.tolist()
             assert decoded_names == names*3
             np.testing.assert_allclose(
@@ -473,38 +469,34 @@ class TestMongoDatabase:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+
+                    '_settings': {
+                        '_method': 'VASP',
+                        '_description': 'A basic test calculation',
+                        '_files': [('dummy_name', 'dummy file contents')],
+                    }
                 }
             }
 
-            pso = PropertySettings(
-                method='VASP',
-                description='A basic test calculation',
-                files=[('dummy_name', 'dummy file contents')],
-            )
-
-            pso_id = database.insert_property_settings(pso)
-
             database.insert_data(
                 images,
                 property_map=property_map,
-                property_settings={'default': pso_id}
             )
 
             database.insert_data(
                 images,
                 property_map=property_map,
-                property_settings={'default': pso_id}
             )
 
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.energy', concatenate=True),
+                database.get_data('properties', 'default.energy'),
                 np.hstack(energies)
             )
             np.testing.assert_allclose(
                 database.get_data('properties', 'default.stress', concatenate=True),
                 np.hstack(stress)
             )
-            decoded_names =  database.get_data('properties', 'default.name', concatenate=True)
+            decoded_names =  database.get_data('properties', 'default.name')
             decoded_names = decoded_names.tolist()
             assert decoded_names == names
             np.testing.assert_allclose(
@@ -577,17 +569,14 @@ class TestMongoDatabase:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+
+                    '_settings': {
+                        '_method': 'VASP',
+                        '_description': 'A basic test calculation',
+                        '_files': [('dummy_name', 'dummy file contents')],
+                    }
                 }
             }
-
-            pso = PropertySettings(
-                method='VASP',
-                description='A basic test calculation',
-                files=[('dummy_name', 'dummy file contents')],
-                labels=['pso_label1', 'pso_label2']
-            )
-
-            pso_id = database.insert_property_settings(pso)
 
             for i, img in enumerate(images):
                 img.info[ATOMS_NAME_FIELD].add(f'config_{i}')
@@ -596,10 +585,7 @@ class TestMongoDatabase:
             ids = database.insert_data(
                 images,
                 property_map=property_map,
-                property_settings={'default': pso_id}
             )
-
-            pso_doc = next(database.property_settings.find({'_id': pso_id}))
 
             for i, ((cid, pid), config) in enumerate(zip(ids, images)):
                 config_doc = next(database.configurations.find({'_id': cid}))
@@ -630,13 +616,11 @@ class TestMongoDatabase:
                 assert config_doc['nperiodic_dimensions'] == 0
                 assert {pid}.issubset(config_doc['relationships']['properties'])
 
-                # assert {'pso_label2', 'pso_label1'}.issubset(
-                #     set(prop_doc['aggregated_fields']['labels'])
-                # )
                 assert {cid}.issubset(prop_doc['relationships']['configurations'])
-                assert {pso_id}.issubset(prop_doc['relationships']['property_settings'])
 
-                assert {pid}.issubset(pso_doc['relationships']['properties'])
+                assert database.property_settings.count_documents({
+                    'relationships.properties': pid
+                })
 
             database.drop_database(database.database_name)
 
@@ -668,8 +652,8 @@ class TestMongoDatabase:
             assert agg_info['nsites'] == sum(len(c) for c in images)
             assert agg_info['nelements'] == 1
             assert agg_info['elements'] == ['H']
-            assert agg_info['individual_elements_ratios'] == [[1.0]]
-            assert agg_info['total_elements_ratios'] == [1.0]
+            assert agg_info['individual_elements_ratios'] == {'H': [1.0]}
+            assert agg_info['total_elements_ratios'] == {'H': 1.0}
             assert agg_info['labels'] == ['a_label']
             assert agg_info['labels_counts'] == [len(ids)]
             assert agg_info['chemical_formula_reduced'] == ['H']
@@ -713,17 +697,24 @@ class TestMongoDatabase:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+
+                    '_settings': {
+                        '_method': 'VASP',
+                        '_description': 'A basic test calculation',
+                        '_files': [('dummy_name', 'dummy file contents')],
+                        '_labels': ['pso_label1', 'pso_label2']
+                    }
                 }
             }
 
-            pso = PropertySettings(
-                method='VASP',
-                description='A basic test calculation',
-                files=[('dummy_name', 'dummy file contents')],
-                labels=['pso_label1', 'pso_label2']
-            )
+            # pso = PropertySettings(
+            #     method='VASP',
+            #     description='A basic test calculation',
+            #     files=[('dummy_name', 'dummy file contents')],
+            #     labels=['pso_label1', 'pso_label2']
+            # )
 
-            pso_id = database.insert_property_settings(pso)
+            # pso_id = database.insert_property_settings(pso)
 
             images = build_n(10)[0]
 
@@ -734,7 +725,6 @@ class TestMongoDatabase:
             ids = database.insert_data(
                 images,
                 property_map=property_map,
-                property_settings={'default': pso_id}
             )
 
             co_ids1, pr_ids1 = list(zip(*ids))
@@ -752,7 +742,6 @@ class TestMongoDatabase:
             ids = database.insert_data(
                 images,
                 property_map=property_map,
-                property_settings={'default': pso_id}
             )
 
             co_ids2, pr_ids2 = list(zip(*ids))
@@ -762,6 +751,7 @@ class TestMongoDatabase:
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
                 pr_ids=pr_ids1+pr_ids2,
+                name='example_dataset',
                 authors=['colabfit'],
                 links=['https://colabfit.org'],
                 description='an example dataset',
@@ -782,8 +772,8 @@ class TestMongoDatabase:
             assert agg['nsites'] == 110
             assert agg['nelements'] == 1
             assert agg['elements'] == ['H']
-            assert agg['individual_elements_ratios'] == [[1.0]]
-            assert agg['total_elements_ratios'] == [1.0]
+            assert agg['individual_elements_ratios'] == {'H': [1.0]}
+            assert agg['total_elements_ratios'] == {'H': 1.0}
             assert {'a_label', 'a_second_label'}.issubset(agg['configuration_labels'])
             assert agg['chemical_formula_reduced'] == ['H']
             assert agg['chemical_formula_anonymous'] == ['A']
@@ -793,7 +783,7 @@ class TestMongoDatabase:
             assert agg['nperiodic_dimensions'] == [0]
             assert agg['dimension_types'] == [[0,0,0]]
 
-            assert agg['types'] == ['default']
+            assert agg['property_types'] == ['default']
             assert set(agg['property_labels']) == {'pso_label1', 'pso_label2'}
 
             database.drop_database(database.database_name)
@@ -833,8 +823,11 @@ class TestPropertyDefinitionsAndSettings:
                 }
 
             database.insert_property_definition(property_definition)
+            
+            get_def = database.get_property_definition('default')['definition']
+            get_def['property-id'] = 'default'
 
-            assert database.get_property_definition('default')['definition'] == property_definition
+            assert  get_def == property_definition
 
 
     def test_settings_setter_getter(self):
@@ -905,7 +898,9 @@ class TestConfigurationSets:
             assert rebuilt_ids == ids
 
             for img in images:
-                img2 = database.get_configuration(str(hash(img)))
+                img2 = database.get_configuration(
+                    ID_FORMAT_STRING.format('CO', hash(img), 0)
+                )
 
                 assert img == img2
 
@@ -975,6 +970,7 @@ class TestDatasets:
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
                 pr_ids=pr_ids1+pr_ids2,
+                name='example_dataset',
                 authors='colabfit',
                 links='https://colabfit.openkim.org/',
                 description='An example dataset',

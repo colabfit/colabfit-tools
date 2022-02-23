@@ -131,17 +131,6 @@ class Configuration(Atoms):
         #     for c in self.info[ATOMS_CONSTRAINTS_FIELD]
         # ))
 
-        # return hash((
-        #     len(self),
-        #     # constraints_hash,
-        #     hash(np.round_(self.arrays['positions'], decimals=8).data.tobytes()),
-        #     hash(self.arrays['numbers'].data.tobytes()),
-        #     hash(np.round_(np.array(self.cell), decimals=8).data.tobytes()),
-        #     hash(np.array(self.pbc).data.tobytes()),
-        # ))
-
-        # int(hashlib.sha512(mystring).hexdigest(), 16)
-
         _hash = sha512()
         _hash.update(np.round_(self.arrays['positions'], decimals=16).data.tobytes()),
         _hash.update(self.arrays['numbers'].data.tobytes()),
@@ -149,16 +138,6 @@ class Configuration(Atoms):
         _hash.update(np.array(self.pbc).data.tobytes()),
 
         return int(_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
-
-        # return sha512((
-        #     len(self),
-        #     # constraints_hash,
-        #     sha512(np.round_(self.arrays['positions'], decimals=8).data.tobytes()),
-        #     sha512(self.arrays['numbers'].data.tobytes()),
-        #     sha512(np.round_(np.array(self.cell), decimals=8).data.tobytes()),
-        #     sha512(np.array(self.pbc).data.tobytes()),
-        # ))
-
 
 
     def __eq__(self, other):

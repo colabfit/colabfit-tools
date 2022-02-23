@@ -5,8 +5,9 @@ from ase import Atoms
 
 from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
 from colabfit.tools.configuration import Configuration
-from colabfit.tools.dataset_old import Dataset, load_data
+from colabfit.tools.dataset import Dataset, load_data
 from colabfit.tools.property import MissingPropertyFieldWarning
+
 
 
 class TestDatasetConstruction(unittest.TestCase):

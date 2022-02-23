@@ -39,7 +39,7 @@ class PropertySettings:
         self,
         method='',
         description='',
-        fields=[],
+        fields=None,
         files=None,
         labels=None,
     ):
@@ -61,6 +61,9 @@ class PropertySettings:
             labels = set([labels])
         else:
             labels = set(labels)
+
+        if fields is None:
+            fields = {}
 
         self.method         = method
         self.fields         = fields
