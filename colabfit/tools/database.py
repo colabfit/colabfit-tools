@@ -1211,10 +1211,13 @@ class MongoDatabase(MongoClient):
                     data[k].append(v)
 
         for k,v in data.items():
-            data[k] = np.array(data[k])
+            # data[k] = np.array(data[k])
 
-            if concatenate:
-                data[k] = np.concatenate(v)
+            if concatenate or ravel:
+                try:
+                    data[k] = np.concatenate(v)
+                except:
+                    data[k] = np.array(v)
 
             if vstack:
                 data[k] = np.vstack(v)
@@ -2177,7 +2180,10 @@ class MongoDatabase(MongoClient):
         for i, prop in enumerate(fields):
             data = self.get_data(
                 'properties', prop,
-                query=query, ids=ids, verbose=verbose, ravel=True
+                query=query,
+                ids=ids,
+                verbose=verbose,
+                ravel=True
             )
 
             c = i % 3
@@ -2975,6 +2981,13 @@ class MongoDatabase(MongoClient):
                 }
 
         agg_info = dataset.aggregated_info
+
+        # TODO: property settings should just be attached to the atoms?
+
+        # TODO: how will you handle property settings? They are now fields on a
+        # CO, so should you store them in the XYZ file? Should
+        # get_configurations also have an attach_settings option??
+        # This could duplicate a lot of data. Could just export PSOs as separate files
 
         property_settings = {}
         for pso_doc in self.property_settings.find(
