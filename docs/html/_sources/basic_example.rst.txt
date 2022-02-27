@@ -112,7 +112,8 @@ configurations.
 Defining a property_map
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-A property map is used to specify how parse a Property from a Configuration.
+A property map is used to specify how parse a Property instance from a
+Configuration.
 Below, we define a property map that extracts the `'energy'` and `'forces'` keys
 in the `'energy-forces'` property defined above from the `'dft_energy'` and
 `'dft_forces'` fields in the info and arrays attributes of a given

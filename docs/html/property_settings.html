@@ -93,7 +93,7 @@ information such as the DFT software package, a description of the calculation,
 and an example file for running the calculation.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.property_settings.PropertySettings">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.property_settings.</span></span><span class="sig-name descname"><span class="pre">PropertySettings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property_settings.PropertySettings" title="Permalink to this definition"></a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.property_settings.</span></span><span class="sig-name descname"><span class="pre">PropertySettings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fields</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property_settings.PropertySettings" title="Permalink to this definition"></a></dt>
 <dd><p>This class is used to store information useful for reproducing a Property.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="colabfit.tools.property_settings.PropertySettings.method">
@@ -114,6 +114,27 @@ properties (e.g., ‘VASP’, ‘QuantumEspresso’, ‘experiment’, …)</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="colabfit.tools.property_settings.PropertySettings.fields">
+<span class="sig-name descname"><span class="pre">fields</span></span><a class="headerlink" href="#colabfit.tools.property_settings.PropertySettings.fields" title="Permalink to this definition"></a></dt>
+<dd><p>A dictionary of additional information. key = name of the field;</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">value</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;source-value&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">key_for_extracting_from_configuration</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="s1">&#39;source-units&#39;</span><span class="p">:</span> <span class="o">&lt;</span><span class="n">string_specifying_units</span><span class="o">&gt;</span> <span class="ow">or</span> <span class="kc">None</span>
+    <span class="p">}</span>
+</pre></div>
+</div>
+<p>For more details onw how to build this dictionary, refer to the
+“property map” description in the documentation, which follows a
+similar structure. These fields will be used to extract data from a
+Configuration object when inserting into the database.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>dict</p>
 </dd>
 </dl>
 </dd></dl>
@@ -151,13 +172,13 @@ of a file, and the second value is the contents of the file.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.property_settings.PropertySettings.__hash__">
 <span class="sig-name descname"><span class="pre">__hash__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property_settings.PropertySettings.__hash__" title="Permalink to this definition"></a></dt>
-<dd><p>Hashes method, description, and file contents. Not labels. Returns a
-string</p>
+<dd><p>Hashes method, description, field contents, and file contents.
+Does NOT use the description or the labels for hashing.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.property_settings.PropertySettings.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property_settings.PropertySettings.__init__" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fields</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.property_settings.PropertySettings.__init__" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">

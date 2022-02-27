@@ -54,7 +54,6 @@
 <li class="toctree-l3"><a class="reference internal" href="#identifying-duplicate-configurations">Identifying duplicate configurations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#manually-constructed-configurationsets">Manually constructed ConfigurationSets</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#manually-applied-configuration-labels">Manually applied Configuration labels</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#filtering-based-on-xc-functional">Filtering based on XC-functional</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="property_definitions.html">Property definitions</a></li>
@@ -502,92 +501,6 @@ information.</p>
         <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">,</span>
         <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
     <span class="p">)</span>
-</pre></div>
-</div>
-</section>
-<section id="filtering-based-on-xc-functional">
-<h2>Filtering based on XC-functional<a class="headerlink" href="#filtering-based-on-xc-functional" title="Permalink to this headline"></a></h2>
-<p>In the Si GAP dataset, some of the data was computed using a PBE functional,
-and some was computed using a PW91 functional. This information is stored in the
-<code class="code docutils literal notranslate"><span class="pre">xc_functional</span></code> field of the <code class="xref py py-attr docutils literal notranslate"><span class="pre">Configuration.info</span></code> array.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">set</span><span class="p">(</span>
-    <span class="n">client</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span>
-        <span class="s1">&#39;properties&#39;</span><span class="p">,</span>
-        <span class="s1">&#39;si-prx-gap-data.xc-functional&#39;</span><span class="p">,</span>
-        <span class="n">ravel</span><span class="o">=</span><span class="kc">True</span>
-    <span class="p">)</span>
-<span class="p">)</span>
-
-<span class="c1"># Output: {&#39;PBE&#39;, &#39;PW91&#39;}</span>
-</pre></div>
-</div>
-<p>A user may want to only work with subsets of the data that were computed with
-the exact same DFT settings. To facilitate this, we break the original Dataset
-into three separate datasets using the
-<code class="xref py py-meth docutils literal notranslate"><span class="pre">filter()</span></code> function (see <a class="reference internal" href="usage.html#filtering-a-dataset"><span class="std std-ref">Filtering a Dataset</span></a> for more details).</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">no_xc_config_sets</span><span class="p">,</span> <span class="n">no_xc_pr_ids</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">filter_on_properties</span><span class="p">(</span>
-        <span class="n">ds_id</span><span class="p">,</span>
-        <span class="n">query</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;si-prx-gap-data.xc-functional.source-value&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;$exists&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">}},</span>
-<span class="p">)</span>
-
-<span class="n">new_cs_ids</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="k">for</span> <span class="n">cs</span> <span class="ow">in</span> <span class="n">no_xc_config_sets</span><span class="p">:</span>
-        <span class="n">new_cs_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">insert_configuration_set</span><span class="p">(</span><span class="n">cs</span><span class="o">.</span><span class="n">configuration_ids</span><span class="p">,</span> <span class="n">cs</span><span class="o">.</span><span class="n">description</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-
-<span class="n">no_xc_ds_id</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">insert_dataset</span><span class="p">(</span>
-        <span class="n">cs_ids</span><span class="o">=</span><span class="n">new_cs_ids</span><span class="p">,</span>
-        <span class="n">pr_ids</span><span class="o">=</span><span class="n">no_xc_pr_ids</span><span class="p">,</span>
-        <span class="n">name</span><span class="o">=</span><span class="s1">&#39;Si_PRX_GAP-no-xc&#39;</span><span class="p">,</span>
-        <span class="n">authors</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">authors</span><span class="p">,</span>
-        <span class="n">links</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">links</span><span class="p">,</span>
-        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;A subset of the Si_PRX_GAP dataset that only contains data without a specified XC functional&quot;</span><span class="p">,</span>
-        <span class="n">resync</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-        <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<span class="p">)</span>
-</pre></div>
-</div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pbe_config_sets</span><span class="p">,</span> <span class="n">pbe_pr_ids</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">filter_on_properties</span><span class="p">(</span>
-        <span class="n">ds_id</span><span class="p">,</span>
-        <span class="n">query</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;si-prx-gap-data.xc-functional.source-value&#39;</span><span class="p">:</span> <span class="s1">&#39;PBE&#39;</span><span class="p">},</span>
-<span class="p">)</span>
-
-<span class="n">new_cs_ids</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="k">for</span> <span class="n">cs</span> <span class="ow">in</span> <span class="n">pbe_config_sets</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">cs</span><span class="o">.</span><span class="n">configuration_ids</span><span class="p">:</span>
-                <span class="n">new_cs_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">insert_configuration_set</span><span class="p">(</span><span class="n">cs</span><span class="o">.</span><span class="n">configuration_ids</span><span class="p">,</span> <span class="n">cs</span><span class="o">.</span><span class="n">description</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-
-<span class="n">pbe_ds_id</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">insert_dataset</span><span class="p">(</span>
-        <span class="n">cs_ids</span><span class="o">=</span><span class="n">new_cs_ids</span><span class="p">,</span>
-        <span class="n">pr_ids</span><span class="o">=</span><span class="n">pbe_pr_ids</span><span class="p">,</span>
-        <span class="n">name</span><span class="o">=</span><span class="s1">&#39;Si_PRX_GAP-pbe&#39;</span><span class="p">,</span>
-        <span class="n">authors</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">authors</span><span class="p">,</span>
-        <span class="n">links</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">links</span><span class="p">,</span>
-        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;A subset of the Si_PRX_GAP dataset that only contains data computed using the PBE XC functional&quot;</span><span class="p">,</span>
-        <span class="n">resync</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-        <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<span class="p">)</span>
-</pre></div>
-</div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pw91_config_sets</span><span class="p">,</span> <span class="n">pw91_pr_ids</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">filter_on_properties</span><span class="p">(</span>
-        <span class="n">ds_id</span><span class="p">,</span>
-        <span class="n">query</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;si-prx-gap-data.xc-functional.source-value&#39;</span><span class="p">:</span> <span class="s1">&#39;PW91&#39;</span><span class="p">},</span>
-<span class="p">)</span>
-
-<span class="n">new_cs_ids</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="k">for</span> <span class="n">cs</span> <span class="ow">in</span> <span class="n">pw91_config_sets</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">cs</span><span class="o">.</span><span class="n">configuration_ids</span><span class="p">:</span>
-                <span class="n">new_cs_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">insert_configuration_set</span><span class="p">(</span><span class="n">cs</span><span class="o">.</span><span class="n">configuration_ids</span><span class="p">,</span> <span class="n">cs</span><span class="o">.</span><span class="n">description</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-
-<span class="n">pw91_ds_id</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">insert_dataset</span><span class="p">(</span>
-        <span class="n">cs_ids</span><span class="o">=</span><span class="n">new_cs_ids</span><span class="p">,</span>
-        <span class="n">pr_ids</span><span class="o">=</span><span class="n">pw91_pr_ids</span><span class="p">,</span>
-        <span class="n">name</span><span class="o">=</span><span class="s1">&#39;Si_PRX_GAP-pw91&#39;</span><span class="p">,</span>
-        <span class="n">authors</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">authors</span><span class="p">,</span>
-        <span class="n">links</span><span class="o">=</span><span class="n">dataset</span><span class="o">.</span><span class="n">links</span><span class="p">,</span>
-        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;A subset of the Si_PRX_GAP dataset that only contains data computed using the PW91 XC functional&quot;</span><span class="p">,</span>
-        <span class="n">resync</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-        <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<span class="p">)</span>
 </pre></div>
 </div>
 </section>

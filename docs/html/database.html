@@ -607,7 +607,7 @@ returning. Default is False.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.database.MongoDatabase.get_configurations">
-<span class="sig-name descname"><span class="pre">get_configurations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">configuration_ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attach_properties</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.get_configurations" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">get_configurations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">configuration_ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attach_properties</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attach_settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.get_configurations" title="Permalink to this definition"></a></dt>
 <dd><p>A generator that returns in-memory Configuration objects one at a time
 by loading the atomic numbers, positions, cells, and PBCs.</p>
 <dl class="field-list simple">
@@ -632,6 +632,10 @@ properties of the same type pointing to the same configuration.
 WARNING: don’t use this option if multiple properties of the
 same type point to the same Configuration, but the properties
 don’t have values for all of their fields.</p></li>
+<li><p><strong>attach_settings</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, attaches all of the fields of the property settings
+that are linked to the attached property instances. If
+<code class="code docutils literal notranslate"><span class="pre">attach_settings=True</span></code>, must also have
+<code class="code docutils literal notranslate"><span class="pre">attach_properties=True</span></code>.</p></li>
 <li><p><strong>generator</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, this function returns a generator of the
 configurations. This is useful if the configurations can’t all
 fit in memory at the same time.</p></li>
@@ -649,7 +653,7 @@ fit in memory at the same time.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.database.MongoDatabase.get_data">
-<span class="sig-name descname"><span class="pre">get_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">collection_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fields</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keep_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">concatenate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ravel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unpack_properties</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.get_data" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">get_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">collection_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fields</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keep_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">concatenate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vstack</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ravel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unpack_properties</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.get_data" title="Permalink to this definition"></a></dt>
 <dd><p>Queries the database and returns the fields specified by <cite>keys</cite> as a
 list or an array of values. Returns the results in memory.</p>
 <p>Example:</p>
@@ -674,6 +678,7 @@ data for the entire collection. Note that this information can
 also be provided using the <code class="code docutils literal notranslate"><span class="pre">query</span></code> argument.</p></li>
 <li><p><strong>keep_ids</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, includes the ‘_id’ field as one of the returned values.</p></li>
 <li><p><strong>concatenate</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, concatenates the data before returning.</p></li>
+<li><p><strong>vstack</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, calls np.vstack on data before returning.</p></li>
 <li><p><strong>ravel</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, concatenates and ravels the data before returning.</p></li>
 <li><p><strong>unpack_properties</strong> (<em>bool</em><em>, </em><em>default=True</em>) – If True, returns only the contents of the <code class="code docutils literal notranslate"><span class="pre">'source-value'</span></code>
 key for each field in <code class="xref py py-attr docutils literal notranslate"><span class="pre">fields</span></code> (assuming
@@ -792,7 +797,7 @@ set.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.database.MongoDatabase.insert_data">
-<span class="sig-name descname"><span class="pre">insert_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">configurations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transform</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.insert_data" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">insert_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">configurations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transform</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.insert_data" title="Permalink to this definition"></a></dt>
 <dd><p>A wrapper to Database.insert_data() which also adds important queryable
 metadata about the configurations into the Client’s server.</p>
 <p>Note that when adding the data, the Mongo server will store the
@@ -816,6 +821,15 @@ previously defined using
         <span class="s1">&#39;forces&#39;</span><span class="p">:</span>   <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;forces&#39;</span><span class="p">,</span>  <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;eV/Ang&#39;</span><span class="p">},</span>
         <span class="s1">&#39;stress&#39;</span><span class="p">:</span>   <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;virial&#39;</span><span class="p">,</span>  <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;GPa&#39;</span><span class="p">},</span>
         <span class="s1">&#39;per-atom&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;per-atom&#39;</span><span class="p">,</span> <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">},</span>
+
+        <span class="s1">&#39;_settings&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;_method&#39;</span><span class="p">:</span> <span class="s1">&#39;VASP&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;_description&#39;</span><span class="p">:</span> <span class="s1">&#39;A static VASP calculation&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;_files&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s1">&#39;_labels&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;Monkhorst-Pack&#39;</span><span class="p">],</span>
+
+            <span class="s1">&#39;xc-functional&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;xcf&#39;</span><span class="p">,</span> <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">}</span>
+        <span class="p">}</span>
     <span class="p">}</span>
 <span class="p">}</span>
 </pre></div>
@@ -823,9 +837,10 @@ previously defined using
 <p>If None, only loads the configuration information (atomic
 numbers, positions, lattice vectors, and periodic boundary
 conditions).</p>
+<p>The ‘_settings’ key is a special key that can be used to specify
+the contents of a PropertySettings object that will be
+constructed and linked to each associated property instance.</p>
 </p></li>
-<li><p><strong>property_settings</strong> (<em>dict</em>) – key = property name (same as top-level keys in property_map).
-val = a PropertySettings object</p></li>
 <li><p><strong>transform</strong> (<em>callable</em><em>, </em><em>default=None</em>) – If provided, <cite>transform</cite> will be called on each configuration in
 <code class="code docutils literal notranslate"><span class="pre">configurations</span></code> as <code class="code docutils literal notranslate"><span class="pre">transform(configuration)</span></code>.
 Note that this happens before anything else is done. <cite>transform</cite>
@@ -914,12 +929,12 @@ of an existing property definition from the
 
 <dl class="py method">
 <dt class="sig sig-object py" id="colabfit.tools.database.MongoDatabase.insert_property_settings">
-<span class="sig-name descname"><span class="pre">insert_property_settings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pso_object</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.insert_property_settings" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">insert_property_settings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ps_object</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase.insert_property_settings" title="Permalink to this definition"></a></dt>
 <dd><p>Inserts a new property settings object into the database by creating
 and populating the necessary groups in <code class="code docutils literal notranslate"><span class="pre">/root/property_settings</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>pso_object</strong> (<a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><em>PropertySettings</em></a>) – The <a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a>
+<dd class="field-odd"><p><strong>ps_object</strong> (<a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><em>PropertySettings</em></a>) – The <a class="reference internal" href="property_settings.html#colabfit.tools.property_settings.PropertySettings" title="colabfit.tools.property_settings.PropertySettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">PropertySettings</span></code></a>
 object to insert into the database.</p>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -927,7 +942,7 @@ object to insert into the database.</p>
 of the object.</p>
 </dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>pso_id (str)</p>
+<dd class="field-odd"><p>ps_id (str)</p>
 </dd>
 </dl>
 </dd></dl>
@@ -949,6 +964,9 @@ the documents in the collection.</p></li>
 <li><p><strong>yscale</strong> (<em>str</em>) – Scaling for y-axes. One of [‘linear’, ‘log’].</p></li>
 <li><p><strong>method</strong> (<em>str</em><em>, </em><em>default='plotly'</em>) – Package to use for plotting. ‘plotly’ or ‘matplotlib’.</p></li>
 </ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Returns the figure object.</p>
 </dd>
 </dl>
 </dd></dl>

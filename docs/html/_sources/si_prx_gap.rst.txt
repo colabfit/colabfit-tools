@@ -444,95 +444,95 @@ information.
             verbose=True
         )
 
-Filtering based on XC-functional
-================================
+.. Filtering based on XC-functional
+.. ================================
 
-In the Si GAP dataset, some of the data was computed using a PBE functional,
-and some was computed using a PW91 functional. This information is stored in the
-:code:`xc_functional` field of the :attr:`Configuration.info` array.
+.. In the Si GAP dataset, some of the data was computed using a PBE functional,
+.. and some was computed using a PW91 functional. This information is stored in the
+.. :code:`xc_functional` field of the :attr:`Configuration.info` array.
 
-.. code-block:: python
+.. .. code-block:: python
 
-    set(
-        client.get_data(
-            'properties',
-            'si-prx-gap-data.xc-functional',
-            ravel=True
-        )
-    )
+..     set(
+..         client.get_data(
+..             'properties',
+..             'si-prx-gap-data.xc-functional',
+..             ravel=True
+..         )
+..     )
 
-    # Output: {'PBE', 'PW91'}
+..     # Output: {'PBE', 'PW91'}
 
-A user may want to only work with subsets of the data that were computed with
-the exact same DFT settings. To facilitate this, we break the original Dataset
-into three separate datasets using the
-:meth:`~colabfit.tools.dataset.Dataset.filter` function (see :ref:`Filtering a
-Dataset` for more details).
+.. A user may want to only work with subsets of the data that were computed with
+.. the exact same DFT settings. To facilitate this, we break the original Dataset
+.. into three separate datasets using the
+.. :meth:`~colabfit.tools.dataset.Dataset.filter` function (see :ref:`Filtering a
+.. Dataset` for more details).
 
-.. code-block:: python
+.. .. code-block:: python
 
-	no_xc_config_sets, no_xc_pr_ids = client.filter_on_properties(
-		ds_id,
-		query={'si-prx-gap-data.xc-functional.source-value': {'$exists': False}},
-	)
+.. 	no_xc_config_sets, no_xc_pr_ids = client.filter_on_properties(
+.. 		ds_id,
+.. 		query={'si-prx-gap-data.xc-functional.source-value': {'$exists': False}},
+.. 	)
 
-	new_cs_ids = []
-	for cs in no_xc_config_sets:
-		new_cs_ids.append(client.insert_configuration_set(cs.configuration_ids, cs.description, verbose=True))
+.. 	new_cs_ids = []
+.. 	for cs in no_xc_config_sets:
+.. 		new_cs_ids.append(client.insert_configuration_set(cs.configuration_ids, cs.description, verbose=True))
 
-	no_xc_ds_id = client.insert_dataset(
-		cs_ids=new_cs_ids,
-		pr_ids=no_xc_pr_ids,
-		name='Si_PRX_GAP-no-xc',
-		authors=dataset.authors,
-		links=dataset.links,
-		description="A subset of the Si_PRX_GAP dataset that only contains data without a specified XC functional",
-		resync=True,
-		verbose=True,
-	)
+.. 	no_xc_ds_id = client.insert_dataset(
+.. 		cs_ids=new_cs_ids,
+.. 		pr_ids=no_xc_pr_ids,
+.. 		name='Si_PRX_GAP-no-xc',
+.. 		authors=dataset.authors,
+.. 		links=dataset.links,
+.. 		description="A subset of the Si_PRX_GAP dataset that only contains data without a specified XC functional",
+.. 		resync=True,
+.. 		verbose=True,
+.. 	)
 
-.. code-block:: python
+.. .. code-block:: python
 
-	pbe_config_sets, pbe_pr_ids = client.filter_on_properties(
-		ds_id,
-		query={'si-prx-gap-data.xc-functional.source-value': 'PBE'},
-	)
+.. 	pbe_config_sets, pbe_pr_ids = client.filter_on_properties(
+.. 		ds_id,
+.. 		query={'si-prx-gap-data.xc-functional.source-value': 'PBE'},
+.. 	)
 
-	new_cs_ids = []
-	for cs in pbe_config_sets:
-		if cs.configuration_ids:
-			new_cs_ids.append(client.insert_configuration_set(cs.configuration_ids, cs.description, verbose=True))
+.. 	new_cs_ids = []
+.. 	for cs in pbe_config_sets:
+.. 		if cs.configuration_ids:
+.. 			new_cs_ids.append(client.insert_configuration_set(cs.configuration_ids, cs.description, verbose=True))
 			
-	pbe_ds_id = client.insert_dataset(
-		cs_ids=new_cs_ids,
-		pr_ids=pbe_pr_ids,
-		name='Si_PRX_GAP-pbe',
-		authors=dataset.authors,
-		links=dataset.links,
-		description="A subset of the Si_PRX_GAP dataset that only contains data computed using the PBE XC functional",
-		resync=True,
-		verbose=True,
-	)
+.. 	pbe_ds_id = client.insert_dataset(
+.. 		cs_ids=new_cs_ids,
+.. 		pr_ids=pbe_pr_ids,
+.. 		name='Si_PRX_GAP-pbe',
+.. 		authors=dataset.authors,
+.. 		links=dataset.links,
+.. 		description="A subset of the Si_PRX_GAP dataset that only contains data computed using the PBE XC functional",
+.. 		resync=True,
+.. 		verbose=True,
+.. 	)
 
-.. code-block:: python
+.. .. code-block:: python
 
-	pw91_config_sets, pw91_pr_ids = client.filter_on_properties(
-		ds_id,
-		query={'si-prx-gap-data.xc-functional.source-value': 'PW91'},
-	)
+.. 	pw91_config_sets, pw91_pr_ids = client.filter_on_properties(
+.. 		ds_id,
+.. 		query={'si-prx-gap-data.xc-functional.source-value': 'PW91'},
+.. 	)
 
-	new_cs_ids = []
-	for cs in pw91_config_sets:
-		if cs.configuration_ids:
-			new_cs_ids.append(client.insert_configuration_set(cs.configuration_ids, cs.description, verbose=True))
+.. 	new_cs_ids = []
+.. 	for cs in pw91_config_sets:
+.. 		if cs.configuration_ids:
+.. 			new_cs_ids.append(client.insert_configuration_set(cs.configuration_ids, cs.description, verbose=True))
 			
-	pw91_ds_id = client.insert_dataset(
-		cs_ids=new_cs_ids,
-		pr_ids=pw91_pr_ids,
-		name='Si_PRX_GAP-pw91',
-		authors=dataset.authors,
-		links=dataset.links,
-		description="A subset of the Si_PRX_GAP dataset that only contains data computed using the PW91 XC functional",
-		resync=True,
-		verbose=True,
-	)
+.. 	pw91_ds_id = client.insert_dataset(
+.. 		cs_ids=new_cs_ids,
+.. 		pr_ids=pw91_pr_ids,
+.. 		name='Si_PRX_GAP-pw91',
+.. 		authors=dataset.authors,
+.. 		links=dataset.links,
+.. 		description="A subset of the Si_PRX_GAP dataset that only contains data computed using the PW91 XC functional",
+.. 		resync=True,
+.. 		verbose=True,
+.. 	)
