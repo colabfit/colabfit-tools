@@ -2,6 +2,17 @@
 Getting started
 ===============
 
+Tutorial videos
+===============
+Videos for helping users to get started with :code:`colabfit-tools` have been
+created and uploaded to Vimeo:
+
+1. Installation: `link <https://vimeo.com/684477958>`
+2. Overview of database structure: `part 1 link <https://vimeo.com/684478158>` and
+   `part 2 link <https://vimeo.com/684478223>`)
+3. Example using the Si PRX dataset: `link <https://vimeo.com/684478369>`
+4. Dataset exploration example: `link <https://vimeo.com/684478619>`
+
 Installing colabfit-tools
 =========================
 
