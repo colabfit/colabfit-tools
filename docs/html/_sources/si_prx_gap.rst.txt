@@ -18,14 +18,98 @@ using the following commands:
     $ cd si_prx_gap && wget -O Si_PRX_GAP.zip https://www.repository.cam.ac.uk/bitstream/handle/1810/317974/Si_PRX_GAP.zip?sequence=1&isAllowed=yield
     $ cd si_prx_gap && unzip Si_PRX_GAP.zip
 
-Using multiple property definitions
-===================================
+Loading from a file
+===================
+
+This example uses :meth:`~colabfit.tools.database.load_data` to load the data
+from an existing Extended XYZ file. Note that the raw data includes the
+:code:`config_type` field, which is used to generate the names of the loaded
+Configurations. A :attr:`default_name` is also provided to handle the
+configurations that do not have a :code:`config_type` field.
+:code:`verbose=True` is used here since the dataset is large enough to warrant a
+progress bar.
+
+.. code-block:: python
+
+	dataset.configurations = load_data(
+		file_path='./si_prx_gap/gp_iter6_sparse9k.xml.xyz',
+		file_format='xyz',
+		name_field='config_type',  # key in Configuration.info to use as the Configuration name
+		elements=['Si'],
+		default_name='Si_PRX_GAP',  # default name with `name_field` not found
+		verbose=True
+	)
+
+Cleaning data
+=============
+
+Some of the Configurations loaded in by :meth:`load_data` need to be cleaned before they
+are ready to be used. Specifically:
+
+1. The `'per-atom'` field should be added to each configuration
+1. Some fields are inconsistently named, using both `'-'` and `'_'`
+2. Some fields need to be converted from strings to floats
+3. Stress vectors should be reshaped to have size `(3, 3)`
+
+We will address this by writing a function for modifying the Configurations
+in-place.
+
+.. code-block:: python
+
+	# Data stored on atoms needs to be cleaned
+	def tform(img):
+		img.info['per-atom'] = False
+		
+		# Renaming some fields to be consistent
+		info_items = list(img.info.items())
+		
+		for key, v in info_items:
+			if key in ['_name', '_labels', '_constraints']:
+				continue
+				
+			del img.info[key]
+			img.info[key.replace('_', '-').lower()] = v
+
+		arrays_items = list(img.arrays.items())
+		for key, v in arrays_items:
+			del img.arrays[key]
+			img.arrays[key.replace('_', '-').lower()] = v
+		
+		# Converting some string values to floats
+		for k in [
+			'md-temperature', 'md-cell-t', 'smearing-width', 'md-delta-t',
+			'md-ion-t', 'cut-off-energy', 'elec-energy-tol',
+			]:
+			if k in img.info:
+				try:
+					img.info[k] = float(img.info[k].split(' ')[0])
+				except:
+					pass
+		
+		# Reshaping shape (9,) stress vector to (3, 3) to match definition
+		if 'dft-virial' in img.info:
+			img.info['dft-virial'] = img.info['dft-virial'].reshape((3,3))
+			
+		if 'gap-virial' in img.info:
+				img.info['gap-virial'] = img.info['gap-virial'].reshape((3,3))
+
+The :meth:`tform` function can be passed to :meth:`insert_data` using the
+:code:`transform` argument, which will call :meth:`tform` on each Configuration
+before doing any additional processing.
+
+Handling different property settings
+====================================
 
 This Dataset contains the common energy/forces/virial data, but also includes a
 large amount of additional data/information for each calculation which can be
-stored as a separate Property. Note that this information is not suitable for a
-PropertySettings object because some of it dependent upon the output of a
-calculation (not the input), and is therefore better suited as a Property.
+stored as PropertySettings objects. This Dataset also has energy/forces/virial
+data computed using multiple methods (DFT and a trained GAP model). In this
+section we will discuss how to use the :code:`property_map` argument property
+with the :meth:`insert_data` function.
+
+To begin with, we first write a property definition for storing computed
+energy/forces/virial data. Note that this same definition will be used for both
+the DFT-computed and the GAP-computed data.
 
 .. code-block:: python
 
@@ -88,164 +172,109 @@ calculation (not the input), and is therefore better suited as a Property.
 				'have the same units as "energy".'
 		},
 	}
-   
+
+
+We will then prepare two separate maps. One for loading any DFT-computed
+properties:
 
 .. code-block:: python
 
-	extra_stuff_definition = {
-		'property-id': 'si-prx-gap-data',
-		'property-title': 'Si PRX GAP data',
-		'property-description': 'A property for storing all of the additional information provided for the Si PRX GAP dataset',
-
-		'mix_history_length':         {'type': 'float',  'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'castep_file_name':           {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'grid_scale':                 {'type': 'float',  'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'popn_calculate':             {'type': 'bool',   'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'n_neighb':                   {'type': 'int',    'has-unit': False, 'extent': [":"],   'required': False, 'description': ''},
-		'oldpos':                     {'type': 'float',  'has-unit': True,  'extent': [":",3], 'required': False, 'description': ''},
-		'i_step':                     {'type': 'int',    'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'md_temperature':             {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'positions':                  {'type': 'float',  'has-unit': True,  'extent': [":",3], 'required': False, 'description': ''},
-		'task':                       {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'data_distribution':          {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'avg_ke':                     {'type': 'float',  'has-unit': True,  'extent': [":"],   'required': False, 'description': ''},
-		'force_nlpot':                {'type': 'float',  'has-unit': True,  'extent': [":",3], 'required': False, 'description': ''},
-		'continuation':               {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'castep_run_time':            {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'calculate_stress':           {'type': 'bool',   'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'Minim_Hydrostatic_Strain':   {'type': 'bool',   'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'avgpos':                     {'type': 'float',  'has-unit': True,  'extent': [":",3], 'required': False, 'description': ''},
-		'frac_pos':                   {'type': 'float',  'has-unit': False, 'extent': [":",3], 'required': False, 'description': ''},
-		'hamiltonian':                {'type': 'float',  'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'md_cell_t':                  {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'cutoff_factor':              {'type': 'float',  'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'momenta':                    {'type': 'float',  'has-unit': False, 'extent': [":",3], 'required': False, 'description': ''},
-		'elec_energy_tol':            {'type': 'float',  'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'mixing_scheme':              {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'Minim_Lattice_Fix':          {'type': 'float',  'has-unit': False, 'extent': [9],     'required': False, 'description': ''},
-		'in_file':                    {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'travel':                     {'type': 'float',  'has-unit': False, 'extent': [":",3], 'required': False, 'description': ''},
-		'thermostat_region':          {'type': 'float',  'has-unit': False, 'extent': [":"],   'required': False, 'description': ''},
-		'time':                       {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'temperature':                {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'kpoints_mp_grid':            {'type': 'float',  'has-unit': False, 'extent': [3],     'required': False, 'description': ''},
-		'gap_force':                  {'type': 'float',  'has-unit': True,  'extent': [":",3], 'required': False, 'description': ''},
-		'gap_energy':                 {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'cutoff':                     {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'xc_functional':              {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'smearing_width':             {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'pressure':                   {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'gap_virial':                 {'type': 'float',  'has-unit': True,  'extent': [9],     'required': False, 'description': ''},
-		'reuse':                      {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'fix_occupancy':              {'type': 'bool',   'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'map_shift':                  {'type': 'float',  'has-unit': False, 'extent': [":",3], 'required': False, 'description': ''},
-		'md_num_iter':                {'type': 'int',    'has-unit': False, 'extent': [], 'required': False, 'description': ''},
-		'damp_mask':                  {'type': 'float',  'has-unit': False, 'extent': [":"],   'required': False, 'description': ''},
-		'opt_strategy':               {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'spin_polarized':             {'type': 'bool',   'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'nextra_bands':               {'type': 'int',    'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'fine_grid_scale':            {'type': 'float',  'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'masses':                     {'type': 'float',  'has-unit': True,  'extent': [":"],   'required': False, 'description': ''},
-		'iprint':                     {'type': 'int',    'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'finite_basis_corr':          {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'enthalpy':                   {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'opt_strategy_bias':          {'type': 'int',    'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'force_ewald':                {'type': 'float',  'has-unit': True,  'extent': [":",3], 'required': False, 'description': ''},
-		'num_dump_cycles':            {'type': 'int',    'has-unit': False,  'extent': [],     'required': False, 'description': ''},
-		'velo':                       {'type': 'float',  'has-unit': True,  'extent': [":",3], 'required': False, 'description': ''},
-		'md_delta_t':                 {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'md_ion_t':                   {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'force_locpot':               {'type': 'float',  'has-unit': True,  'extent': [":",3], 'required': False, 'description': ''},
-		'numbers':                    {'type': 'int',    'has-unit': False, 'extent': [":"],   'required': False, 'description': ''},
-		'max_scf_cycles':             {'type': 'int',    'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'mass':                       {'type': 'float',  'has-unit': True,  'extent': [":"],      'required': False, 'description': ''},
-		'Minim_Constant_Volume':      {'type': 'bool',   'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'cut_off_energy':             {'type': 'float',  'has-unit': True,  'extent': [],      'required': False, 'description': ''},
-		'virial':                     {'type': 'float',  'has-unit': True,  'extent': [3,3],   'required': False, 'description': ''},
-		'nneightol':                  {'type': 'float',  'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'max_charge_amp':             {'type': 'float',  'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'md_thermostat':              {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'md_ensemble':                {'type': 'string', 'has-unit': False, 'extent': [],      'required': False, 'description': ''},
-		'acc':                        {'type': 'float',  'has-unit': False, 'extent': [":",3], 'required': False, 'description': ''},
+	dft_map = {
+		# Property Definition field: {'field': ASE field, 'units': ASE-readable units}
+		'energy': {'field': 'dft-energy', 'units': 'eV'},
+		'forces': {'field': 'dft-force',  'units': 'eV/Ang'},
+		'stress': {'field': 'dft-virial', 'units': 'GPa'},
+		'per-atom': {'field': 'per-atom', 'units': None},
 	}
 
-In order to satisfy the formatting requirements specified by the `OpenKIM
-Properties Framework <https://openkim.org/doc/schema/properties-framework/>`_,
-the field names in the property defintion should not include underscores
-(:code:`'_'`).
+And a separate one for loading GAP-computed properties:
 
 .. code-block:: python
 
-	# Can't use underscores in field names
-	extra_stuff_definition = {
-		k.replace('_', '-').lower(): v for k,v in extra_stuff_definition.items()
+	gap_map = {
+		# Property Definition field: {'field': ASE field, 'units': ASE-readable units}
+		'energy': {'field': 'gap-energy', 'units': 'eV'},
+		'forces': {'field': 'gap-force',  'units': 'eV/Ang'},
+		'stress': {'field': 'gap-virial', 'units': 'GPa'},
+		'per-atom': {'field': 'per-atom', 'units': None},
 	}
+	
+Next, we will create a list of all of the fields that should be stored on a
+PropertySettings object rather than on a Property:
 
 .. code-block:: python
 
-    client.insert_property_definition(base_definition)
-    client.insert_property_definition(extra_stuff_definition)
+	settings_keys = [
+		'mix-history-length',
+		'castep-file-name',
+		'grid-scale',
+		'popn-calculate',
+		'n-neighb',
+		'oldpos',
+		'i-step',
+		'md-temperature',
+		'positions',
+		'task',
+		'data-distribution',
+		'avg-ke',
+		'force-nlpot',
+		'continuation',
+		'castep-run-time',
+		'calculate-stress',
+		'minim-hydrostatic-strain',
+		'avgpos',
+		'frac-pos',
+		'hamiltonian',
+		'md-cell-t',
+		'cutoff-factor',
+		'momenta',
+		'elec-energy-tol',
+		'mixing-scheme',
+		'minim-lattice-fix',
+		'in-file',
+		'travel',
+		'thermostat-region',
+		'time',
+		'temperature',
+		'kpoints-mp-grid',
+		'cutoff',
+		'xc-functional',
+		'smearing-width',
+		'pressure',
+		'reuse',
+		'fix-occupancy',
+		'map-shift',
+		'md-num-iter',
+		'damp-mask',
+		'opt-strategy',
+		'spin-polarized',
+		'nextra-bands',
+		'fine-grid-scale',
+		'masses',
+		'iprint',
+		'finite-basis-corr',
+		'enthalpy',
+		'opt-strategy-bias',
+		'force-ewald',
+		'num-dump-cycles',
+		'velo',
+		'md-delta-t',
+		'md-ion-t',
+		'force-locpot',
+		'numbers',
+		'max-scf-cycles',
+		'mass',
+		'minim-constant-volume',
+		'cut-off-energy',
+		'virial',
+		'nneightol',
+		'max-charge-amp',
+		'md-thermostat',
+		'md-ensemble',
+		'acc',
+	]
 
-Loading from a file
-===================
-
-This example uses :meth:`~colabfit.tools.database.load_data` to load the data
-from an existing Extended XYZ file. Note that the raw data includes the
-:code:`config_type` field, which is used to generate the names of the loaded
-Configurations. A :attr:`default_name` is also provided to handle the
-configurations that do not have a :code:`config_type` field.
-:code:`verbose=True` is used here since the dataset is large enough to warrant a
-progress bar.
-
-.. code-block:: python
-
-	dataset.configurations = load_data(
-		file_path='./si_prx_gap/gp_iter6_sparse9k.xml.xyz',
-		file_format='xyz',
-		name_field='config_type',  # key in Configuration.info to use as the Configuration name
-		elements=['Si'],
-		default_name='Si_PRX_GAP',  # default name with `name_field` not found
-		verbose=True
-	)
-
-Some of the data fields need to be cleaned before use
-
-.. code-block:: python
-
-	# Data stored on atoms needs to be cleaned
-	def tform(img):
-		img.info['per-atom'] = False
-		
-		# Renaming some fields to be consistent
-		if 'DFT_energy' in img.info:
-			img.info['dft_energy'] = img.info['DFT_energy']
-			del img.info['DFT_energy']
-			
-		if 'DFT_force' in img.arrays:
-			img.arrays['dft_force'] = img.arrays['DFT_force']
-			del img.arrays['DFT_force']
-			
-		if 'DFT_virial' in img.info:
-			img.info['dft_virial'] = img.info['DFT_virial']
-			del img.info['DFT_virial']
-			
-		# Converting some string values to floats
-		for k in [
-			'md_temperature', 'md_cell_t', 'smearing_width', 'md_delta_t',
-			'md_ion_t', 'cut_off_energy', 'elec_energy_tol',
-			]:
-			if k in img.info:
-				try:
-					img.info[k] = float(img.info[k].split(' ')[0])
-				except:
-					pass
-		
-		# Reshaping shape (9,) stress vector to (3, 3) to match definition
-		if 'dft_virial' in img.info:
-			img.info['dft_virial'] = img.info['dft_virial'].reshape((3,3))
-
-Now we can build the property map to tell :meth:`insert_data` how to build the
-properties.
+We will also specify any units on the fields:
 
 .. code-block:: python
 
@@ -254,62 +283,83 @@ properties.
 		'forces': 'eV/Ang',
 		'virial': 'GPa',
 		'oldpos': 'Ang',
-		'md_temperature': 'K',
+		'md-temperature': 'K',
 		'positions': 'Ang',
-		'avg_ke': 'eV',
-		'force_nlpot': 'eV/Ang',
-		'castep_run_time': 's',
+		'avg-ke': 'eV',
+		'force-nlpot': 'eV/Ang',
+		'castep-run-time': 's',
 		'avgpos': 'Ang',
-		'md_cell_t': 'ps',
+		'md-cell-t': 'ps',
 		'time': 's',
 		'temperature': 'K',
-		'gap_force': 'eV/Ang',
-		'gap_energy': 'eV',
+		'gap-force': 'eV/Ang',
+		'gap-energy': 'eV',
 		'cutoff': 'Ang',
-		'smearing_width': 'eV',
+		'smearing-width': 'eV',
 		'pressure': 'GPa',
-		'gap_virial': 'GPa',
+		'gap-virial': 'GPa',
 		'masses': '_amu',
 		'enthalpy': 'eV',
-		'force_ewald': 'eV/Ang',
+		'force-ewald': 'eV/Ang',
 		'velo': 'Ang/s',
-		'md_delta_t': 'fs',
-		'md_ion_t': 'ps',
-		'force_locpot': 'eV/Ang',
+		'md-delta-t': 'fs',
+		'md-ion-t': 'ps',
+		'force-locpot': 'eV/Ang',
 		'mass': 'g',
-		'cut_off_energy': 'eV',
+		'cut-off-energy': 'eV',
 		'virial': 'GPa',
 	}
+
+We will also create dictionaries for constructing the DFT settings:
+
+.. code-block:: python
+
+	dft_settings_map = {
+		k: {'field': k, 'units': units[k] if k in units else None} for k in settings_keys
+	}
+
+	dft_settings_map['_method'] = 'CASTEP'
+	dft_settings_map['_description'] = 'DFT calculations using the CASTEP software'
+	dft_settings_map['_files'] = None
+	dft_settings_map['_labels'] = ['Monkhorst-Pack']
+
+And the GAP settings:
+
+.. code-block:: python
+
+	gap_settings_map = dict(dft_settings_map)
+
+	gap_settings_map['_method'] = 'GAP'
+	gap_settings_map['_description'] = 'Predictions using a trained GAP potential'
+	gap_settings_map['_files'] = None
+	gap_settings_map['_labels'] = ['GAP', 'classical']
+
+Each of these settings maps will be attached to their corresponding property
+maps:
+
+.. code-block:: python
+
+	dft_map['_settings'] = dft_settings_map
+	gap_map['_settings'] = gap_settings_map
+
+Finally, they will both be merged into a single map, which will be passed
+directly to :meth:`insert_data`:
 
 .. code-block:: python
 
 	property_map = {
-		'energy-forces-virial': {
-			# Property Definition field: {'field': ASE field, 'units': ASE-readable units}
-			'energy': {'field': 'dft_energy', 'units': 'eV'},
-			'forces': {'field': 'dft_force', 'units': 'eV/Ang'},
-			'virial': {'field': 'dft_virial', 'units': 'GPa'}
-		},
-		'si-prx-gap-data': {
-			k.replace('_', '-').lower(): {'field': k , 'units': units[k] if k in units else None}
-			for k in extra_stuff_definition if k not in {'property-id', 'property-title', 'property-description'}
-		}
+		'energy-forces-stress': [
+			dft_map,
+			gap_map,
+		]
 	}
 
-Identifying duplicate configurations
-====================================
-
-Note: this dataset has four pairs of duplicate configurations. This can be seen
-by counting the number of configurations that have twice as many linked
-properties as expected (expected is 2).
-
-.. code-block:: python
-
-	client.configurations.count_documents(
-		{'relationships.properties.2': {'$exists': True}}
+	ids = client.insert_data(
+		images,
+		property_map=property_map,
+		transform=tform,
+		verbose=True
 	)
-
-	# Output: 4
 
 Manually constructed ConfigurationSets
 ======================================
@@ -378,25 +428,6 @@ Similarly, additional knowledge provided by the authors about the types of
 Configurations and Properties in the dataset can be used to apply metadata
 labels to the Configurations, which is useful for enabling querying over the
 data by future users. See :ref:`Applying configuration labels` for more details.
-
-
-First, adding labels to the Property objects based on the XC-functional used.
-
-.. code-block:: python
-
-    client.apply_labels(
-        dataset_id=ds_id, collection_name='properties',
-        query={'si-prx-gap-data.xc-functional.source-value': 'PW91'},
-        labels='PW91',
-        verbose=True
-    )
-
-    client.apply_labels(
-        dataset_id=ds_id, collection_name='properties',
-        query={'si-prx-gap-data.xc-functional.source-value': 'PBE'},
-        labels='PBE',
-        verbose=True
-    )
 
 Second, applying labels to the Configurations based on author-provided
 information.

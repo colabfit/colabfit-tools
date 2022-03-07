@@ -17,10 +17,15 @@ class PropertySettings:
 
         fields (dict):
             A dictionary of additional information. key = name of the field;
-            value = {
-                'source-value': <key_for_extracting_from_configuration>,
-                'source-units': <string_specifying_units> or None
-                }
+
+
+            .. code-block:: python
+
+                value = {
+                    'source-value': <key_for_extracting_from_configuration>,
+                    'source-units': <string_specifying_units> or None
+                    }
+
             For more details onw how to build this dictionary, refer to the
             "property map" description in the documentation, which follows a
             similar structure. These fields will be used to extract data from a
