@@ -177,11 +177,11 @@ class MongoDatabase(MongoClient):
 
         datasets (Collection):
             A Mongo collection of dataset documents
-
     """
     def __init__(
-        self, database_name, nprocs=1,
-        drop_database=False, user=None, pwrd=None, port=27017
+        self, database_name, nprocs=1, uri=None,
+        drop_database=False, user=None, pwrd=None, port=27017,
+        *args, **kwargs
         ):
         """
         Args:
@@ -191,6 +191,9 @@ class MongoDatabase(MongoClient):
 
             nprocs (int):
                 The size of the processor pool
+
+            uri (str):
+                The full Mongo URI
 
             drop_database (bool, default=False):
                 If True, deletes the existing Mongo database.
@@ -204,20 +207,28 @@ class MongoDatabase(MongoClient):
             port (int, default=27017):
                 Mongo server port number
 
+            *args, **kwargs (list, dict):
+                All additional arguments will be passed directly to the
+                MongoClient constructor.
+
+
         """
 
         self.user = user
         self.pwrd = pwrd
         self.port = port
 
-        if user is None:
-            super().__init__('localhost', self.port)
+        if uri is not None:
+            super().__init__(uri, *args, **kwargs)
         else:
-            super().__init__(
-                'mongodb://{}:{}@localhost:{}/'.format(
-                    self.user, self.pwrd, self.port
+            if user is None:
+                super().__init__('localhost', self.port, *args, **kwargs)
+            else:
+                super().__init__(
+                    'mongodb://{}:{}@localhost:{}/'.format(
+                        self.user, self.pwrd, self.port, *args, **kwargs
+                    )
                 )
-            )
 
         self.database_name = database_name
 
@@ -274,7 +285,7 @@ class MongoDatabase(MongoClient):
                                 'forces':   {'field': 'forces',  'units': 'eV/Ang'},
                                 'stress':   {'field': 'virial',  'units': 'GPa'},
                                 'per-atom': {'field': 'per-atom', 'units': None},
-                            
+
                                 '_settings': {
                                     '_method': 'VASP',
                                     '_description': 'A static VASP calculation',
@@ -1448,7 +1459,7 @@ class MongoDatabase(MongoClient):
                             # Then this is the first time
                             # the property of this type is being added
                             dct[field_name] = [v]
-                
+
                 if attach_settings:
                     for ps_doc in co_doc['linked_property_settings']:
                         for k,v in ps_doc.items():
@@ -2218,7 +2229,7 @@ class MongoDatabase(MongoClient):
 
             nbins (int):
                 Number of bins per histogram
-            
+
             xscale (str):
                 Scaling for x-axes. One of ['linear', 'log'].
 
@@ -3066,7 +3077,7 @@ class MongoDatabase(MongoClient):
         #     property_settings[pso_doc['_id']] = self.get_property_settings(
         #         pso_doc['_id']
         #     )
-        
+
         property_settings = list(
             self.property_settings.find(
                 {'relationships.properties': {'$in': dataset.property_ids}}
