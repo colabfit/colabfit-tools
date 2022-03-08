@@ -1510,6 +1510,8 @@ class MongoDatabase(MongoClient):
         if isinstance(ids, str):
             ids = [ids]
 
+        ids = list(set(ids))
+
         cs_hash = sha512()
         cs_hash.update(description.encode('utf-8'))
         for i in sorted(ids):
@@ -1981,6 +1983,9 @@ class MongoDatabase(MongoClient):
 
         if isinstance(pr_ids, str):
             pr_ids = [pr_ids]
+
+        cs_ids = list(set(cs_ids))
+        pr_ids = list(set(pr_ids))
 
         if isinstance(authors, str):
             authors = [authors]
