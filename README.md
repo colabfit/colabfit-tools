@@ -2,6 +2,13 @@
 Tools for constructing and manipulating datasets for fitting interatomic potentials
 
 # Installation
+
+Using `pip`:
+```
+pip install git+https://github.com/colabfit/colabfit-tools.git@master
+```
+
+From source:
 1. Clone repository or download from source and unpack
 2. `cd` into repository
 3. `pip install -e .`
