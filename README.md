@@ -8,12 +8,6 @@ Using `pip`:
 pip install git+https://github.com/colabfit/colabfit-tools.git@master
 ```
 
-From source:
-1. Clone repository or download from source and unpack
-2. `cd` into repository
-3. `pip install -e .`
-4. `python -c 'import colabfit; print(colabfit.__version__)'` to confirm installation was successful
-
 You should also follow the instructions in the documentation for [installing and running a Mongo server](https://colabfit.github.io/colabfit-tools/html/getting_started.html#installing-mongo)
 
 # Documentation
