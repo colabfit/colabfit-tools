@@ -1984,8 +1984,34 @@ class MongoDatabase(MongoClient):
         if isinstance(pr_ids, str):
             pr_ids = [pr_ids]
 
+        # Remove possible duplicates
         cs_ids = list(set(cs_ids))
         pr_ids = list(set(pr_ids))
+
+        # Make sure to only include PRs with COs contained by the given CSs
+        all_co_ids = []
+        for cs_doc in self.configuration_sets.find({'_id': {'$in': cs_ids}}):
+            all_co_ids += cs_doc['relationships']['configurations']
+
+        all_co_ids = list(set(all_co_ids))
+
+        clean_pr_ids = [
+            _['_id'] for _ in self.properties.find(
+                {
+                    '_id': {'$in': pr_ids},
+                    'relationships.configurations': {'$in': all_co_ids},
+                },
+                {'_id'}
+            )
+        ]
+
+        if len(pr_ids) != len(clean_pr_ids):
+            warnings.warn(
+                "{} PR IDs passed to insert_dataset, but only {} point to COs "\
+                "contained by the given CSs".format(
+                    len(pr_ids), len(clean_pr_ids)
+                )
+            )
 
         if isinstance(authors, str):
             authors = [authors]
@@ -1996,7 +2022,7 @@ class MongoDatabase(MongoClient):
         ds_hash = sha512()
         for ci in sorted(cs_ids):
             ds_hash.update(str(ci).encode('utf-8'))
-        for pi in sorted(pr_ids):
+        for pi in sorted(clean_pr_ids):
             ds_hash.update(str(pi).encode('utf-8'))
 
         ds_hash = int(ds_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
@@ -2020,7 +2046,7 @@ class MongoDatabase(MongoClient):
             aggregated_info[k] = v
 
         for k,v in self.aggregate_property_info(
-            pr_ids, verbose=verbose).items():
+            clean_pr_ids, verbose=verbose).items():
             if k in {
                 'labels', 'labels_counts',
                 'types',  'types_counts',
@@ -2035,7 +2061,7 @@ class MongoDatabase(MongoClient):
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
-                    'relationships.properties': {'$each': pr_ids},
+                    'relationships.properties': {'$each': clean_pr_ids},
                 },
                 '$setOnInsert': {
                     '_id': ds_id,
@@ -2064,7 +2090,7 @@ class MongoDatabase(MongoClient):
 
         # Add the backwards relationships PR->DS
         property_docs = []
-        for pid in tqdm(pr_ids, desc='Updating PR->DS relationships'):
+        for pid in tqdm(clean_pr_ids, desc='Updating PR->DS relationships'):
             property_docs.append(UpdateOne(
                 {'_id': pid},
                 {'$addToSet': {'relationships.datasets': ds_id}}
