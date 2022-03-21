@@ -62,6 +62,9 @@ class BaseConverter:
                 If True, prints the loading progress. Default is False.
 
         """
+        if labels_field is None:
+            labels_field = ATOMS_LABELS_FIELD
+
         images = self._load(
             file_path, name_field, elements, default_name, labels_field,
             verbose, **kwargs
@@ -114,11 +117,12 @@ class EXYZConverter(BaseConverter):
                                 "to use `default_name`."
                     )
 
-            if labels_field is None:
+            if labels_field not in atoms.info:
                 atoms.info[ATOMS_LABELS_FIELD] = set()
             else:
                 atoms.info[ATOMS_LABELS_FIELD] = set(
-                    [_.strip() for _ in atoms.info[labels_field].split(',')]
+                    # [_.strip() for _ in atoms.info[labels_field].split(',')]
+                    atoms.info[labels_field]
                 )
 
             yield Configuration.from_ase(atoms)
@@ -277,11 +281,12 @@ class CFGConverter(BaseConverter):
                                         "to use `default_name`."
                             )
 
-                    if labels_field is None:
+                    if labels_field not in atoms.info:
                         atoms.info[ATOMS_LABELS_FIELD] = set()
                     else:
                         atoms.info[ATOMS_LABELS_FIELD] = set(
-                            [_.strip() for _ in atoms.info[labels_field].split(',')]
+                            # [_.strip() for _ in atoms.info[labels_field].split(',')]
+                            atoms.info[labels_field]
                         )
 
                     yield Configuration.from_ase(atoms)
@@ -370,11 +375,12 @@ class FolderConverter(BaseConverter):
                                     "to use `default_name`."
                         )
 
-                if labels_field is None:
+                if labels_field not in atoms.info:
                     atoms.info[ATOMS_LABELS_FIELD] = set()
                 else:
                     atoms.info[ATOMS_LABELS_FIELD] = set(
-                        [_.strip() for _ in atoms.info[labels_field].split(',')]
+                        # [_.strip() for _ in atoms.info[labels_field].split(',')]
+                        atoms.info[labels_field]
                     )
 
                 yield Configuration.from_ase(atoms)
