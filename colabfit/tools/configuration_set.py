@@ -53,7 +53,7 @@ class ConfigurationSet:
         for i in sorted(self.configuration_ids):
             cs_hash.update(str(i).encode('utf-8'))
 
-        return int(cs_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
+        return int(str(int(cs_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
 
     def __str__(self):
         return "ConfigurationSet(description='{}', nconfigurations={})".format(

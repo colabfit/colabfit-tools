@@ -89,7 +89,7 @@ class Dataset:
         for i in sorted(self.property_ids):
             ds_hash.update(str(i).encode('utf-8'))
 
-        return int(ds_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
+        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
 
 
     def __str__(self):

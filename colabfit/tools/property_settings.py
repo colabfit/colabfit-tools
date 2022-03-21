@@ -120,8 +120,7 @@ class PropertySettings:
         _hash.update(self.method.encode('utf-8'))
         # _hash.update(self.description.encode('utf-8'))
 
-        # convert a base-16 int string to an int, take first 16 digits and shift
-        return int(_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
+        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
 
 
     def __eq__(self, other):

@@ -587,7 +587,7 @@ class Property(dict):
         for cid in self.configuration_ids:
             _hash.update(cid.encode('utf-8'))
 
-        return int(_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
+        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
 
 
     def __eq__(self, other):
