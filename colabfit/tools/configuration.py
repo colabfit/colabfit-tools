@@ -73,7 +73,7 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
             *args,
             **kwargs
     ):
-        BaseConfiguration.__init__()
+        BaseConfiguration.__init__(self)
         Atoms.__init__(*args, **kwargs)
         self.unique_identifiers = {
             "atomic_numbers": self.arrays['numbers'],
