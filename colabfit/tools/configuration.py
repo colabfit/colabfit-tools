@@ -8,7 +8,10 @@ from colabfit import (
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
     ATOMS_CONSTRAINTS_FIELD
 )
-#TODO: Add support for labels
+
+# TODO: Add support for labels
+
+
 class BaseConfiguration:
     """The base Configuration class.
 
@@ -42,7 +45,7 @@ class BaseConfiguration:
         """
         raise NotImplementedError('All subclasses should implement this.')
 
-    #TODO: Check datatypes of items added to hash as this will likely change bytes
+    # TODO: Check datatypes of items added to hash as this will likely change bytes
     def __hash__(self):
         """Generates a hash for :code:`self`.
 
@@ -54,11 +57,10 @@ class BaseConfiguration:
         """
         if len(self.unique_identifiers) == 0:
             raise Exception('Ensure subclasses define key-value pairs in self.unique_identifiers!')
-        _hash=sha512()
-        for _,v in self.unique_identifiers.items():
+        _hash = sha512()
+        for _, v in self.unique_identifiers.items():
             _hash.update(bytes(v))
         return int(str(int(_hash.hexdigest(), 16) - HASH_SHIFT)[:HASH_LENGTH])
-
 
     def __eq__(self, other):
         """
@@ -67,7 +69,8 @@ class BaseConfiguration:
         """
         return hash(self) == hash(other)
 
-class AtomicConfiguration(BaseConfiguration,Atoms):
+
+class AtomicConfiguration(BaseConfiguration, Atoms):
 
     def __init__(
             self,
@@ -75,7 +78,7 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
             **kwargs
     ):
         BaseConfiguration.__init__(self)
-        Atoms.__init__(self,*args, **kwargs)
+        Atoms.__init__(self, *args, **kwargs)
         self.unique_identifiers = {
             "atomic_numbers": self.arrays['numbers'],
             "positions": np.round_(self.arrays['positions'], decimals=16),
@@ -99,8 +102,9 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
         # Build per-element proportions
         from math import gcd
         from functools import reduce
-        def find_gcd(list):
-            x = reduce(gcd, list)
+
+        def find_gcd(_list):
+            x = reduce(gcd, _list)
             return x
 
         count_gcd = find_gcd(species_counts)
@@ -141,7 +145,7 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
             })
 
         return {
-            'natoms': natoms, #Is there reason for nsites over natoms?
+            'natoms': natoms,  # Is there reason for nsites over natoms?
             'elements': elements,
             'nelements': nelements,
             'elements_ratios': elements_ratios,
@@ -149,9 +153,8 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
             'chemical_formula_reduced': chemical_formula_reduced,
             'chemical_formula_hill': self.get_chemical_formula(),
             'nperiodic_dimensions': int(sum(self.get_pbc())),
-            'species': species, #Is this ever used?
+            'species': species, # Is this ever used?
         }
-
 
     @classmethod
     def from_ase(cls, atoms):
@@ -165,7 +168,7 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
 
         conf = cls.fromdict(atoms.todict())
 
-        for k,v in atoms.info.items():
+        for k, v in atoms.info.items():
             if k in [ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD]:
                 if not isinstance(v, set):
                     if not isinstance(v, list):
@@ -177,7 +180,7 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
             else:
                 conf.info[k] = v
 
-        for k,v in atoms.arrays.items():
+        for k, v in atoms.arrays.items():
             conf.arrays[k] = v
 
         return conf
@@ -188,6 +191,7 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
             self.info[ATOMS_NAME_FIELD],
             ase_str[14:-1]
         )
+
 
 class Configuration(Atoms):
     """

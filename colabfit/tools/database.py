@@ -1812,7 +1812,7 @@ class MongoDatabase(MongoClient):
             upsert=True
         )
 
-
+#TODO Work on making this Configuration "type" agnostic
     def aggregate_configuration_info(self, ids, verbose=False):
         """
         Gathers the following information from a collection of configurations:
