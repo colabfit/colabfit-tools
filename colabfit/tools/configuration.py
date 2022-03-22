@@ -162,7 +162,7 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
         if atoms.constraints is not None:
             atoms.constraints = [c.todict() for c in atoms.constraints]
 
-        conf = Configuration.fromdict(atoms.todict())
+        conf = cls.fromdict(atoms.todict())
 
         for k,v in atoms.info.items():
             if k in [ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD]:
