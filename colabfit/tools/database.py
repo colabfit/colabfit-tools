@@ -829,6 +829,10 @@ class MongoDatabase(MongoClient):
 
             processed_fields = process_species_list(atoms)
 
+            # g Make the below dependent on Configuration type and change above "atoms" to something like "instance"
+            # All config types will have ID, properties that make configuration unique,
+            # (those that are used for hashing), and any processed (summary fields)
+
             # Add if doesn't exist, else update (since last-modified changed)
             c_update_doc =  {  # update document
                     '$setOnInsert': {

@@ -1,7 +1,6 @@
 __version__ = "0.0.1"
 __author__  = "ColabFit"
 __credit__  = "University of Minnesota"
-
 HASH_LENGTH = 12
 HASH_SHIFT = 0
 # HASH_SHIFT = 2**63

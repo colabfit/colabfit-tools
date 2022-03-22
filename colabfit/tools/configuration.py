@@ -8,6 +8,65 @@ from colabfit import (
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
     ATOMS_CONSTRAINTS_FIELD
 )
+#TODO: Add support for labels
+class BaseConfiguration:
+    """The base Configuration class.
+
+    All other Configuration 'types' should be subclasses of this and any other useful classes.
+
+    All subclasses must define self.unique_identifiers which contains key-value
+    pairs of any Configuration attributes that help uniquely define a Configuration.
+    These values will be used to produce a unique hash for each Configuration.
+
+    All subclasses must define self.configuration_summary, which is used to extract
+    any other useful information that will be included (in addition to self.unique_identifiers)
+    in the Configuration's entry in the Database.
+
+    See AtomicConfiguration as an example.
+    """
+    def __init__(
+            self,
+    ):
+        self.unique_identifiers = {}
+
+    def configuration_summary(self):
+        """Extracts useful information from a Configuration.
+
+        All subclasses should implement this.
+        Any useful information that should be included under a Configuration's entry in the Database
+        (in addition to its unique_identifiers) should be extracted and added to a dict.
+        Will be called before inserting data into Database
+
+        Returns:
+            dict: Keys and their associated values that will be included under a Configuration's entry in the Database
+        """
+        raise NotImplementedError('All subclasses should implement this.')
+
+    #TODO: Check datatypes of items added to hash as this will likely change bytes
+    def __hash__(self):
+        """Generates a hash for :code:`self`.
+
+        Hashes all values in self.unique_identifiers.
+        hashlib is used instead of hash() to avoid hash randomisation.
+
+        Returns:
+            int: Value of hash
+        """
+        if len(self.unique_identifiers) == 0:
+            raise Exception('Ensure subclasses define key-value pairs in self.unique_identifiers!')
+        _hash=sha512()
+        _hash.update(bytes(v) for _,v in self.unique_identifiers.items())
+        return int(str(int(_hash.hexdigest(), 16) - HASH_SHIFT)[:HASH_LENGTH])
+
+
+    def __eq__(self, other):
+        """
+        Two Configurations are considered to be identical if they have the same
+        hash value.
+        """
+        return hash(self) == hash(other)
+
+
 
 
 class Configuration(Atoms):
@@ -47,7 +106,7 @@ class Configuration(Atoms):
             self.info[ATOMS_NAME_FIELD] = v
         else:
             self.info[ATOMS_NAME_FIELD] = set()
-
+#TODO fix how labels are utilized
         if ATOMS_LABELS_FIELD not in self.info:
             if labels is None:
                 labels = set()
@@ -147,7 +206,8 @@ class Configuration(Atoms):
         #     else hash(np.array(self.arrays[c]).data.tobytes())
         #     for c in self.info[ATOMS_CONSTRAINTS_FIELD]
         # ))
-
+#TODO: Add hash update for constraints like charge, external, etc
+#TODO: Ensure order doesn't affect hash
         _hash = sha512()
         _hash.update(np.round_(self.arrays['positions'], decimals=16).data.tobytes()),
         _hash.update(self.arrays['numbers'].data.tobytes()),
