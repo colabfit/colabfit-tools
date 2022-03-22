@@ -74,7 +74,7 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
             **kwargs
     ):
         BaseConfiguration.__init__(self)
-        Atoms.__init__(*args, **kwargs)
+        Atoms.__init__(self,*args, **kwargs)
         self.unique_identifiers = {
             "atomic_numbers": self.arrays['numbers'],
             "positions": np.round_(self.arrays['positions'], decimals=16),
