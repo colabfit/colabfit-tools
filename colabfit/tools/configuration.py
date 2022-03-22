@@ -66,8 +66,127 @@ class BaseConfiguration:
         """
         return hash(self) == hash(other)
 
+class AtomicConfiguration(BaseConfiguration,Atoms):
+
+    def __init__(
+            self,
+            *args,
+            **kwargs
+    ):
+        BaseConfiguration.__init__()
+        Atoms.__init__(*args, **kwargs)
+        self.unique_identifiers = {
+            "atomic_numbers": self.arrays['numbers'],
+            "positions": np.round_(self.arrays['positions'], decimals=16),
+            "cell": np.round_(np.array(self.cell), decimals=16),
+            "pbc":  self.pbc
+        }
+
+    def configuration_summary(self):
+        """Extracts useful metadata from a list of atomic species"""
+        atomic_species = self.get_chemical_symbols()
+
+        natoms = len(atomic_species)
+        elements = sorted(list(set(atomic_species)))
+        nelements = len(elements)
+        elements_ratios = [
+            atomic_species.count(el) / natoms for el in elements
+        ]
+
+        species_counts = [atomic_species.count(sp) for sp in elements]
+
+        # Build per-element proportions
+        from math import gcd
+        from functools import reduce
+        def find_gcd(list):
+            x = reduce(gcd, list)
+            return x
+
+        count_gcd = find_gcd(species_counts)
+        species_proportions = [sc // count_gcd for sc in species_counts]
+
+        chemical_formula_reduced = ''
+        for elem, elem_prop in zip(elements, species_proportions):
+            chemical_formula_reduced += '{}{}'.format(
+                elem, '' if elem_prop == 1 else str(elem_prop)
+            )
+
+        # Replace elements with A, B, C, ...
+        species_proportions = sorted(species_proportions, reverse=True)
+
+        chemical_formula_anonymous = ''
+        for spec_idx, spec_count in enumerate(species_proportions):
+            # OPTIMADE uses A...Z, then Aa..Za, ..., up to Az...Zz
+
+            count1 = spec_idx // 26
+            count2 = spec_idx % 26
+
+            if count1 == 0:
+                anon_spec = ascii_uppercase[count2]
+            else:
+                anon_spec = ascii_uppercase[count1] + ascii_lowercase[count2]
+
+            chemical_formula_anonymous += anon_spec
+            if spec_count > 1:
+                chemical_formula_anonymous += str(spec_count)
+
+        species = []
+        for el in elements:
+            # https://github.com/Materials-Consortia/OPTIMADE/blob/develop/optimade.rst#7214species
+            species.append({
+                'name': el,
+                'chemical_symbols': [el],
+                'concentration': [1.0],
+            })
+
+        return {
+            'natoms': natoms, #Is there reason for nsites over natoms?
+            'elements': elements,
+            'nelements': nelements,
+            'elements_ratios': elements_ratios,
+            'chemical_formula_anonymous': chemical_formula_anonymous,
+            'chemical_formula_reduced': chemical_formula_reduced,
+            'chemical_formula_hill': self.get_chemical_formula(),
+            'nperiodic_dimensions': int(sum(atoms.get_pbc())),
+            'species': species, #Is this ever used?
+        }
 
 
+    @classmethod
+    def from_ase(cls, atoms):
+        """
+        Generates a :class:`Configuration` from an :code:`ase.Atoms` object.
+        """
+        # Workaround for bug in todict() fromdict() with constraints.
+        # Merge request: https://gitlab.com/ase/ase/-/merge_requests/2574
+        if atoms.constraints is not None:
+            atoms.constraints = [c.todict() for c in atoms.constraints]
+
+        conf = Configuration.fromdict(atoms.todict())
+
+        for k,v in atoms.info.items():
+            if k in [ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD]:
+                if not isinstance(v, set):
+                    if not isinstance(v, list):
+                        v = [v]
+
+                    conf.info[k] = set(v)
+                else:
+                    conf.info[k] = v
+            else:
+                conf.info[k] = v
+
+        for k,v in atoms.arrays.items():
+            conf.arrays[k] = v
+
+        return conf
+
+    def __str__(self):
+        ase_str = super().__str__()
+        return "Configuration(name='{}', {})".format(
+            self.info[ATOMS_NAME_FIELD],
+            ase_str[14:-1]
+        )
 
 class Configuration(Atoms):
     """
@@ -177,6 +296,8 @@ class Configuration(Atoms):
             conf.arrays[k] = v
 
         return conf
+
+
 
 
     # def colabfit_format(self):
