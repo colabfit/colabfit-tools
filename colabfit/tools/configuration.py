@@ -147,7 +147,7 @@ class AtomicConfiguration(BaseConfiguration,Atoms):
             'chemical_formula_anonymous': chemical_formula_anonymous,
             'chemical_formula_reduced': chemical_formula_reduced,
             'chemical_formula_hill': self.get_chemical_formula(),
-            'nperiodic_dimensions': int(sum(atoms.get_pbc())),
+            'nperiodic_dimensions': int(sum(self.get_pbc())),
             'species': species, #Is this ever used?
         }
 
