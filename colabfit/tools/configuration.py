@@ -55,7 +55,8 @@ class BaseConfiguration:
         if len(self.unique_identifiers) == 0:
             raise Exception('Ensure subclasses define key-value pairs in self.unique_identifiers!')
         _hash=sha512()
-        _hash.update(bytes(v) for _,v in self.unique_identifiers.items())
+        for _,v in self.unique_identifiers.items():
+            _hash.update(bytes(v))
         return int(str(int(_hash.hexdigest(), 16) - HASH_SHIFT)[:HASH_LENGTH])
 
 
