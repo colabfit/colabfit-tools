@@ -100,7 +100,24 @@ class Configuration(Atoms):
         if atoms.constraints is not None:
             atoms.constraints = [c.todict() for c in atoms.constraints]
 
-        return cls.fromdict(atoms.todict())
+        conf = Configuration.fromdict(atoms.todict())
+
+        for k,v in atoms.info.items():
+            if k in [ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD]:
+                if not isinstance(v, set):
+                    if not isinstance(v, list):
+                        v = [v]
+
+                    conf.info[k] = set(v)
+                else:
+                    conf.info[k] = v
+            else:
+                conf.info[k] = v
+
+        for k,v in atoms.arrays.items():
+            conf.arrays[k] = v
+
+        return conf
 
 
     # def colabfit_format(self):
@@ -137,7 +154,7 @@ class Configuration(Atoms):
         _hash.update(np.round_(np.array(self.cell), decimals=16).data.tobytes()),
         _hash.update(np.array(self.pbc).data.tobytes()),
 
-        return int(_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
+        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
 
 
     def __eq__(self, other):

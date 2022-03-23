@@ -1637,7 +1637,7 @@ class MongoDatabase(MongoClient):
         for i in sorted(ids):
             cs_hash.update(str(i).encode('utf-8'))
 
-        cs_hash = int(cs_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
+        cs_hash = int(str(int(cs_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
         cs_id = ID_FORMAT_STRING.format('CS', cs_hash, 0)
 
         # Check for duplicates
@@ -2145,7 +2145,7 @@ class MongoDatabase(MongoClient):
         for pi in sorted(clean_pr_ids):
             ds_hash.update(str(pi).encode('utf-8'))
 
-        ds_hash = int(ds_hash.hexdigest()[:HASH_LENGTH], 16)-HASH_SHIFT
+        ds_hash = int(str(int(ds_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
         ds_id = ID_FORMAT_STRING.format('DS', ds_hash, 0)
 
         # Check for duplicates
