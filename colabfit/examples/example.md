@@ -70,6 +70,33 @@ Multiple rows can be included if data is stored in multiple files.
 |Elements|File|Format|Name field|
 | Mo, Ni, Cu | [example.extxyz](example.extxyz) | xyz | name |
 
+
+# Property settings
+
+Additional fields that are used to construct the property settings for each
+property instance.
+
+Columns:
+
+<!-- * `ID`: the ID of the PropertySettings if it already exists in the
+  Database. This column is optional, and may be ommitted if the object does not
+  exist in the Database yet -->
+* `Property`: a key for specifying how the property settings are mapped to the
+  property instances. Uses the format
+  `<property_name>.settings.<settings_number>`. The `<property_name>` tag is
+  used to specify the property type, and the `<settings_number>` (1-indexed) is
+  used to allow multiple settings objects to be applied to the same property
+  type.
+* `Method`: the method used for the `<settings_number>`-th settings object
+* `Labels`: labels applied to Properties linked to this PropertySettings
+* `Files`: hyperlinked files to link to this PropertySettings
+
+Property|Method|Description|Labels|Files|
+|---|---|---|---|---|
+|my-custom-property.settings.1| VASP | Static DFT calculations | PBE, GGA | |
+|my-custom-property.settings.2| VASP | AIMD sampling | PBE, GGA | |
+
+
 # Properties
 
 This section is for storing the tabular form of the `property_map` argument for
@@ -81,7 +108,17 @@ Columns:
    Definitions](https://openkim.org/properties) OR a link to a local EDN file
    (using the notation `[<name_of_property>](<path_to_edn_file>)`) that has been
    formatted according to the [KIM Properties
-   Framework](https://openkim.org/doc/schema/properties-framework/)
+   Framework](https://openkim.org/doc/schema/properties-framework/).
+  * The property names can be appended with a `.<index>` tag in order to account
+  for the case where a user wants to load multiple properties of the same type
+  (e.g. `energy-forces-stress.1` to store DFT-computed results, and
+  `energy-forces-stress.2` for results using a classical potential). The
+  `.<index>` tag may be omitted if only one property of the given type is being
+  loaded.
+  * The `.settings` tag can be appended to the property name in
+  order to specify that the given field should be used as a settings object
+  instead of a property field. The `.<settings_number>` tag is used to attach
+  multiple settings to properties of the same type.
 * `KIM field`: A string that can be used as a key for a dictionary
   representation of an OpenKIM Property Instance
 * `ASE field`: A string that can be used as a key for the `info` or `arrays`
@@ -93,30 +130,15 @@ Columns:
 |---|---|---|---|
 |an-existing-property|energy|energy|eV|
 |an-existing-property|forces|F|eV/Ang|
-|[my-custom-property](colabfit/tests/files/test_property.edn)|a-custom-field-name|field-name|None|
-|[my-custom-property](colabfit/tests/files/test_property.edn)|a-custom-1d-array|1d-array|eV|
-|[my-custom-property](colabfit/tests/files/test_property.edn)|a-custom-per-atom-array|per-atom-array|eV|
-
-
-
-# Property settings
-
-The tabular form of the `property_settings` argument to the
-`MongoDatabase.insert_data()` function.
-
-Columns:
-
-* `ID`: the ID of the PropertySettings if it already exists in the
-  Database. This column is optional, and may be ommitted if the object does not
-  exist in the Database yet
-* `Property`: the name of the Property
-* `Method`: the method used
-* `Labels`: labels applied to Properties linked to this PropertySettings
-* `Files`: files associated with Properties linked to this PropertySettings
-
-ID|Property|Method|Description|Labels|Files|
-|---|---|---|---|---|---|
-|| my-custom-property | VASP | energies/forces/stresses | PBE, GGA |  |
+|[my-custom-property.1](colabfit/tests/files/test_property.edn)|a-custom-field-name|field-name|None|
+|[my-custom-property.1](colabfit/tests/files/test_property.edn)|a-custom-1d-array|1d-array|eV|
+|[my-custom-property.1](colabfit/tests/files/test_property.edn)|a-custom-per-atom-array|per-atom-array|eV|
+|[my-custom-property.2](colabfit/tests/files/test_property.edn)|a-custom-field-name|field-name-2|None|
+|[my-custom-property.2](colabfit/tests/files/test_property.edn)|a-custom-1d-array|1d-array-2|eV|
+|[my-custom-property.2](colabfit/tests/files/test_property.edn)|a-custom-per-atom-array|per-atom-array-2|eV|
+|my-custom-property.1.settings|a-custom-settings-field|settings-field-1|None|
+|my-custom-property.1.settings|a-second-custom-settings-field|settings-field-2|eV|
+|my-custom-property.2.settings|a-third-custom-settings-field|settings-field-3|K|
 
 # Configuration sets
 
