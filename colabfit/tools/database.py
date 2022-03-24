@@ -479,6 +479,7 @@ class MongoDatabase(MongoClient):
 
         # Add all of the configurations into the Mongo server
         ai = 1
+        # TODO: rename atoms
         for atoms in tqdm(
             configurations,
             desc='Preparing to add configurations to Database',
@@ -491,7 +492,7 @@ class MongoDatabase(MongoClient):
             cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
             processed_fields = process_species_list(atoms)
-
+            # TODO: Modify below to be Configuration "type" agnostic
             # Add if doesn't exist, else update (since last-modified changed)
             c_update_doc =  {  # update document
                     '$setOnInsert': {
@@ -832,6 +833,7 @@ class MongoDatabase(MongoClient):
             #TODO Make the below dependent on Configuration type and change above "atoms" to something like "instance"
             # All config types will have ID, properties that make configuration unique,
             # (those that are used for hashing), and any processed (summary fields)
+            # Make private static method to create c_update_doc
 
             # Add if doesn't exist, else update (since last-modified changed)
             c_update_doc =  {  # update document
@@ -1500,6 +1502,7 @@ class MongoDatabase(MongoClient):
                 desc='Getting configurations',
                 disable=not verbose
                 ):
+                # TODO: Think about how to handle below and self.configurations.find above
                 c = Configuration(
                     symbols=co_doc['atomic_numbers'],
                     positions=co_doc['positions'],
@@ -1551,7 +1554,7 @@ class MongoDatabase(MongoClient):
                     desc='Getting configurations',
                     disable=not verbose
                 ):
-
+                # TODO: Think about how to handle below
                 c = Configuration(
                     symbols=co_doc['atomic_numbers'],
                     positions=co_doc['positions'],
@@ -2001,7 +2004,7 @@ class MongoDatabase(MongoClient):
 
         return aggregated_info
 
-
+    # TODO: Make Configuration "type" agnostic (only need to change docstring)
     def aggregate_configuration_set_info(self, cs_ids, resync=False, verbose=False):
         """
         Aggregates the following information from a list of configuration sets:
@@ -3415,7 +3418,7 @@ class MongoDatabase(MongoClient):
                 format=data_format,
             )
 
-
+# TODO: May need to make more Configuration "type" agnostic
 def load_data(
     file_path,
     file_format,

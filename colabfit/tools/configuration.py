@@ -2,6 +2,7 @@ import numpy as np
 from hashlib import sha512
 from ase import Atoms
 from string import ascii_lowercase, ascii_uppercase
+from Bio.SeqRecord import SeqRecord
 
 from colabfit import (
     HASH_LENGTH, HASH_SHIFT,
@@ -70,6 +71,7 @@ class BaseConfiguration:
         return hash(self) == hash(other)
 
 
+# TODO: Fix issues with name, label, etc fields
 class AtomicConfiguration(BaseConfiguration, Atoms):
 
     def __init__(
@@ -187,9 +189,42 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
     def __str__(self):
         ase_str = super().__str__()
-        return "Configuration(name='{}', {})".format(
+        return "AtomicConfiguration(name='{}', {})".format(
             self.info[ATOMS_NAME_FIELD],
             ase_str[14:-1]
+        )
+
+# TODO: Any other arguments here?
+#       Think about how properties are incorporated here-may want to define new class that subclasses SeqRecord first
+#       Think about capitalization for hashing purposes
+class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
+    def __init__(
+            self,
+            *args,
+            **kwargs,
+    ):
+        BaseConfiguration.__init__(self)
+        SeqRecord.__init__(self, *args, **kwargs)
+        # TODO: Maybe make info dict here
+        self.unique_identifiers = {
+            "sequence": str(self.seq).encode('utf-8'),
+        }
+
+# TODO: What things would be needed here-Count/composition, sequence length, etc
+    def configuration_summary(self):
+        return {'seq_length': len(self.unique_identifiers['sequence'])}
+
+    @classmethod
+    def from_seqrecord(cls,seqrec):
+        return cls(
+            seqrec.seq,
+            id=seqrec.id,
+            name=seqrec.name,
+            description=seqrec.description,
+            dbxrefs=seqrec.dbxrefs[:],
+            features=seqrec.features[:],
+            annotations=seqrec.annotations.copy(),
+            letter_annotations=seqrec.letter_annotations.copy(),
         )
 
 
