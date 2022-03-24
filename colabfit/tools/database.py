@@ -421,6 +421,33 @@ class MongoDatabase(MongoClient):
                 pool.map(pfunc, split_configs)
             ))
 
+    @staticmethod
+    def __build_c_update_doc(configuration):
+        cid = ID_FORMAT_STRING.format('CO', hash(configuration), 0)
+        processed_fields = configuration.configuration_summary()
+        c_update_doc = {
+            '$setOnInsert' : {
+                '_id': cid,
+            },
+            '$set': {
+                'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+            },
+            '$addToSet': {
+                'names': {
+                    '$each': list(configuration.info[ATOMS_NAME_FIELD])
+                },
+                'labels': {
+                    '$each': list(configuration.info[ATOMS_LABELS_FIELD])
+                },
+                'relationships.properties': {
+                    '$each': []
+                }
+            }
+        }
+        c_update_doc['$setOnInsert'].update({k: v.tolist() for k, v in configuration.unique_identifiers.items()})
+        c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
+        return c_update_doc
+
 
     @staticmethod
     def _insert_data_generator(
@@ -528,6 +555,8 @@ class MongoDatabase(MongoClient):
                     }
                 }
 
+            # TODO: Make Configuration "type" agnostic->Possible all types may not have info/arrays
+            #       but could enforce this.
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
             pid = None

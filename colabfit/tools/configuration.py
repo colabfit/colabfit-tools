@@ -71,16 +71,53 @@ class BaseConfiguration:
         return hash(self) == hash(other)
 
 
-# TODO: Fix issues with name, label, etc fields
+# TODO: Fix issues with name, label, etc fields.
+#       They are currently only included so as to replicate Configuration.
 class AtomicConfiguration(BaseConfiguration, Atoms):
 
     def __init__(
             self,
+            labels=None,
+            constraints=None,
             *args,
             **kwargs
     ):
         BaseConfiguration.__init__(self)
         Atoms.__init__(self, *args, **kwargs)
+
+        if ATOMS_NAME_FIELD in self.info:
+            v = self.info[ATOMS_NAME_FIELD]
+            if not isinstance(v, list):
+                v = set([str(v)])
+            else:
+                v = set(v)
+
+            self.info[ATOMS_NAME_FIELD] = v
+        else:
+            self.info[ATOMS_NAME_FIELD] = set()
+        # TODO fix how labels are utilized
+        if ATOMS_LABELS_FIELD not in self.info:
+            if labels is None:
+                labels = set()
+        else:
+            labels = set(self.info[ATOMS_LABELS_FIELD])
+
+        self.info[ATOMS_LABELS_FIELD] = set(labels)
+
+        if ATOMS_CONSTRAINTS_FIELD not in self.info:
+            if constraints is None:
+                constraints = set()
+        else:
+            constraints = set(self.info[ATOMS_CONSTRAINTS_FIELD])
+
+        self.info[ATOMS_CONSTRAINTS_FIELD] = set(constraints)
+
+        # Check for name conflicts in info/arrays; would cause bug in parsing
+        if set(self.info.keys()).intersection(set(self.arrays.keys())):
+            raise RuntimeError(
+                "The same key should not be used in both Configuration.info " \
+                "and Configuration.arrays"
+            )
         self.unique_identifiers = {
             "atomic_numbers": self.arrays['numbers'],
             "positions": np.round_(self.arrays['positions'], decimals=16),
