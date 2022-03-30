@@ -32,7 +32,7 @@ from colabfit import (
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
 )
-from colabfit.tools.configuration import Configuration, process_species_list
+from colabfit.tools.configuration import BaseConfiguration, Configuration, process_species_list
 from colabfit.tools.property import Property
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
@@ -178,8 +178,9 @@ class MongoDatabase(MongoClient):
         datasets (Collection):
             A Mongo collection of dataset documents
     """
+    # TODO: Add argument for configuration type after database_name
     def __init__(
-        self, database_name, nprocs=1, uri=None,
+        self, database_name, configuration_type=BaseConfiguration(), nprocs=1, uri=None,
         drop_database=False, user=None, pwrd=None, port=27017,
         *args, **kwargs
         ):
@@ -188,6 +189,9 @@ class MongoDatabase(MongoClient):
 
             database_name (str):
                 The name of the database
+
+            configuration_type (Configuration, default=BaseConfiguration()):
+                The configuration type that will be stored in the database.
 
             nprocs (int):
                 The size of the processor pool
@@ -214,6 +218,7 @@ class MongoDatabase(MongoClient):
 
         """
 
+        self.configuration_type = configuration_type
         self.uri  = uri
         self.login_args = args
         self.login_kwargs = kwargs
@@ -1519,19 +1524,24 @@ class MongoDatabase(MongoClient):
         attach_settings,
         verbose=False
         ):
+        ui_keys = self.configuration_type.unique_identifiers.keys()
         if not attach_properties:
             for co_doc in tqdm(
                 self.configurations.find(
                     query,
                     {
-                        'atomic_numbers', 'positions', 'cell', 'pbc', 'names',
+                        *ui_keys,
+                        'names',
                         'labels'
                     }
                 ),
                 desc='Getting configurations',
                 disable=not verbose
                 ):
-                # TODO: Think about how to handle below and self.configurations.find above
+                # TODO: Need way to map unique identifiers to init arguments
+                c = self.configuration_type.__class__(
+
+                )
                 c = Configuration(
                     symbols=co_doc['atomic_numbers'],
                     positions=co_doc['positions'],

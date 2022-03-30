@@ -10,35 +10,59 @@ from colabfit import (
     ATOMS_CONSTRAINTS_FIELD
 )
 
-# TODO: Add support for labels
-
 
 class BaseConfiguration:
     """The base Configuration class.
 
-    All other Configuration 'types' should be subclasses of this and any other useful classes.
+    All other Configuration 'types' must subclass this and any other useful classes.
 
-    All subclasses must define self.unique_identifiers which contains key-value
-    pairs of any Configuration attributes that help uniquely define a Configuration.
-    These values will be used to produce a unique hash for each Configuration.
+    Configuration classes must pass all necessary unique identifiers as keyword arguments
+    to BaseConfiguration.__init. Unique identifiers are values that are needed to uniquely
+    identify one Configuration instance from another. These values will be used to produce
+    a unique hash for each Configuration instance and be added to the database with
+    their associated keyword.
 
-    All subclasses must define self.configuration_summary, which is used to extract
-    any other useful information that will be included (in addition to self.unique_identifiers)
-    in the Configuration's entry in the Database.
+    All Configuration classes must define a self.configuration_summary method. This is used
+    to extract any other useful information that will be included (in addition to all unique
+    identifiers) in the Configuration's entry in the Database.
 
     See AtomicConfiguration as an example.
+
+    Attributes:
+
+        info (dict):
+            Stores important metadata for a Configuration. At a minimum, it will include
+            keywords "_name" and "_labels".
+        unique_identifiers (dict):
+            Stores all key-value pairs needed to uniquely define a Configuration.
     """
-    def __init__(
-            self,
-    ):
-        self.unique_identifiers = {}
+    def __init__(self, names=None, labels=None, **unique_identifiers):
+        """
+        Args:
+            names (str, list of str):
+                Names to be associated with a Configuration
+            labels (str, list of str):
+                Labels to be associated with a Configuration
+            **unique_identifiers:
+                All identifiers needed to uniquely define a Configuration
+        """
+        self.info = {}
+        if names is None:
+            self.info[ATOMS_NAME_FIELD] = set()
+        else:
+            self.info[ATOMS_NAME_FIELD] = set(list(names))
+        if labels is None:
+            self.info[ATOMS_LABELS_FIELD] = set()
+        else:
+            self.info[ATOMS_LABELS_FIELD] = set(list(labels))
+        self.unique_identifiers = unique_identifiers
 
     def configuration_summary(self):
         """Extracts useful information from a Configuration.
 
-        All subclasses should implement this.
+        All Configuration classes should implement this.
         Any useful information that should be included under a Configuration's entry in the Database
-        (in addition to its unique_identifiers) should be extracted and added to a dict.
+        (in addition to its unique identifiers) should be extracted and added to a dict.
         Will be called before inserting data into Database
 
         Returns:
@@ -46,7 +70,6 @@ class BaseConfiguration:
         """
         raise NotImplementedError('All subclasses should implement this.')
 
-    # TODO: Check datatypes of items added to hash as this will likely change bytes
     def __hash__(self):
         """Generates a hash for :code:`self`.
 
@@ -57,10 +80,10 @@ class BaseConfiguration:
             int: Value of hash
         """
         if len(self.unique_identifiers) == 0:
-            raise Exception('Ensure subclasses define key-value pairs in self.unique_identifiers!')
+            raise Exception('Ensure unique identifiers are properly defined!')
         _hash = sha512()
         for _, v in self.unique_identifiers.items():
-            _hash.update(bytes(v))
+            _hash.update(bytes(pre_hash_formatting(v)))
         return int(str(int(_hash.hexdigest(), 16) - HASH_SHIFT)[:HASH_LENGTH])
 
     def __eq__(self, other):
@@ -71,20 +94,68 @@ class BaseConfiguration:
         return hash(self) == hash(other)
 
 
-# TODO: Fix issues with name, label, etc fields.
-#       They are currently only included so as to replicate Configuration.
+
 class AtomicConfiguration(BaseConfiguration, Atoms):
+    # TODO: Modify docstring
+    """
+    An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and an :class:`ase.Atoms`
+    object that is guaranteed to have the following fields in its :attr:`info` dictionary:
 
-    def __init__(
+    - :attr:`~colabfit.ATOMS_ID_FIELD` = :code:"_id" # TODO: Don't think this is true->Fix
+    - :attr:`~colabfit.ATOMS_NAME_FIELD` = :code:"_name"
+    - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
+    # TODO: Reimplement contrainsts
+    # - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD` = :code:"_constraints"
+    """
+
+    def __init__(self, numbers=None, positions=None, cell=None,
+                 pbc=None, names=None, labels=None,
+                 # TODO Add functionality later         constraints=None
+                 *args, **kwargs):
+        """
+        Constructs an AtomicConfiguration. Calls :meth:`BaseConfiguration.__init__()`
+        and :meth:`ase.Atoms.__init__()`
+
+        Args:
+            numbers (list/ndarray of int):
+                Atomic Numbers
+            positions (Anything that can be converted to a ndarray of shape (n, 3)):
+                Atomic xyz-positions
+            cell (3x3 matrix of float): # TODO: Ensure similar formatting that is used in ASE
+                Unit cell vectors
+            pbc (list of 3 bool):
+                Periodic boundary conditions for each dimension
+            names (str, list of str):
+                Names to be associated with a Configuration
+            labels (str, list of str):
+                Labels to be associated with a Configuration
+            *args:
+                Other positional arguments that can be passed to :meth:`ase.Atoms.__init__()`
+            **kwargs:
+                Other keyword arguments that can be passed to :meth:`ase.Atoms.__init__()`
+        """
+
+        # NB: Keywords (other than "names" and "labels") used here define what will be added to Database
+        BaseConfiguration.__init__(
             self,
-            labels=None,
-            constraints=None,
+            atomic_numbers=numbers,
+            positions=positions,
+            cell=cell,
+            pbc=pbc,
+            names=names,
+            labels=labels,
+        )
+        Atoms.__init__(
+            self,
+            numbers=numbers,
+            positions=positions,
+            cell=cell,
+            pbc=pbc,
             *args,
-            **kwargs
-    ):
-        BaseConfiguration.__init__(self)
-        Atoms.__init__(self, *args, **kwargs)
+            **kwargs,
+        )
 
+        '''
         if ATOMS_NAME_FIELD in self.info:
             v = self.info[ATOMS_NAME_FIELD]
             if not isinstance(v, list):
@@ -104,6 +175,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
         self.info[ATOMS_LABELS_FIELD] = set(labels)
 
+# TODO: Reimplement later
+
         if ATOMS_CONSTRAINTS_FIELD not in self.info:
             if constraints is None:
                 constraints = set()
@@ -111,22 +184,22 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             constraints = set(self.info[ATOMS_CONSTRAINTS_FIELD])
 
         self.info[ATOMS_CONSTRAINTS_FIELD] = set(constraints)
-
+        '''
         # Check for name conflicts in info/arrays; would cause bug in parsing
         if set(self.info.keys()).intersection(set(self.arrays.keys())):
             raise RuntimeError(
                 "The same key should not be used in both Configuration.info " \
                 "and Configuration.arrays"
             )
-        self.unique_identifiers = {
-            "atomic_numbers": self.arrays['numbers'],
-            "positions": np.round_(self.arrays['positions'], decimals=16),
-            "cell": np.round_(np.array(self.cell), decimals=16),
-            "pbc":  self.pbc
-        }
 
     def configuration_summary(self):
-        """Extracts useful metadata from a list of atomic species"""
+        """
+        Extracts useful metadata from a list of atomic species
+
+        Returns:
+            dict: Keys and their associated values that will be included under a Configuration's entry in the Database
+        """
+
         atomic_species = self.get_chemical_symbols()
 
         natoms = len(atomic_species)
@@ -192,13 +265,13 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             'chemical_formula_reduced': chemical_formula_reduced,
             'chemical_formula_hill': self.get_chemical_formula(),
             'nperiodic_dimensions': int(sum(self.get_pbc())),
-            'species': species, # Is this ever used?
+            'species': species,  # Is this ever used?
         }
 
     @classmethod
     def from_ase(cls, atoms):
         """
-        Generates a :class:`Configuration` from an :code:`ase.Atoms` object.
+        Generates an :class:`AtomicConfiguration` from an :code:`ase.Atoms` object.
         """
         # Workaround for bug in todict() fromdict() with constraints.
         # Merge request: https://gitlab.com/ase/ase/-/merge_requests/2574
@@ -231,28 +304,53 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             ase_str[14:-1]
         )
 
+
 # TODO: Any other arguments here?
 #       Think about how properties are incorporated here-may want to define new class that subclasses SeqRecord first
 #       Think about capitalization for hashing purposes
 class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
-    def __init__(
-            self,
-            *args,
-            **kwargs,
-    ):
-        BaseConfiguration.__init__(self)
-        SeqRecord.__init__(self, *args, **kwargs)
-        # TODO: Maybe make info dict here
-        self.unique_identifiers = {
-            "sequence": str(self.seq).encode('utf-8'),
-        }
+    """
+    A BioSequenceConfiguration is an extension of a :class:`BaseConfiguration` and an :class:`Bio.SeqRecord object.`
+    """
 
-# TODO: What things would be needed here-Count/composition, sequence length, etc
+# TODO: Check seq use cases->may need to be Seq class, be required, etc
+    def __init__(self, seq=None, names=None,labels=None, *args, **kwargs,):
+        """
+        Constructs a BioSequenceConfiguration. Calls :meth:`BaseConfiguration.__init__()`
+        and :meth:`Bio.SeqRecord.__init__()`
+
+        Args:
+            seq (str):
+                Biological sequence
+            names (str, list of str):
+                Names to be associated with a Configuration
+            labels (str, list of str):
+                Labels to be associated with a Configuration
+            *args:
+                Other positional arguments that can be passed to :meth:`Bio.SeqRecord.__init__()`
+            **kwargs:
+                Other keyword arguments that can be passed to :meth:`Bio.SeqRecord.__init__()`
+        """
+
+        BaseConfiguration.__init__(self, sequence=str(seq).encode('utf-8'), names=names, labels=labels)
+        SeqRecord.__init__(self, seq=seq, *args, **kwargs)
+
+
+    # TODO: What things would be needed here-Count/composition, sequence length, etc
     def configuration_summary(self):
+        """
+        Extracts useful metadata from a sequence.
+
+        Returns:
+            dict: Keys and their associated values that will be included under a Configuration's entry in the Database
+        """
         return {'seq_length': len(self.unique_identifiers['sequence'])}
 
     @classmethod
-    def from_seqrecord(cls,seqrec):
+    def from_seqrecord(cls, seqrec):
+        """
+        Generates a :class:`BioSequenceConfiguration` from a :code:`Bio.SeqRecord` object.
+        """
         return cls(
             seqrec.seq,
             id=seqrec.id,
@@ -277,8 +375,8 @@ class Configuration(Atoms):
     """
 
     def __init__(
-        self, description='', labels=None, constraints=None, *args, **kwargs
-        ):
+            self, description='', labels=None, constraints=None, *args, **kwargs
+    ):
         """
         Constructs a Configuration. Calls :meth:`ase.Atoms.__init__()`, then
         populates the additional required fields.
@@ -302,7 +400,7 @@ class Configuration(Atoms):
             self.info[ATOMS_NAME_FIELD] = v
         else:
             self.info[ATOMS_NAME_FIELD] = set()
-#TODO fix how labels are utilized
+        # TODO fix how labels are utilized
         if ATOMS_LABELS_FIELD not in self.info:
             if labels is None:
                 labels = set()
@@ -322,7 +420,7 @@ class Configuration(Atoms):
         # Check for name conflicts in info/arrays; would cause bug in parsing
         if set(self.info.keys()).intersection(set(self.arrays.keys())):
             raise RuntimeError(
-                "The same key should not be used in both Configuration.info "\
+                "The same key should not be used in both Configuration.info " \
                 "and Configuration.arrays"
             )
 
@@ -357,7 +455,7 @@ class Configuration(Atoms):
 
         conf = Configuration.fromdict(atoms.todict())
 
-        for k,v in atoms.info.items():
+        for k, v in atoms.info.items():
             if k in [ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD]:
                 if not isinstance(v, set):
                     if not isinstance(v, list):
@@ -369,13 +467,10 @@ class Configuration(Atoms):
             else:
                 conf.info[k] = v
 
-        for k,v in atoms.arrays.items():
+        for k, v in atoms.arrays.items():
             conf.arrays[k] = v
 
         return conf
-
-
-
 
     # def colabfit_format(self):
     #     """
@@ -385,7 +480,6 @@ class Configuration(Atoms):
     #         - sort atoms by X, Y, then Z positions
     #     """
     #     raise NotImplementedError()
-
 
     def __hash__(self):
         """
@@ -404,16 +498,15 @@ class Configuration(Atoms):
         #     else hash(np.array(self.arrays[c]).data.tobytes())
         #     for c in self.info[ATOMS_CONSTRAINTS_FIELD]
         # ))
-#TODO: Add hash update for constraints like charge, external, etc
-#TODO: Ensure order doesn't affect hash
+        # TODO: Add hash update for constraints like charge, external, etc
+        # TODO: Ensure order doesn't affect hash
         _hash = sha512()
-        _hash.update(np.round_(self.arrays['positions'], decimals=16).data.tobytes()),
         _hash.update(self.arrays['numbers'].data.tobytes()),
+        _hash.update(np.round_(self.arrays['positions'], decimals=16).data.tobytes()),
         _hash.update(np.round_(np.array(self.cell), decimals=16).data.tobytes()),
         _hash.update(np.array(self.pbc).data.tobytes()),
 
-        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
-
+        return int(str(int(_hash.hexdigest(), 16) - HASH_SHIFT)[:HASH_LENGTH])
 
     def __eq__(self, other):
         """
@@ -444,7 +537,7 @@ def process_species_list(atoms):
     elements = sorted(list(set(atomic_species)))
     nelements = len(elements)
     elements_ratios = [
-        atomic_species.count(el)/natoms for el in elements
+        atomic_species.count(el) / natoms for el in elements
     ]
 
     species_counts = [atomic_species.count(sp) for sp in elements]
@@ -457,7 +550,7 @@ def process_species_list(atoms):
         return x
 
     count_gcd = find_gcd(species_counts)
-    species_proportions = [sc//count_gcd for sc in species_counts]
+    species_proportions = [sc // count_gcd for sc in species_counts]
 
     chemical_formula_reduced = ''
     for elem, elem_prop in zip(elements, species_proportions):
@@ -473,7 +566,7 @@ def process_species_list(atoms):
         # OPTIMADE uses A...Z, then Aa..Za, ..., up to Az...Zz
 
         count1 = spec_idx // 26
-        count2 = spec_idx %  26
+        count2 = spec_idx % 26
 
         if count1 == 0:
             anon_spec = ascii_uppercase[count2]
@@ -503,3 +596,24 @@ def process_species_list(atoms):
         'species': species,
     }
 
+# TODO: Check datatypes, decimal rounding, string encodings, etc to ensure consistent hashing
+#       Add support for lists, etc
+def pre_hash_formatting(v):
+    """
+    Ensures proper datatypes, precision, etc prior to hashing of unique identifiers
+
+    Args:
+        v:
+            Value to hash
+
+    Returns:
+        Reformatted value
+
+    """
+    if isinstance(v, np.ndarray):
+        if v.dtype == float:
+            return np.round_(v,decimals=16)
+        else:
+            return v
+    else:
+        return v
