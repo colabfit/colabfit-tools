@@ -3,7 +3,7 @@ from hashlib import sha512
 from ase import Atoms
 from string import ascii_lowercase, ascii_uppercase
 from Bio.SeqRecord import SeqRecord
-
+from tqdm import tqdm
 from colabfit import (
     HASH_LENGTH, HASH_SHIFT,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
@@ -68,7 +68,23 @@ class BaseConfiguration:
         Returns:
             dict: Keys and their associated values that will be included under a Configuration's entry in the Database
         """
-        raise NotImplementedError('All subclasses should implement this.')
+        raise NotImplementedError('All Configuration classes should implement this.')
+
+    @staticmethod
+    def aggregate_configuration_summaries(ids):
+        """Aggregates information for given configurations
+        All Configuration classes should implement this.
+        Similar to configuration_summary, but summarizes information
+        for a collection of Configurations
+
+        Args:
+            ids:
+                IDs of Configurations of interest
+
+        Returns:
+            dict: Key-value pairs of information aggregated from multiple Configurations
+        """
+        raise NotImplementedError('All Configuration classes should implement this.')
 
     def __hash__(self):
         """Generates a hash for :code:`self`.
@@ -109,9 +125,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     """
 
     def __init__(self, numbers=None, positions=None, cell=None,
-                 pbc=None, names=None, labels=None,
+                 pbc=None, names=None, labels=None, **kwargs):
                  # TODO Add functionality later         constraints=None
-                 *args, **kwargs):
         """
         Constructs an AtomicConfiguration. Calls :meth:`BaseConfiguration.__init__()`
         and :meth:`ase.Atoms.__init__()`
@@ -129,8 +144,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                 Names to be associated with a Configuration
             labels (str, list of str):
                 Labels to be associated with a Configuration
-            *args:
-                Other positional arguments that can be passed to :meth:`ase.Atoms.__init__()`
             **kwargs:
                 Other keyword arguments that can be passed to :meth:`ase.Atoms.__init__()`
         """
@@ -151,7 +164,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             positions=positions,
             cell=cell,
             pbc=pbc,
-            *args,
             **kwargs,
         )
 
@@ -193,8 +205,19 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             )
 
     def configuration_summary(self):
-        """
-        Extracts useful metadata from a list of atomic species
+        """Extracts useful metadata from a Configuration
+
+        Gathers the following information from a Configuration:
+
+        * :code:`natoms`: the total number of atoms
+        * :code:`nelements`: the total number of unique element types
+        * :code:`elements`: the element types
+        * :code:`elements_ratios`: elemental ratio of the species
+        * :code:`chemical_formula_reduced`: the reduced chemical formula
+        * :code:`chemical_formula_anonymous`: the chemical formula
+        * :code:`chemical_formula_hill`: the hill chemical formulae
+        * :code:`nperiodic_dimensions`: the numbers of periodic dimensions
+        * :code:`dimension_types`: the periodic boundary condition
 
         Returns:
             dict: Keys and their associated values that will be included under a Configuration's entry in the Database
@@ -264,8 +287,9 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             'chemical_formula_anonymous': chemical_formula_anonymous,
             'chemical_formula_reduced': chemical_formula_reduced,
             'chemical_formula_hill': self.get_chemical_formula(),
+            'dimension_types': self.get_pbc().astype(int).tolist(),
             'nperiodic_dimensions': int(sum(self.get_pbc())),
-            'species': species,  # Is this ever used?
+            #'species': species,  # Is this ever used?
         }
 
     @classmethod
@@ -297,11 +321,115 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
         return conf
 
+    @staticmethod
+    def aggregate_configuration_summaries(db, ids, verbose=False):
+        """
+          Gathers the following information from a collection of configurations:
+
+        * :code:`nconfigurations`: the total number of configurations
+        * :code:`natoms`: the total number of atoms
+        * :code:`nelements`: the total number of unique element types
+        * :code:`elements`: the element types
+        * :code:`individual_elements_ratios`: a set of elements ratios generated
+          by looping over each configuration, extracting its concentration of
+          each element, and adding the tuple of concentrations to the set
+        * :code:`total_elements_ratios`: the ratio of the total count of atoms
+            of each element type over :code:`natoms`
+        * :code:`labels`: the union of all configuration labels
+        * :code:`labels_counts`: the total count of each label
+        * :code:`chemical_formula_reduced`: the set of all reduced chemical
+            formulae
+        * :code:`chemical_formula_anonymous`: the set of all anonymous chemical
+            formulae
+        * :code:`chemical_formula_hill`: the set of all hill chemical formulae
+        * :code:`nperiodic_dimensions`: the set of all numbers of periodic
+            dimensions
+        * :code:`dimension_types`: the set of all periodic boundary choices
+
+        Args:
+            db (MongoDatabase object):
+                Database client in which to search for IDs
+            ids (list):
+                IDs of Configurations of interest
+            verbose (bool, default=False):
+                If True, prints a progress bar
+
+        Returns:
+            dict: Aggregated Configuration information
+        """
+        aggregated_info = {
+            'nconfigurations': len(ids),
+            'natoms': 0,
+            'nelements': 0,
+            'chemical_systems': set(),
+            'elements': [],
+            'individual_elements_ratios': {},
+            'total_elements_ratios': {},
+            'labels': [],
+            'labels_counts': [],
+            'chemical_formula_reduced': set(),
+            'chemical_formula_anonymous': set(),
+            'chemical_formula_hill': set(),
+            'nperiodic_dimensions': set(),
+            'dimension_types': set(),
+        }
+
+        for doc in tqdm(
+            db.configurations.find({'_id': {'$in': ids}}),
+            desc='Aggregating configuration info',
+            disable=not verbose,
+            total=len(ids),
+            ):
+            aggregated_info['natoms'] += doc['natoms']
+
+            aggregated_info['chemical_systems'].add(''.join(doc['elements']))
+
+            for e, er in zip(doc['elements'], doc['elements_ratios']):
+                if e not in aggregated_info['elements']:
+                    aggregated_info['nelements'] += 1
+                    aggregated_info['elements'].append(e)
+                    aggregated_info['total_elements_ratios'][e] = er*doc['natoms']
+                    aggregated_info['individual_elements_ratios'][e] = set(
+                        [np.round_(er, decimals=2)]
+                    )
+                else:
+                    aggregated_info['total_elements_ratios'][e] += er*doc['natoms']
+                    aggregated_info['individual_elements_ratios'][e].add(
+                        np.round_(er, decimals=2)
+                    )
+
+            for l in doc['labels']:
+                if l not in aggregated_info['labels']:
+                    aggregated_info['labels'].append(l)
+                    aggregated_info['labels_counts'].append(1)
+                else:
+                    idx = aggregated_info['labels'].index(l)
+                    aggregated_info['labels_counts'][idx] += 1
+
+            aggregated_info['chemical_formula_reduced'].add(doc['chemical_formula_reduced'])
+            aggregated_info['chemical_formula_anonymous'].add(doc['chemical_formula_anonymous'])
+            aggregated_info['chemical_formula_hill'].add(doc['chemical_formula_hill'])
+
+            aggregated_info['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
+            aggregated_info['dimension_types'].add(tuple(doc['dimension_types']))
+
+        for e in aggregated_info['elements']:
+            aggregated_info['total_elements_ratios'][e] /= aggregated_info['natoms']
+            aggregated_info['individual_elements_ratios'][e] = list(aggregated_info['individual_elements_ratios'][e])
+
+        aggregated_info['chemical_systems'] = list(aggregated_info['chemical_systems'])
+        aggregated_info['chemical_formula_reduced'] = list(aggregated_info['chemical_formula_reduced'])
+        aggregated_info['chemical_formula_anonymous'] = list(aggregated_info['chemical_formula_anonymous'])
+        aggregated_info['chemical_formula_hill'] = list(aggregated_info['chemical_formula_hill'])
+        aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
+        aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
+
+        return aggregated_info
+
     def __str__(self):
         ase_str = super().__str__()
-        return "AtomicConfiguration(name='{}', {})".format(
-            self.info[ATOMS_NAME_FIELD],
-            ase_str[14:-1]
+        return "AtomicConfiguration(name={}, {})".format(
+            self.info[ATOMS_NAME_FIELD],            ase_str[20:-1]
         )
 
 
@@ -314,7 +442,7 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
     """
 
 # TODO: Check seq use cases->may need to be Seq class, be required, etc
-    def __init__(self, seq=None, names=None,labels=None, *args, **kwargs,):
+    def __init__(self, seq=None, names=None,labels=None, **kwargs,):
         """
         Constructs a BioSequenceConfiguration. Calls :meth:`BaseConfiguration.__init__()`
         and :meth:`Bio.SeqRecord.__init__()`
@@ -326,14 +454,12 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
                 Names to be associated with a Configuration
             labels (str, list of str):
                 Labels to be associated with a Configuration
-            *args:
-                Other positional arguments that can be passed to :meth:`Bio.SeqRecord.__init__()`
             **kwargs:
                 Other keyword arguments that can be passed to :meth:`Bio.SeqRecord.__init__()`
         """
 
         BaseConfiguration.__init__(self, sequence=str(seq).encode('utf-8'), names=names, labels=labels)
-        SeqRecord.__init__(self, seq=seq, *args, **kwargs)
+        SeqRecord.__init__(self, seq=seq, **kwargs)
 
 
     # TODO: What things would be needed here-Count/composition, sequence length, etc

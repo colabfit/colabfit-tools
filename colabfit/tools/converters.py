@@ -6,7 +6,7 @@ from ase.io import read
 from pathlib import Path
 
 from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
-from colabfit.tools.configuration import Configuration
+from colabfit.tools.configuration import Configuration, AtomicConfiguration
 
 __all__ = [
     'BaseConverter',
@@ -125,7 +125,7 @@ class EXYZConverter(BaseConverter):
                     atoms.info[labels_field]
                 )
 
-            yield Configuration.from_ase(atoms)
+            yield AtomicConfiguration.from_ase(atoms)
         #     images[ai] = Configuration.from_ase(atoms)
 
         # return images
@@ -289,7 +289,7 @@ class CFGConverter(BaseConverter):
                             atoms.info[labels_field]
                         )
 
-                    yield Configuration.from_ase(atoms)
+                    yield AtomicConfiguration.from_ase(atoms)
                     ai += 1
 
 class FolderConverter(BaseConverter):
@@ -383,7 +383,7 @@ class FolderConverter(BaseConverter):
                         atoms.info[labels_field]
                     )
 
-                yield Configuration.from_ase(atoms)
+                yield AtomicConfiguration.from_ase(atoms)
                 # images.append(Configuration.from_ase(atoms))
                 ai += 1
 

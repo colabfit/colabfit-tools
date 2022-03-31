@@ -178,7 +178,8 @@ class MongoDatabase(MongoClient):
         datasets (Collection):
             A Mongo collection of dataset documents
     """
-    # TODO: Add argument for configuration type after database_name
+    # TODO: Should database be instantiated with nprocs, or should it be passed in as an
+    #       argument to methods in which this would be relevant
     def __init__(
         self, database_name, configuration_type=BaseConfiguration(), nprocs=1, uri=None,
         drop_database=False, user=None, pwrd=None, port=27017,
@@ -217,7 +218,6 @@ class MongoDatabase(MongoClient):
 
 
         """
-
         self.configuration_type = configuration_type
         self.uri  = uri
         self.login_args = args
@@ -426,7 +426,7 @@ class MongoDatabase(MongoClient):
                 pool.map(pfunc, split_configs)
             ))
 
-    @staticmethod
+    ''''@staticmethod
     def __build_c_update_doc(configuration):
         cid = ID_FORMAT_STRING.format('CO', hash(configuration), 0)
         processed_fields = configuration.configuration_summary()
@@ -452,7 +452,7 @@ class MongoDatabase(MongoClient):
         c_update_doc['$setOnInsert'].update({k: v.tolist() for k, v in configuration.unique_identifiers.items()})
         c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
         return c_update_doc
-
+'''
 
     @staticmethod
     def _insert_data_generator(
@@ -522,10 +522,11 @@ class MongoDatabase(MongoClient):
                 transform(atoms)
 
             cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
+            c_update_doc = _build_c_update_doc(atoms)
 
-            processed_fields = process_species_list(atoms)
-            # TODO: Modify below to be Configuration "type" agnostic
+            #Old Method processed_fields = process_species_list(atoms)
             # Add if doesn't exist, else update (since last-modified changed)
+            '''
             c_update_doc =  {  # update document
                     '$setOnInsert': {
                         '_id': cid,
@@ -559,7 +560,7 @@ class MongoDatabase(MongoClient):
                         }
                     }
                 }
-
+'''
             # TODO: Make Configuration "type" agnostic->Possible all types may not have info/arrays
             #       but could enforce this.
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
@@ -862,14 +863,11 @@ class MongoDatabase(MongoClient):
 
             cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
-            processed_fields = process_species_list(atoms)
-
-            #TODO Make the below dependent on Configuration type and change above "atoms" to something like "instance"
-            # All config types will have ID, properties that make configuration unique,
-            # (those that are used for hashing), and any processed (summary fields)
-            # Make private static method to create c_update_doc
+            c_update_doc = _build_c_update_doc(atoms)
+            #Old method processed_fields = process_species_list(atoms)
 
             # Add if doesn't exist, else update (since last-modified changed)
+            '''
             c_update_doc =  {  # update document
                     '$setOnInsert': {
                         '_id': cid,
@@ -903,7 +901,7 @@ class MongoDatabase(MongoClient):
                         }
                     }
                 }
-
+'''         # TODO: Same as above
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
             pid = None
@@ -1539,15 +1537,18 @@ class MongoDatabase(MongoClient):
                 disable=not verbose
                 ):
                 # TODO: Need way to map unique identifiers to init arguments
+                #  For now assume arguments are in correct order or could enforce matching keyword names
                 c = self.configuration_type.__class__(
-
+                    *[co_doc[_ui_key] for _ui_key in ui_keys]
                 )
+                '''
                 c = Configuration(
                     symbols=co_doc['atomic_numbers'],
                     positions=co_doc['positions'],
                     cell=co_doc['cell'],
                     pbc=co_doc['pbc'],
                 )
+                '''
 
                 c.info['_id'] = co_doc['_id']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
@@ -1593,14 +1594,18 @@ class MongoDatabase(MongoClient):
                     desc='Getting configurations',
                     disable=not verbose
                 ):
-                # TODO: Think about how to handle below
+                # TODO: Think about how to handle below (same as above)
+                c = self.configuration_type.__class__(
+                    *[co_doc[_ui_key] for _ui_key in ui_keys]
+                )
+                '''
                 c = Configuration(
                     symbols=co_doc['atomic_numbers'],
                     positions=co_doc['positions'],
                     cell=co_doc['cell'],
                     pbc=co_doc['pbc'],
                 )
-
+                '''
                 c.info['_id'] = co_doc['_id']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
                 c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
@@ -1697,7 +1702,12 @@ class MongoDatabase(MongoClient):
                 " in the database."
             )
 
-        aggregated_info = self.aggregate_configuration_info(ids, verbose=verbose)
+        #Old method aggregated_info = self.aggregate_configuration_info(ids, verbose=verbose)
+        aggregated_info = self.configuration_type.aggregate_configuration_summaries(
+            self,
+            ids,
+            verbose=verbose
+        )
 
         self.configuration_sets.update_one(
             {'_id': cs_id},
@@ -1791,8 +1801,13 @@ class MongoDatabase(MongoClient):
 
         cs_doc = self.configuration_sets.find_one({'_id': cs_id})
 
-        aggregated_info = self.aggregate_configuration_info(
-            cs_doc['relationships']['configurations'], verbose=verbose
+        #Old method aggregated_info = self.aggregate_configuration_info(
+        #    cs_doc['relationships']['configurations'], verbose=verbose
+        #)
+        aggregated_info = self.configuration_type.aggregate_configuration_summaries(
+            self,
+            cs_doc['relationships']['configurations'],
+            verbose=verbose,
         )
 
         self.configuration_sets.update_one(
@@ -1854,7 +1869,8 @@ class MongoDatabase(MongoClient):
             upsert=True
         )
 
-#TODO Work on making this Configuration "type" agnostic
+    # TODO Work on making this Configuration "type" agnostic->Seems to be HIGHLY Configuration type dependent
+    #  Could define another configuration method for this->Just do this for now
     def aggregate_configuration_info(self, ids, verbose=False):
         """
         Gathers the following information from a collection of configurations:
@@ -2092,8 +2108,8 @@ class MongoDatabase(MongoClient):
             cs_doc['relationships']['configurations'] for cs_doc in
             self.configuration_sets.find({'_id': {'$in': cs_ids}})
         )))
-
-        return self.aggregate_configuration_info(co_ids, verbose=verbose)
+        return self.configuration_type.aggregate_configuration_summaries(self, co_ids, verbose=verbose)
+        #Old method return self.aggregate_configuration_info(co_ids, verbose=verbose)
 
 
     def insert_dataset(
@@ -2660,10 +2676,15 @@ class MongoDatabase(MongoClient):
                 ConfigurationSet(
                     configuration_ids=co_ids,
                     description=cs_doc['description'],
-                    aggregated_info=self.aggregate_configuration_info(
+                    aggregated_info=self.configuration_type.aggregate_configuration_summaries(
+                        self,
                         co_ids,
-                        verbose=verbose
+                        verbose=verbose,
                     )
+                    #Old method aggregated_info=self.aggregate_configuration_info(
+                    #    co_ids,
+                    #    verbose=verbose
+                    #)
                 )
             )
 
@@ -2790,10 +2811,15 @@ class MongoDatabase(MongoClient):
                 ConfigurationSet(
                     configuration_ids=co_ids,
                     description=cs_doc['description'],
-                    aggregated_info=self.aggregate_configuration_info(
+                    aggregated_info=self.configuration_type.aggregate_configuration_summaries(
+                        self,
                         co_ids,
                         verbose=verbose
                     )
+                    #Old method aggregated_info=self.aggregate_configuration_info(
+                    #    co_ids,
+                    #    verbose=verbose
+                    #)
                 )
             )
 
@@ -3566,6 +3592,34 @@ def load_data(
         )
 
     return results if generator else list(results)
+
+# Moved out of static method to avoid changing insert_data* methods
+# Could consider changing in the future
+def _build_c_update_doc(configuration):
+    cid = ID_FORMAT_STRING.format('CO', hash(configuration), 0)
+    processed_fields = configuration.configuration_summary()
+    c_update_doc = {
+        '$setOnInsert' : {
+            '_id': cid,
+        },
+        '$set': {
+            'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        },
+        '$addToSet': {
+            'names': {
+                '$each': list(configuration.info[ATOMS_NAME_FIELD])
+            },
+            'labels': {
+                '$each': list(configuration.info[ATOMS_LABELS_FIELD])
+            },
+            'relationships.properties': {
+                '$each': []
+            }
+        }
+    }
+    c_update_doc['$setOnInsert'].update({k: v.tolist() for k, v in configuration.unique_identifiers.items()})
+    c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
+    return c_update_doc
 
 class ConcatenationException(Exception):
     pass
