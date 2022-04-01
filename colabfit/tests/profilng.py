@@ -8,7 +8,7 @@ def main():
     database = MongoDatabase('debug', drop_database=True)
 
     configurations = []
-    for i in range(1, 1001):
+    for i in range(1, 101):
         atoms = Atoms(
             symbols=f'H{i}',
             positions=np.random.random((i, 3)),
@@ -50,6 +50,8 @@ def main():
     rebuilt_configs = database.get_configurations(
         co_ids, pr_ids, attach_properties=True
     )
+
+    data = database.get_data('properties', '_id')
 
 
 if __name__ == '__main__':

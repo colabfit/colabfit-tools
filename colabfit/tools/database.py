@@ -1248,6 +1248,7 @@ class MongoDatabase(MongoClient):
 
 
     # @staticmethod
+    @profile
     def get_data(
         self, collection_name,
         fields,
@@ -1440,15 +1441,15 @@ class MongoDatabase(MongoClient):
                 don't have values for all of their fields.
 
             attach_settings (bool, default=False):
-                If True, attaches all of the fields of the property settings
+                NOT supported yet. If True, attaches all of the fields of the property settings
                 that are linked to the attached property instances. If
                 :code:`attach_settings=True`, must also have
                 :code:`attach_properties=True`.
 
             generator (bool, default=False):
-                If True, this function returns a generator of the
-                configurations. This is useful if the configurations can't all
-                fit in memory at the same time.
+                NOT supported yet. If True, this function returns a generator of
+                the configurations. This is useful if the configurations can't
+                all fit in memory at the same time.
 
             verbose (bool):
                 If True, prints progress bar
@@ -1459,6 +1460,9 @@ class MongoDatabase(MongoClient):
                 A list or generator of the re-constructed configurations
         """
 
+        if attach_settings:
+            raise NotImplementedError
+
         if configuration_ids == 'all':
             query = {}
         else:
@@ -1468,12 +1472,13 @@ class MongoDatabase(MongoClient):
             query = {'_id': {'$in': configuration_ids}}
 
         if generator:
-            return self._get_configurations(
-                query=query,
-                property_ids=property_ids,
-                attach_properties=attach_properties,
-                verbose=verbose
-            )
+            raise NotImplementedError
+            # return self._get_configurations(
+            #     query=query,
+            #     property_ids=property_ids,
+            #     attach_properties=attach_properties,
+            #     verbose=verbose
+            # )
         else:
             return list(self._get_configurations(
                 query=query,
@@ -1484,7 +1489,6 @@ class MongoDatabase(MongoClient):
             ))
 
 
-    @profile
     def _get_configurations(
         self,
         query,
@@ -1518,42 +1522,11 @@ class MongoDatabase(MongoClient):
 
                 yield c
         else:
-
-            property_match = { 'relationships.configurations': query['_id']}
-
-            if property_ids is not None:
-                property_match['_id'] = {'$in': property_ids}
-
-            pipeline = [
-                {'$match': query},
-                {'$lookup': {
-                    'from': 'properties',
-                    'localField': 'relationships.properties',
-                    'foreignField': '_id',
-                    'as': 'linked_properties'
-                }},
-            ]
-
-            if property_ids is not None:
-                pipeline.append(
-                    {'$match': {'linked_properties._id': {'$in': property_ids}}}
-                )
-
-            if attach_settings:
-                pipeline.append(
-                    {'$lookup': {
-                        'from': 'property_settings',
-                        'localField': 'linked_properties.relationships.property_settings',
-                        'foreignField': '_id',
-                        'as': 'linked_property_settings'
-                    }}
-                )
-
-            cursor = list(self.configurations.aggregate(pipeline))
+            config_dict = {}
             for co_doc in tqdm(
-                    cursor,
-                    desc='Getting configurations',
-                    disable=not verbose
+                self.configurations.find(query),
+                desc='Getting configurations',
+                disable=not verbose
                 ):
 
                 c = Configuration(
@@ -1567,17 +1540,36 @@ class MongoDatabase(MongoClient):
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
                 c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
 
-                n = len(c)
+                config_dict[co_doc['_id']] = c
 
-                for pr_doc in co_doc['linked_properties']:
+            all_attached_prs = set([_['_id'] for _ in self.properties.find(
+                {'relationships.configurations': query['_id']},
+                {'_id'}
+            )])
+
+            if property_ids is not None:
+                property_ids = list(all_attached_prs.union(set(property_ids)))
+            else:
+                property_ids = all_attached_prs
+
+            for pr_doc in tqdm(
+                    self.properties.find( {'_id': {'$in': property_ids}}),
+                    desc='Attaching properties',
+                    disable=not verbose
+                ):
+
+                for co_id in pr_doc['relationships']['configurations']:
+                    c = config_dict[co_id]
+
+                    n = len(c)
+
                     for field_name, field in pr_doc[pr_doc['type']].items():
                         v = field['source-value']
 
                         dct = c.info
                         if isinstance(v, list):
                             if len(v) == n:
-                                if isinstance(v[0], (int, float, bool, str)):
-                                    dct = c.arrays
+                                dct = c.arrays
 
                         field_name = f'{pr_doc["type"]}.{field_name}'
 
@@ -1589,27 +1581,91 @@ class MongoDatabase(MongoClient):
                             # the property of this type is being added
                             dct[field_name] = [v]
 
-                if attach_settings:
-                    for ps_doc in co_doc['linked_property_settings']:
-                        for k,v in ps_doc.items():
-                            if k in [
-                                '_id', '_description', '_labels', '_method'
-                                ]:
-                                c.info['_settings.'+k] = v
-                            elif k in ['_files', 'last_modified', 'relationships']:
-                                pass
-                            else:
-                                v = field['source-value']
+            return list(config_dict.values())
 
-                                dct = c.info
-                                if isinstance(v, list):
-                                    if len(v) == n:
-                                        if isinstance(v[0], (int, float, bool, str)):
-                                            dct = c.arrays
+            # pipeline = [
+            #     {'$match': query},
+            #     {'$lookup': {
+            #         'from': 'properties',
+            #         'localField': 'relationships.properties',
+            #         'foreignField': '_id',
+            #         'as': 'linked_properties'
+            #     }},
+            # ]
 
-                                dct[k] = v
+            # if property_ids is not None:
+            #     pipeline.append(
+            #         {'$match': {'linked_properties._id': {'$in': property_ids}}}
+            #     )
 
-                yield c
+            # if attach_settings:
+            #     pipeline.append(
+            #         {'$lookup': {
+            #             'from': 'property_settings',
+            #             'localField': 'linked_properties.relationships.property_settings',
+            #             'foreignField': '_id',
+            #             'as': 'linked_property_settings'
+            #         }}
+            #     )
+
+            # for co_doc in tqdm(
+            #         self.configurations.aggregate(pipeline),
+            #         desc='Getting configurations',
+            #         disable=not verbose
+            #     ):
+
+            #     c = Configuration(
+            #         symbols=co_doc['atomic_numbers'],
+            #         positions=co_doc['positions'],
+            #         cell=co_doc['cell'],
+            #         pbc=co_doc['pbc'],
+            #     )
+
+            #     c.info['_id'] = co_doc['_id']
+            #     c.info[ATOMS_NAME_FIELD] = co_doc['names']
+            #     c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
+
+            #     n = len(c)
+
+            #     for pr_doc in co_doc['linked_properties']:
+            #         for field_name, field in pr_doc[pr_doc['type']].items():
+            #             v = field['source-value']
+
+            #             dct = c.info
+            #             if isinstance(v, list):
+            #                 if len(v) == n:
+            #                     dct = c.arrays
+
+            #             field_name = f'{pr_doc["type"]}.{field_name}'
+
+            #             if field_name in dct:
+            #                 # Then this is a duplicate property
+            #                 dct[field_name].append(v)
+            #             else:
+            #                 # Then this is the first time
+            #                 # the property of this type is being added
+            #                 dct[field_name] = [v]
+
+            #     if attach_settings:
+            #         for ps_doc in co_doc['linked_property_settings']:
+            #             for k,v in ps_doc.items():
+            #                 if k in [
+            #                     '_id', '_description', '_labels', '_method'
+            #                     ]:
+            #                     c.info['_settings.'+k] = v
+            #                 elif k in ['_files', 'last_modified', 'relationships']:
+            #                     pass
+            #                 else:
+            #                     v = field['source-value']
+
+            #                     dct = c.info
+            #                     if isinstance(v, list):
+            #                         if len(v) == n:
+            #                             dct = c.arrays
+
+            #                     dct[k] = v
+
+            #     yield c
 
 
     def concatenate_configurations(self):
