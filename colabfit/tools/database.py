@@ -450,13 +450,17 @@ class MongoDatabase(MongoClient):
         if property_map is None:
             property_map = {}
 
-        # if property_settings is None:
-        #     property_settings = []
+        property_definitions = {}
+        for pname in property_map:
+            doc = coll_property_definitions.find_one({'_id': pname})
 
-        property_definitions = {
-            pname: coll_property_definitions.find_one({'_id': pname})['definition']
-            for pname in property_map
-        }
+            if doc is None:
+                raise RuntimeError(
+                    "Property definition '{}' does not exist. "\
+                    "Use insert_property_definition() first".format(pname)
+                )
+            else:
+                property_definitions[pname] = doc['definition']
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
@@ -785,13 +789,17 @@ class MongoDatabase(MongoClient):
         if property_map is None:
             property_map = {}
 
-        # if property_settings is None:
-        #     property_settings = []
+        property_definitions = {}
+        for pname in property_map:
+            doc = coll_property_definitions.find_one({'_id': pname})
 
-        property_definitions = {
-            pname: coll_property_definitions.find_one({'_id': pname})['definition']
-            for pname in property_map
-        }
+            if doc is None:
+                raise RuntimeError(
+                    "Property definition '{}' does not exist. "\
+                    "Use insert_property_definition() first".format(pname)
+                )
+            else:
+                property_definitions[pname] = doc['definition']
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
@@ -1476,6 +1484,7 @@ class MongoDatabase(MongoClient):
             ))
 
 
+    @profile
     def _get_configurations(
         self,
         query,
@@ -1523,8 +1532,6 @@ class MongoDatabase(MongoClient):
                     'foreignField': '_id',
                     'as': 'linked_properties'
                 }},
-                # {'$match': {'linked_properties._id': property_match}},
-                # {'$match': {'linked_properties._id': {'$in': property_ids}}},
             ]
 
             if property_ids is not None:
@@ -1542,8 +1549,9 @@ class MongoDatabase(MongoClient):
                     }}
                 )
 
+            cursor = list(self.configurations.aggregate(pipeline))
             for co_doc in tqdm(
-                    self.configurations.aggregate(pipeline),
+                    cursor,
                     desc='Getting configurations',
                     disable=not verbose
                 ):
@@ -1563,12 +1571,13 @@ class MongoDatabase(MongoClient):
 
                 for pr_doc in co_doc['linked_properties']:
                     for field_name, field in pr_doc[pr_doc['type']].items():
-                        v = np.atleast_1d(field['source-value'])
+                        v = field['source-value']
 
-                        if (v.dtype == 'O') or v.shape[0] != n:
-                            dct = c.info
-                        else:
-                            dct = c.arrays
+                        dct = c.info
+                        if isinstance(v, list):
+                            if len(v) == n:
+                                if isinstance(v[0], (int, float, bool, str)):
+                                    dct = c.arrays
 
                         field_name = f'{pr_doc["type"]}.{field_name}'
 
@@ -1590,12 +1599,13 @@ class MongoDatabase(MongoClient):
                             elif k in ['_files', 'last_modified', 'relationships']:
                                 pass
                             else:
-                                v = np.atleast_1d(field['source-value'])
+                                v = field['source-value']
 
-                                if (v.dtype == 'O') or v.shape[0] != n:
-                                    dct = c.info
-                                else:
-                                    dct = c.arrays
+                                dct = c.info
+                                if isinstance(v, list):
+                                    if len(v) == n:
+                                        if isinstance(v[0], (int, float, bool, str)):
+                                            dct = c.arrays
 
                                 dct[k] = v
 
