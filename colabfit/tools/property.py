@@ -289,7 +289,6 @@ class Property(dict):
 
 
     @classmethod
-    @profile
     def from_definition(
         cls, definition, configuration, property_map,
         settings=None, instance_id=1, convert_units=False
