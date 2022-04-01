@@ -1248,7 +1248,6 @@ class MongoDatabase(MongoClient):
 
 
     # @staticmethod
-    @profile
     def get_data(
         self, collection_name,
         fields,
@@ -1559,6 +1558,8 @@ class MongoDatabase(MongoClient):
                 ):
 
                 for co_id in pr_doc['relationships']['configurations']:
+                    if co_id not in config_dict: continue
+
                     c = config_dict[co_id]
 
                     n = len(c)
@@ -1581,7 +1582,8 @@ class MongoDatabase(MongoClient):
                             # the property of this type is being added
                             dct[field_name] = [v]
 
-            return list(config_dict.values())
+            for v in config_dict.values():
+                yield v
 
             # pipeline = [
             #     {'$match': query},
