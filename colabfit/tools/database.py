@@ -1484,7 +1484,6 @@ class MongoDatabase(MongoClient):
             ))
 
 
-    @profile
     def _get_configurations(
         self,
         query,
