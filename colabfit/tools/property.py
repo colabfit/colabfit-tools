@@ -271,7 +271,7 @@ class Property(dict):
 
     @instance.setter
     def instance(self, edn):
-        self._instance = deepcopy(edn)
+        self._instance = edn
 
         fields = []
         for key in self._instance:
