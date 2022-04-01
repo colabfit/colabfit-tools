@@ -271,7 +271,7 @@ class Property(dict):
 
     @instance.setter
     def instance(self, edn):
-        self._instance = deepcopy(edn)
+        self._instance = edn
 
         fields = []
         for key in self._instance:
@@ -289,6 +289,7 @@ class Property(dict):
 
 
     @classmethod
+    @profile
     def from_definition(
         cls, definition, configuration, property_map,
         settings=None, instance_id=1, convert_units=False
