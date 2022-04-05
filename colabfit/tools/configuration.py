@@ -124,9 +124,10 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     # - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD` = :code:"_constraints"
     """
 
+    #_unique_identifier_kw=['atomic_numbers', 'positions', 'cell', 'pbc']
+
     def __init__(self, numbers=None, positions=None, cell=None,
                  pbc=None, names=None, labels=None, **kwargs):
-                 # TODO Add functionality later         constraints=None
         """
         Constructs an AtomicConfiguration. Calls :meth:`BaseConfiguration.__init__()`
         and :meth:`ase.Atoms.__init__()`
@@ -148,7 +149,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                 Other keyword arguments that can be passed to :meth:`ase.Atoms.__init__()`
         """
 
-        # NB: Keywords (other than "names" and "labels") used here define what will be added to Database
         BaseConfiguration.__init__(
             self,
             atomic_numbers=numbers,
@@ -158,6 +158,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             names=names,
             labels=labels,
         )
+
         Atoms.__init__(
             self,
             numbers=numbers,
@@ -209,7 +210,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
         Gathers the following information from a Configuration:
 
-        * :code:`natoms`: the total number of atoms
+        * :code:`nsites`: the total number of atoms
         * :code:`nelements`: the total number of unique element types
         * :code:`elements`: the element types
         * :code:`elements_ratios`: elemental ratio of the species
@@ -280,7 +281,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             })
 
         return {
-            'natoms': natoms,  # Is there reason for nsites over natoms?
+            'nsites': natoms,
             'elements': elements,
             'nelements': nelements,
             'elements_ratios': elements_ratios,
@@ -301,7 +302,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         # Merge request: https://gitlab.com/ase/ase/-/merge_requests/2574
         if atoms.constraints is not None:
             atoms.constraints = [c.todict() for c in atoms.constraints]
-
+#This means kwargs need to be same as those in ASE
         conf = cls.fromdict(atoms.todict())
 
         for k, v in atoms.info.items():
@@ -327,7 +328,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
           Gathers the following information from a collection of configurations:
 
         * :code:`nconfigurations`: the total number of configurations
-        * :code:`natoms`: the total number of atoms
+        * :code:`nsites`: the total number of atoms
         * :code:`nelements`: the total number of unique element types
         * :code:`elements`: the element types
         * :code:`individual_elements_ratios`: a set of elements ratios generated
@@ -359,7 +360,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         """
         aggregated_info = {
             'nconfigurations': len(ids),
-            'natoms': 0,
+            'nsites': 0,
             'nelements': 0,
             'chemical_systems': set(),
             'elements': [],
@@ -380,7 +381,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             disable=not verbose,
             total=len(ids),
             ):
-            aggregated_info['natoms'] += doc['natoms']
+            aggregated_info['nsites'] += doc['nsites']
 
             aggregated_info['chemical_systems'].add(''.join(doc['elements']))
 
@@ -388,12 +389,12 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                 if e not in aggregated_info['elements']:
                     aggregated_info['nelements'] += 1
                     aggregated_info['elements'].append(e)
-                    aggregated_info['total_elements_ratios'][e] = er*doc['natoms']
+                    aggregated_info['total_elements_ratios'][e] = er*doc['nsites']
                     aggregated_info['individual_elements_ratios'][e] = set(
                         [np.round_(er, decimals=2)]
                     )
                 else:
-                    aggregated_info['total_elements_ratios'][e] += er*doc['natoms']
+                    aggregated_info['total_elements_ratios'][e] += er*doc['nsites']
                     aggregated_info['individual_elements_ratios'][e].add(
                         np.round_(er, decimals=2)
                     )
@@ -414,7 +415,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             aggregated_info['dimension_types'].add(tuple(doc['dimension_types']))
 
         for e in aggregated_info['elements']:
-            aggregated_info['total_elements_ratios'][e] /= aggregated_info['natoms']
+            aggregated_info['total_elements_ratios'][e] /= aggregated_info['nsites']
             aggregated_info['individual_elements_ratios'][e] = list(aggregated_info['individual_elements_ratios'][e])
 
         aggregated_info['chemical_systems'] = list(aggregated_info['chemical_systems'])
