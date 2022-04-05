@@ -497,8 +497,8 @@ class MongoDatabase(MongoClient):
             if transform:
                 transform(atoms)
 
-            cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
-            c_update_doc = _build_c_update_doc(atoms)
+
+            c_update_doc, cid = _build_c_update_doc(atoms)
 
             #Old Method processed_fields = process_species_list(atoms)
             # Add if doesn't exist, else update (since last-modified changed)
@@ -843,7 +843,7 @@ class MongoDatabase(MongoClient):
 
             #cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
-            c_update_doc = _build_c_update_doc(atoms)
+            c_update_doc, cid = _build_c_update_doc(atoms)
             #Old method processed_fields = process_species_list(atoms)
 
             # Add if doesn't exist, else update (since last-modified changed)
@@ -3659,7 +3659,7 @@ def _build_c_update_doc(configuration):
     }
     c_update_doc['$setOnInsert'].update({k: v.tolist() for k, v in configuration.unique_identifiers.items()})
     c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
-    return c_update_doc
+    return c_update_doc, cid
 
 class ConcatenationException(Exception):
     pass
