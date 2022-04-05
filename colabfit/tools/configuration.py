@@ -36,7 +36,10 @@ class BaseConfiguration:
         unique_identifiers (dict):
             Stores all key-value pairs needed to uniquely define a Configuration.
     """
-    def __init__(self, names=None, labels=None, **unique_identifiers):
+
+    _unique_identifier_kw = None
+
+    def __init__(self, names=None, labels=None):
         """
         Args:
             names (str, list of str):
@@ -46,6 +49,7 @@ class BaseConfiguration:
             **unique_identifiers:
                 All identifiers needed to uniquely define a Configuration
         """
+
         self.info = {}
         if names is None:
             self.info[ATOMS_NAME_FIELD] = set()
@@ -55,7 +59,15 @@ class BaseConfiguration:
             self.info[ATOMS_LABELS_FIELD] = set()
         else:
             self.info[ATOMS_LABELS_FIELD] = set(list(labels))
-        self.unique_identifiers = unique_identifiers
+
+
+    @property
+    def unique_identifiers(self):
+        raise NotImplementedError('All Configuration classes should implement this.')
+
+    @unique_identifiers.setter
+    def unique_identifiers(self):
+        raise NotImplementedError('All Configuration classes should implement this.')
 
     def configuration_summary(self):
         """Extracts useful information from a Configuration.
@@ -124,10 +136,9 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     # - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD` = :code:"_constraints"
     """
 
-    #_unique_identifier_kw=['atomic_numbers', 'positions', 'cell', 'pbc']
+    unique_identifier_kw = ['atomic_numbers', 'positions', 'cell', 'pbc']
 
-    def __init__(self, numbers=None, positions=None, cell=None,
-                 pbc=None, names=None, labels=None, **kwargs):
+    def __init__(self, names=None, labels=None, **kwargs):
         """
         Constructs an AtomicConfiguration. Calls :meth:`BaseConfiguration.__init__()`
         and :meth:`ase.Atoms.__init__()`
@@ -151,22 +162,16 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
         BaseConfiguration.__init__(
             self,
-            atomic_numbers=numbers,
-            positions=positions,
-            cell=cell,
-            pbc=pbc,
             names=names,
             labels=labels,
         )
 
-        Atoms.__init__(
-            self,
-            numbers=numbers,
-            positions=positions,
-            cell=cell,
-            pbc=pbc,
-            **kwargs,
-        )
+        kwargs['info'] = self.info
+        if 'atomic_numbers' in list(kwargs.keys()):
+            kwargs['numbers'] = kwargs['atomic_numbers']
+            kwargs.pop('atomic_numbers')
+
+        Atoms.__init__(self,**kwargs)
 
         '''
         if ATOMS_NAME_FIELD in self.info:
@@ -204,6 +209,25 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                 "The same key should not be used in both Configuration.info " \
                 "and Configuration.arrays"
             )
+
+    @property
+    def unique_identifiers(self):
+        return {
+            'atomic_numbers': self.get_atomic_numbers(),
+            'positions': self.get_positions(),
+            'cell': np.array(self.get_cell()),
+            'pbc': self.get_pbc().astype(int)
+        }
+
+    @unique_identifiers.setter
+    def unique_identifiers(self, d):
+        if set(self.unique_identifier_kw) != set(list(d.keys())):
+            raise RunTimeError("There is a mismatch between keywords!")
+        # Make sure ASE values are in sync
+        self.arrays['numbers'] = d['atomic_numbers']
+        self.arrays['positions'] = d['positions']
+        self.cell = d['cell']
+        self.pbc = d['pbc']
 
     def configuration_summary(self):
         """Extracts useful metadata from a Configuration
@@ -442,8 +466,10 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
     A BioSequenceConfiguration is an extension of a :class:`BaseConfiguration` and an :class:`Bio.SeqRecord object.`
     """
 
+    unique_identifier_kw = ['sequence']
+
 # TODO: Check seq use cases->may need to be Seq class, be required, etc
-    def __init__(self, seq=None, names=None,labels=None, **kwargs,):
+    def __init__(self, names=None, labels=None, **kwargs,):
         """
         Constructs a BioSequenceConfiguration. Calls :meth:`BaseConfiguration.__init__()`
         and :meth:`Bio.SeqRecord.__init__()`
@@ -459,9 +485,19 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
                 Other keyword arguments that can be passed to :meth:`Bio.SeqRecord.__init__()`
         """
 
-        BaseConfiguration.__init__(self, sequence=str(seq).encode('utf-8'), names=names, labels=labels)
-        SeqRecord.__init__(self, seq=seq, **kwargs)
+        BaseConfiguration.__init__(self, names=names, labels=labels)
 
+        if 'sequence' in list(kwargs.keys()):
+            kwargs['seq'] = kwargs['sequence']
+            kwargs.pop('sequence')
+
+        SeqRecord.__init__(self, **kwargs)
+
+    @property
+    def unique_identifiers(self):
+        return {'sequence': str(self.seq).encode('utf-8')}
+
+    # TODO: create setter here
 
     # TODO: What things would be needed here-Count/composition, sequence length, etc
     def configuration_summary(self):
@@ -479,7 +515,7 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
         Generates a :class:`BioSequenceConfiguration` from a :code:`Bio.SeqRecord` object.
         """
         return cls(
-            seqrec.seq,
+            seq=seqrec.seq,
             id=seqrec.id,
             name=seqrec.name,
             description=seqrec.description,
