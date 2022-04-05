@@ -10,34 +10,38 @@ from colabfit import (
     ATOMS_CONSTRAINTS_FIELD
 )
 
-
 class BaseConfiguration:
     """The base Configuration class.
 
-    All other Configuration 'types' must subclass this and any other useful classes.
+       All other Configuration classes must subclass this and any other useful classes.
 
-    Configuration classes must pass all necessary unique identifiers as keyword arguments
-    to BaseConfiguration.__init. Unique identifiers are values that are needed to uniquely
-    identify one Configuration instance from another. These values will be used to produce
-    a unique hash for each Configuration instance and be added to the database with
-    their associated keyword.
+       Configuration classes must pass all necessary unique identifiers as individual keyword arguments
+       to their associated constructor. Unique identifiers are values that are needed to uniquely
+       identify one Configuration instance from another. These values will be used to produce
+       a unique hash for each Configuration instance and be added to the database with
+       their associated keyword. See :attr:`unique_identifer_kw`.
 
-    All Configuration classes must define a self.configuration_summary method. This is used
-    to extract any other useful information that will be included (in addition to all unique
-    identifiers) in the Configuration's entry in the Database.
+       All Configuration classes must define a :code:`self.configuration_summary` method. This is used
+       to extract any other useful information that will be included (in addition to all unique
+       identifiers) in the Configuration's entry in the Database.
 
-    See AtomicConfiguration as an example.
+       All Configuration classes must also define a :code:`self.aggregate_configuration_summaries` method. This is used
+       to extract useful information from a collection of Configurations.
 
-    Attributes:
+       See :meth:`~colabfit.tools.configuration.AtomicConfiguration` as an example.
 
-        info (dict):
-            Stores important metadata for a Configuration. At a minimum, it will include
-            keywords "_name" and "_labels".
-        unique_identifiers (dict):
-            Stores all key-value pairs needed to uniquely define a Configuration.
-    """
+       Attributes:
 
-    _unique_identifier_kw = None
+           info (dict):
+               Stores important metadata for a Configuration. At a minimum, it will include
+               keywords "_name" and "_labels".
+           unique_identifiers_kw (list):
+               Class attribute that specifies the keywords to be used for all unique identifiers.
+               All Configuration classes should accept each keyword as an argument to their constructor.
+       """
+
+# TODO: Make this read-only so as to avoid user accidentally renaming
+    unique_identifier_kw = None
 
     def __init__(self, names=None, labels=None):
         """
@@ -46,8 +50,6 @@ class BaseConfiguration:
                 Names to be associated with a Configuration
             labels (str, list of str):
                 Labels to be associated with a Configuration
-            **unique_identifiers:
-                All identifiers needed to uniquely define a Configuration
         """
 
         self.info = {}
@@ -75,7 +77,6 @@ class BaseConfiguration:
         All Configuration classes should implement this.
         Any useful information that should be included under a Configuration's entry in the Database
         (in addition to its unique identifiers) should be extracted and added to a dict.
-        Will be called before inserting data into Database
 
         Returns:
             dict: Keys and their associated values that will be included under a Configuration's entry in the Database
@@ -84,9 +85,10 @@ class BaseConfiguration:
 
     @staticmethod
     def aggregate_configuration_summaries(ids):
-        """Aggregates information for given configurations
+        """Aggregates information for given configurations.
+
         All Configuration classes should implement this.
-        Similar to configuration_summary, but summarizes information
+        Similar to :code:`self.configuration_summary`, but summarizes information
         for a collection of Configurations
 
         Args:
@@ -125,15 +127,16 @@ class BaseConfiguration:
 
 class AtomicConfiguration(BaseConfiguration, Atoms):
     # TODO: Modify docstring
+    # TODO: Don't think AtomicConfigurations will always have _id
+    # TODO: Reimplement contrainsts
+    # - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD` = :code:"_constraints"
     """
     An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and an :class:`ase.Atoms`
     object that is guaranteed to have the following fields in its :attr:`info` dictionary:
 
-    - :attr:`~colabfit.ATOMS_ID_FIELD` = :code:"_id" # TODO: Don't think this is true->Fix
+    - :attr:`~colabfit.ATOMS_ID_FIELD` = :code:"_id"
     - :attr:`~colabfit.ATOMS_NAME_FIELD` = :code:"_name"
     - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
-    # TODO: Reimplement contrainsts
-    # - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD` = :code:"_constraints"
     """
 
     unique_identifier_kw = ['atomic_numbers', 'positions', 'cell', 'pbc']
@@ -144,14 +147,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         and :meth:`ase.Atoms.__init__()`
 
         Args:
-            numbers (list/ndarray of int):
-                Atomic Numbers
-            positions (Anything that can be converted to a ndarray of shape (n, 3)):
-                Atomic xyz-positions
-            cell (3x3 matrix of float): # TODO: Ensure similar formatting that is used in ASE
-                Unit cell vectors
-            pbc (list of 3 bool):
-                Periodic boundary conditions for each dimension
             names (str, list of str):
                 Names to be associated with a Configuration
             labels (str, list of str):
@@ -349,7 +344,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     @staticmethod
     def aggregate_configuration_summaries(db, ids, verbose=False):
         """
-          Gathers the following information from a collection of configurations:
+          Gathers the following information from a collection of Configurations:
 
         * :code:`nconfigurations`: the total number of configurations
         * :code:`nsites`: the total number of atoms
@@ -359,20 +354,20 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
           by looping over each configuration, extracting its concentration of
           each element, and adding the tuple of concentrations to the set
         * :code:`total_elements_ratios`: the ratio of the total count of atoms
-            of each element type over :code:`natoms`
+          of each element type over :code:`nsites`
         * :code:`labels`: the union of all configuration labels
         * :code:`labels_counts`: the total count of each label
         * :code:`chemical_formula_reduced`: the set of all reduced chemical
-            formulae
+          formulae
         * :code:`chemical_formula_anonymous`: the set of all anonymous chemical
-            formulae
+          formulae
         * :code:`chemical_formula_hill`: the set of all hill chemical formulae
         * :code:`nperiodic_dimensions`: the set of all numbers of periodic
-            dimensions
+          dimensions
         * :code:`dimension_types`: the set of all periodic boundary choices
 
         Args:
-            db (MongoDatabase object):
+            db (:code:`MongoDatabase` object):
                 Database client in which to search for IDs
             ids (list):
                 IDs of Configurations of interest
@@ -475,8 +470,6 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
         and :meth:`Bio.SeqRecord.__init__()`
 
         Args:
-            seq (str):
-                Biological sequence
             names (str, list of str):
                 Names to be associated with a Configuration
             labels (str, list of str):

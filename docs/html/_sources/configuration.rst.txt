@@ -74,3 +74,12 @@ or, equivalently, using the
 .. autoclass:: colabfit.tools.configuration.Configuration
     :members:
     :special-members:
+
+.. autoclass:: colabfit.tools.configuration.BaseConfiguration
+    :members:
+    :special-members:
+    :exclude-members: __weakref__
+
+.. autoclass:: colabfit.tools.configuration.AtomicConfiguration
+    :members:
+    :special-members:
