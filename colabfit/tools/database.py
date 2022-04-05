@@ -181,7 +181,7 @@ class MongoDatabase(MongoClient):
     # TODO: Should database be instantiated with nprocs, or should it be passed in as an
     #       argument to methods in which this would be relevant
     def __init__(
-        self, database_name, configuration_type=BaseConfiguration(), nprocs=1, uri=None,
+        self, database_name, configuration_type=BaseConfiguration, nprocs=1, uri=None,
         drop_database=False, user=None, pwrd=None, port=27017,
         *args, **kwargs
         ):
@@ -191,7 +191,7 @@ class MongoDatabase(MongoClient):
             database_name (str):
                 The name of the database
 
-            configuration_type (Configuration, default=BaseConfiguration()):
+            configuration_type (Configuration, default=BaseConfiguration):
                 The configuration type that will be stored in the database.
 
             nprocs (int):
@@ -1506,13 +1506,13 @@ class MongoDatabase(MongoClient):
         attach_settings,
         verbose=False
         ):
-        ui_keys = self.configuration_type.unique_identifiers.keys()
+
         if not attach_properties:
             for co_doc in tqdm(
                 self.configurations.find(
                     query,
                     {
-                        *ui_keys,
+                        *self.configuration_type.unique_identifier_kw,
                         'names',
                         'labels'
                     }
@@ -1520,11 +1520,10 @@ class MongoDatabase(MongoClient):
                 desc='Getting configurations',
                 disable=not verbose
                 ):
-                # TODO: Need way to map unique identifiers to init arguments
-                #  For now assume arguments are in correct order or could enforce matching keyword names
-                c = self.configuration_type.__class__(
-                    *[co_doc[_ui_key] for _ui_key in ui_keys]
-                )
+
+                c = self.configuration_type(**{k:v for k, v in co_doc.items()
+                                               if k in self.configuration_type.unique_identifier_kw})
+
                 '''
                 c = Configuration(
                     symbols=co_doc['atomic_numbers'],
@@ -1546,10 +1545,10 @@ class MongoDatabase(MongoClient):
                 desc='Getting configurations',
                 disable=not verbose
                 ):
-                # TODO: Think about how to handle below (same as above)
-                c = self.configuration_type.__class__(
-                    *[co_doc[_ui_key] for _ui_key in ui_keys]
-                )
+
+                c = self.configuration_type(**{k: v for k, v in co_doc.items()
+                                               if k in self.configuration_type.unique_identifier_kw})
+
                 '''
                 c = Configuration(
                     symbols=co_doc['atomic_numbers'],
