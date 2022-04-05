@@ -142,5 +142,5 @@ colabfit/api/data/uploads
 .vscode
 
 #pycharm
-.idea/*
+.idea/
 .iml
