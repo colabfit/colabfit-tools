@@ -222,7 +222,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     @unique_identifiers.setter
     def unique_identifiers(self, d):
         if set(self.unique_identifier_kw) != set(list(d.keys())):
-            raise RunTimeError("There is a mismatch between keywords!")
+            raise RuntimeError("There is a mismatch between keywords!")
         # Make sure ASE values are in sync
         self.arrays['numbers'] = d['atomic_numbers']
         self.arrays['positions'] = d['positions']
