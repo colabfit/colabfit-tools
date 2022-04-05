@@ -426,34 +426,6 @@ class MongoDatabase(MongoClient):
                 pool.map(pfunc, split_configs)
             ))
 
-    ''''@staticmethod
-    def __build_c_update_doc(configuration):
-        cid = ID_FORMAT_STRING.format('CO', hash(configuration), 0)
-        processed_fields = configuration.configuration_summary()
-        c_update_doc = {
-            '$setOnInsert' : {
-                '_id': cid,
-            },
-            '$set': {
-                'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-            },
-            '$addToSet': {
-                'names': {
-                    '$each': list(configuration.info[ATOMS_NAME_FIELD])
-                },
-                'labels': {
-                    '$each': list(configuration.info[ATOMS_LABELS_FIELD])
-                },
-                'relationships.properties': {
-                    '$each': []
-                }
-            }
-        }
-        c_update_doc['$setOnInsert'].update({k: v.tolist() for k, v in configuration.unique_identifiers.items()})
-        c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
-        return c_update_doc
-'''
-
     @staticmethod
     def _insert_data_generator(
         configurations, database_name,
@@ -482,13 +454,17 @@ class MongoDatabase(MongoClient):
         if property_map is None:
             property_map = {}
 
-        # if property_settings is None:
-        #     property_settings = []
+        property_definitions = {}
+        for pname in property_map:
+            doc = coll_property_definitions.find_one({'_id': pname})
 
-        property_definitions = {
-            pname: coll_property_definitions.find_one({'_id': pname})['definition']
-            for pname in property_map
-        }
+            if doc is None:
+                raise RuntimeError(
+                    "Property definition '{}' does not exist. "\
+                    "Use insert_property_definition() first".format(pname)
+                )
+            else:
+                property_definitions[pname] = doc['definition']
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
@@ -821,13 +797,17 @@ class MongoDatabase(MongoClient):
         if property_map is None:
             property_map = {}
 
-        # if property_settings is None:
-        #     property_settings = []
+        property_definitions = {}
+        for pname in property_map:
+            doc = coll_property_definitions.find_one({'_id': pname})
 
-        property_definitions = {
-            pname: coll_property_definitions.find_one({'_id': pname})['definition']
-            for pname in property_map
-        }
+            if doc is None:
+                raise RuntimeError(
+                    "Property definition '{}' does not exist. "\
+                    "Use insert_property_definition() first".format(pname)
+                )
+            else:
+                property_definitions[pname] = doc['definition']
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
@@ -861,7 +841,7 @@ class MongoDatabase(MongoClient):
             if transform:
                 transform(atoms)
 
-            cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
+            #cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
             c_update_doc = _build_c_update_doc(atoms)
             #Old method processed_fields = process_species_list(atoms)
@@ -1470,15 +1450,15 @@ class MongoDatabase(MongoClient):
                 don't have values for all of their fields.
 
             attach_settings (bool, default=False):
-                If True, attaches all of the fields of the property settings
+                NOT supported yet. If True, attaches all of the fields of the property settings
                 that are linked to the attached property instances. If
                 :code:`attach_settings=True`, must also have
                 :code:`attach_properties=True`.
 
             generator (bool, default=False):
-                If True, this function returns a generator of the
-                configurations. This is useful if the configurations can't all
-                fit in memory at the same time.
+                NOT supported yet. If True, this function returns a generator of
+                the configurations. This is useful if the configurations can't
+                all fit in memory at the same time.
 
             verbose (bool):
                 If True, prints progress bar
@@ -1489,6 +1469,9 @@ class MongoDatabase(MongoClient):
                 A list or generator of the re-constructed configurations
         """
 
+        if attach_settings:
+            raise NotImplementedError
+
         if configuration_ids == 'all':
             query = {}
         else:
@@ -1498,12 +1481,13 @@ class MongoDatabase(MongoClient):
             query = {'_id': {'$in': configuration_ids}}
 
         if generator:
-            return self._get_configurations(
-                query=query,
-                property_ids=property_ids,
-                attach_properties=attach_properties,
-                verbose=verbose
-            )
+            raise NotImplementedError
+            # return self._get_configurations(
+            #     query=query,
+            #     property_ids=property_ids,
+            #     attach_properties=attach_properties,
+            #     verbose=verbose
+            # )
         else:
             return list(self._get_configurations(
                 query=query,
@@ -1556,41 +1540,9 @@ class MongoDatabase(MongoClient):
 
                 yield c
         else:
-
-            property_match = { 'relationships.configurations': query['_id']}
-
-            if property_ids is not None:
-                property_match['_id'] = {'$in': property_ids}
-
-            pipeline = [
-                {'$match': query},
-                {'$lookup': {
-                    'from': 'properties',
-                    'localField': 'relationships.properties',
-                    'foreignField': '_id',
-                    'as': 'linked_properties'
-                }},
-                # {'$match': {'linked_properties._id': property_match}},
-                # {'$match': {'linked_properties._id': {'$in': property_ids}}},
-            ]
-
-            if property_ids is not None:
-                pipeline.append(
-                    {'$match': {'linked_properties._id': {'$in': property_ids}}}
-                )
-
-            if attach_settings:
-                pipeline.append(
-                    {'$lookup': {
-                        'from': 'property_settings',
-                        'localField': 'linked_properties.relationships.property_settings',
-                        'foreignField': '_id',
-                        'as': 'linked_property_settings'
-                    }}
-                )
-
+            config_dict = {}
             for co_doc in tqdm(
-                    self.configurations.aggregate(pipeline),
+                    self.configurations.find(query),
                     desc='Getting configurations',
                     disable=not verbose
                 ):
@@ -1610,16 +1562,38 @@ class MongoDatabase(MongoClient):
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
                 c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
 
-                n = len(c)
+                config_dict[co_doc['_id']] = c
 
-                for pr_doc in co_doc['linked_properties']:
+            all_attached_prs = set([_['_id'] for _ in self.properties.find(
+                {'relationships.configurations': query['_id']},
+                {'_id'}
+            )])
+
+            if property_ids is not None:
+                 property_ids = list(all_attached_prs.union(set(property_ids)))
+            else:
+                property_ids = all_attached_prs
+
+            for pr_doc in tqdm(
+                    self.properties.find({'_id': {'$in': property_ids}}),
+                    desc='Attaching properties',
+                    disable=not verbose
+            ):
+
+                for co_id in pr_doc['relationships']['configurations']:
+                    if co_id not in config_dict: continue
+
+                    c = config_dict[co_id]
+
+                    n = len(c)
+
                     for field_name, field in pr_doc[pr_doc['type']].items():
-                        v = np.atleast_1d(field['source-value'])
+                        v = field['source-value']
 
-                        if (v.dtype == 'O') or v.shape[0] != n:
-                            dct = c.info
-                        else:
-                            dct = c.arrays
+                        dct = c.info
+                        if isinstance(v, list):
+                             if len(v) == n:
+                                dct = c.arrays
 
                         field_name = f'{pr_doc["type"]}.{field_name}'
 
@@ -1631,27 +1605,92 @@ class MongoDatabase(MongoClient):
                             # the property of this type is being added
                             dct[field_name] = [v]
 
-                if attach_settings:
-                    for ps_doc in co_doc['linked_property_settings']:
-                        for k,v in ps_doc.items():
-                            if k in [
-                                '_id', '_description', '_labels', '_method'
-                                ]:
-                                c.info['_settings.'+k] = v
-                            elif k in ['_files', 'last_modified', 'relationships']:
-                                pass
-                            else:
-                                v = np.atleast_1d(field['source-value'])
+            for v in config_dict.values():
+                yield v
 
-                                if (v.dtype == 'O') or v.shape[0] != n:
-                                    dct = c.info
-                                else:
-                                    dct = c.arrays
+            # pipeline = [
+            #     {'$match': query},
+            #     {'$lookup': {
+            #         'from': 'properties',
+            #         'localField': 'relationships.properties',
+            #         'foreignField': '_id',
+            #         'as': 'linked_properties'
+            #     }},
+            # ]
 
-                                dct[k] = v
+            # if property_ids is not None:
+            #     pipeline.append(
+            #         {'$match': {'linked_properties._id': {'$in': property_ids}}}
+            #     )
 
-                yield c
+            # if attach_settings:
+            #     pipeline.append(
+            #         {'$lookup': {
+            #             'from': 'property_settings',
+            #             'localField': 'linked_properties.relationships.property_settings',
+            #             'foreignField': '_id',
+            #             'as': 'linked_property_settings'
+            #         }}
+            #     )
 
+            # for co_doc in tqdm(
+            #         self.configurations.aggregate(pipeline),
+            #         desc='Getting configurations',
+            #         disable=not verbose
+            #     ):
+
+            #     c = Configuration(
+            #         symbols=co_doc['atomic_numbers'],
+            #         positions=co_doc['positions'],
+            #         cell=co_doc['cell'],
+            #         pbc=co_doc['pbc'],
+            #     )
+
+            #     c.info['_id'] = co_doc['_id']
+            #     c.info[ATOMS_NAME_FIELD] = co_doc['names']
+            #     c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
+
+            #     n = len(c)
+
+            #     for pr_doc in co_doc['linked_properties']:
+            #         for field_name, field in pr_doc[pr_doc['type']].items():
+            #             v = field['source-value']
+
+            #             dct = c.info
+            #             if isinstance(v, list):
+            #                 if len(v) == n:
+            #                     dct = c.arrays
+
+            #             field_name = f'{pr_doc["type"]}.{field_name}'
+
+            #             if field_name in dct:
+            #                 # Then this is a duplicate property
+            #                 dct[field_name].append(v)
+            #             else:
+            #                 # Then this is the first time
+            #                 # the property of this type is being added
+            #                 dct[field_name] = [v]
+
+            #     if attach_settings:
+            #         for ps_doc in co_doc['linked_property_settings']:
+            #             for k,v in ps_doc.items():
+            #                 if k in [
+            #                     '_id', '_description', '_labels', '_method'
+            #                     ]:
+            #                     c.info['_settings.'+k] = v
+            #                 elif k in ['_files', 'last_modified', 'relationships']:
+            #                     pass
+            #                 else:
+            #                     v = field['source-value']
+
+            #                     dct = c.info
+            #                     if isinstance(v, list):
+            #                         if len(v) == n:
+            #                             dct = c.arrays
+
+            #                     dct[k] = v
+
+            #     yield c
 
     def concatenate_configurations(self):
         """
