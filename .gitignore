@@ -144,3 +144,6 @@ colabfit/api/data/uploads
 #pycharm
 .idea
 .iml
+
+#github
+.github
