@@ -1381,7 +1381,7 @@ class MongoDatabase(MongoClient):
 
         for k,v in data.items():
             # data[k] = np.array(data[k])
-
+            # TODO: Standardize=> Currently, output is array if numpy operations are used, otherwise it's list
             if concatenate or ravel:
                 try:
                     data[k] = np.concatenate(v)

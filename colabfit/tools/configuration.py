@@ -11,9 +11,10 @@ from colabfit import (
 )
 
 class BaseConfiguration:
-    """The base Configuration class.
+    """Abstract parent class for all Configurations.
 
-       All other Configuration classes must subclass this and any other useful classes.
+       This class should never be directly instantiated-all other Configuration classes
+       must subclass this along with any other useful classes.
 
        Configuration classes must pass all necessary unique identifiers as individual keyword arguments
        to their associated constructor. Unique identifiers are values that are needed to uniquely
@@ -756,7 +757,7 @@ def process_species_list(atoms):
 #       Add support for lists, etc
 def pre_hash_formatting(v):
     """
-    Ensures proper datatypes, precision, etc prior to hashing of unique identifiers
+    Ensures proper datatypes, precision, etc. prior to hashing of unique identifiers
 
     Args:
         v:
