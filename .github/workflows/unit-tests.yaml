@@ -14,8 +14,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r .github/requirements.txt
       - name: Run unit tests
-        # run: pytest colabfit/tests/ >log.log
-        run: pytest --version
+        run: echo "${PWD}"
+        run: echo "Hello" >log.log
       - name:  Email log file
         uses: dawidd6/action-send-mail@v3.6.1
         with:
