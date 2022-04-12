@@ -3,6 +3,9 @@ on: pull_request # By default, will trigger workflow when PR is opened, reopened
 jobs:
   run-unit-tests:
     runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo
     steps:
       - name: Check out repo code
         uses: actions/checkout@v3 # GitHub's built-in method to grab your repo
@@ -13,12 +16,10 @@ jobs:
           cache-dependency-path: '.github/requirements.txt'
       - name: Install dependencies
         run: pip install -r .github/requirements.txt
-      - name: Install BioPython # speeds up process if wheel is first installed
-        run: pip install biopython
-      - name: Install Mongo
-        run: conda install -c conda-forge mongodb
-      - name: Create DB
-        run: mongod --dbpath ./
+      #- name: Install Mongo
+      #  run: conda install -c conda-forge mongodb
+      #- name: Create DB
+      #  run: mongod --dbpath ./
       - name: Run unit tests
         run: pytest colabfit/tests
       - name:  Email log file
