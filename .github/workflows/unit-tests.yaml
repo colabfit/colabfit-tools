@@ -4,27 +4,30 @@ jobs:
   run-unit-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3 # GitHub's built-in method to grab your repo
-      - uses: actions/setup-python@v3 # Github's built-in method to setup Python on runner
+      - name: Check out repo code
+        uses: actions/checkout@v3 # GitHub's built-in method to grab your repo
+      - name: Sets up Python
+        uses: actions/setup-python@v3 # Github's built-in method to setup Python on runner
         with:
           cache: 'pip' # Caches requirements if they don't change so runner startup is faster
           cache-dependency-path: '.github/requirements.txt'
-      - run: pip install -r .github/requirements.txt
-      - run: pytest colabit/tests/ >log.log
-
-  send-email:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: dawidd6/action-send-mail@v3.6.1
-      with:
-        server_address: smtp.gmail.com
-        server_port: 465
-        username: ${{secrets.MAIL_USERNAME}}
-        password: ${{secrets.MAIL_PASSWORD}}
-        subject: PR Testing ${GITHUB_HEAD_REF}->${GITHUB_BASE_REF} $(date +'%Y-%m-%dT%H:%M:%S')
-        to: efuemmel@umn.edu
-        from: GitHub Unit Testing
-        secure: True
-        body: file://log.log
+      - name: Install dependencies
+        run: pip install -r .github/requirements.txt
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.7.0
+      - name: Run unit tests
+        run: pytest colabfit/tests >log.log
+      - name:  Email log file
+        uses: dawidd6/action-send-mail@v3.6.1
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{secrets.MAIL_USERNAME}}
+          password: ${{secrets.MAIL_PASSWORD}}
+          subject: PR Testing ${{github.head_ref}}->${{github.base_ref}}
+          to: efuemmel@umn.edu
+          from: GitHub Unit Testing
+          secure: True
+          body: file://log.log
 
 

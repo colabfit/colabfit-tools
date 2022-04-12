@@ -1,5 +1,5 @@
 ase
-kim_propery
+kim_property
 numpy
 tqdm
 markdown
@@ -7,3 +7,4 @@ plotly
 pymongo
 biopython
 pytest
+wheel
