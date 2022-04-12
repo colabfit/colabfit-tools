@@ -14,7 +14,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r .github/requirements.txt
       - name: Run unit tests
-        run: echo "${PWD}"
+        run: export
       - name: Create log
         run: echo "Hello" >log.log
       - name:  Email log file
