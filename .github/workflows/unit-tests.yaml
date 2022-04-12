@@ -16,7 +16,7 @@ jobs:
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.7.0
       - name: Run unit tests
-        run: pytest colabfit/tests
+        run: pytest colabfit/tests >log.log
       - name:  Email log file
         uses: dawidd6/action-send-mail@v3.6.1
         with:
