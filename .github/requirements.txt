@@ -5,6 +5,5 @@ tqdm
 markdown
 plotly
 pymongo
-biopython
 pytest
 wheel
