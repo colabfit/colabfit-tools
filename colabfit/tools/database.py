@@ -32,7 +32,7 @@ from colabfit import (
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
 )
-from colabfit.tools.configuration import BaseConfiguration, Configuration, process_species_list
+from colabfit.tools.configuration import BaseConfiguration
 from colabfit.tools.property import Property
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
@@ -448,7 +448,7 @@ class MongoDatabase(MongoClient):
         coll_property_definitions   = client[database_name][_PROPDEFS_COLLECTION]
         coll_property_settings      = client[database_name][_PROPSETTINGS_COLLECTION]
 
-        if isinstance(configurations, Configuration):
+        if isinstance(configurations, BaseConfiguration):
             configurations = [configurations]
 
         if property_map is None:
@@ -791,7 +791,7 @@ class MongoDatabase(MongoClient):
         coll_property_definitions   = client[database_name][_PROPDEFS_COLLECTION]
         coll_property_settings      = client[database_name][_PROPSETTINGS_COLLECTION]
 
-        if isinstance(configurations, Configuration):
+        if isinstance(configurations, BaseConfiguration):
             configurations = [configurations]
 
         if property_map is None:
@@ -1524,15 +1524,6 @@ class MongoDatabase(MongoClient):
                 c = self.configuration_type(**{k:v for k, v in co_doc.items()
                                                if k in self.configuration_type.unique_identifier_kw})
 
-                '''
-                c = Configuration(
-                    symbols=co_doc['atomic_numbers'],
-                    positions=co_doc['positions'],
-                    cell=co_doc['cell'],
-                    pbc=co_doc['pbc'],
-                )
-                '''
-
                 c.info['_id'] = co_doc['_id']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
                 c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
@@ -1549,14 +1540,6 @@ class MongoDatabase(MongoClient):
                 c = self.configuration_type(**{k: v for k, v in co_doc.items()
                                                if k in self.configuration_type.unique_identifier_kw})
 
-                '''
-                c = Configuration(
-                    symbols=co_doc['atomic_numbers'],
-                    positions=co_doc['positions'],
-                    cell=co_doc['cell'],
-                    pbc=co_doc['pbc'],
-                )
-                '''
                 c.info['_id'] = co_doc['_id']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
                 c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
@@ -1741,7 +1724,6 @@ class MongoDatabase(MongoClient):
                 " in the database."
             )
 
-        #Old method aggregated_info = self.aggregate_configuration_info(ids, verbose=verbose)
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
             ids,
@@ -1840,9 +1822,6 @@ class MongoDatabase(MongoClient):
 
         cs_doc = self.configuration_sets.find_one({'_id': cs_id})
 
-        #Old method aggregated_info = self.aggregate_configuration_info(
-        #    cs_doc['relationships']['configurations'], verbose=verbose
-        #)
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
             cs_doc['relationships']['configurations'],
@@ -2148,7 +2127,6 @@ class MongoDatabase(MongoClient):
             self.configuration_sets.find({'_id': {'$in': cs_ids}})
         )))
         return self.configuration_type.aggregate_configuration_summaries(self, co_ids, verbose=verbose)
-        #Old method return self.aggregate_configuration_info(co_ids, verbose=verbose)
 
 
     def insert_dataset(
@@ -2720,10 +2698,6 @@ class MongoDatabase(MongoClient):
                         co_ids,
                         verbose=verbose,
                     )
-                    #Old method aggregated_info=self.aggregate_configuration_info(
-                    #    co_ids,
-                    #    verbose=verbose
-                    #)
                 )
             )
 
@@ -2855,10 +2829,6 @@ class MongoDatabase(MongoClient):
                         co_ids,
                         verbose=verbose
                     )
-                    #Old method aggregated_info=self.aggregate_configuration_info(
-                    #    co_ids,
-                    #    verbose=verbose
-                    #)
                 )
             )
 
@@ -3508,7 +3478,7 @@ class MongoDatabase(MongoClient):
             data_file_name = os.path.join(base_folder, data_file_name)
 
             images = self.get_configurations(
-                ids=list(set(itertools.chain.from_iterable(
+                configuration_ids=list(set(itertools.chain.from_iterable(
                     cs.configuration_ids for cs in configuration_sets.values()
                 ))),
                 attach_settings=True,
