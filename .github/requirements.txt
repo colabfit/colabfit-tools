@@ -1,0 +1,9 @@
+ase
+kim_propery
+numpy
+tqdm
+markdown
+plotly
+pymongo
+biopython
+pytest
