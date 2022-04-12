@@ -36,7 +36,7 @@ class BaseConfiguration:
            info (dict):
                Stores important metadata for a Configuration. At a minimum, it will include
                keywords "_name" and "_labels".
-           unique_identifiers_kw (list):
+           unique_identifier_kw (list):
                Class attribute that specifies the keywords to be used for all unique identifiers.
                All Configuration classes should accept each keyword as an argument to their constructor.
        """
