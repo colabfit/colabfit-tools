@@ -7,3 +7,4 @@ plotly
 pymongo
 biopython
 pytest
+wheel

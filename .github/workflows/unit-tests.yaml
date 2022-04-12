@@ -24,7 +24,7 @@ jobs:
           server_port: 465
           username: ${{secrets.MAIL_USERNAME}}
           password: ${{secrets.MAIL_PASSWORD}}
-          subject: "PR Testing ${{GITHUB_HEAD_REF}}->${{GITHUB_BASE_REF}}"
+          subject: PR Testing ${{github.head_ref}}->${{github.base_ref}}
           to: efuemmel@umn.edu
           from: GitHub Unit Testing
           secure: True
