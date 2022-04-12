@@ -123,7 +123,7 @@ class BaseConfiguration:
         hash value.
         """
         return hash(self) == hash(other)
-
+#
 
 
 class AtomicConfiguration(BaseConfiguration, Atoms):
