@@ -1682,8 +1682,8 @@ class MongoDatabase(MongoClient):
         """
         self.database.concatenate_configurations()
 
-
-    def insert_configuration_set(self, ids, description='', verbose=False):
+# TODO: If duplicate found, return original's id->Likewise for insert_dataset
+    def insert_configuration_set(self, ids, description='', overloaded_cs_id=None, verbose=False):
         """
         Inserts the configuration set of IDs to the database.
 
@@ -1705,16 +1705,19 @@ class MongoDatabase(MongoClient):
 
         ids = list(set(ids))
 
+
         cs_hash = sha512()
         cs_hash.update(description.encode('utf-8'))
         for i in sorted(ids):
             cs_hash.update(str(i).encode('utf-8'))
 
         cs_hash = int(str(int(cs_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
-        cs_id = ID_FORMAT_STRING.format('CS', cs_hash, 0)
-
+        if overloaded_cs_id is None:
+            cs_id = ID_FORMAT_STRING.format('CS', cs_hash, 0)
+        else:
+            cs_id = overloaded_cs_id
         # Check for duplicates
-        if self.configuration_sets.count_documents({'_id': cs_id}):
+        if self.configuration_sets.count_documents({'hash': cs_hash}):
             return cs_id
 
         # Make sure all of the configurations exist
@@ -1739,6 +1742,7 @@ class MongoDatabase(MongoClient):
                 '$setOnInsert': {
                     '_id': cs_id,
                     'description': description,
+                    'hash': cs_hash,
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
@@ -1834,7 +1838,52 @@ class MongoDatabase(MongoClient):
             upsert=True,
         )
 
+    # TODO: need to make sure can't make duplicate CS just with different versions
+    # TODO: Could do this by creating ConfigurationSets for all versioned CS and use a defined equality with hashing
+    def update_configuration_set(self, cs_id, add_ids=None, remove_ids=None):
 
+        if add_ids is None and remove_ids is None:
+            raise RuntimeError('Please input configuration IDs to add or remove from the configuration set.')
+
+        # increment version number
+        current_hash, current_version = cs_id.split('_')[1:]
+        family_ids = self.configuration_sets.find({'_id': {'$regex':f'CS_{current_hash}_...'}}, '_id')
+        family_ids = sorted([f['_id'] for f in family_ids])
+        version = int(family_ids[-1].split('_')[-1]) + 1
+        new_cs_id = ID_FORMAT_STRING.format('CS', int(current_hash), version)
+
+        # Get configuration ids from current version and append and/or remove
+        cs_doc = self.configuration_sets.find_one({'_id': cs_id})
+        ids = cs_doc['relationships']['configurations']
+        init_len = len(ids)
+
+        if add_ids is not None:
+            if isinstance(add_ids, str):
+                add_ids = [add_ids]
+            ids.extend(add_ids)
+            ids = list(set(ids))
+            if len(ids) == init_len:
+                raise RuntimeError('All configurations to be added are already present in CS.')
+            init_len = len(ids)
+
+        if remove_ids is not None:
+            if isinstance(remove_ids, str):
+                remove_ids = [remove_ids]
+            remove_ids = list(set(remove_ids))
+            for r in remove_ids:
+                try:
+                    ids.remove(r)
+                except:
+                    raise UserWarning(f'A configuration with the ID {r} was not'
+                                      f'in the original CS, so it could not be removed.')
+            if len(ids) == init_len:
+                raise RuntimeError('All configurations to be removed are not present in CS.')
+
+
+        # insert new version of CS
+        self.insert_configuration_set(ids, description=cs_doc['description'], overloaded_cs_id=new_cs_id)
+
+    # TODO: May need to recompute hash-But when is resyncing necessary?
     def resync_dataset(self, ds_id, verbose=False):
         """
         Re-synchronizes the dataset by aggregating all necessary data from
@@ -1863,6 +1912,7 @@ class MongoDatabase(MongoClient):
             self.resync_configuration_set(csid, verbose=verbose)
 
         aggregated_info = {}
+
         for k,v in self.aggregate_configuration_set_info(cs_ids).items():
             if k == 'labels':
                 k = 'configuration_labels'
@@ -2136,6 +2186,7 @@ class MongoDatabase(MongoClient):
         description='',
         resync=False,
         verbose=False,
+        overloaded_ds_id=None,
         ):
         """
         Inserts a dataset into the database.
@@ -2225,10 +2276,14 @@ class MongoDatabase(MongoClient):
             ds_hash.update(str(pi).encode('utf-8'))
 
         ds_hash = int(str(int(ds_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
-        ds_id = ID_FORMAT_STRING.format('DS', ds_hash, 0)
+
+        if overloaded_ds_id is None:
+            ds_id = ID_FORMAT_STRING.format('DS', ds_hash, 0)
+        else:
+            ds_id = overloaded_ds_id
 
         # Check for duplicates
-        if self.datasets.count_documents({'_id': ds_id}):
+        if self.datasets.count_documents({'hash': ds_hash}):
             if resync:
                 self.resync_dataset(ds_id)
 
@@ -2268,6 +2323,7 @@ class MongoDatabase(MongoClient):
                     'authors': authors,
                     'links': links,
                     'description': description,
+                    'hash': ds_hash,
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
@@ -2344,7 +2400,63 @@ class MongoDatabase(MongoClient):
             )
         }
 
+# TODO: Handle properties somewhere->should we allow for only properties to be update?
+# TODO: Allow for metadata updating
+    def update_dataset(self, ds_id, add_cs_ids=None, remove_cs_ids=None):
 
+        if add_cs_ids is None and remove_cs_ids is None:
+            raise RuntimeError('Please input configuration set IDs/properties to add or remove from the dataset.')
+
+        # increment version number
+        current_hash, current_version = ds_id.split('_')[1:]
+        family_ids = self.datasets.find({'_id': {'$regex':f'DS_{current_hash}_...'}}, '_id')
+        family_ids = sorted([f['_id'] for f in family_ids])
+        version = int(family_ids[-1].split('_')[-1]) + 1
+        new_ds_id = ID_FORMAT_STRING.format('DS', int(current_hash), version)
+
+        # Get configuration set ids from current version and append and/or remove
+        ds_doc = self.datasets.find_one({'_id': ds_id})
+        cs_ids = ds_doc['relationships']['configuration_sets'],
+        property_ids = ds_doc['relationships']['properties']
+        init_len = len(cs_ids)
+
+        if add_cs_ids is not None:
+            if isinstance(cs_ids,str):
+                add_cs_ids = [add_cs_ids]
+            cs_ids.extend(add_cs_ids)
+            cs_ids = list(set(cs_ids))
+            if len(cs_ids) == init_len:
+                raise RuntimeError('All configuration sets to be added are already present in DS.')
+            init_len = len(cs_ids)
+
+            # Remove old version of CS if new version is in added
+            for id in add_cs_ids:
+                current_hash, version = id.split('_')[1:]
+                if int(version) > 0:
+                    try:
+                        old_version = self.configuration_sets.find_one(
+                            {'_id': {'$regex': f'CS_{current_hash}_...'}}, '_id'
+                        )
+                        cs_ids.remove(old_version)
+                    except:
+                        pass
+
+        if remove_cs_ids is not None:
+            if isinstance(remove_cs_ids, str):
+                remove_cs_ids = [remove_cs_ids]
+            remove_cs_ids = list(set(remove_cs_ids))
+            for r in remove_cs_ids:
+                try:
+                    cs_ids.remove(r)
+                except:
+                    raise UserWarning(f'A configuration set with the ID {r} was not'
+                                      f'in the original DS, so it could not be removed.')
+            if len(cs_ids) == init_len:
+                raise RuntimeError('All configuration sets to be removed are not present in DS.')
+
+        # insert new version of DS
+        self.insert_dataset(cs_ids, name=ds_doc['name'], authors=ds_doc['authors'],
+                            links=ds_doc['links'], description=ds_doc['description'], overloaded_ds_id=new_ds_id)
 
     def aggregate_dataset_info(self, ds_ids):
         """

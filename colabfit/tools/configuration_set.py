@@ -43,6 +43,7 @@ class ConfigurationSet:
         self.configuration_ids  = configuration_ids
         self.description        = description
         self.aggregated_info    = aggregated_info
+        self.hash = hash(self)
 
 
     def __hash__(self):
