@@ -135,7 +135,7 @@ Configuration, as documented in <a class="reference external" href="https://figs
 parsing the data. A <code class="xref py py-attr docutils literal notranslate"><span class="pre">property_map</span></code> must still be provided for specifying
 <em>how</em> to parse the data and what the units of the fields are.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">property_map</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s1">&#39;qm9-property&#39;</span><span class="p">:</span> <span class="p">{</span>
+    <span class="s1">&#39;qm9-property&#39;</span><span class="p">:</span> <span class="p">[{</span>
         <span class="c1"># Property Definition field: {&#39;field&#39;: ASE field, &#39;units&#39;: ASE-readable units}</span>
         <span class="s1">&#39;a&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;A&#39;</span><span class="p">,</span>     <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;GHz&#39;</span><span class="p">},</span>
         <span class="s1">&#39;b&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;B&#39;</span><span class="p">,</span>     <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;GHz&#39;</span><span class="p">},</span>
@@ -154,7 +154,14 @@ parsing the data. A <code class="xref py py-attr docutils literal notranslate"><
         <span class="s1">&#39;cv&#39;</span><span class="p">:</span>    <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;Cv&#39;</span><span class="p">,</span>    <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;cal/mol/K&#39;</span><span class="p">},</span>
         <span class="s1">&#39;smiles-relaxed&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;SMILES_relaxed&#39;</span><span class="p">,</span> <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">},</span>
         <span class="s1">&#39;inchi-relaxed&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;field&#39;</span><span class="p">:</span> <span class="s1">&#39;SMILES_relaxed&#39;</span><span class="p">,</span>  <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">},</span>
-    <span class="p">}</span>
+
+        <span class="s1">&#39;_settings&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;_method&#39;</span><span class="p">:</span> <span class="s1">&#39;DFT/B3LYP/6-31G(2df,p)&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;_description&#39;</span><span class="p">:</span> <span class="s1">&#39;QM9 property settings calculation&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;_files&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s1">&#39;_labels&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;DFT&#39;</span><span class="p">,</span> <span class="s1">&#39;B3LYP&#39;</span><span class="p">,</span> <span class="s1">&#39;6-31G(2df,p)&#39;</span><span class="p">],</span>
+        <span class="p">}</span>
+    <span class="p">}]</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -231,19 +238,9 @@ modification to the typical XYZ format), it is necessary to use the
 <span class="p">)</span>
 </pre></div>
 </div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">colabfit.tools.property_settings</span> <span class="kn">import</span> <span class="n">PropertySettings</span>
-
-<span class="n">pso</span> <span class="o">=</span> <span class="n">PropertySettings</span><span class="p">(</span>
-    <span class="n">method</span><span class="o">=</span><span class="s1">&#39;DFT/B3LYP/6-31G(2df,p)&#39;</span><span class="p">,</span>
-    <span class="n">description</span><span class="o">=</span><span class="s1">&#39;QM9 property settings calculation&#39;</span><span class="p">,</span>
-    <span class="n">files</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;DFT&#39;</span><span class="p">,</span> <span class="s1">&#39;B3LYP&#39;</span><span class="p">,</span> <span class="s1">&#39;6-31G(2df,p)&#39;</span><span class="p">],</span>
-<span class="p">)</span>
-
-<span class="n">ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">insert_data</span><span class="p">(</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">insert_data</span><span class="p">(</span>
     <span class="n">images</span><span class="p">,</span>
     <span class="n">property_map</span><span class="o">=</span><span class="n">property_map</span><span class="p">,</span>
-    <span class="n">property_settings</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;qm9-property&#39;</span><span class="p">:</span> <span class="n">pso</span><span class="p">},</span>
     <span class="n">generator</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
 <span class="p">))</span>

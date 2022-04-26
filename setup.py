@@ -32,5 +32,6 @@ setup(
         'markdown',
         'plotly',
         'pymongo',
+        'biopython',
     ],
 )

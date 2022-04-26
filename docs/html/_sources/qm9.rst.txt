@@ -59,7 +59,7 @@ parsing the data. A :attr:`property_map` must still be provided for specifying
 .. code-block:: python
 
     property_map = {
-        'qm9-property': {
+        'qm9-property': [{
             # Property Definition field: {'field': ASE field, 'units': ASE-readable units}
             'a':     {'field': 'A',     'units': 'GHz'},
             'b':     {'field': 'B',     'units': 'GHz'},
@@ -78,7 +78,14 @@ parsing the data. A :attr:`property_map` must still be provided for specifying
             'cv':    {'field': 'Cv',    'units': 'cal/mol/K'},
             'smiles-relaxed': {'field': 'SMILES_relaxed', 'units': None},
             'inchi-relaxed': {'field': 'SMILES_relaxed',  'units': None},
-        }
+            
+            '_settings': {
+                '_method': 'DFT/B3LYP/6-31G(2df,p)',
+                '_description': 'QM9 property settings calculation',
+                '_files': None,
+                '_labels': ['DFT', 'B3LYP', '6-31G(2df,p)'],
+            }
+        }]
     }
 
 Defining a reader function
@@ -160,19 +167,9 @@ modification to the typical XYZ format), it is necessary to use the
 
 .. code-block:: python
 
-    from colabfit.tools.property_settings import PropertySettings
-
-    pso = PropertySettings(
-        method='DFT/B3LYP/6-31G(2df,p)',
-        description='QM9 property settings calculation',
-        files=None,
-        labels=['DFT', 'B3LYP', '6-31G(2df,p)'],
-    )
-
     ids = list(client.insert_data(
         images,
         property_map=property_map,
-        property_settings={'qm9-property': pso},
         generator=False,
         verbose=True
     ))

@@ -3,12 +3,12 @@ import numpy as np
 from ase import Atoms
 
 from colabfit import ATOMS_CONSTRAINTS_FIELD, ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
-from colabfit.tools.configuration import Configuration
+from colabfit.tools.configuration import AtomicConfiguration
 
 
 class TestConfigurations(unittest.TestCase):
     def test_empty_constructor(self):
-        conf = Configuration()
+        conf = AtomicConfiguration()
 
         self.assertEqual(conf.info[ATOMS_NAME_FIELD], set())
         self.assertSetEqual(conf.info[ATOMS_LABELS_FIELD], set())
@@ -32,7 +32,7 @@ class TestConfigurations(unittest.TestCase):
         atoms.cell = cell
         atoms.positions = pos
 
-        conf = Configuration.from_ase(atoms)
+        conf = AtomicConfiguration.from_ase(atoms)
 
         # self.assertEqual(conf, atoms)
 
@@ -63,8 +63,8 @@ class TestConfigurations(unittest.TestCase):
         atoms.cell = cell
         atoms.positions = pos
 
-        conf1 = Configuration.from_ase(atoms)
-        conf2 = Configuration.from_ase(atoms)
+        conf1 = AtomicConfiguration.from_ase(atoms)
+        conf2 = AtomicConfiguration.from_ase(atoms)
 
         self.assertEqual(hash(conf1), hash(conf2))
 
@@ -93,9 +93,9 @@ class TestConfigurations(unittest.TestCase):
         atoms3 = Atoms(atoms2)
         atoms3.positions = atoms.positions
 
-        conf1 = Configuration.from_ase(atoms)
-        conf2 = Configuration.from_ase(atoms2)
-        conf3 = Configuration.from_ase(atoms3)
+        conf1 = AtomicConfiguration.from_ase(atoms)
+        conf2 = AtomicConfiguration.from_ase(atoms2)
+        conf3 = AtomicConfiguration.from_ase(atoms3)
 
         self.assertNotEqual(hash(conf1), hash(conf2))
         self.assertEqual(hash(conf1), hash(conf3))
