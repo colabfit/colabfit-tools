@@ -78,7 +78,7 @@ class PropertySettings:
 
         self.parse_labels_from_files()
 
-
+        self._hash = hash(self)
     def parse_labels_from_files(self):
         pass
 

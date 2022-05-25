@@ -52,7 +52,6 @@ class BaseConfiguration:
             labels (str, list of str):
                 Labels to be associated with a Configuration
         """
-
         self.info = {}
         if names is None:
             self.info[ATOMS_NAME_FIELD] = set()
@@ -168,7 +167,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             kwargs.pop('atomic_numbers')
 
         Atoms.__init__(self,**kwargs)
-
+        self._hash = hash(self)
         '''
         if ATOMS_NAME_FIELD in self.info:
             v = self.info[ATOMS_NAME_FIELD]

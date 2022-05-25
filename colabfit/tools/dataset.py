@@ -77,7 +77,7 @@ class Dataset:
         self.links                  = links
         self.description            = description
         self.aggregated_info        = aggregated_info
-        self.hash = hash(self)
+        self._hash = hash(self)
 
     def __hash__(self):
         """Hashes the dataset using its configuration set and property IDs"""
