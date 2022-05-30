@@ -938,70 +938,21 @@ class MongoDatabase(MongoClient):
                     if '_settings' in pmap:
                         pso_map = pmap['_settings']
 
-                        all_ps_fields = set(pso_map.keys()) - {
-                            'method', 'description', 'files', 'labels'
-                        }
-
-                        # ps_not_required = {
-                        #     psk for psk in all_ps_fields if not pso_map[psk]['required']
-                        # }
-
-                        # ps_missing_keys = all_ps_fields  - available_keys - ps_not_required
-
-                        # if not ps_missing_keys:
-                        #     # Has all of the required PS keys
-
-                        gathered_fields = {}
-                        for ps_field in all_ps_fields:
-                            psf_key = pso_map[ps_field]['field']
-
-                            if ps_field in atoms.info:
-                                v = atoms.info[psf_key]
-                            elif ps_field in atoms.arrays:
-                                v = atoms.arrays[psf_key]
-                            else:
-                                # No keys are required; ignored if missing
-                                continue
-
-                            gathered_fields[ps_field] = {
-                                # 'required': pso_map[ps_field]['required'],
-                                'source-value': v,
-                                'source-unit':  pso_map[ps_field]['units'],
-                            }
-
                         ps = PropertySettings(
                             method=pso_map['method'] if 'method' in pso_map else None,
                             description=pso_map['description'] if 'description' in pso_map else None,
                             files=pso_map['files'] if 'files' in pso_map else None,
                             labels=pso_map['labels'] if 'labels' in pso_map else None,
-                            fields=gathered_fields,
                         )
 
                         ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
 
                         ps_set_on_insert = {
                             'colabfit_id': ps_id,
-                            'method':       ps.method,
+                            'method':      ps.method,
                             'description': ps.description,
                             'files':       ps.files,
                         }
-
-                        for gf, gf_dict in gathered_fields.items():
-                            if isinstance(gf_dict['source-value'], (int, float, str)):
-                                # Add directly
-                                ps_set_on_insert[gf] = {
-                                    'source-value': gf_dict['source-value']
-                                }
-                            else:
-                                # Then it's array-like and should be converted to a list
-                                ps_set_on_insert[gf] = {
-                                    'source-value': np.atleast_1d(
-                                        gf_dict['source-value']
-                                    ).tolist()
-                                }
-
-                            if 'source-unit' in gf_dict:
-                                ps_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
 
                         ps_update_doc =  {  # update document
                                 '$setOnInsert': ps_set_on_insert,
@@ -1144,9 +1095,8 @@ class MongoDatabase(MongoClient):
             definition (dict or string):
                 The map defining the property. See the example below, or the
                 `OpenKIM Properties Framework <https://openkim.org/doc/schema/properties-framework/>`_
-                for more details. If a string is provided, it must be the name
-                of an existing property definition from the
-                `OpenKIM Properties List <https://openkim.org/properties>`_.
+                for more details. If a string is provided, it must be the full
+                path to an existing property definition.
 
         Example definition:
 
@@ -1169,7 +1119,9 @@ class MongoDatabase(MongoClient):
         """
 
         if isinstance(definition, str):
-            definition = KIM_PROPERTIES[definition]
+            # definition = KIM_PROPERTIES[definition]
+            with open(definition, 'r') as f:
+                definition = json.load(f)
 
         if self.property_definitions.count_documents(
             {'definition.property-name': definition['property-name']}
@@ -1177,7 +1129,7 @@ class MongoDatabase(MongoClient):
             warnings.warn(
                 "Property definition with name '{}' already exists. "\
                 "Using existing definition.".format(
-                    definition['definition.property-name']
+                    definition['property-name']
                 )
             )
 
@@ -1221,7 +1173,8 @@ class MongoDatabase(MongoClient):
 
 
     def get_property_definition(self, name):
-        return self.property_definitions.find_one({'_id': name})
+        """Returns a property definition using its 'definition.property-name' key"""
+        return self.property_definitions.find_one({'definition.property-name': name})
 
 
     def insert_property_settings(self, ps_object):
@@ -1540,7 +1493,8 @@ class MongoDatabase(MongoClient):
                     {
                         *self.configuration_type.unique_identifier_kw,
                         'names',
-                        'labels'
+                        'labels',
+                        'colabfit_id',
                     }
                 ),
                 desc='Getting configurations',
@@ -1709,7 +1663,7 @@ class MongoDatabase(MongoClient):
         self.database.concatenate_configurations()
 
 
-    def insert_configuration_set(self, ids, description='', verbose=False):
+    def insert_configuration_set(self, ids, description=''):
         """
         Inserts the configuration set of IDs to the database.
 
@@ -1721,9 +1675,6 @@ class MongoDatabase(MongoClient):
 
             description (str, optional):
                 A human-readable description of the configuration set.
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
         """
 
         if isinstance(ids, str):
@@ -1753,7 +1704,6 @@ class MongoDatabase(MongoClient):
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
             ids,
-            verbose=verbose
         )
 
         self.configuration_sets.update_one(
@@ -3637,7 +3587,7 @@ def _build_c_update_doc(configuration):
     processed_fields = configuration.configuration_summary()
     c_update_doc = {
         '$setOnInsert' : {
-            '_id': cid,
+            'colabfit_id': cid,
         },
         '$set': {
             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')

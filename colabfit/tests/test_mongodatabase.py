@@ -212,7 +212,8 @@ class TestMongoDatabase:
 
             database.insert_property_definition(
                 {
-                    'property-id': 'default',
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
                     'property-title': 'A default property used for testing',
                     'property-description': 'A description of the property',
                     'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
@@ -253,33 +254,33 @@ class TestMongoDatabase:
             )))
 
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.energy', ravel=True),
+                database.get_data('property_instances', 'default.energy', ravel=True),
                 np.hstack(energies)
             )
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.stress', ravel=True),
+                database.get_data('property_instances', 'default.stress', ravel=True),
                 np.hstack(stress)
             )
-            decoded_names = database.get_data('properties', 'default.name', ravel=True)
+            decoded_names = database.get_data('property_instances', 'default.name', ravel=True)
             decoded_names = decoded_names.tolist()
             assert decoded_names == names
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.nd-same-shape', ravel=True),
+                database.get_data('property_instances', 'default.nd-same-shape', ravel=True),
                 np.concatenate(nd_same_shape).ravel()
             )
-            data = database.get_data('properties', 'default.nd-diff-shapes')
+            data = database.get_data('property_instances', 'default.nd-diff-shapes')
             for a1, a2 in zip(data, nd_diff_shape):
                 np.testing.assert_allclose(a1, a2)
 
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.forces', concatenate=True),
+                database.get_data('property_instances', 'default.forces', concatenate=True),
                 np.concatenate(forces)
             )
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.nd-same-shape-arr', concatenate=True),
+                database.get_data('property_instances', 'default.nd-same-shape-arr', concatenate=True),
                 np.concatenate(nd_same_shape_arr)
             )
-            data = database.get_data('properties', 'default.nd-diff-shapes-arr')
+            data = database.get_data('property_instances', 'default.nd-diff-shapes-arr')
             for a1, a2 in zip(data, nd_diff_shape_arr):
                 np.testing.assert_allclose(a1, a2)
 
@@ -303,7 +304,8 @@ class TestMongoDatabase:
 
             database.insert_property_definition(
                 {
-                    'property-id': 'default',
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
                     'property-title': 'A default property used for testing',
                     'property-description': 'A description of the property',
                     'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
@@ -329,9 +331,9 @@ class TestMongoDatabase:
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
 
                     '_settings': {
-                        '_method': 'VASP',
-                        '_description': 'A basic test calculation',
-                        '_files': [('dummy_name', 'dummy file contents')],
+                        'method': 'VASP',
+                        'description': 'A basic test calculation',
+                        'files': [('dummy_name', 'dummy file contents')],
                     }
                 }]
             }
@@ -375,7 +377,7 @@ class TestMongoDatabase:
             )
 
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.energy', ravel=True),
+                database.get_data('property_instances', 'default.energy', ravel=True),
                 np.concatenate([
                     np.hstack(energies),
                     np.hstack(energies)+100000,
@@ -383,30 +385,30 @@ class TestMongoDatabase:
                 ]).ravel()
             )
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.stress', concatenate=True),
+                database.get_data('property_instances', 'default.stress', concatenate=True),
                 np.concatenate([
                     np.hstack(stress),
                     np.hstack(stress),
                     np.hstack(stress),
                 ])
             )
-            decoded_names = database.get_data('properties', 'default.name')
+            decoded_names = database.get_data('property_instances', 'default.name')
             #decoded_names = decoded_names.tolist()
             assert decoded_names == names*3
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.nd-same-shape', concatenate=True),
+                database.get_data('property_instances', 'default.nd-same-shape', concatenate=True),
                 np.concatenate([
                     np.concatenate(nd_same_shape),
                     np.concatenate(nd_same_shape),
                     np.concatenate(nd_same_shape),
                 ])
             )
-            data = database.get_data('properties', 'default.nd-diff-shapes')
+            data = database.get_data('property_instances', 'default.nd-diff-shapes')
             for a1, a2 in zip(data, nd_diff_shape*3):
                 np.testing.assert_allclose(a1, a2)
 
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.forces', concatenate=True),
+                database.get_data('property_instances', 'default.forces', concatenate=True),
                 np.concatenate([
                     np.concatenate(forces),
                     np.concatenate(forces),
@@ -414,14 +416,14 @@ class TestMongoDatabase:
                 ])
             )
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.nd-same-shape-arr', concatenate=True),
+                database.get_data('property_instances', 'default.nd-same-shape-arr', concatenate=True),
                 np.concatenate([
                     np.concatenate(nd_same_shape_arr),
                     np.concatenate(nd_same_shape_arr),
                     np.concatenate(nd_same_shape_arr),
                 ])
             )
-            data = database.get_data('properties', 'default.nd-diff-shapes-arr')
+            data = database.get_data('property_instances', 'default.nd-diff-shapes-arr')
             for a1, a2 in zip(data, nd_diff_shape_arr*3):
                 np.testing.assert_allclose(a1, a2)
 
@@ -445,7 +447,8 @@ class TestMongoDatabase:
 
             database.insert_property_definition(
                 {
-                    'property-id': 'default',
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
                     'property-title': 'A default property used for testing',
                     'property-description': 'A description of the property',
                     'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
@@ -471,9 +474,9 @@ class TestMongoDatabase:
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
 
                     '_settings': {
-                        '_method': 'VASP',
-                        '_description': 'A basic test calculation',
-                        '_files': [('dummy_name', 'dummy file contents')],
+                        'method': 'VASP',
+                        'description': 'A basic test calculation',
+                        'files': [('dummy_name', 'dummy file contents')],
                     }
                 }]
             }
@@ -489,33 +492,33 @@ class TestMongoDatabase:
             )
 
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.energy'),
+                database.get_data('property_instances', 'default.energy'),
                 np.hstack(energies)
             )
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.stress', concatenate=True),
+                database.get_data('property_instances', 'default.stress', concatenate=True),
                 np.hstack(stress)
             )
-            decoded_names =  database.get_data('properties', 'default.name')
+            decoded_names =  database.get_data('property_instances', 'default.name')
             #decoded_names = decoded_names.tolist()
             assert decoded_names == names
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.nd-same-shape', concatenate=True),
+                database.get_data('property_instances', 'default.nd-same-shape', concatenate=True),
                 np.concatenate(nd_same_shape)
             )
-            data = database.get_data('properties', 'default.nd-diff-shapes')
+            data = database.get_data('property_instances', 'default.nd-diff-shapes')
             for a1, a2 in zip(data, nd_diff_shape):
                 np.testing.assert_allclose(a1, a2)
 
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.forces', concatenate=True),
+                database.get_data('property_instances', 'default.forces', concatenate=True),
                 np.concatenate(forces)
             )
             np.testing.assert_allclose(
-                database.get_data('properties', 'default.nd-same-shape-arr', concatenate=True),
+                database.get_data('property_instances', 'default.nd-same-shape-arr', concatenate=True),
                 np.concatenate(nd_same_shape_arr)
             )
-            data = database.get_data('properties', 'default.nd-diff-shapes-arr')
+            data = database.get_data('property_instances', 'default.nd-diff-shapes-arr')
             for a1, a2 in zip(data, nd_diff_shape_arr):
                 np.testing.assert_allclose(a1, a2)
 
@@ -650,7 +653,8 @@ class TestMongoDatabase:
 
             database.insert_property_definition(
                 {
-                    'property-id': 'default',
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
                     'property-title': 'A default property used for testing',
                     'property-description': 'A description of the property',
                     'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
@@ -676,9 +680,9 @@ class TestMongoDatabase:
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
 
                     '_settings': {
-                        '_method': 'VASP',
-                        '_description': 'A basic test calculation',
-                        '_files': [('dummy_name', 'dummy file contents')],
+                        'method': 'VASP',
+                        'description': 'A basic test calculation',
+                        'files': [('dummy_name', 'dummy file contents')],
                     }
                 }]
             }
@@ -693,11 +697,11 @@ class TestMongoDatabase:
             )
 
             for i, ((cid, pid), config) in enumerate(zip(ids, images)):
-                config_doc = next(database.configurations.find({'_id': cid}))
-                prop_doc   = next(database.properties.find({'_id': pid}))
+                config_doc = next(database.configurations.find({'colabfit_id': cid}))
+                prop_doc   = next(database.property_instances.find({'colabfit_id': pid}))
 
                 pn = database.get_data(
-                    'properties', 'default.forces', ids=[pid], concatenate=True
+                    'property_instances', 'default.forces', ids=[pid], concatenate=True
                 ).shape[0]
 
                 na = len(config)
@@ -747,7 +751,7 @@ class TestMongoDatabase:
 
             cs_id = database.insert_configuration_set(co_ids, 'a description')
 
-            cs_doc = next(database.configuration_sets.find({'_id': cs_id}))
+            cs_doc = next(database.configuration_sets.find({'colabfit_id': cs_id}))
 
             agg_info = cs_doc['aggregated_info']
 
@@ -778,7 +782,8 @@ class TestMongoDatabase:
 
             database.insert_property_definition(
                 {
-                    'property-id': 'default',
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
                     'property-title': 'A default property used for testing',
                     'property-description': 'A description of the property',
                     'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
@@ -804,10 +809,10 @@ class TestMongoDatabase:
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
 
                     '_settings': {
-                        '_method': 'VASP',
-                        '_description': 'A basic test calculation',
-                        '_files': [('dummy_name', 'dummy file contents')],
-                        '_labels': ['pso_label1', 'pso_label2']
+                        'method': 'VASP',
+                        'description': 'A basic test calculation',
+                        'files': [('dummy_name', 'dummy file contents')],
+                        'labels': ['pso_label1', 'pso_label2']
                     }
                 }]
             }
@@ -863,7 +868,7 @@ class TestMongoDatabase:
                 resync=True
             )
 
-            ds_doc = next(database.datasets.find({'_id': ds_id}))
+            ds_doc = next(database.datasets.find({'colabfit_id': ds_id}))
 
             assert ds_doc['authors'] == ['colabfit']
             assert ds_doc['links'] == ['https://colabfit.org']
@@ -914,7 +919,8 @@ class TestPropertyDefinitionsAndSettings:
             database = MongoDatabase(self.database_name, drop_database=True,configuration_type=AtomicConfiguration)
 
             property_definition = {
-                    'property-id': 'default',
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
                     'property-title': 'A default property used for testing',
                     'property-description': 'A description of the property',
                     'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
@@ -928,9 +934,8 @@ class TestPropertyDefinitionsAndSettings:
                 }
 
             database.insert_property_definition(property_definition)
-            
+
             get_def = database.get_property_definition('default')['definition']
-            get_def['property-id'] = 'default'
 
             assert  get_def == property_definition
 
@@ -989,11 +994,11 @@ class TestConfigurationSets:
                 ids, description='A basic configuration set'
             )
 
-            desc = next(database.configuration_sets.find({'_id': cs_id}))['description']
+            desc = next(database.configuration_sets.find({'colabfit_id': cs_id}))['description']
 
             assert desc == 'A basic configuration set'
 
-            rebuilt_ids = next(database.configuration_sets.find({'_id': cs_id}))['relationships']['configurations']
+            rebuilt_ids = next(database.configuration_sets.find({'colabfit_id': cs_id}))['relationships']['configurations']
 
             # rebuilt_ids = database.get_data(
             #     f'configuration_sets/{cs_id}/ids',
@@ -1019,7 +1024,8 @@ class TestDatasets:
 
             database.insert_property_definition(
                 {
-                    'property-id': 'default',
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
                     'property-title': 'A default property used for testing',
                     'property-description': 'A description of the property',
                     'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
@@ -1081,5 +1087,5 @@ class TestDatasets:
                 resync=True
             )
 
-            ds_doc = next(database.datasets.find({'_id': ds_id}))
+            ds_doc = next(database.datasets.find({'colabfit_id': ds_id}))
             assert ds_doc['authors'] == ['colabfit']
