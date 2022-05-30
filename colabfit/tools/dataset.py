@@ -1,7 +1,7 @@
 import os
 from hashlib import sha512
 
-from colabfit import HASH_LENGTH, HASH_SHIFT, ATOMS_NAME_FIELD
+from colabfit import HASH_LENGTH, HASH_SHIFT
 
 class Dataset:
     """
@@ -89,7 +89,7 @@ class Dataset:
         for i in sorted(self.property_ids):
             ds_hash.update(str(i).encode('utf-8'))
 
-        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
+        return int(str(int(ds_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
 
 
     def __str__(self):

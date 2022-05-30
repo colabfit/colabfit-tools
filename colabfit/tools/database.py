@@ -2360,11 +2360,6 @@ class MongoDatabase(MongoClient):
 
             verbose (bool):
                 If True, prints progress bar.
-
-        Pseudocode:
-            * Get the IDs of the configurations that match the query
-            * Use updateMany to update the MongoDB
-            * Iterate over the HDF5 entries.
         """
 
         dataset = self.get_dataset(dataset_id)['dataset']
@@ -3469,6 +3464,43 @@ class MongoDatabase(MongoClient):
                 images=images,
                 format=data_format,
             )
+
+    def export_dataset(self, ds_id, fmt, verbose=False):
+        """
+        Exports the dataset whose :code:`colabfit_id` matches :code:`ds_id` to
+        the given format.
+
+        Args:
+
+            ds_id (str):
+                An ID matching the form DS_XXXXXXXXXXXX_XXX
+
+            fmt (str):
+                The format to which to export the data. Supported formats:
+                ['hdf5'].
+
+            verbose (bool, default=True):
+                If True, prints progress bar
+        """
+
+        supported_formats = ['hdf5']
+        if fmt not in supported_formats:
+            raise RuntimeError(
+                f"The only supported formats are {supported_formats}"
+            )
+
+        ds_doc = self.datasets.find_one(ds_id)
+
+        configuration_ids = []
+
+        for cs_id in ds_doc['relationships']['configuration_sets']:
+            configuration_ids += self.get_configuration_set(
+                cs_id
+            )['configuration_set'].configuration_ids
+
+        property_ids = ds_doc['relationships']['properties']
+
+
 
 # TODO: May need to make more Configuration "type" agnostic
 def load_data(

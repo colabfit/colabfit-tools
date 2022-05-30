@@ -1089,3 +1089,88 @@ class TestDatasets:
 
             ds_doc = next(database.datasets.find({'colabfit_id': ds_id}))
             assert ds_doc['authors'] == ['colabfit']
+
+
+    def test_export_ds(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = MongoDatabase(
+                self.database_name,
+                drop_database=True,
+                configuration_type=AtomicConfiguration
+            )
+
+            images = build_n(10)[0]
+
+            database.insert_property_definition(
+                {
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
+                    'property-title': 'A default property used for testing',
+                    'property-description': 'A description of the property',
+                    'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                    'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+                    'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                    'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                    'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                    'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+                }
+            )
+
+            property_map = {
+                'default': [{
+                    'energy': {'field': 'energy', 'units': 'eV'},
+                    'stress': {'field': 'stress', 'units': 'GPa'},
+                    'name': {'field': 'name', 'units': None},
+                    'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                    'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                    'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                    'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                    'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+
+                    '_settings': {
+                        'method': 'VASP',
+                        'labels': ['label1', 'label2'],
+                        'files':
+                    },
+                }]
+            }
+
+            ids = database.insert_data(
+                images, property_map=property_map
+            )
+
+            co_ids1, pr_ids1 = list(zip(*ids))
+
+            cs_id1 = database.insert_configuration_set(
+                co_ids1, description='A basic configuration set'
+            )
+
+            images = build_n(10)[0]
+
+            for img in images:
+                img.info['energy'] += 100000
+
+            ids = database.insert_data(
+                images, property_map=property_map
+            )
+
+            co_ids2, pr_ids2 = list(zip(*ids))
+
+            cs_id2 = database.insert_configuration_set(
+                co_ids2, description='A basic configuration set'
+            )
+
+            ds_id = database.insert_dataset(
+                cs_ids=[cs_id1, cs_id2],
+                pr_ids=pr_ids1+pr_ids2,
+                name='example_dataset',
+                authors='colabfit',
+                links='https://colabfit.openkim.org/',
+                description='An example dataset',
+                resync=True
+            )
+
+            ds_doc = next(database.datasets.find({'colabfit_id': ds_id}))
+            assert ds_doc['authors'] == ['colabfit']
