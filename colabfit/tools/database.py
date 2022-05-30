@@ -938,11 +938,43 @@ class MongoDatabase(MongoClient):
                     if '_settings' in pmap:
                         pso_map = pmap['_settings']
 
+                        all_ps_fields = set(pso_map.keys()) - {
+                            'method', 'description', 'files', 'labels'
+                        }
+
+                        # ps_not_required = {
+                        #     psk for psk in all_ps_fields if not pso_map[psk]['required']
+                        # }
+
+                        # ps_missing_keys = all_ps_fields  - available_keys - ps_not_required
+
+                        # if not ps_missing_keys:
+                        #     # Has all of the required PS keys
+
+                        gathered_fields = {}
+                        for ps_field in all_ps_fields:
+                            psf_key = pso_map[ps_field]['field']
+
+                            if ps_field in atoms.info:
+                                v = atoms.info[psf_key]
+                            elif ps_field in atoms.arrays:
+                                v = atoms.arrays[psf_key]
+                            else:
+                                # No keys are required; ignored if missing
+                                continue
+
+                            gathered_fields[ps_field] = {
+                                # 'required': pso_map[ps_field]['required'],
+                                'source-value': v,
+                                'source-unit':  pso_map[ps_field]['units'],
+                            }
+
                         ps = PropertySettings(
                             method=pso_map['method'] if 'method' in pso_map else None,
                             description=pso_map['description'] if 'description' in pso_map else None,
                             files=pso_map['files'] if 'files' in pso_map else None,
                             labels=pso_map['labels'] if 'labels' in pso_map else None,
+                            fields=gathered_fields,
                         )
 
                         ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
@@ -953,6 +985,23 @@ class MongoDatabase(MongoClient):
                             'description': ps.description,
                             'files':       ps.files,
                         }
+
+                        for gf, gf_dict in gathered_fields.items():
+                            if isinstance(gf_dict['source-value'], (int, float, str)):
+                                # Add directly
+                                ps_set_on_insert[gf] = {
+                                    'source-value': gf_dict['source-value']
+                                }
+                            else:
+                                # Then it's array-like and should be converted to a list
+                                ps_set_on_insert[gf] = {
+                                    'source-value': np.atleast_1d(
+                                        gf_dict['source-value']
+                                    ).tolist()
+                                }
+
+                            if 'source-unit' in gf_dict:
+                                ps_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
 
                         ps_update_doc =  {  # update document
                                 '$setOnInsert': ps_set_on_insert,
@@ -3614,3 +3663,4 @@ class MissingEntryError(Exception):
 
 class DuplicateDefinitionError(Exception):
     pass
+
