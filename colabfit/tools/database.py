@@ -2360,11 +2360,6 @@ class MongoDatabase(MongoClient):
 
             verbose (bool):
                 If True, prints progress bar.
-
-        Pseudocode:
-            * Get the IDs of the configurations that match the query
-            * Use updateMany to update the MongoDB
-            * Iterate over the HDF5 entries.
         """
 
         dataset = self.get_dataset(dataset_id)['dataset']
