@@ -15,6 +15,22 @@ class PropertySettings:
         description (str):
             A human-readable description of the settings.
 
+        fields (dict):
+            A dictionary of additional information. key = name of the field;
+
+
+            .. code-block:: python
+
+                value = {
+                    'source-value': <key_for_extracting_from_configuration>,
+                    'source-units': <string_specifying_units> or None
+                    }
+
+            For more details onw how to build this dictionary, refer to the
+            "property map" description in the documentation, which follows a
+            similar structure. These fields will be used to extract data from a
+            Configuration object when inserting into the database.
+
         files (list):
             A list of 2-tuples, where the first value of each tuple is the name
             of a file, and the second value is the contents of the file.
@@ -28,6 +44,7 @@ class PropertySettings:
         self,
         method='',
         description='',
+        fields=None,
         files=None,
         labels=None,
     ):
@@ -50,7 +67,11 @@ class PropertySettings:
         else:
             labels = set(labels)
 
+        if fields is None:
+            fields = {}
+
         self.method         = method
+        self.fields         = fields
         self.files          = files
         self.description    = description
         self.labels         = labels
@@ -71,6 +92,27 @@ class PropertySettings:
         _hash = sha512()
 
         file_hashes = []
+
+        for k, vdict in self.fields.items():
+            _hash.update(k.encode('utf-8'))
+
+            try:
+                hashval =  np.round_(
+                    np.array(vdict['source-value']), decimals=12
+                ).data.tobytes()
+            except:
+                try:
+                    hashval = np.array(
+                        vdict['source-value'], dtype=STRING_DTYPE_SPECIFIER
+                    ).data.tobytes()
+                except:
+                    raise PropertySettingsHashError(
+                        "Could not hash key {}: {}".format(k, vdict)
+                    )
+
+            _hash.update(hashval)
+            _hash.update(str(vdict['source-unit']).encode('utf-8'))
+
 
         for (fname, contents) in self.files:
             file_hashes.append(_hash.update(contents.encode('utf-8')))
@@ -101,3 +143,4 @@ class PropertySettings:
 
 class PropertySettingsHashError(Exception):
     pass
+
