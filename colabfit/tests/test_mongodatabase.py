@@ -1092,7 +1092,7 @@ class TestDatasets:
 
 
     def test_export_ds(self):
-        with tempfile.TemporaryFile() as tmpfile:
+        with tempfile.NamedTemporaryFile() as tmpfile:
             database = MongoDatabase(
                 self.database_name,
                 drop_database=True,
@@ -1132,7 +1132,8 @@ class TestDatasets:
                     '_settings': {
                         'method': 'VASP',
                         'labels': ['label1', 'label2'],
-                        'files':
+                        'files': [('dummy_file.txt', 'dummy contents')],
+                        'description': 'A dummy property settings object'
                     },
                 }]
             }
@@ -1172,5 +1173,4 @@ class TestDatasets:
                 resync=True
             )
 
-            ds_doc = next(database.datasets.find({'colabfit_id': ds_id}))
-            assert ds_doc['authors'] == ['colabfit']
+            database.export_dataset(ds_id, tmpfile.name, fmt='hdf5')

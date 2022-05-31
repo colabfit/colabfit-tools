@@ -1,4 +1,5 @@
 import os
+import h5py
 import json
 import shutil
 import markdown
@@ -3514,7 +3515,7 @@ class MongoDatabase(MongoClient):
                 format=data_format,
             )
 
-    def export_dataset(self, ds_id, fmt, verbose=False):
+    def export_dataset(self, ds_id, file_name, fmt, mode, verbose=False):
         """
         Exports the dataset whose :code:`colabfit_id` matches :code:`ds_id` to
         the given format.
@@ -3524,9 +3525,15 @@ class MongoDatabase(MongoClient):
             ds_id (str):
                 An ID matching the form DS_XXXXXXXXXXXX_XXX
 
+            file_name (str):
+                The name of the file to save the dataset to.
+
             fmt (str):
                 The format to which to export the data. Supported formats:
                 ['hdf5'].
+
+            mode (str):
+                'r', 'w', or 'a'
 
             verbose (bool, default=True):
                 If True, prints progress bar
@@ -3538,7 +3545,7 @@ class MongoDatabase(MongoClient):
                 f"The only supported formats are {supported_formats}"
             )
 
-        ds_doc = self.datasets.find_one(ds_id)
+        ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
 
         configuration_ids = []
 
@@ -3549,7 +3556,38 @@ class MongoDatabase(MongoClient):
 
         property_ids = ds_doc['relationships']['properties']
 
+        co_cursor = self.configurations.find(
+            {'colabfit_id': {'$in': configuration_ids}},
+            self.configuration_type.unique_identifier_kw
+        )
 
+        """
+        property instances
+        property settings
+        property definitions
+
+        configurations
+        configuration_sets
+        """
+
+        if fmt == 'hdf5':
+            with h5py.File(file_name, mode) as outfile:
+                # Build all groups
+                ds_group = outfile.create_group(ds_id)
+
+                pi_group = ds_group.create_group(_PROPS_COLLECTION)
+                ps_group = ds_group.create_group(_PROPSETTINGS_COLLECTION)
+                pd_group = ds_group.create_group(_PROPDEFS_COLLECTION)
+
+                co_group = ds_group.create_group(_CONFIGS_COLLECTION)
+                cs_group = ds_group.create_group(_CONFIGSETS_COLLECTION)
+
+                # Write the configurations
+                for co_doc in co_cursor:
+                    pass
+
+                for key in self.configuration_type.unique_identifiers:
+                    co_group.create_group(key)
 
 # TODO: May need to make more Configuration "type" agnostic
 def load_data(
