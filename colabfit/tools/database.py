@@ -3722,6 +3722,7 @@ def _build_c_update_doc(configuration):
     c_update_doc = {
         '$setOnInsert' : {
             '_id': cid,
+            '_hash': hash(configuration)
         },
         '$set': {
             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')

@@ -112,7 +112,8 @@ class BaseConfiguration:
         if len(self.unique_identifiers) == 0:
             raise Exception('Ensure unique identifiers are properly defined!')
         _hash = sha512()
-        for _, v in self.unique_identifiers.items():
+        for k, v in self.unique_identifiers.items():
+            print (k,v.dtype)
             _hash.update(bytes(pre_hash_formatting(v)))
         return int(str(int(_hash.hexdigest(), 16) - HASH_SHIFT)[:HASH_LENGTH])
 
@@ -520,7 +521,7 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
 
 
 
-# TODO: Check datatypes, decimal rounding, string encodings, etc to ensure consistent hashing
+# TODO: string encodings, etc to ensure consistent hashing
 #       Add support for lists, etc
 def pre_hash_formatting(v):
     """
@@ -534,9 +535,12 @@ def pre_hash_formatting(v):
         Reformatted value
 
     """
+    # for now all AtomicConfiguration UIs are defined to be ndarrays
     if isinstance(v, np.ndarray):
-        if v.dtype == float:
-            return np.round_(v,decimals=16)
+        if v.dtype in [np.half, np.single, np.double, np.longdouble]:
+            return np.round_(v.astype(np.float64),decimals=16)
+        elif v.dtype in [np.int8, np.int16, np.int32, np.int64]:
+            return v.astype(np.int64)
         else:
             return v
     else:
