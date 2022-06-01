@@ -88,7 +88,7 @@
 <h1>Database<a class="headerlink" href="#database" title="Permalink to this headline"></a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="colabfit.tools.database.MongoDatabase">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.database.</span></span><span class="sig-name descname"><span class="pre">MongoDatabase</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">database_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nprocs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_database</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pwrd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">27017</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase" title="Permalink to this definition"></a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">colabfit.tools.database.</span></span><span class="sig-name descname"><span class="pre">MongoDatabase</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">database_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">configuration_type=&lt;class</span> <span class="pre">'colabfit.tools.configuration.BaseConfiguration'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nprocs=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uri=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_database=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pwrd=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port=27017</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">**kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#colabfit.tools.database.MongoDatabase" title="Permalink to this definition"></a></dt>
 <dd><p>A MongoDatabase stores all of the data in Mongo documents, and
 provides additinal functionality like filtering and optimized queries.</p>
 <p>The Mongo database has the following structure</p>
@@ -632,13 +632,13 @@ properties of the same type pointing to the same configuration.
 WARNING: don’t use this option if multiple properties of the
 same type point to the same Configuration, but the properties
 don’t have values for all of their fields.</p></li>
-<li><p><strong>attach_settings</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, attaches all of the fields of the property settings
+<li><p><strong>attach_settings</strong> (<em>bool</em><em>, </em><em>default=False</em>) – NOT supported yet. If True, attaches all of the fields of the property settings
 that are linked to the attached property instances. If
 <code class="code docutils literal notranslate"><span class="pre">attach_settings=True</span></code>, must also have
 <code class="code docutils literal notranslate"><span class="pre">attach_properties=True</span></code>.</p></li>
-<li><p><strong>generator</strong> (<em>bool</em><em>, </em><em>default=False</em>) – If True, this function returns a generator of the
-configurations. This is useful if the configurations can’t all
-fit in memory at the same time.</p></li>
+<li><p><strong>generator</strong> (<em>bool</em><em>, </em><em>default=False</em>) – NOT supported yet. If True, this function returns a generator of
+the configurations. This is useful if the configurations can’t
+all fit in memory at the same time.</p></li>
 <li><p><strong>verbose</strong> (<em>bool</em>) – If True, prints progress bar</p></li>
 </ul>
 </dd>
