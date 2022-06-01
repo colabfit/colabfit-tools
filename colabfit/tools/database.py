@@ -3556,38 +3556,47 @@ class MongoDatabase(MongoClient):
 
         property_ids = ds_doc['relationships']['properties']
 
+        # copied from ase.io.extxyz for formatting property outputs
+        fmt_map = {'d': ('R', '%16.8f'),
+            'f': ('R', '%16.8f'),
+            'i': ('I', '%8d'),
+            'O': ('S', '%s'),
+            'S': ('S', '%s'),
+            'U': ('S', '%-2s'),
+            'b': ('L', ' %.1s')}
+
         co_cursor = self.configurations.find(
             {'colabfit_id': {'$in': configuration_ids}},
-            self.configuration_type.unique_identifier_kw
+            # self.configuration_type.unique_identifier_kw
         )
-
-        """
-        property instances
-        property settings
-        property definitions
-
-        configurations
-        configuration_sets
-        """
 
         if fmt == 'hdf5':
             with h5py.File(file_name, mode) as outfile:
                 # Build all groups
-                ds_group = outfile.create_group(ds_id)
+                ds_coll_group = outfile.create_group(_DATASETS_COLLECTION)
 
-                pi_group = ds_group.create_group(_PROPS_COLLECTION)
-                ps_group = ds_group.create_group(_PROPSETTINGS_COLLECTION)
-                pd_group = ds_group.create_group(_PROPDEFS_COLLECTION)
+                pi_coll_group = outfile.create_group(_PROPS_COLLECTION)
+                ps_coll_group = outfile.create_group(_PROPSETTINGS_COLLECTION)
+                pd_coll_group = outfile.create_group(_PROPDEFS_COLLECTION)
 
-                co_group = ds_group.create_group(_CONFIGS_COLLECTION)
-                cs_group = ds_group.create_group(_CONFIGSETS_COLLECTION)
+                co_coll_group = outfile.create_group(_CONFIGS_COLLECTION)
+                cs_coll_group = outfile.create_group(_CONFIGSETS_COLLECTION)
 
                 # Write the configurations
                 for co_doc in co_cursor:
-                    pass
+                    co_group = co_coll_group.create_group(co_doc['colabfit_id'])
 
-                for key in self.configuration_type.unique_identifiers:
-                    co_group.create_group(key)
+                    for key in self.configuration_type.unique_identifiers:
+
+                        array = np.array(co_doc[key])
+
+                        # Check how ASE writes EXTXYZ files to help with this
+                        co_group.create_dataset(
+                            key,
+                            shape=array.shape,
+                            dtype=array.dtype,
+                            data=array,
+                        )
 
 # TODO: May need to make more Configuration "type" agnostic
 def load_data(

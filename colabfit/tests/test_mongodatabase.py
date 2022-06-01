@@ -1173,4 +1173,4 @@ class TestDatasets:
                 resync=True
             )
 
-            database.export_dataset(ds_id, tmpfile.name, fmt='hdf5')
+            database.export_dataset(ds_id, tmpfile.name, fmt='hdf5', mode='w')
