@@ -395,7 +395,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         }
 
         for doc in tqdm(
-            db.configurations.find({'_id': {'$in': ids}}),
+            db.configurations.find({'colabfit_id': {'$in': ids}}),
             desc='Aggregating configuration info',
             disable=not verbose,
             total=len(ids),

@@ -981,7 +981,7 @@ class MongoDatabase(MongoClient):
 
                         ps_set_on_insert = {
                             'colabfit_id': ps_id,
-                            'method':       ps.method,
+                            'method':      ps.method,
                             'description': ps.description,
                             'files':       ps.files,
                         }
@@ -1144,9 +1144,8 @@ class MongoDatabase(MongoClient):
             definition (dict or string):
                 The map defining the property. See the example below, or the
                 `OpenKIM Properties Framework <https://openkim.org/doc/schema/properties-framework/>`_
-                for more details. If a string is provided, it must be the name
-                of an existing property definition from the
-                `OpenKIM Properties List <https://openkim.org/properties>`_.
+                for more details. If a string is provided, it must be the full
+                path to an existing property definition.
 
         Example definition:
 
@@ -1169,7 +1168,9 @@ class MongoDatabase(MongoClient):
         """
 
         if isinstance(definition, str):
-            definition = KIM_PROPERTIES[definition]
+            # definition = KIM_PROPERTIES[definition]
+            with open(definition, 'r') as f:
+                definition = json.load(f)
 
         if self.property_definitions.count_documents(
             {'definition.property-name': definition['property-name']}
@@ -1177,7 +1178,7 @@ class MongoDatabase(MongoClient):
             warnings.warn(
                 "Property definition with name '{}' already exists. "\
                 "Using existing definition.".format(
-                    definition['definition.property-name']
+                    definition['property-name']
                 )
             )
 
@@ -1221,7 +1222,8 @@ class MongoDatabase(MongoClient):
 
 
     def get_property_definition(self, name):
-        return self.property_definitions.find_one({'_id': name})
+        """Returns a property definition using its 'definition.property-name' key"""
+        return self.property_definitions.find_one({'definition.property-name': name})
 
 
     def insert_property_settings(self, ps_object):
@@ -1540,7 +1542,8 @@ class MongoDatabase(MongoClient):
                     {
                         *self.configuration_type.unique_identifier_kw,
                         'names',
-                        'labels'
+                        'labels',
+                        'colabfit_id',
                     }
                 ),
                 desc='Getting configurations',
@@ -1709,7 +1712,7 @@ class MongoDatabase(MongoClient):
         self.database.concatenate_configurations()
 
 
-    def insert_configuration_set(self, ids, description='', verbose=False):
+    def insert_configuration_set(self, ids, description=''):
         """
         Inserts the configuration set of IDs to the database.
 
@@ -1721,9 +1724,6 @@ class MongoDatabase(MongoClient):
 
             description (str, optional):
                 A human-readable description of the configuration set.
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
         """
 
         if isinstance(ids, str):
@@ -1753,7 +1753,6 @@ class MongoDatabase(MongoClient):
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
             ids,
-            verbose=verbose
         )
 
         self.configuration_sets.update_one(
@@ -2410,11 +2409,6 @@ class MongoDatabase(MongoClient):
 
             verbose (bool):
                 If True, prints progress bar.
-
-        Pseudocode:
-            * Get the IDs of the configurations that match the query
-            * Use updateMany to update the MongoDB
-            * Iterate over the HDF5 entries.
         """
 
         dataset = self.get_dataset(dataset_id)['dataset']
@@ -3637,7 +3631,7 @@ def _build_c_update_doc(configuration):
     processed_fields = configuration.configuration_summary()
     c_update_doc = {
         '$setOnInsert' : {
-            '_id': cid,
+            'colabfit_id': cid,
         },
         '$set': {
             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -3669,3 +3663,4 @@ class MissingEntryError(Exception):
 
 class DuplicateDefinitionError(Exception):
     pass
+
