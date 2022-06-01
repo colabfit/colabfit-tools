@@ -143,3 +143,4 @@ class PropertySettings:
 
 class PropertySettingsHashError(Exception):
     pass
+

@@ -210,11 +210,18 @@ class Property(dict):
         self.instance = instance
         self.instance['property-id'] = definition_name
 
+        # Hack to avoid the fact that "property-name" has to be a dictionary
+        # in order for OpenKIM's check_property_definition to work
+        tmp = self.definition['property-name']
+        del self.definition['property-name']
+
         check_instance_optional_key_marked_required_are_present(
             self.instance,
             self.definition,
             # KIM_PROPERTIES[self.instance['property-id']]
         )
+
+        self.definition['property-name'] = tmp
 
         if load_from_existing:
             check_property_instances(
@@ -318,6 +325,8 @@ class Property(dict):
         load_from_existing = False
 
         if isinstance(definition, dict):
+
+            # TODO: this is probably slowing things down a bit
             dummy_dict = deepcopy(definition)
 
             # Spoof if necessary
@@ -364,6 +373,12 @@ class Property(dict):
             ))[0]
         else:
             with tempfile.NamedTemporaryFile('w') as tmp:
+                # Hack to avoid the fact that "property-name" has to be a dictionary
+                # in order for OpenKIM's check_property_definition to work
+
+                if 'property-name' in dummy_dict:
+                    del dummy_dict['property-name']
+
                 tmp.write(json.dumps(dummy_dict))
                 tmp.flush()
 

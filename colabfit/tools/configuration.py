@@ -135,7 +135,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and an :class:`ase.Atoms`
     object that is guaranteed to have the following fields in its :attr:`info` dictionary:
 
-    - :attr:`~colabfit.ATOMS_ID_FIELD` = :code:"_id"
     - :attr:`~colabfit.ATOMS_NAME_FIELD` = :code:"_name"
     - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
     """
@@ -396,7 +395,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         }
 
         for doc in tqdm(
-            db.configurations.find({'_id': {'$in': ids}}),
+            db.configurations.find({'colabfit_id': {'$in': ids}}),
             desc='Aggregating configuration info',
             disable=not verbose,
             total=len(ids),

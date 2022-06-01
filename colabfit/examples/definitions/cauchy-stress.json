@@ -1,0 +1,16 @@
+{
+    "property-id": "tag:staff@noreply.colabfit.org,2022-05-30:property/cauchy-stress",
+    "property-name": "cauchy-stress",
+    "property-title": "Cauchy stress tensor from a static calculation",
+    "property-description": "Full 3x3 Cauchy stress tensor from a calculation of a static configuration.",
+    "forces": {
+        "type": "float",
+        "has-unit": true,
+        "extent": [
+            ":",
+            3
+        ],
+        "required": false,
+        "description": "The [x,y,z] components of the force on each particle."
+    }
+}
