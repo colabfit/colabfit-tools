@@ -80,6 +80,31 @@ class TestMongoDatabase:
     #         assert 3 == dataset.aggregated_info['nconfigurations']
     #         assert 3 == sum(dataset.aggregated_info['property_types_counts'])
 
+    def test_add_identical_configs(self):
+        with tempfile.TemporaryFile() as tmpfile:
+
+            database = MongoDatabase(self.database_name, drop_database=True,configuration_type=AtomicConfiguration)
+
+            returns = build_n(10)
+
+            images              = returns[0]
+            energies            = returns[1]
+            stress              = returns[2]
+            names               = returns[3]
+            nd_same_shape       = returns[4]
+            nd_diff_shape       = returns[5]
+            forces              = returns[6]
+            nd_same_shape_arr   = returns[7]
+            nd_diff_shape_arr   = returns[8]
+
+            ids = list(database.insert_data(images))
+
+            assert database.configurations.count_documents({}) == 10
+
+            ids = list(database.insert_data(images))
+
+            assert database.configurations.count_documents({}) == 10
+
 
     def test_add_then_update_nochange_config(self):
         with tempfile.TemporaryFile() as tmpfile:
