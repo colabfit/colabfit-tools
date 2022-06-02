@@ -1,3 +1,6 @@
+import os
+import json
+import h5py
 import pytest
 import tempfile
 import numpy as np
@@ -6,7 +9,7 @@ import random
 random.seed(42)
 from ase import Atoms
 
-from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ID_FORMAT_STRING
+from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ID_FORMAT_STRING, STRING_DTYPE_SPECIFIER
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.database import MongoDatabase
 from colabfit.tools.property_settings import PropertySettings
@@ -1092,7 +1095,8 @@ class TestDatasets:
 
 
     def test_export_ds(self):
-        with tempfile.NamedTemporaryFile() as tmpfile:
+        # with tempfile.NamedTemporaryFile() as tmpfile:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             database = MongoDatabase(
                 self.database_name,
                 drop_database=True,
@@ -1132,7 +1136,7 @@ class TestDatasets:
                     '_settings': {
                         'method': 'VASP',
                         'labels': ['label1', 'label2'],
-                        'files': [('dummy_file.txt', 'dummy contents')],
+                        'files': [('dummy_file.txt', 'dummy contents\nwith a newline\n')],
                         'description': 'A dummy property settings object'
                     },
                 }]
@@ -1173,4 +1177,73 @@ class TestDatasets:
                 resync=True
             )
 
-            database.export_dataset(ds_id, tmpfile.name, fmt='hdf5', mode='w')
+            database.export_dataset(ds_id, tmpdirname, fmt='hdf5', mode='w')
+
+            co_ids = list(co_ids1 + co_ids2)
+
+            with h5py.File(os.path.join(tmpdirname, ds_id+'.hdf5'), 'r') as hdf5:
+
+                # Check definitions
+                prop_definitions = {}
+                for pd_name in property_map:
+                    with open(
+                        os.path.join(
+                            tmpdirname, 'property_definitions', pd_name+'.json'
+                        ),
+                        'r'
+                        ) as f:
+
+                        dct = json.load(f)
+
+                        assert dct == database.get_property_definition(pd_name)['definition']
+
+                        prop_definitions[pd_name] = dct
+
+                # Check DS info
+                ds_doc = database.datasets.find_one({'colabfit_id': ds_id})
+
+                assert hdf5.attrs['description'] == ds_doc['description']
+                assert set(hdf5.attrs['authors'].astype(str).tolist()) == set(ds_doc['authors'])
+                assert set(hdf5.attrs['links'].astype(str).tolist()) == set(ds_doc['links'])
+
+                # Check configurations
+                assert set(co_ids) == set(hdf5['configurations'].keys())
+
+                configurations = database.get_configurations(
+                    co_ids, attach_properties=True
+                )
+
+                for c in configurations:
+                    g = hdf5['configurations'][c.info['colabfit_id']]
+
+                    np.testing.assert_equal(g['atomic_numbers'], c.arrays['numbers'])
+                    np.testing.assert_equal(g['cell'], np.array(c.cell))
+                    np.testing.assert_equal(g['pbc'], c.pbc)
+                    np.testing.assert_equal(g['positions'], c.positions)
+
+                    assert set(g['labels'].asstr()[()].tolist()) == set(c.info['_labels'])
+                    assert set(g['names'].asstr()[()].tolist()) == set(c.info['_name'])
+
+                # Check property instances
+                for pi_doc in database.property_instances.find(
+                        {'colabfit_id': {'$in': pr_ids1+pr_ids2}}
+                    ):
+
+                    g = hdf5['property_instances'][pi_doc['colabfit_id']]
+
+                    assert g['type'].asstr()[()] == pi_doc['type']
+                    assert set(g['methods'].asstr()[()].tolist()) == set(pi_doc['methods'])
+                    assert set(g['labels'].asstr()[()].tolist()) == set(pi_doc['labels'])
+
+                    for k,v in pi_doc[pi_doc['type']].items():
+                        dtype = prop_definitions[pi_doc['type']][k]['type']
+                        if dtype == 'string':
+                            v1 = v['source-value']
+                            v2 = g[pi_doc['type']][k].asstr()[()]
+                        else:
+                            v1 = v['source-value']
+                            v2 = g[pi_doc['type']][k][()]
+
+                        np.testing.assert_equal(v1, v2)
+
+                    pass

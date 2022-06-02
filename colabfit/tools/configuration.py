@@ -146,7 +146,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
     unique_identifier_kw = ['atomic_numbers', 'positions', 'cell', 'pbc']
     unique_identifier_kw_types = {
-        'atomic_numbers': float,
+        'atomic_numbers': int,
         'positions': float,
         'cell': float,
         'pbc': bool,

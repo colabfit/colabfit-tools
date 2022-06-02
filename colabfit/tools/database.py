@@ -31,7 +31,8 @@ from colabfit import (
     ID_FORMAT_STRING,
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
-    ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
+    ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD,
+    STRING_DTYPE_SPECIFIER
 )
 from colabfit.tools.configuration import BaseConfiguration
 from colabfit.tools.property import Property
@@ -1584,7 +1585,7 @@ class MongoDatabase(MongoClient):
             if property_ids is not None:
                 property_ids = list(all_attached_prs.union(set(property_ids)))
             else:
-                property_ids = all_attached_prs
+                property_ids = list(all_attached_prs)
 
             for pr_doc in tqdm(
                     self.property_instances.find( {'colabfit_id': {'$in': property_ids}}),
@@ -3515,7 +3516,7 @@ class MongoDatabase(MongoClient):
                 format=data_format,
             )
 
-    def export_dataset(self, ds_id, file_name, fmt, mode, verbose=False):
+    def export_dataset(self, ds_id, output_folder, fmt, mode, verbose=False):
         """
         Exports the dataset whose :code:`colabfit_id` matches :code:`ds_id` to
         the given format.
@@ -3525,8 +3526,12 @@ class MongoDatabase(MongoClient):
             ds_id (str):
                 An ID matching the form DS_XXXXXXXXXXXX_XXX
 
-            file_name (str):
-                The name of the file to save the dataset to.
+            output_folder (str):
+                The path to a folder in which to save the dataset. Database
+                contents will be save under
+                :code:`<output_folder>/database.<fmt>`, and all other files
+                (property settings files, property definitions, etc.) will be
+                saved as :code:`<output_folder>/<file_name>`.
 
             fmt (str):
                 The format to which to export the data. Supported formats:
@@ -3538,6 +3543,19 @@ class MongoDatabase(MongoClient):
             verbose (bool, default=True):
                 If True, prints progress bar
         """
+
+        # Check if folders exist
+        path = os.path.join(output_folder)
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        path = os.path.join(output_folder, 'property_definitions')
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        path = os.path.join(output_folder, 'property_settings_files')
+        if not os.path.isdir(path):
+            os.mkdir(path)
 
         supported_formats = ['hdf5']
         if fmt not in supported_formats:
@@ -3556,47 +3574,178 @@ class MongoDatabase(MongoClient):
 
         property_ids = ds_doc['relationships']['properties']
 
-        # copied from ase.io.extxyz for formatting property outputs
-        fmt_map = {'d': ('R', '%16.8f'),
-            'f': ('R', '%16.8f'),
-            'i': ('I', '%8d'),
-            'O': ('S', '%s'),
-            'S': ('S', '%s'),
-            'U': ('S', '%-2s'),
-            'b': ('L', ' %.1s')}
+        # Write the property definitions to files
+        prop_definitions = {}
+        for pd_name in ds_doc['aggregated_info']['property_types']:
+            pd_doc = self.get_property_definition(pd_name)['definition']
 
-        co_cursor = self.configurations.find(
-            {'colabfit_id': {'$in': configuration_ids}},
-            # self.configuration_type.unique_identifier_kw
-        )
+            pd_path = os.path.join(
+                output_folder, 'property_definitions', f'{pd_name}.json'
+            )
+
+            prop_definitions[pd_name] = pd_doc
+
+            with open(pd_path, 'w') as pd_file:
+                json.dump(pd_doc, pd_file, indent=4)
 
         if fmt == 'hdf5':
-            with h5py.File(file_name, mode) as outfile:
+
+            hdf5_path = os.path.join(output_folder, f'{ds_id}.hdf5')
+            with h5py.File(hdf5_path, mode) as outfile:
                 # Build all groups
-                ds_coll_group = outfile.create_group(_DATASETS_COLLECTION)
 
                 pi_coll_group = outfile.create_group(_PROPS_COLLECTION)
                 ps_coll_group = outfile.create_group(_PROPSETTINGS_COLLECTION)
-                pd_coll_group = outfile.create_group(_PROPDEFS_COLLECTION)
-
                 co_coll_group = outfile.create_group(_CONFIGS_COLLECTION)
                 cs_coll_group = outfile.create_group(_CONFIGSETS_COLLECTION)
 
+                # Write dataset info
+                outfile.attrs['description'] = ds_doc['description']
+
+                outfile.attrs.create(
+                    'authors',
+                    np.array(ds_doc['authors'], dtype=STRING_DTYPE_SPECIFIER)
+                )
+
+                outfile.attrs.create(
+                    'links',
+                    np.array(ds_doc['links'], dtype=STRING_DTYPE_SPECIFIER)
+                )
+
+                # TODO: decide if you want to export aggregated info too
+                # info_group = outfile.create_group('aggregated_info')
+
+                # for k,v in ds_doc['aggregated_info'].items():
+                #     info_group.create_dataset(k, data=v)
+
                 # Write the configurations
-                for co_doc in co_cursor:
+                for co_doc in self.configurations.find(
+                        {'colabfit_id': {'$in': configuration_ids}}
+                    ):
+
                     co_group = co_coll_group.create_group(co_doc['colabfit_id'])
 
-                    for key in self.configuration_type.unique_identifiers:
+                    co_group.create_dataset(
+                        'names',
+                        data=np.array(co_doc['names'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
 
-                        array = np.array(co_doc[key])
+                    co_group.create_dataset(
+                        'labels',
+                        data=np.array(co_doc['labels'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
 
-                        # Check how ASE writes EXTXYZ files to help with this
+                    co_group.create_dataset(
+                        'relationships.properties',
+                        data=np.array(co_doc['relationships']['properties'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    co_group.create_dataset(
+                        'relationships.configuration_sets',
+                        data=np.array(co_doc['relationships']['configuration_sets'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    for key in self.configuration_type.unique_identifier_kw:
                         co_group.create_dataset(
                             key,
-                            shape=array.shape,
-                            dtype=array.dtype,
-                            data=array,
+                            dtype=self.configuration_type.unique_identifier_kw_types[key],
+                            data=co_doc[key]
                         )
+
+                # Write property instances
+                ps_ids = []
+                for pi_doc in self.property_instances.find(
+                        {'colabfit_id': {'$in': property_ids}}
+                    ):
+                    pi_group = pi_coll_group.create_group(pi_doc['colabfit_id'])
+
+                    pi_group.create_dataset(
+                        'type',
+                        data=np.array(pi_doc['type'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'methods',
+                        data=np.array(pi_doc['methods'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'labels',
+                        data=np.array(pi_doc['labels'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'relationships.configurations',
+                        data=np.array(pi_doc['relationships']['configurations'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'relationships.property_settings',
+                        data=np.array(pi_doc['relationships']['property_settings'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    ps_ids += pi_doc['relationships']['property_settings']
+
+                    data_group = pi_group.create_group(pi_doc['type'])
+
+                    for key, value in pi_doc[pi_doc['type']].items():
+                        dtype = prop_definitions[pi_doc['type']][key]['type']
+                        if dtype == 'string':
+                            dtype = STRING_DTYPE_SPECIFIER
+
+                        data_group.create_dataset(
+                            key,
+                            dtype=dtype,
+                            data=value['source-value'],
+                        )
+                
+                # Write property settings
+                ps_ids = list(set(ps_ids))
+                for ps_doc in self.property_settings.find(
+                    {'colabfit_id': {'$in': ps_ids}}
+                    ):
+
+                    ps_group = ps_coll_group.create_group(ps_doc['colabfit_id'])
+
+                    ps_group.attrs['description'] = ps_doc['description']
+                    ps_group.attrs['method'] = ps_doc['method']
+                    ps_group.attrs.create(
+                        'labels',
+                        np.array(ps_doc['labels'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    for fname, fcontents in ps_doc['files']:
+                        with open(
+                                os.path.join(
+                                    output_folder, 'property_settings_files', fname
+                                ),
+                                'w'
+                            ) as fpointer:
+
+                            fpointer.write(fcontents)
+                
+                # Write configuration sets
+                for cs_doc in self.configuration_sets.find(
+                        {'colabfit_id': {
+                                '$in':
+                                ds_doc['relationships']['configuration_sets']
+                            }
+                        },
+                    ):
+
+                    cs_group = cs_coll_group.create_group(cs_doc['colabfit_id'])
+
+                    cs_group.attrs['description'] = cs_doc['description']
+                    cs_group.create_dataset(
+                        'relationships.configurations',
+                        data=np.array(cs_doc['relationships']['configurations'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
 
 # TODO: May need to make more Configuration "type" agnostic
 def load_data(
