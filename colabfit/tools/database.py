@@ -18,7 +18,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 from ase.io import write as ase_write
-
+import struct
+import random
+import time
+import binascii
 import kim_edn
 from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
@@ -579,8 +582,8 @@ class MongoDatabase(MongoClient):
                         configuration=atoms,
                         property_map=pmap_copy
                     )
-
-                    pid = ID_FORMAT_STRING.format('PI', hash(prop), 0)
+                    # TODO: Change below naming convention
+                    pid = ID_FORMAT_STRING.format('PI', generate_hexstring(), 0)
 
                     new_pids.append(pid)
 
@@ -630,11 +633,12 @@ class MongoDatabase(MongoClient):
                             labels=pso_map['labels'] if 'labels' in pso_map else None,
                             fields=gathered_fields,
                         )
-
-                        ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
+                        # TODO: Change naming convention
+                        ps_id = ID_FORMAT_STRING.format('PS', generate_hexstring(), 0)
 
                         ps_set_on_insert = {
                             'colabfit_id': ps_id,
+                            'hash':ps._hash,
                             'method':       ps.method,
                             'description': ps.description,
                             'files':       ps.files,
@@ -719,6 +723,7 @@ class MongoDatabase(MongoClient):
                             },
                             '$setOnInsert': {
                                 'colabfit_id': pid,
+                                #'hash': hash(???),
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -925,8 +930,8 @@ class MongoDatabase(MongoClient):
                         configuration=atoms,
                         property_map=pmap_copy
                     )
-
-                    pid = ID_FORMAT_STRING.format('PI', hash(prop), 0)
+                    #TODO: Change namoing convention below
+                    pid = ID_FORMAT_STRING.format('PI', generate_hexstring(), 0)
 
                     new_pids.append(pid)
 
@@ -977,10 +982,12 @@ class MongoDatabase(MongoClient):
                             fields=gathered_fields,
                         )
 
-                        ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
+                        # TODO: change naming convention
+                        ps_id = ID_FORMAT_STRING.format('PS', generate_hexstring(), 0)
 
                         ps_set_on_insert = {
                             'colabfit_id': ps_id,
+                            'hash':ps._hash,
                             'method':      ps.method,
                             'description': ps.description,
                             'files':       ps.files,
@@ -1052,7 +1059,7 @@ class MongoDatabase(MongoClient):
 
                         if 'source-unit' in prop[k]:
                             setOnInsert[k]['source-unit'] = prop[k]['source-unit']
-
+                        # TODO: Look at
                         p_update_doc = {
                             '$addToSet': {
                                 'methods': {'$each': methods},
@@ -1065,6 +1072,7 @@ class MongoDatabase(MongoClient):
                             },
                             '$setOnInsert': {
                                 'colabfit_id': pid,
+                                #'hash':hash(???),
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -1245,7 +1253,7 @@ class MongoDatabase(MongoClient):
                 of the object.
         """
 
-        ps_id = ID_FORMAT_STRING.format('PS', hash(ps_object), 0)
+        ps_id = ID_FORMAT_STRING.format('PS', generate_hexstring(), 0)
 
         self.property_settings.update_one(
             {'colabfit_id': ps_id},
@@ -1255,6 +1263,7 @@ class MongoDatabase(MongoClient):
                 },
                 '$setOnInsert': {
                     'colabfit_id': ps_id,
+                    'hash': ps_object._hash,
                     'method': ps_object.method,
                     'description': ps_object.description,
                     'files': [
@@ -1731,7 +1740,7 @@ class MongoDatabase(MongoClient):
 
         ids = list(set(ids))
 
-
+        # TODO: Look at below
         cs_hash = sha512()
         cs_hash.update(description.encode('utf-8'))
         for i in sorted(ids):
@@ -1739,11 +1748,11 @@ class MongoDatabase(MongoClient):
 
         cs_hash = int(str(int(cs_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
         if overloaded_cs_id is None:
-            cs_id = ID_FORMAT_STRING.format('CS', cs_hash, 0)
+            cs_id = ID_FORMAT_STRING.format('CS', generate_hexstring(), 0)
         else:
             cs_id = overloaded_cs_id
         # Check for duplicates
-        if self.configuration_sets.count_documents({'_hash': cs_hash}):
+        if self.configuration_sets.count_documents({'hash': cs_hash}):
             return cs_id
 
         # Make sure all of the configurations exist
@@ -1872,13 +1881,13 @@ class MongoDatabase(MongoClient):
 
         # increment version number
         current_hash, current_version = cs_id.split('_')[1:]
-        family_ids = self.configuration_sets.find({'_id': {'$regex':f'CS_{current_hash}_...'}}, '_id')
-        family_ids = sorted([f['_id'] for f in family_ids])
+        family_ids = self.configuration_sets.find({'colabfit_id': {'$regex':f'CS_{current_hash}_...'}}, '_id')
+        family_ids = sorted([f['colabfit_id'] for f in family_ids])
         version = int(family_ids[-1].split('_')[-1]) + 1
         new_cs_id = ID_FORMAT_STRING.format('CS', int(current_hash), version)
 
         # Get configuration ids from current version and append and/or remove
-        cs_doc = self.configuration_sets.find_one({'_id': cs_id})
+        cs_doc = self.configuration_sets.find_one({'colabfit_id': cs_id})
         ids = cs_doc['relationships']['configurations']
         init_len = len(ids)
 
@@ -2304,12 +2313,12 @@ class MongoDatabase(MongoClient):
         ds_hash = int(str(int(ds_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
 
         if overloaded_ds_id is None:
-            ds_id = ID_FORMAT_STRING.format('DS', ds_hash, 0)
+            ds_id = ID_FORMAT_STRING.format('DS', generate_hexstring(), 0)
         else:
             ds_id = overloaded_ds_id
 
         # Check for duplicates
-        if self.datasets.count_documents({'_hash': ds_hash}):
+        if self.datasets.count_documents({'hash': ds_hash}):
             if resync:
                 self.resync_dataset(ds_id)
 
@@ -2435,13 +2444,13 @@ class MongoDatabase(MongoClient):
 
         # increment version number
         current_hash, current_version = ds_id.split('_')[1:]
-        family_ids = self.datasets.find({'_id': {'$regex':f'DS_{current_hash}_...'}}, '_id')
-        family_ids = sorted([f['_id'] for f in family_ids])
+        family_ids = self.datasets.find({'colabfit_id': {'$regex':f'DS_{current_hash}_...'}}, 'colabfit_id')
+        family_ids = sorted([f['colabfit_id'] for f in family_ids])
         version = int(family_ids[-1].split('_')[-1]) + 1
         new_ds_id = ID_FORMAT_STRING.format('DS', int(current_hash), version)
 
         # Get configuration set ids from current version and append and/or remove
-        ds_doc = self.datasets.find_one({'_id': ds_id})
+        ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
         cs_ids = ds_doc['relationships']['configuration_sets'],
         property_ids = ds_doc['relationships']['properties']
         init_len = len(cs_ids)
@@ -2461,7 +2470,7 @@ class MongoDatabase(MongoClient):
                 if int(version) > 0:
                     try:
                         old_version = self.configuration_sets.find_one(
-                            {'_id': {'$regex': f'CS_{current_hash}_...'}}, '_id'
+                            {'colabfit_id': {'$regex': f'CS_{current_hash}_...'}}, 'colabfit_id'
                         )
                         cs_ids.remove(old_version)
                     except:
@@ -3739,12 +3748,12 @@ def load_data(
 # Moved out of static method to avoid changing insert_data* methods
 # Could consider changing in the future
 def _build_c_update_doc(configuration):
-    cid = ID_FORMAT_STRING.format('CO', hash(configuration), 0)
+    cid = ID_FORMAT_STRING.format('CO', generate_hexstring(), 0)
     processed_fields = configuration.configuration_summary()
     c_update_doc = {
         '$setOnInsert' : {
             'colabfit_id': cid,
-            '_hash': hash(configuration)
+            'hash': hash(configuration)
         },
         '$set': {
             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -3764,6 +3773,17 @@ def _build_c_update_doc(configuration):
     c_update_doc['$setOnInsert'].update({k: v.tolist() for k, v in configuration.unique_identifiers.items()})
     c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
     return c_update_doc, cid
+
+def generate_hexstring():
+    """ Adapted from bson.ObjectId which is used by Mongo
+        4 byte time, 2 byte PID, 2 byte random int
+    """
+    uid = struct.pack(">i", int(time.time()))
+    uid += struct.pack(">H", os.getpid() % 0xFFFF)
+    r = random.randint(0, 0xFFFF)
+    uid += struct.pack(">h", r)
+    return binascii.hexlify(uid).decode()
+
 
 class ConcatenationException(Exception):
     pass
