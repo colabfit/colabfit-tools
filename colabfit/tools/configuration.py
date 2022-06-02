@@ -39,10 +39,15 @@ class BaseConfiguration:
            unique_identifiers_kw (list):
                Class attribute that specifies the keywords to be used for all unique identifiers.
                All Configuration classes should accept each keyword as an argument to their constructor.
+           unique_identifiers_kw_types (dict):
+               Class attribute that specifies the data types of the unique
+               identifier keywords. key = identifier keyword; value = identifier
+               data type.
        """
 
-# TODO: Make this read-only so as to avoid user accidentally renaming
+# TODO: Make these read-only so as to avoid user accidentally renaming
     unique_identifier_kw = None
+    unique_identifier_kw_types = None
 
     def __init__(self, names=None, labels=None):
         """
@@ -140,6 +145,12 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     """
 
     unique_identifier_kw = ['atomic_numbers', 'positions', 'cell', 'pbc']
+    unique_identifier_kw_types = {
+        'atomic_numbers': float,
+        'positions': float,
+        'cell': float,
+        'pbc': bool,
+    }
 
     def __init__(self, names=None, labels=None, **kwargs):
         """
