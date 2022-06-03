@@ -113,7 +113,7 @@ class BaseConfiguration:
             raise Exception('Ensure unique identifiers are properly defined!')
         _hash = sha512()
         for k, v in self.unique_identifiers.items():
-            print (k,v.dtype)
+            #print (k,v.dtype)
             _hash.update(bytes(pre_hash_formatting(v)))
         return int(str(int(_hash.hexdigest(), 16) - HASH_SHIFT)[:HASH_LENGTH])
 

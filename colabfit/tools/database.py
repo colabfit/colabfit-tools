@@ -937,7 +937,6 @@ class MongoDatabase(MongoClient):
                     # Attach property settings, if any were given
                     if '_settings' in pmap:
                         pso_map = pmap['_settings']
-
                         all_ps_fields = set(pso_map.keys()) - {
                             'method', 'description', 'files', 'labels'
                         }
