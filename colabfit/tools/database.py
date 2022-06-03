@@ -448,11 +448,9 @@ class MongoDatabase(MongoClient):
         ):
 
         if isinstance(mongo_login, int):
-            client = MongoClient(
-                'localhost', mongo_login, *login_args, **login_kwargs
-            )
+            client = MongoClient('localhost', mongo_login)
         else:
-            client = MongoClient(mongo_login, *login_args, **login_kwargs)
+            client = MongoClient(mongo_login)
 
         coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
         coll_properties             = client[database_name][_PROPS_COLLECTION]
@@ -481,7 +479,7 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
-            'last_modified', 'definition', '_id', 'colabfit_id', '_settings',
+            'last_modified', 'definition', '_id', 'colabfit_id', 'settings',
             'property-name',
         }
 
@@ -495,13 +493,12 @@ class MongoDatabase(MongoClient):
             for pname in property_map
         }
 
-        config_docs     = []
-        property_docs   = []
+        insertions = []
+
         settings_docs   = []
 
         # Add all of the configurations into the Mongo server
         ai = 1
-        # TODO: rename atoms
         for atoms in tqdm(
             configurations,
             desc='Preparing to add configurations to Database',
@@ -511,48 +508,10 @@ class MongoDatabase(MongoClient):
             if transform:
                 transform(atoms)
 
+            #cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
             c_update_doc, cid = _build_c_update_doc(atoms)
 
-            #Old Method processed_fields = process_species_list(atoms)
-            # Add if doesn't exist, else update (since last-modified changed)
-            '''
-            c_update_doc =  {  # update document
-                    '$setOnInsert': {
-                        '_id': cid,
-                        'atomic_numbers': atoms.get_atomic_numbers().tolist(),
-                        'positions': atoms.get_positions().tolist(),
-                        'cell': np.array(atoms.get_cell()).tolist(),
-                        'pbc': atoms.get_pbc().astype(int).tolist(),
-                        'elements': processed_fields['elements'],
-                        'nelements': processed_fields['nelements'],
-                        'elements_ratios': processed_fields['elements_ratios'],
-                        'chemical_formula_reduced': processed_fields['chemical_formula_reduced'],
-                        'chemical_formula_anonymous': processed_fields['chemical_formula_anonymous'],
-                        'chemical_formula_hill': atoms.get_chemical_formula(),
-                        'nsites': len(atoms),
-                        'dimension_types': atoms.get_pbc().astype(int).tolist(),
-                        'nperiodic_dimensions': int(sum(atoms.get_pbc())),
-                        'lattice_vectors': np.array(atoms.get_cell()).tolist(),
-                    },
-                    '$set': {
-                        'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                    },
-                    '$addToSet': {
-                        'names': {
-                            '$each': list(atoms.info[ATOMS_NAME_FIELD])
-                        },
-                        'labels': {
-                            '$each': list(atoms.info[ATOMS_LABELS_FIELD])
-                        },
-                        'relationships.properties': {
-                            '$each': []
-                        }
-                    }
-                }
-'''
-            # TODO: Make Configuration "type" agnostic->Possible all types may not have info/arrays
-            #       but could enforce this.
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
             pid = None
@@ -637,7 +596,7 @@ class MongoDatabase(MongoClient):
 
                         ps_set_on_insert = {
                             'colabfit_id': ps_id,
-                            'method':       ps.method,
+                            'method':      ps.method,
                             'description': ps.description,
                             'files':       ps.files,
                         }
@@ -674,11 +633,11 @@ class MongoDatabase(MongoClient):
                                 }
                             }
 
-                        settings_docs.append(UpdateOne(
+                        coll_property_settings.update_one(
                             {'colabfit_id': ps_id},
                             ps_update_doc,
                             upsert=True,
-                        ))
+                        )
 
                         methods.append(ps.method)
                         labels += list(ps.labels)
@@ -729,11 +688,11 @@ class MongoDatabase(MongoClient):
                             }
                         }
 
-                    property_docs.append(UpdateOne(
+                    coll_properties.update_one(
                         {'colabfit_id': pid},
                         p_update_doc,
                         upsert=True,
-                    ))
+                    )
 
                     c_update_doc['$addToSet']['relationships.properties']['$each'].append(
                         pid
@@ -741,8 +700,10 @@ class MongoDatabase(MongoClient):
 
                     yield (cid, pid)
 
-            config_docs.append(
-                UpdateOne({'colabfit_id': cid}, c_update_doc, upsert=True)
+            coll_configurations.update_one(
+                {'colabfit_id': cid},
+                c_update_doc,
+                upsert=True
             )
 
             if not pid:
@@ -751,40 +712,8 @@ class MongoDatabase(MongoClient):
 
             ai += 1
 
-        if config_docs:
-            res = coll_configurations.bulk_write(config_docs, ordered=False)
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate configurations detected'.format(nmatch)
-                )
-        if property_docs:
-            res = coll_properties.bulk_write(property_docs, ordered=False)
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate properties detected'.format(nmatch)
-                )
-
-        if settings_docs:
-            res = coll_property_settings.bulk_write(
-                settings_docs,
-                # [
-                #     UpdateOne(
-                #         {'_id': sid},
-                #         {'$addToSet': {'relationships.properties': {'$each': lst}}}
-                #     ) for sid, lst in settings_docs.items()
-                # ],
-                ordered=False
-            )
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate property settings detected'.format(nmatch)
-                )
-
-
         client.close()
+        return insertions
 
 
 
@@ -3703,7 +3632,7 @@ class MongoDatabase(MongoClient):
                             dtype=dtype,
                             data=value['source-value'],
                         )
-                
+
                 # Write property settings
                 ps_ids = list(set(ps_ids))
                 for ps_doc in self.property_settings.find(
@@ -3728,7 +3657,7 @@ class MongoDatabase(MongoClient):
                             ) as fpointer:
 
                             fpointer.write(fcontents)
-                
+
                 # Write configuration sets
                 for cs_doc in self.configuration_sets.find(
                         {'colabfit_id': {
