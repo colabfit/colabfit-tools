@@ -32,7 +32,7 @@ from colabfit import (
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
 )
-from colabfit.tools.configuration import BaseConfiguration
+from colabfit.tools.configuration import BaseConfiguration, AtomicConfiguration
 from colabfit.tools.property import Property
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
@@ -187,7 +187,7 @@ class MongoDatabase(MongoClient):
     # TODO: Should database be instantiated with nprocs, or should it be passed in as an
     #       argument to methods in which this would be relevant
     def __init__(
-        self, database_name, configuration_type=BaseConfiguration, nprocs=1, uri=None,
+        self, database_name, configuration_type=AtomicConfiguration, nprocs=1, uri=None,
         drop_database=False, user=None, pwrd=None, port=27017,
         *args, **kwargs
         ):
