@@ -74,7 +74,7 @@ class MongoDatabase(MongoClient):
             latice_vectors
             last_modified
             relationships
-                properties
+                property_instances
                 configuration_sets
 
         /property_definitions
@@ -105,7 +105,7 @@ class MongoDatabase(MongoClient):
                 file_name
                 file_contents
             relationships
-                properties
+                property_instances
 
         /configuration_sets
             _id
@@ -160,7 +160,7 @@ class MongoDatabase(MongoClient):
                 property_labels
                 property_labels_counts
             relationships
-                properties
+                property_instances
                 configuration_sets
 
     Attributes:
@@ -495,8 +495,6 @@ class MongoDatabase(MongoClient):
 
         insertions = []
 
-        settings_docs   = []
-
         # Add all of the configurations into the Mongo server
         ai = 1
         for atoms in tqdm(
@@ -627,7 +625,7 @@ class MongoDatabase(MongoClient):
                                     'labels': {
                                         '$each': list(ps.labels)
                                     },
-                                    'relationships.properties': {
+                                    'relationships.property_instances': {
                                         '$each': [pid]
                                     }
                                 }
@@ -694,7 +692,7 @@ class MongoDatabase(MongoClient):
                         upsert=True,
                     )
 
-                    c_update_doc['$addToSet']['relationships.properties']['$each'].append(
+                    c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
                         pid
                     )
 
@@ -822,7 +820,7 @@ class MongoDatabase(MongoClient):
                         'labels': {
                             '$each': list(atoms.info[ATOMS_LABELS_FIELD])
                         },
-                        'relationships.properties': {
+                        'relationships.property_instances': {
                             '$each': []
                         }
                     }
@@ -943,7 +941,7 @@ class MongoDatabase(MongoClient):
                                     'labels': {
                                         '$each': list(ps.labels)
                                     },
-                                    'relationships.properties': {
+                                    'relationships.property_instances': {
                                         '$each': [pid]
                                     }
                                 }
@@ -1010,7 +1008,7 @@ class MongoDatabase(MongoClient):
                         upsert=True,
                     ))
 
-                    c_update_doc['$addToSet']['relationships.properties']['$each'].append(
+                    c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
                         pid
                     )
 
@@ -1813,7 +1811,7 @@ class MongoDatabase(MongoClient):
         ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
 
         cs_ids = ds_doc['relationships']['configuration_sets']
-        pr_ids = ds_doc['relationships']['properties']
+        pr_ids = ds_doc['relationships']['property_instances']
 
         for csid in cs_ids:
             self.resync_configuration_set(csid, verbose=verbose)
@@ -2217,7 +2215,7 @@ class MongoDatabase(MongoClient):
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
-                    'relationships.properties': {'$each': clean_pr_ids},
+                    'relationships.property_instances': {'$each': clean_pr_ids},
                 },
                 '$setOnInsert': {
                     'colabfit_id': ds_id,
@@ -2292,7 +2290,7 @@ class MongoDatabase(MongoClient):
             'last_modified': ds_doc['last_modified'],
             'dataset': Dataset(
                 configuration_set_ids=ds_doc['relationships']['configuration_sets'],
-                property_ids=ds_doc['relationships']['properties'],
+                property_ids=ds_doc['relationships']['property_instances'],
                 name=ds_doc['name'],
                 authors=ds_doc['authors'],
                 links=ds_doc['links'],
@@ -2746,7 +2744,7 @@ class MongoDatabase(MongoClient):
         if query is None:
             query = {}
 
-        query['colabfit_id'] = {'$in': ds_doc['relationships']['properties']}
+        query['colabfit_id'] = {'$in': ds_doc['relationships']['property_instances']}
 
         cursor = self.property_instances.find(query, retfields)
 
@@ -3265,7 +3263,7 @@ class MongoDatabase(MongoClient):
 
         property_settings = list(
             self.property_settings.find(
-                {'relationships.properties': {'$in': dataset.property_ids}}
+                {'relationships.property_instances': {'$in': dataset.property_ids}}
             )
         )
 
@@ -3501,7 +3499,7 @@ class MongoDatabase(MongoClient):
                 cs_id
             )['configuration_set'].configuration_ids
 
-        property_ids = ds_doc['relationships']['properties']
+        property_ids = ds_doc['relationships']['property_instances']
 
         # Write the property definitions to files
         prop_definitions = {}
@@ -3565,8 +3563,8 @@ class MongoDatabase(MongoClient):
                     )
 
                     co_group.create_dataset(
-                        'relationships.properties',
-                        data=np.array(co_doc['relationships']['properties'], dtype=STRING_DTYPE_SPECIFIER)
+                        'relationships.property_instances',
+                        data=np.array(co_doc['relationships']['property_instances'], dtype=STRING_DTYPE_SPECIFIER)
                     )
 
                     co_group.create_dataset(
@@ -3805,7 +3803,7 @@ def _build_c_update_doc(configuration):
             'labels': {
                 '$each': list(configuration.info[ATOMS_LABELS_FIELD])
             },
-            'relationships.properties': {
+            'relationships.property_instances': {
                 '$each': []
             }
         }
