@@ -9,7 +9,11 @@ import random
 random.seed(42)
 from ase import Atoms
 
-from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ID_FORMAT_STRING, STRING_DTYPE_SPECIFIER
+from colabfit import (
+    ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
+    ID_FORMAT_STRING, STRING_DTYPE_SPECIFIER,
+    SHORT_ID_STRING_NAME
+)
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.database import MongoDatabase
 from colabfit.tools.property_settings import PropertySettings
@@ -725,8 +729,8 @@ class TestMongoDatabase:
             )
 
             for i, ((cid, pid), config) in enumerate(zip(ids, images)):
-                config_doc = next(database.configurations.find({'colabfit_id': cid}))
-                prop_doc   = next(database.property_instances.find({'colabfit_id': pid}))
+                config_doc = next(database.configurations.find({SHORT_ID_STRING_NAME: cid}))
+                prop_doc   = next(database.property_instances.find({SHORT_ID_STRING_NAME: pid}))
 
                 pn = database.get_data(
                     'property_instances', 'default.forces', ids=[pid], concatenate=True
@@ -779,7 +783,7 @@ class TestMongoDatabase:
 
             cs_id = database.insert_configuration_set(co_ids, 'a description')
 
-            cs_doc = next(database.configuration_sets.find({'colabfit_id': cs_id}))
+            cs_doc = next(database.configuration_sets.find({SHORT_ID_STRING_NAME: cs_id}))
 
             agg_info = cs_doc['aggregated_info']
 
@@ -896,7 +900,7 @@ class TestMongoDatabase:
                 resync=True
             )
 
-            ds_doc = next(database.datasets.find({'colabfit_id': ds_id}))
+            ds_doc = next(database.datasets.find({SHORT_ID_STRING_NAME: ds_id}))
 
             assert ds_doc['authors'] == ['colabfit']
             assert ds_doc['links'] == ['https://colabfit.org']
@@ -1022,11 +1026,11 @@ class TestConfigurationSets:
                 ids, description='A basic configuration set'
             )
 
-            desc = next(database.configuration_sets.find({'colabfit_id': cs_id}))['description']
+            desc = next(database.configuration_sets.find({SHORT_ID_STRING_NAME: cs_id}))['description']
 
             assert desc == 'A basic configuration set'
 
-            rebuilt_ids = next(database.configuration_sets.find({'colabfit_id': cs_id}))['relationships']['configurations']
+            rebuilt_ids = next(database.configuration_sets.find({SHORT_ID_STRING_NAME: cs_id}))['relationships']['configurations']
 
             # rebuilt_ids = database.get_data(
             #     f'configuration_sets/{cs_id}/ids',
@@ -1109,14 +1113,135 @@ class TestDatasets:
                 cs_ids=[cs_id1, cs_id2],
                 pr_ids=pr_ids1+pr_ids2,
                 name='example_dataset',
-                authors='colabfit',
+                authors=['colabfit', 'Josh Vita', 'Eric Fuemmeler'],
                 links='https://colabfit.openkim.org/',
                 description='An example dataset',
                 resync=True
             )
 
-            ds_doc = next(database.datasets.find({'colabfit_id': ds_id}))
-            assert ds_doc['authors'] == ['colabfit']
+            ds_doc = next(database.datasets.find({SHORT_ID_STRING_NAME: ds_id}))
+            assert set(ds_doc['authors']) == {'colabfit', 'Josh Vita', 'Eric Fuemmeler'}
+            assert ds_doc['extended-id'] == 'example_dataset_colabfitVitaFuemmeler__' + ds_id
+
+            # with pytest.raises(Exception):
+            #     database.insert_property_definition(property_definition)
+
+    def test_bad_authors(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = MongoDatabase(self.database_name, drop_database=True, configuration_type=AtomicConfiguration)
+
+            images = build_n(10)[0]
+
+            database.insert_property_definition(
+                {
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
+                    'property-title': 'A default property used for testing',
+                    'property-description': 'A description of the property',
+                    'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                    'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+                    'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                    'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                    'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                    'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+                }
+            )
+
+            property_map = {
+                'default': [{
+                    'energy': {'field': 'energy', 'units': 'eV'},
+                    'stress': {'field': 'stress', 'units': 'GPa'},
+                    'name': {'field': 'name', 'units': None},
+                    'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                    'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                    'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                    'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                    'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                }]
+            }
+
+            ids = database.insert_data(
+                images, property_map=property_map
+            )
+
+            co_ids1, pr_ids1 = list(zip(*ids))
+
+            cs_id1 = database.insert_configuration_set(
+                co_ids1, description='A basic configuration set'
+            )
+
+            images = build_n(10)[0]
+
+            for img in images:
+                img.info['energy'] += 100000
+
+            ids = database.insert_data(
+                images, property_map=property_map
+            )
+
+            co_ids2, pr_ids2 = list(zip(*ids))
+
+            cs_id2 = database.insert_configuration_set(
+                co_ids2, description='A basic configuration set'
+            )
+
+            all_pr_ids = pr_ids1 + pr_ids2
+
+            ds_id = database.insert_dataset(
+                cs_ids=[cs_id1, cs_id2],
+                pr_ids=all_pr_ids,
+                name='example_dataset',
+                authors=['authors with spaces are okay'],
+                links='https://colabfit.openkim.org/',
+                description='An example dataset',
+                resync=True
+            )
+
+            with pytest.raises(RuntimeError):
+                ds_id = database.insert_dataset(
+                    cs_ids=[cs_id1, cs_id2],
+                    pr_ids=all_pr_ids[:-1],
+                    name='example_dataset',
+                    authors=['authors123'],
+                    links='https://colabfit.openkim.org/',
+                    description='An example dataset',
+                    resync=True
+                )
+
+            with pytest.raises(RuntimeError):
+                ds_id = database.insert_dataset(
+                    cs_ids=[cs_id1, cs_id2],
+                    pr_ids=all_pr_ids[:-2],
+                    name='example_dataset',
+                    authors=['authors_name'],
+                    links='https://colabfit.openkim.org/',
+                    description='An example dataset',
+                    resync=True
+                )
+
+            # Note: in Python3 non-english upper/lowercase are okay
+            ds_id = database.insert_dataset(
+                cs_ids=[cs_id1, cs_id2],
+                pr_ids=all_pr_ids[:-3],
+                name='example_dataset',
+                authors=['ä'],
+                links='https://colabfit.openkim.org/',
+                description='An example dataset',
+                resync=True
+            )
+
+            # Note: in Python3 non-english upper/lowercase are okay
+            ds_id = database.insert_dataset(
+                cs_ids=[cs_id1, cs_id2],
+                pr_ids=all_pr_ids[:-4],
+                name='example_dataset',
+                authors=['AVeryLongLastNameThatShouldGetClipped'+'a'*255],
+                links='https://colabfit.openkim.org/',
+                description='An example dataset',
+                resync=True
+            )
 
 
     def test_export_ds(self):
@@ -1225,7 +1350,7 @@ class TestDatasets:
                         prop_definitions[pd_name] = dct
 
                 # Check DS info
-                ds_doc = database.datasets.find_one({'colabfit_id': ds_id})
+                ds_doc = database.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
                 assert hdf5.attrs['description'] == ds_doc['description']
                 assert set(hdf5.attrs['authors'].astype(str).tolist()) == set(ds_doc['authors'])
@@ -1239,7 +1364,7 @@ class TestDatasets:
                 )
 
                 for c in configurations:
-                    g = hdf5['configurations'][c.info['colabfit_id']]
+                    g = hdf5['configurations'][c.info[SHORT_ID_STRING_NAME]]
 
                     np.testing.assert_equal(g['atomic_numbers'], c.arrays['numbers'])
                     np.testing.assert_equal(g['cell'], np.array(c.cell))
@@ -1251,10 +1376,10 @@ class TestDatasets:
 
                 # Check property instances
                 for pi_doc in database.property_instances.find(
-                        {'colabfit_id': {'$in': pr_ids1+pr_ids2}}
+                        {SHORT_ID_STRING_NAME: {'$in': pr_ids1+pr_ids2}}
                     ):
 
-                    g = hdf5['property_instances'][pi_doc['colabfit_id']]
+                    g = hdf5['property_instances'][pi_doc[SHORT_ID_STRING_NAME]]
 
                     assert g['type'].asstr()[()] == pi_doc['type']
                     assert set(g['methods'].asstr()[()].tolist()) == set(pi_doc['methods'])

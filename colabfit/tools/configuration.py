@@ -7,7 +7,8 @@ from tqdm import tqdm
 from colabfit import (
     HASH_LENGTH, HASH_SHIFT,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
-    ATOMS_CONSTRAINTS_FIELD
+    ATOMS_CONSTRAINTS_FIELD,
+    SHORT_ID_STRING_NAME
 )
 
 class BaseConfiguration:
@@ -406,7 +407,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         }
 
         for doc in tqdm(
-            db.configurations.find({'colabfit_id': {'$in': ids}}),
+            db.configurations.find({SHORT_ID_STRING_NAME: {'$in': ids}}),
             desc='Aggregating configuration info',
             disable=not verbose,
             total=len(ids),

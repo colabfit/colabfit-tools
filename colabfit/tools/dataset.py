@@ -70,6 +70,12 @@ class Dataset:
         aggregated_info,
         ):
 
+        for auth in authors:
+            if not ''.join(auth.split(' ')).isalpha():
+                raise RuntimeError(
+                    "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(auth)
+                )
+
         self.configuration_set_ids  = configuration_set_ids
         self.property_ids           = property_ids
         self.name                   = name
