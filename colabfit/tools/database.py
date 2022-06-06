@@ -385,7 +385,7 @@ class MongoDatabase(MongoClient):
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
             'last_modified', 'definition', '_id', SHORT_ID_STRING_NAME, '_settings',
-            'property-name',
+            'property-name', EXTENDED_ID_STRING_NAME
         }
 
         # Sanity checks for property map
@@ -407,10 +407,16 @@ class MongoDatabase(MongoClient):
                                 'property definition'.format(k)
                             )
 
-                        if ('field' not in pd) or (pd['field'] is None):
-                            raise RuntimeError(
-                                "Must specify all 'field' sections in property_map"
-                            )
+                        if 'value' in pd:
+                            if 'field' in pd and pd['field'] is not None:
+                                raise RuntimeError(
+                                    "Error with key '{}'. property_map must specify exactly ONE of 'field' or 'value'".format(k)
+                                )
+                        else:
+                            if ('field' not in pd) or (pd['field'] is None):
+                                raise RuntimeError(
+                                    "Error with key '{}'. property_map must specify exactly ONE of 'field' or 'value'".format(k)
+                                )
 
                         if 'units' not in pd:
                             raise RuntimeError(
@@ -503,13 +509,12 @@ class MongoDatabase(MongoClient):
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
             'last_modified', 'definition', '_id', SHORT_ID_STRING_NAME, 'settings',
-            'property-name',
+            'property-name', EXTENDED_ID_STRING_NAME
         }
 
         expected_keys = {
             pname: [set(
-                # property_map[pname][f]['field']
-                pmap[f]['field']
+                pmap[f]['field'] if 'field' in pmap[f] else None
                 for f in property_definitions[pname].keys() - ignore_keys
                 if property_definitions[pname][f]['required']
             ) for pmap in property_map[pname]]
@@ -781,13 +786,13 @@ class MongoDatabase(MongoClient):
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
             'last_modified', 'definition', '_id', SHORT_ID_STRING_NAME, 'settings',
-            'property-name',
+            'property-name', EXTENDED_ID_STRING_NAME
         }
 
         expected_keys = {
             pname: [set(
                 # property_map[pname][f]['field']
-                pmap[f]['field']
+                pmap[f]['field'] if 'field' in pmap[f] else None
                 for f in property_definitions[pname].keys() - ignore_keys
                 if property_definitions[pname][f]['required']
             ) for pmap in property_map[pname]]
@@ -2024,7 +2029,7 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description', '_id',
-            SHORT_ID_STRING_NAME, 'property-name'
+            SHORT_ID_STRING_NAME, 'property-name', EXTENDED_ID_STRING_NAME
         }
 
         for doc in tqdm(
@@ -2209,12 +2214,6 @@ class MongoDatabase(MongoClient):
         if isinstance(authors, str):
             authors = [authors]
 
-        for auth in authors:
-            if not ''.join(auth.split(' ')).isalpha():
-                raise RuntimeError(
-                    "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(auth)
-                )
-
         if isinstance(links, str):
             links = [links]
 
@@ -2255,12 +2254,16 @@ class MongoDatabase(MongoClient):
 
             aggregated_info[k] = v
 
-        id_prefix = '_'.join([
-            name,
-            ''.join([
-                auth.split()[-1] for auth in authors
-            ]),
-        ])
+        # id_prefix = '_'.join([
+        #     name,
+        #     ''.join([
+        #         auth.split()[-1] for auth in authors
+        #     ]),
+        # ])
+
+        # NOTE: not including author names to avoid having to check special
+        # characters 
+        id_prefix = name
 
         if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
             id_prefix = id_prefix[:MAX_STRING_LENGTH - len(ds_id) - 2]

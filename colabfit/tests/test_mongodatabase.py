@@ -1121,7 +1121,7 @@ class TestDatasets:
 
             ds_doc = next(database.datasets.find({SHORT_ID_STRING_NAME: ds_id}))
             assert set(ds_doc['authors']) == {'colabfit', 'Josh Vita', 'Eric Fuemmeler'}
-            assert ds_doc['extended-id'] == 'example_dataset_colabfitVitaFuemmeler__' + ds_id
+            assert ds_doc['extended-id'] == 'example_dataset__' + ds_id
 
             # with pytest.raises(Exception):
             #     database.insert_property_definition(property_definition)
@@ -1201,12 +1201,13 @@ class TestDatasets:
             )
 
             dataset = database.get_dataset(
-                'example_dataset_colabfitVitaFuemmeler__'+ds_id
-            )
+                'example_dataset__'+ds_id
+            )['dataset']
+
+            assert len(dataset.property_ids) == len(all_pr_ids)
 
 
-
-    def test_bad_authors(self):
+    def test_bad_property_maps(self):
         with tempfile.TemporaryFile() as tmpfile:
             database = MongoDatabase(self.database_name, drop_database=True, configuration_type=AtomicConfiguration)
 
@@ -1229,99 +1230,211 @@ class TestDatasets:
                 }
             )
 
-            property_map = {
-                'default': [{
-                    'energy': {'field': 'energy', 'units': 'eV'},
-                    'stress': {'field': 'stress', 'units': 'GPa'},
-                    'name': {'field': 'name', 'units': None},
-                    'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
-                    'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
-                    'forces': {'field': 'forces', 'units': 'eV/Ang'},
-                    'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
-                    'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
-                }]
-            }
-
+            # Okay map
             ids = database.insert_data(
-                images, property_map=property_map
+                images,
+                property_map={
+                    'default': [{
+                        'energy': {'field': 'energy', 'units': 'eV'},
+                        'stress': {'field': 'stress', 'units': 'GPa'},
+                        'name': {'field': 'name', 'units': None},
+                        'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                        'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                        'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                        'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                        'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                    }]
+                }
             )
 
-            co_ids1, pr_ids1 = list(zip(*ids))
-
-            cs_id1 = database.insert_configuration_set(
-                co_ids1, description='A basic configuration set'
-            )
-
-            images = build_n(10)[0]
-
-            for img in images:
-                img.info['energy'] += 100000
-
+            # Okay map
             ids = database.insert_data(
-                images, property_map=property_map
-            )
-
-            co_ids2, pr_ids2 = list(zip(*ids))
-
-            cs_id2 = database.insert_configuration_set(
-                co_ids2, description='A basic configuration set'
-            )
-
-            all_pr_ids = pr_ids1 + pr_ids2
-
-            ds_id = database.insert_dataset(
-                cs_ids=[cs_id1, cs_id2],
-                pr_ids=all_pr_ids,
-                name='example_dataset',
-                authors=['authors with spaces are okay'],
-                links='https://colabfit.openkim.org/',
-                description='An example dataset',
-                resync=True
+                images,
+                property_map={
+                    'default': [{
+                        'energy': {'value': 0.1, 'units': 'eV'},
+                        'stress': {'field': 'stress', 'units': 'GPa'},
+                        'name': {'field': 'name', 'units': None},
+                        'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                        'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                        'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                        'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                        'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                    }]
+                }
             )
 
             with pytest.raises(RuntimeError):
-                ds_id = database.insert_dataset(
-                    cs_ids=[cs_id1, cs_id2],
-                    pr_ids=all_pr_ids[:-1],
-                    name='example_dataset',
-                    authors=['authors123'],
-                    links='https://colabfit.openkim.org/',
-                    description='An example dataset',
-                    resync=True
+                # Bad: must specify 'field' OR 'value'
+                ids = database.insert_data(
+                    images,
+                    property_map={
+                        'default': [{
+                            'energy': {'units': 'eV'},
+                            'stress': {'field': 'stress', 'units': 'GPa'},
+                            'name': {'field': 'name', 'units': None},
+                            'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                            'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                            'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                            'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                            'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                        }]
+                    }
                 )
 
             with pytest.raises(RuntimeError):
-                ds_id = database.insert_dataset(
-                    cs_ids=[cs_id1, cs_id2],
-                    pr_ids=all_pr_ids[:-2],
-                    name='example_dataset',
-                    authors=['authors_name'],
-                    links='https://colabfit.openkim.org/',
-                    description='An example dataset',
-                    resync=True
+                # Bad: must specify 'field' OR 'value'
+                ids = database.insert_data(
+                    images,
+                    property_map={
+                        'default': [{
+                            'energy': {'units': 'eV'},
+                            'stress': {'field': 'stress', 'units': 'GPa'},
+                            'name': {'field': 'name', 'units': None},
+                            'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                            'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                            'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                            'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                            'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                        }]
+                    }
                 )
 
-            # Note: in Python3 non-english upper/lowercase are okay
-            ds_id = database.insert_dataset(
-                cs_ids=[cs_id1, cs_id2],
-                pr_ids=all_pr_ids[:-3],
-                name='example_dataset',
-                authors=['ä'],
-                links='https://colabfit.openkim.org/',
-                description='An example dataset',
-                resync=True
-            )
+            with pytest.raises(RuntimeError):
+                # Bad: can't specify 'field' AND 'value'
+                ids = database.insert_data(
+                    images,
+                    property_map={
+                        'default': [{
+                            'energy': {'field': 'energy', 'value': 0.1, 'units': 'eV'},
+                            'stress': {'field': 'stress', 'units': 'GPa'},
+                            'name': {'field': 'name', 'units': None},
+                            'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                            'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                            'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                            'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                            'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                        }]
+                    }
+                )
 
-            # Note: in Python3 non-english upper/lowercase are okay
-            ds_id = database.insert_dataset(
-                cs_ids=[cs_id1, cs_id2],
-                pr_ids=all_pr_ids[:-4],
-                name='example_dataset',
-                authors=['AVeryLongLastNameThatShouldGetClipped'+'a'*255],
-                links='https://colabfit.openkim.org/',
-                description='An example dataset',
-                resync=True
-            )
+
+    # def test_bad_authors(self):
+    #     with tempfile.TemporaryFile() as tmpfile:
+    #         database = MongoDatabase(self.database_name, drop_database=True, configuration_type=AtomicConfiguration)
+
+    #         images = build_n(10)[0]
+
+    #         database.insert_property_definition(
+    #             {
+    #                 'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+    #                 'property-name': 'default',
+    #                 'property-title': 'A default property used for testing',
+    #                 'property-description': 'A description of the property',
+    #                 'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+    #                 'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+    #                 'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+    #                 'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+    #                 'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+    #                 'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+    #                 'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+    #                 'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+    #             }
+    #         )
+
+    #         property_map = {
+    #             'default': [{
+    #                 'energy': {'field': 'energy', 'units': 'eV'},
+    #                 'stress': {'field': 'stress', 'units': 'GPa'},
+    #                 'name': {'field': 'name', 'units': None},
+    #                 'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+    #                 'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+    #                 'forces': {'field': 'forces', 'units': 'eV/Ang'},
+    #                 'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+    #                 'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+    #             }]
+    #         }
+
+    #         ids = database.insert_data(
+    #             images, property_map=property_map
+    #         )
+
+    #         co_ids1, pr_ids1 = list(zip(*ids))
+
+    #         cs_id1 = database.insert_configuration_set(
+    #             co_ids1, description='A basic configuration set'
+    #         )
+
+    #         images = build_n(10)[0]
+
+    #         for img in images:
+    #             img.info['energy'] += 100000
+
+    #         ids = database.insert_data(
+    #             images, property_map=property_map
+    #         )
+
+    #         co_ids2, pr_ids2 = list(zip(*ids))
+
+    #         cs_id2 = database.insert_configuration_set(
+    #             co_ids2, description='A basic configuration set'
+    #         )
+
+    #         all_pr_ids = pr_ids1 + pr_ids2
+
+    #         ds_id = database.insert_dataset(
+    #             cs_ids=[cs_id1, cs_id2],
+    #             pr_ids=all_pr_ids,
+    #             name='example_dataset',
+    #             authors=['authors with spaces are okay'],
+    #             links='https://colabfit.openkim.org/',
+    #             description='An example dataset',
+    #             resync=True
+    #         )
+
+    #         with pytest.raises(RuntimeError):
+    #             ds_id = database.insert_dataset(
+    #                 cs_ids=[cs_id1, cs_id2],
+    #                 pr_ids=all_pr_ids[:-1],
+    #                 name='example_dataset',
+    #                 authors=['authors123'],
+    #                 links='https://colabfit.openkim.org/',
+    #                 description='An example dataset',
+    #                 resync=True
+    #             )
+
+    #         with pytest.raises(RuntimeError):
+    #             ds_id = database.insert_dataset(
+    #                 cs_ids=[cs_id1, cs_id2],
+    #                 pr_ids=all_pr_ids[:-2],
+    #                 name='example_dataset',
+    #                 authors=['authors_name'],
+    #                 links='https://colabfit.openkim.org/',
+    #                 description='An example dataset',
+    #                 resync=True
+    #             )
+
+    #         # Note: in Python3 non-english upper/lowercase are okay
+    #         ds_id = database.insert_dataset(
+    #             cs_ids=[cs_id1, cs_id2],
+    #             pr_ids=all_pr_ids[:-3],
+    #             name='example_dataset',
+    #             authors=['ä'],
+    #             links='https://colabfit.openkim.org/',
+    #             description='An example dataset',
+    #             resync=True
+    #         )
+
+    #         # Note: in Python3 non-english upper/lowercase are okay
+    #         ds_id = database.insert_dataset(
+    #             cs_ids=[cs_id1, cs_id2],
+    #             pr_ids=all_pr_ids[:-4],
+    #             name='example_dataset',
+    #             authors=['AVeryLongLastNameThatShouldGetClipped'+'a'*255],
+    #             links='https://colabfit.openkim.org/',
+    #             description='An example dataset',
+    #             resync=True
+    #         )
 
 
     def test_export_ds(self):
