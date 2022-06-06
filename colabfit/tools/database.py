@@ -259,6 +259,26 @@ class MongoDatabase(MongoClient):
         self.configuration_sets     = self[database_name][_CONFIGSETS_COLLECTION]
         self.datasets               = self[database_name][_DATASETS_COLLECTION]
 
+        self.configurations.create_index(
+            keys='colabfit_id', name='colabfit_id', unique=True
+        )
+        self.property_instances.create_index(
+            keys='colabfit_id', name='colabfit_id', unique=True
+        )
+        self.property_definitions.create_index(
+            keys='definition.property-name', name='definition.property-name',
+            unique=True
+        )
+        self.property_settings.create_index(
+            keys='colabfit_id', name='colabfit_id', unique=True
+        )
+        self.configuration_sets.create_index(
+            keys='colabfit_id', name='colabfit_id', unique=True
+        )
+        self.datasets.create_index(
+            keys='colabfit_id', name='colabfit_id', unique=True
+        )
+
         self.nprocs = nprocs
 
 
@@ -635,6 +655,7 @@ class MongoDatabase(MongoClient):
                             {'colabfit_id': ps_id},
                             ps_update_doc,
                             upsert=True,
+                            hint='colabfit_id'
                         )
 
                         methods.append(ps.method)
@@ -690,6 +711,7 @@ class MongoDatabase(MongoClient):
                         {'colabfit_id': pid},
                         p_update_doc,
                         upsert=True,
+                        hint='colabfit_id',
                     )
 
                     c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
@@ -701,7 +723,8 @@ class MongoDatabase(MongoClient):
             coll_configurations.update_one(
                 {'colabfit_id': cid},
                 c_update_doc,
-                upsert=True
+                upsert=True,
+                hint='colabfit_id',
             )
 
             if not pid:
@@ -951,6 +974,7 @@ class MongoDatabase(MongoClient):
                             {'colabfit_id': ps_id},
                             ps_update_doc,
                             upsert=True,
+                            hint='colabfit_id',
                         ))
 
                         methods.append(ps.method)
@@ -1006,6 +1030,7 @@ class MongoDatabase(MongoClient):
                         {'colabfit_id': pid},
                         p_update_doc,
                         upsert=True,
+                        hint='colabfit_id',
                     ))
 
                     c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
@@ -1015,7 +1040,12 @@ class MongoDatabase(MongoClient):
                     insertions.append((cid, pid))
 
             config_docs.append(
-                UpdateOne({'colabfit_id': cid}, c_update_doc, upsert=True)
+                UpdateOne(
+                    {'colabfit_id': cid},
+                    c_update_doc,
+                    upsert=True,
+                    hint='colabfit_id',
+                )
             )
 
             if not pid:
@@ -1146,7 +1176,8 @@ class MongoDatabase(MongoClient):
                     'definition': dummy_dict
                 }
             },
-            upsert=True
+            upsert=True,
+            hint='definition.property-name',
         )
 
 
@@ -1194,7 +1225,8 @@ class MongoDatabase(MongoClient):
                     ],
                 }
             },
-            upsert=True
+            upsert=True,
+            hint='colabfit_id',
         )
 
         return ps_id
@@ -1699,7 +1731,8 @@ class MongoDatabase(MongoClient):
                     'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                 },
             },
-            upsert=True
+            upsert=True,
+            hint='colabfit_id',
         )
 
         # Add the backwards relationships CO->CS
@@ -1711,7 +1744,8 @@ class MongoDatabase(MongoClient):
                     '$addToSet': {
                         'relationships.configuration_sets': cs_id
                     }
-                }
+                },
+                hint='colabfit_id',
             ))
 
         self.configurations.bulk_write(config_docs)
@@ -1786,6 +1820,7 @@ class MongoDatabase(MongoClient):
             {'colabfit_id': cs_id},
             {'$set': {'aggregated_info': aggregated_info}},
             upsert=True,
+            hint='colabfit_id',
         )
 
 
@@ -1838,7 +1873,8 @@ class MongoDatabase(MongoClient):
         self.datasets.update_one(
             {'colabfit_id': ds_id},
             {'$set': {'aggregated_info': aggregated_info}},
-            upsert=True
+            upsert=True,
+            hint='colabfit_id',
         )
 
     # TODO Work on making this Configuration "type" agnostic->Seems to be HIGHLY Configuration type dependent
@@ -2229,7 +2265,8 @@ class MongoDatabase(MongoClient):
                     'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                 },
             },
-            upsert=True
+            upsert=True,
+            hint='colabfit_id',
         )
 
         # Add the backwards relationships CS->DS
@@ -2237,7 +2274,8 @@ class MongoDatabase(MongoClient):
         for csid in cs_ids:
             config_set_docs.append(UpdateOne(
                 {'colabfit_id': csid},
-                {'$addToSet': {'relationships.datasets': ds_id}}
+                {'$addToSet': {'relationships.datasets': ds_id}},
+                hint='colabfit_id',
             ))
 
         self.configuration_sets.bulk_write(config_set_docs)
@@ -2247,7 +2285,8 @@ class MongoDatabase(MongoClient):
         for pid in tqdm(clean_pr_ids, desc='Updating PR->DS relationships'):
             property_docs.append(UpdateOne(
                 {'colabfit_id': pid},
-                {'$addToSet': {'relationships.datasets': ds_id}}
+                {'$addToSet': {'relationships.datasets': ds_id}},
+                hint='colabfit_id',
             ))
 
         self.property_instances.bulk_write(property_docs)
@@ -2374,7 +2413,8 @@ class MongoDatabase(MongoClient):
 
             collection.update_one(
                 {'colabfit_id': doc_id},
-                {'$addToSet': {'labels': {'$each': list(labels)}}}
+                {'$addToSet': {'labels': {'$each': list(labels)}}},
+                hint='colabfit_id',
             )
 
 
