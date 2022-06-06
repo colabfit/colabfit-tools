@@ -32,7 +32,8 @@ from colabfit import (
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD,
-    STRING_DTYPE_SPECIFIER
+    STRING_DTYPE_SPECIFIER,
+    SHORT_ID_STRING_NAME, EXTENDED_ID_STRING_NAME
 )
 from colabfit.tools.configuration import BaseConfiguration, AtomicConfiguration
 from colabfit.tools.property import Property
@@ -55,7 +56,7 @@ class MongoDatabase(MongoClient):
 
         /configurations
             _id
-            colabfit_id
+            short-id 
             atomic_numbers
             positions
             cell
@@ -79,12 +80,12 @@ class MongoDatabase(MongoClient):
 
         /property_definitions
             _id
-            colabfit_id
+            short-id
             definition
 
         /properties
             _id
-            colabfit_id
+            short-id
             type
             property_name
                 each field in the property definition
@@ -97,7 +98,7 @@ class MongoDatabase(MongoClient):
 
         /property_settings
             _id
-            colabfit_id
+            short-id
             method
             decription
             labels
@@ -109,7 +110,7 @@ class MongoDatabase(MongoClient):
 
         /configuration_sets
             _id
-            colabfit_id
+            short-id
             last_modified
             aggregated_info
                 (from configurations)
@@ -133,7 +134,8 @@ class MongoDatabase(MongoClient):
 
         /datasets
             _id
-            colabfit_id
+            short-id
+            extended-id
             last_modified
             aggregated_info
                 (from configuration sets)
@@ -260,23 +262,23 @@ class MongoDatabase(MongoClient):
         self.datasets               = self[database_name][_DATASETS_COLLECTION]
 
         self.configurations.create_index(
-            keys='colabfit_id', name='colabfit_id', unique=True
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
         )
         self.property_instances.create_index(
-            keys='colabfit_id', name='colabfit_id', unique=True
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
         )
         self.property_definitions.create_index(
             keys='definition.property-name', name='definition.property-name',
             unique=True
         )
         self.property_settings.create_index(
-            keys='colabfit_id', name='colabfit_id', unique=True
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
         )
         self.configuration_sets.create_index(
-            keys='colabfit_id', name='colabfit_id', unique=True
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
         )
         self.datasets.create_index(
-            keys='colabfit_id', name='colabfit_id', unique=True
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
         )
 
         self.nprocs = nprocs
@@ -381,7 +383,7 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
-            'last_modified', 'definition', '_id', 'colabfit_id', '_settings',
+            'last_modified', 'definition', '_id', SHORT_ID_STRING_NAME, '_settings',
             'property-name',
         }
 
@@ -499,7 +501,7 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
-            'last_modified', 'definition', '_id', 'colabfit_id', 'settings',
+            'last_modified', 'definition', '_id', SHORT_ID_STRING_NAME, 'settings',
             'property-name',
         }
 
@@ -613,7 +615,7 @@ class MongoDatabase(MongoClient):
                         ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
 
                         ps_set_on_insert = {
-                            'colabfit_id': ps_id,
+                            SHORT_ID_STRING_NAME: ps_id,
                             'method':      ps.method,
                             'description': ps.description,
                             'files':       ps.files,
@@ -652,10 +654,10 @@ class MongoDatabase(MongoClient):
                             }
 
                         coll_property_settings.update_one(
-                            {'colabfit_id': ps_id},
+                            {SHORT_ID_STRING_NAME: ps_id},
                             ps_update_doc,
                             upsert=True,
-                            hint='colabfit_id'
+                            hint=SHORT_ID_STRING_NAME
                         )
 
                         methods.append(ps.method)
@@ -698,7 +700,7 @@ class MongoDatabase(MongoClient):
                                 'relationships.configurations': cid,
                             },
                             '$setOnInsert': {
-                                'colabfit_id': pid,
+                                SHORT_ID_STRING_NAME: pid,
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -708,10 +710,10 @@ class MongoDatabase(MongoClient):
                         }
 
                     coll_properties.update_one(
-                        {'colabfit_id': pid},
+                        {SHORT_ID_STRING_NAME: pid},
                         p_update_doc,
                         upsert=True,
-                        hint='colabfit_id',
+                        hint=SHORT_ID_STRING_NAME,
                     )
 
                     c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
@@ -721,10 +723,10 @@ class MongoDatabase(MongoClient):
                     yield (cid, pid)
 
             coll_configurations.update_one(
-                {'colabfit_id': cid},
+                {SHORT_ID_STRING_NAME: cid},
                 c_update_doc,
                 upsert=True,
-                hint='colabfit_id',
+                hint=SHORT_ID_STRING_NAME,
             )
 
             if not pid:
@@ -777,7 +779,7 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
-            'last_modified', 'definition', '_id', 'colabfit_id', 'settings',
+            'last_modified', 'definition', '_id', SHORT_ID_STRING_NAME, 'settings',
             'property-name',
         }
 
@@ -932,7 +934,7 @@ class MongoDatabase(MongoClient):
                         ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
 
                         ps_set_on_insert = {
-                            'colabfit_id': ps_id,
+                            SHORT_ID_STRING_NAME: ps_id,
                             'method':      ps.method,
                             'description': ps.description,
                             'files':       ps.files,
@@ -971,10 +973,10 @@ class MongoDatabase(MongoClient):
                             }
 
                         settings_docs.append(UpdateOne(
-                            {'colabfit_id': ps_id},
+                            {SHORT_ID_STRING_NAME: ps_id},
                             ps_update_doc,
                             upsert=True,
-                            hint='colabfit_id',
+                            hint=SHORT_ID_STRING_NAME,
                         ))
 
                         methods.append(ps.method)
@@ -1017,7 +1019,7 @@ class MongoDatabase(MongoClient):
                                 'relationships.configurations': cid,
                             },
                             '$setOnInsert': {
-                                'colabfit_id': pid,
+                                SHORT_ID_STRING_NAME: pid,
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -1027,10 +1029,10 @@ class MongoDatabase(MongoClient):
                         }
 
                     property_docs.append(UpdateOne(
-                        {'colabfit_id': pid},
+                        {SHORT_ID_STRING_NAME: pid},
                         p_update_doc,
                         upsert=True,
-                        hint='colabfit_id',
+                        hint=SHORT_ID_STRING_NAME,
                     ))
 
                     c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
@@ -1041,10 +1043,10 @@ class MongoDatabase(MongoClient):
 
             config_docs.append(
                 UpdateOne(
-                    {'colabfit_id': cid},
+                    {SHORT_ID_STRING_NAME: cid},
                     c_update_doc,
                     upsert=True,
-                    hint='colabfit_id',
+                    hint=SHORT_ID_STRING_NAME,
                 )
             )
 
@@ -1208,13 +1210,13 @@ class MongoDatabase(MongoClient):
         ps_id = ID_FORMAT_STRING.format('PS', hash(ps_object), 0)
 
         self.property_settings.update_one(
-            {'colabfit_id': ps_id},
+            {SHORT_ID_STRING_NAME: ps_id},
             {
                 '$addToSet': {
                     'labels': {'$each': list(ps_object.labels)}
                 },
                 '$setOnInsert': {
-                    'colabfit_id': ps_id,
+                    SHORT_ID_STRING_NAME: ps_id,
                     'method': ps_object.method,
                     'description': ps_object.description,
                     'files': [
@@ -1226,14 +1228,14 @@ class MongoDatabase(MongoClient):
                 }
             },
             upsert=True,
-            hint='colabfit_id',
+            hint=SHORT_ID_STRING_NAME,
         )
 
         return ps_id
 
 
     def get_property_settings(self, pso_id):
-        pso_doc = self.property_settings.find_one({'colabfit_id': pso_id})
+        pso_doc = self.property_settings.find_one({SHORT_ID_STRING_NAME: pso_id})
 
         return PropertySettings(
                 method=pso_doc['method'],
@@ -1269,7 +1271,7 @@ class MongoDatabase(MongoClient):
 
             data = database.get_data(
                 collection_name='properties',
-                query={'colabfit_id': {'$in': <list_of_property_IDs>}},
+                query={SHORT_ID_STRING_NAME: {'$in': <list_of_property_IDs>}},
                 fields=['property_name_1.energy', 'property_name_1.forces'],
                 cache=True
             )
@@ -1293,7 +1295,7 @@ class MongoDatabase(MongoClient):
                 also be provided using the :code:`query` argument.
 
             keep_ids (bool, default=False):
-                If True, includes the 'colabfit_id' field as one of the returned values.
+                If True, includes the SHORT_ID_STRING_NAME field as one of the returned values.
 
             concatenate (bool, default=False):
                 If True, concatenates the data before returning.
@@ -1329,7 +1331,7 @@ class MongoDatabase(MongoClient):
             elif isinstance(ids, np.ndarray):
                 ids = ids.tolist()
 
-            query['colabfit_id'] = {'$in': ids}
+            query[SHORT_ID_STRING_NAME] = {'$in': ids}
 
         if isinstance(fields, str):
             fields = [fields]
@@ -1337,7 +1339,7 @@ class MongoDatabase(MongoClient):
         retfields = {k: 1 for k in fields}
 
         if keep_ids:
-            retfields['colabfit_id'] = 1
+            retfields[SHORT_ID_STRING_NAME] = 1
 
         collection = self[self.database_name][collection_name]
 
@@ -1467,7 +1469,7 @@ class MongoDatabase(MongoClient):
             if isinstance(configuration_ids, str):
                 configuration_ids = [configuration_ids]
 
-            query = {'colabfit_id': {'$in': configuration_ids}}
+            query = {SHORT_ID_STRING_NAME: {'$in': configuration_ids}}
 
         if generator:
             raise NotImplementedError
@@ -1504,7 +1506,7 @@ class MongoDatabase(MongoClient):
                         *self.configuration_type.unique_identifier_kw,
                         'names',
                         'labels',
-                        'colabfit_id',
+                        SHORT_ID_STRING_NAME,
                     }
                 ),
                 desc='Getting configurations',
@@ -1514,7 +1516,7 @@ class MongoDatabase(MongoClient):
                 c = self.configuration_type(**{k:v for k, v in co_doc.items()
                                                if k in self.configuration_type.unique_identifier_kw})
 
-                c.info['colabfit_id'] = co_doc['colabfit_id']
+                c.info[SHORT_ID_STRING_NAME] = co_doc[SHORT_ID_STRING_NAME]
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
                 c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
 
@@ -1530,15 +1532,15 @@ class MongoDatabase(MongoClient):
                 c = self.configuration_type(**{k: v for k, v in co_doc.items()
                                                if k in self.configuration_type.unique_identifier_kw})
 
-                c.info['colabfit_id'] = co_doc['colabfit_id']
+                c.info[SHORT_ID_STRING_NAME] = co_doc[SHORT_ID_STRING_NAME]
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
                 c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
 
-                config_dict[co_doc['colabfit_id']] = c
+                config_dict[co_doc[SHORT_ID_STRING_NAME]] = c
 
-            all_attached_prs = set([_['colabfit_id'] for _ in self.property_instances.find(
-                {'relationships.configurations': query['colabfit_id']},
-                {'colabfit_id'}
+            all_attached_prs = set([_[SHORT_ID_STRING_NAME] for _ in self.property_instances.find(
+                {'relationships.configurations': query[SHORT_ID_STRING_NAME]},
+                {SHORT_ID_STRING_NAME}
             )])
 
             if property_ids is not None:
@@ -1547,7 +1549,7 @@ class MongoDatabase(MongoClient):
                 property_ids = list(all_attached_prs)
 
             for pr_doc in tqdm(
-                    self.property_instances.find( {'colabfit_id': {'$in': property_ids}}),
+                    self.property_instances.find( {SHORT_ID_STRING_NAME: {'$in': property_ids}}),
                     desc='Attaching properties',
                     disable=not verbose
                 ):
@@ -1701,11 +1703,11 @@ class MongoDatabase(MongoClient):
         cs_id = ID_FORMAT_STRING.format('CS', cs_hash, 0)
 
         # Check for duplicates
-        if self.configuration_sets.count_documents({'colabfit_id': cs_id}):
+        if self.configuration_sets.count_documents({SHORT_ID_STRING_NAME: cs_id}):
             return cs_id
 
         # Make sure all of the configurations exist
-        if self.configurations.count_documents({'colabfit_id': {'$in': ids}}) != len(ids):
+        if self.configurations.count_documents({SHORT_ID_STRING_NAME: {'$in': ids}}) != len(ids):
             raise MissingEntryError(
                 "Not all of the IDs provided to insert_configuration_set exist"\
                 " in the database."
@@ -1717,13 +1719,13 @@ class MongoDatabase(MongoClient):
         )
 
         self.configuration_sets.update_one(
-            {'colabfit_id': cs_id},
+            {SHORT_ID_STRING_NAME: cs_id},
             {
                 '$addToSet': {
                     'relationships.configurations': {'$each': ids}
                 },
                 '$setOnInsert': {
-                    'colabfit_id': cs_id,
+                    SHORT_ID_STRING_NAME: cs_id,
                     'description': description,
                 },
                 '$set': {
@@ -1732,20 +1734,20 @@ class MongoDatabase(MongoClient):
                 },
             },
             upsert=True,
-            hint='colabfit_id',
+            hint=SHORT_ID_STRING_NAME,
         )
 
         # Add the backwards relationships CO->CS
         config_docs = []
         for cid in ids:
             config_docs.append(UpdateOne(
-                {'colabfit_id': cid},
+                {SHORT_ID_STRING_NAME: cid},
                 {
                     '$addToSet': {
                         'relationships.configuration_sets': cs_id
                     }
                 },
-                hint='colabfit_id',
+                hint=SHORT_ID_STRING_NAME,
             ))
 
         self.configurations.bulk_write(config_docs)
@@ -1777,7 +1779,7 @@ class MongoDatabase(MongoClient):
         if resync:
             self.resync_configuration_set(cs_id)
 
-        cs_doc = self.configuration_sets.find_one({'colabfit_id': cs_id})
+        cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: cs_id})
 
         return {
             'last_modified': cs_doc['last_modified'],
@@ -1808,7 +1810,7 @@ class MongoDatabase(MongoClient):
 
         """
 
-        cs_doc = self.configuration_sets.find_one({'colabfit_id': cs_id})
+        cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: cs_id})
 
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
@@ -1817,10 +1819,10 @@ class MongoDatabase(MongoClient):
         )
 
         self.configuration_sets.update_one(
-            {'colabfit_id': cs_id},
+            {SHORT_ID_STRING_NAME: cs_id},
             {'$set': {'aggregated_info': aggregated_info}},
             upsert=True,
-            hint='colabfit_id',
+            hint=SHORT_ID_STRING_NAME,
         )
 
 
@@ -1843,7 +1845,7 @@ class MongoDatabase(MongoClient):
             None; updates the dataset document in-place
         """
 
-        ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         cs_ids = ds_doc['relationships']['configuration_sets']
         pr_ids = ds_doc['relationships']['property_instances']
@@ -1871,10 +1873,10 @@ class MongoDatabase(MongoClient):
             aggregated_info[k] = v
 
         self.datasets.update_one(
-            {'colabfit_id': ds_id},
+            {SHORT_ID_STRING_NAME: ds_id},
             {'$set': {'aggregated_info': aggregated_info}},
             upsert=True,
-            hint='colabfit_id',
+            hint=SHORT_ID_STRING_NAME,
         )
 
     # TODO Work on making this Configuration "type" agnostic->Seems to be HIGHLY Configuration type dependent
@@ -1930,7 +1932,7 @@ class MongoDatabase(MongoClient):
         }
 
         for doc in tqdm(
-            self.configurations.find({'colabfit_id': {'$in': ids}}),
+            self.configurations.find({SHORT_ID_STRING_NAME: {'$in': ids}}),
             desc='Aggregating configuration info',
             disable=not verbose,
             total=len(ids),
@@ -2021,11 +2023,11 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description', '_id',
-            'colabfit_id', 'property-name'
+            SHORT_ID_STRING_NAME, 'property-name'
         }
 
         for doc in tqdm(
-            self.property_instances.find({'colabfit_id': {'$in': pr_ids}}),
+            self.property_instances.find({SHORT_ID_STRING_NAME: {'$in': pr_ids}}),
             desc='Aggregating property info',
             disable=not verbose,
             total=len(pr_ids)
@@ -2115,7 +2117,7 @@ class MongoDatabase(MongoClient):
 
         co_ids = list(set(itertools.chain.from_iterable(
             cs_doc['relationships']['configurations'] for cs_doc in
-            self.configuration_sets.find({'colabfit_id': {'$in': cs_ids}})
+            self.configuration_sets.find({SHORT_ID_STRING_NAME: {'$in': cs_ids}})
         )))
         return self.configuration_type.aggregate_configuration_summaries(self, co_ids, verbose=verbose)
 
@@ -2180,18 +2182,18 @@ class MongoDatabase(MongoClient):
 
         # Make sure to only include PRs with COs contained by the given CSs
         all_co_ids = []
-        for cs_doc in self.configuration_sets.find({'colabfit_id': {'$in': cs_ids}}):
+        for cs_doc in self.configuration_sets.find({SHORT_ID_STRING_NAME: {'$in': cs_ids}}):
             all_co_ids += cs_doc['relationships']['configurations']
 
         all_co_ids = list(set(all_co_ids))
 
         clean_pr_ids = [
-            _['colabfit_id'] for _ in self.property_instances.find(
+            _[SHORT_ID_STRING_NAME] for _ in self.property_instances.find(
                 {
-                    'colabfit_id': {'$in': pr_ids},
+                    SHORT_ID_STRING_NAME: {'$in': pr_ids},
                     'relationships.configurations': {'$in': all_co_ids},
                 },
-                {'colabfit_id'}
+                {SHORT_ID_STRING_NAME}
             )
         ]
 
@@ -2219,7 +2221,7 @@ class MongoDatabase(MongoClient):
         ds_id = ID_FORMAT_STRING.format('DS', ds_hash, 0)
 
         # Check for duplicates
-        if self.datasets.count_documents({'colabfit_id': ds_id}):
+        if self.datasets.count_documents({SHORT_ID_STRING_NAME: ds_id}):
             if resync:
                 self.resync_dataset(ds_id)
 
@@ -2247,14 +2249,14 @@ class MongoDatabase(MongoClient):
             aggregated_info[k] = v
 
         self.datasets.update_one(
-            {'colabfit_id': ds_id},
+            {SHORT_ID_STRING_NAME: ds_id},
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
                     'relationships.property_instances': {'$each': clean_pr_ids},
                 },
                 '$setOnInsert': {
-                    'colabfit_id': ds_id,
+                    SHORT_ID_STRING_NAME: ds_id,
                     'name': name,
                     'authors': authors,
                     'links': links,
@@ -2266,16 +2268,16 @@ class MongoDatabase(MongoClient):
                 },
             },
             upsert=True,
-            hint='colabfit_id',
+            hint=SHORT_ID_STRING_NAME,
         )
 
         # Add the backwards relationships CS->DS
         config_set_docs = []
         for csid in cs_ids:
             config_set_docs.append(UpdateOne(
-                {'colabfit_id': csid},
+                {SHORT_ID_STRING_NAME: csid},
                 {'$addToSet': {'relationships.datasets': ds_id}},
-                hint='colabfit_id',
+                hint=SHORT_ID_STRING_NAME,
             ))
 
         self.configuration_sets.bulk_write(config_set_docs)
@@ -2284,9 +2286,9 @@ class MongoDatabase(MongoClient):
         property_docs = []
         for pid in tqdm(clean_pr_ids, desc='Updating PR->DS relationships'):
             property_docs.append(UpdateOne(
-                {'colabfit_id': pid},
+                {SHORT_ID_STRING_NAME: pid},
                 {'$addToSet': {'relationships.datasets': ds_id}},
-                hint='colabfit_id',
+                hint=SHORT_ID_STRING_NAME,
             ))
 
         self.property_instances.bulk_write(property_docs)
@@ -2322,10 +2324,10 @@ class MongoDatabase(MongoClient):
         if resync:
             self.resync_dataset(ds_id, verbose=verbose)
 
-        ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         return {
-            'colabfit_id': ds_id,
+            SHORT_ID_STRING_NAME: ds_id,
             'last_modified': ds_doc['last_modified'],
             'dataset': Dataset(
                 configuration_set_ids=ds_doc['relationships']['configuration_sets'],
@@ -2388,14 +2390,14 @@ class MongoDatabase(MongoClient):
 
             all_co_ids = list(set(itertools.chain.from_iterable(
                 cs_doc['relationships']['configurations'] for cs_doc in
-                self.configuration_sets.find({'colabfit_id': {'$in': cs_ids}})
+                self.configuration_sets.find({SHORT_ID_STRING_NAME: {'$in': cs_ids}})
             )))
 
-            query['colabfit_id'] = {'$in': all_co_ids}
+            query[SHORT_ID_STRING_NAME] = {'$in': all_co_ids}
         elif collection_name == 'properties':
             collection = self.property_instances
 
-            query['colabfit_id'] = {'$in': dataset.property_ids}
+            query[SHORT_ID_STRING_NAME] = {'$in': dataset.property_ids}
         else:
             raise RuntimeError(
                 "collection_name must be 'configurations' or 'properties'"
@@ -2405,16 +2407,16 @@ class MongoDatabase(MongoClient):
             labels = {labels}
 
         for doc in tqdm(
-            collection.find(query, {'colabfit_id': 1}),
+            collection.find(query, {SHORT_ID_STRING_NAME: 1}),
             desc='Applying configuration labels',
             disable=not verbose
             ):
-            doc_id = doc['colabfit_id']
+            doc_id = doc[SHORT_ID_STRING_NAME]
 
             collection.update_one(
-                {'colabfit_id': doc_id},
+                {SHORT_ID_STRING_NAME: doc_id},
                 {'$addToSet': {'labels': {'$each': list(labels)}}},
-                hint='colabfit_id',
+                hint=SHORT_ID_STRING_NAME,
             )
 
 
@@ -2557,7 +2559,7 @@ class MongoDatabase(MongoClient):
 
             data = database.get_data(
                 collection_name='properties',
-                query={'colabfit_id': {'$in': <list_of_property_IDs>}},
+                query={SHORT_ID_STRING_NAME: {'$in': <list_of_property_IDs>}},
                 fields=['property_name_1.energy', 'property_name_1.forces'],
                 cache=True
             )
@@ -2641,7 +2643,7 @@ class MongoDatabase(MongoClient):
 
             query (dict):
                 A Mongo query that will return the desired objects. Note that
-                the key-value pair :code:`{'colabfit_id': {'$in': ...}}` will be
+                the key-value pair :code:`{SHORT_ID_STRING_NAME: {'$in': ...}}` will be
                 included automatically to filter on only the objects that are
                 already linked to the given dataset.
 
@@ -2658,14 +2660,14 @@ class MongoDatabase(MongoClient):
                 A list of property IDs that satisfy the filter
         """
 
-        ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         configuration_sets = []
         property_ids = []
 
         # Loop over configuration sets
         cursor = self.configuration_sets.find({
-            'colabfit_id': {'$in': ds_doc['relationships']['configuration_sets']}
+            SHORT_ID_STRING_NAME: {'$in': ds_doc['relationships']['configuration_sets']}
             }
         )
 
@@ -2675,9 +2677,9 @@ class MongoDatabase(MongoClient):
             disable=not verbose
             ):
 
-            query['colabfit_id'] = {'$in': cs_doc['relationships']['configurations']}
+            query[SHORT_ID_STRING_NAME] = {'$in': cs_doc['relationships']['configurations']}
 
-            co_ids = self.get_data('configurations', fields='colabfit_id', query=query)
+            co_ids = self.get_data('configurations', fields=SHORT_ID_STRING_NAME, query=query)
 
             # Build the filtered configuration sets
             configuration_sets.append(
@@ -2693,13 +2695,13 @@ class MongoDatabase(MongoClient):
             )
 
         # Now get the corresponding properties
-        property_ids = [_['colabfit_id'] for _ in self.property_instances.filter(
+        property_ids = [_[SHORT_ID_STRING_NAME] for _ in self.property_instances.filter(
             {
-            'colabfit_id': {'$in': list(itertools.chain.from_iterable(
+            SHORT_ID_STRING_NAME: {'$in': list(itertools.chain.from_iterable(
                 cs.configuration_ids for cs in configuration_sets
             ))}
             },
-            {'colabfit_id': 1}
+            {SHORT_ID_STRING_NAME: 1}
         )]
 
         return configuration_sets, property_ids
@@ -2767,13 +2769,13 @@ class MongoDatabase(MongoClient):
             else:
                 filter_fxn = lambda x: True
 
-        ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         configuration_sets = []
         property_ids = []
 
         # Filter the properties
-        retfields = {'colabfit_id': 1, 'relationships.configurations': 1}
+        retfields = {SHORT_ID_STRING_NAME: 1, 'relationships.configurations': 1}
         if fields is not None:
             if isinstance(fields, str):
                 fields = [fields]
@@ -2784,7 +2786,7 @@ class MongoDatabase(MongoClient):
         if query is None:
             query = {}
 
-        query['colabfit_id'] = {'$in': ds_doc['relationships']['property_instances']}
+        query[SHORT_ID_STRING_NAME] = {'$in': ds_doc['relationships']['property_instances']}
 
         cursor = self.property_instances.find(query, retfields)
 
@@ -2795,14 +2797,14 @@ class MongoDatabase(MongoClient):
             disable=not verbose,
             ):
             if filter_fxn(pr_doc):
-                property_ids.append(pr_doc['colabfit_id'])
+                property_ids.append(pr_doc[SHORT_ID_STRING_NAME])
                 all_co_ids.append(pr_doc['relationships']['configurations'])
 
         all_co_ids = list(set(itertools.chain.from_iterable(all_co_ids)))
 
         # Then filter the configuration sets
         for cs_doc in self.configuration_sets.find({
-            'colabfit_id': {'$in': ds_doc['relationships']['configuration_sets']}
+            SHORT_ID_STRING_NAME: {'$in': ds_doc['relationships']['configuration_sets']}
             }):
 
             co_ids =list(
@@ -3107,11 +3109,11 @@ class MongoDatabase(MongoClient):
         header = config_sets[0]
         for row in config_sets[1:]:
             query = literal_eval(row[header.index('Query')])
-            query['colabfit_id'] = {'$in': all_co_ids}
+            query[SHORT_ID_STRING_NAME] = {'$in': all_co_ids}
 
             co_ids = self.get_data(
                 'configurations',
-                fields='colabfit_id',
+                fields=SHORT_ID_STRING_NAME,
                 query=query,
                 ravel=True
             ).tolist()
@@ -3140,7 +3142,7 @@ class MongoDatabase(MongoClient):
         header = labels[0]
         for row in labels[1:]:
             query = literal_eval(row[header.index('Query')])
-            query['colabfit_id'] = {'$in': all_co_ids}
+            query[SHORT_ID_STRING_NAME] = {'$in': all_co_ids}
 
             self.apply_labels(
                 dataset_id=ds_id,
@@ -3278,7 +3280,7 @@ class MongoDatabase(MongoClient):
 
         property_map = {}
         for pr_doc in self.property_instances.find(
-            {'colabfit_id': {'$in': dataset.property_ids}}
+            {SHORT_ID_STRING_NAME: {'$in': dataset.property_ids}}
             ):
             if pr_doc['type'] not in property_map:
                 property_map[pr_doc['type']] = {
@@ -3485,7 +3487,7 @@ class MongoDatabase(MongoClient):
 
     def export_dataset(self, ds_id, output_folder, fmt, mode, verbose=False):
         """
-        Exports the dataset whose :code:`colabfit_id` matches :code:`ds_id` to
+        Exports the dataset whose :code:`SHORT_ID_STRING_NAME` matches :code:`ds_id` to
         the given format.
 
         Args:
@@ -3530,7 +3532,7 @@ class MongoDatabase(MongoClient):
                 f"The only supported formats are {supported_formats}"
             )
 
-        ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         configuration_ids = []
 
@@ -3587,10 +3589,10 @@ class MongoDatabase(MongoClient):
 
                 # Write the configurations
                 for co_doc in self.configurations.find(
-                        {'colabfit_id': {'$in': configuration_ids}}
+                        {SHORT_ID_STRING_NAME: {'$in': configuration_ids}}
                     ):
 
-                    co_group = co_coll_group.create_group(co_doc['colabfit_id'])
+                    co_group = co_coll_group.create_group(co_doc[SHORT_ID_STRING_NAME])
 
                     co_group.create_dataset(
                         'names',
@@ -3622,9 +3624,9 @@ class MongoDatabase(MongoClient):
                 # Write property instances
                 ps_ids = []
                 for pi_doc in self.property_instances.find(
-                        {'colabfit_id': {'$in': property_ids}}
+                        {SHORT_ID_STRING_NAME: {'$in': property_ids}}
                     ):
-                    pi_group = pi_coll_group.create_group(pi_doc['colabfit_id'])
+                    pi_group = pi_coll_group.create_group(pi_doc[SHORT_ID_STRING_NAME])
 
                     pi_group.create_dataset(
                         'type',
@@ -3674,10 +3676,10 @@ class MongoDatabase(MongoClient):
                 # Write property settings
                 ps_ids = list(set(ps_ids))
                 for ps_doc in self.property_settings.find(
-                    {'colabfit_id': {'$in': ps_ids}}
+                    {SHORT_ID_STRING_NAME: {'$in': ps_ids}}
                     ):
 
-                    ps_group = ps_coll_group.create_group(ps_doc['colabfit_id'])
+                    ps_group = ps_coll_group.create_group(ps_doc[SHORT_ID_STRING_NAME])
 
                     ps_group.attrs['description'] = ps_doc['description']
                     ps_group.attrs['method'] = ps_doc['method']
@@ -3698,14 +3700,14 @@ class MongoDatabase(MongoClient):
 
                 # Write configuration sets
                 for cs_doc in self.configuration_sets.find(
-                        {'colabfit_id': {
+                        {SHORT_ID_STRING_NAME: {
                                 '$in':
                                 ds_doc['relationships']['configuration_sets']
                             }
                         },
                     ):
 
-                    cs_group = cs_coll_group.create_group(cs_doc['colabfit_id'])
+                    cs_group = cs_coll_group.create_group(cs_doc[SHORT_ID_STRING_NAME])
 
                     cs_group.attrs['description'] = cs_doc['description']
                     cs_group.create_dataset(
@@ -3831,7 +3833,7 @@ def _build_c_update_doc(configuration):
     processed_fields = configuration.configuration_summary()
     c_update_doc = {
         '$setOnInsert' : {
-            'colabfit_id': cid,
+            SHORT_ID_STRING_NAME: cid,
         },
         '$set': {
             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')

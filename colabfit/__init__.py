@@ -20,6 +20,9 @@ _PROPSETTINGS_COLLECTION    = 'property_settings'
 _CONFIGSETS_COLLECTION      = 'configuration_sets'
 _DATASETS_COLLECTION        = 'datasets'
 
+SHORT_ID_STRING_NAME = 'short-id'
+EXTENDED_ID_STRING_NAME = 'short-id'
+
 ATOMS_NAME_FIELD            = '_name'
 ATOMS_LABELS_FIELD          = '_labels'
 ATOMS_LAST_MODIFIED_FIELD   = '_last_modified'
