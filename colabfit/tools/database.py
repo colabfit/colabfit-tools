@@ -2254,15 +2254,10 @@ class MongoDatabase(MongoClient):
 
             aggregated_info[k] = v
 
-        # id_prefix = '_'.join([
-        #     name,
-        #     ''.join([
-        #         auth.split()[-1] for auth in authors
-        #     ]),
-        # ])
+        name_check = name.replace('_', '')
+        if not name_check.isalnum():
+            raise RuntimeError("Dataset name ('{}') must only contain [a-z][A-Z][0-9] or '_'".format(name))
 
-        # NOTE: not including author names to avoid having to check special
-        # characters 
         id_prefix = name
 
         if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
@@ -2270,8 +2265,6 @@ class MongoDatabase(MongoClient):
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
 
         extended_id = f'{id_prefix}__{ds_id}'
-
-        # TODO: get_dataset should be able to use extended-id; authors can't symbols
 
         self.datasets.update_one(
             {SHORT_ID_STRING_NAME: ds_id},
