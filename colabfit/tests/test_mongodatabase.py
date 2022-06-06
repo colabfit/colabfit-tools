@@ -1,3 +1,6 @@
+import os
+import json
+import h5py
 import pytest
 import tempfile
 import numpy as np
@@ -6,7 +9,7 @@ import random
 random.seed(42)
 from ase import Atoms
 
-from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ID_FORMAT_STRING
+from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ID_FORMAT_STRING, STRING_DTYPE_SPECIFIER
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.database import MongoDatabase
 from colabfit.tools.property_settings import PropertySettings
@@ -748,12 +751,12 @@ class TestMongoDatabase:
                 assert config_doc['nsites'] == len(config)
                 assert config_doc['nelements'] == 1
                 assert config_doc['nperiodic_dimensions'] == 0
-                assert {pid}.issubset(config_doc['relationships']['properties'])
+                assert {pid}.issubset(config_doc['relationships']['property_instances'])
 
                 assert {cid}.issubset(prop_doc['relationships']['configurations'])
 
                 assert database.property_settings.count_documents({
-                    'relationships.properties': pid
+                    'relationships.property_instances': pid
                 })
 
             database.drop_database(database.database_name)
@@ -899,7 +902,7 @@ class TestMongoDatabase:
             assert ds_doc['links'] == ['https://colabfit.org']
             assert ds_doc['description'] == 'an example dataset'
             assert len(ds_doc['relationships']['configuration_sets']) == 2
-            assert len(ds_doc['relationships']['properties']) == 20
+            assert len(ds_doc['relationships']['property_instances']) == 20
 
             agg = ds_doc['aggregated_info']
 
@@ -1114,3 +1117,158 @@ class TestDatasets:
 
             ds_doc = next(database.datasets.find({'colabfit_id': ds_id}))
             assert ds_doc['authors'] == ['colabfit']
+
+
+    def test_export_ds(self):
+        # with tempfile.NamedTemporaryFile() as tmpfile:
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            database = MongoDatabase(
+                self.database_name,
+                drop_database=True,
+                configuration_type=AtomicConfiguration
+            )
+
+            images = build_n(10)[0]
+
+            database.insert_property_definition(
+                {
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
+                    'property-title': 'A default property used for testing',
+                    'property-description': 'A description of the property',
+                    'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                    'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+                    'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                    'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                    'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                    'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+                }
+            )
+
+            property_map = {
+                'default': [{
+                    'energy': {'field': 'energy', 'units': 'eV'},
+                    'stress': {'field': 'stress', 'units': 'GPa'},
+                    'name': {'field': 'name', 'units': None},
+                    'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                    'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                    'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                    'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                    'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+
+                    '_settings': {
+                        'method': 'VASP',
+                        'labels': ['label1', 'label2'],
+                        'files': [('dummy_file.txt', 'dummy contents\nwith a newline\n')],
+                        'description': 'A dummy property settings object'
+                    },
+                }]
+            }
+
+            ids = database.insert_data(
+                images, property_map=property_map
+            )
+
+            co_ids1, pr_ids1 = list(zip(*ids))
+
+            cs_id1 = database.insert_configuration_set(
+                co_ids1, description='A basic configuration set'
+            )
+
+            images = build_n(10)[0]
+
+            for img in images:
+                img.info['energy'] += 100000
+
+            ids = database.insert_data(
+                images, property_map=property_map
+            )
+
+            co_ids2, pr_ids2 = list(zip(*ids))
+
+            cs_id2 = database.insert_configuration_set(
+                co_ids2, description='A basic configuration set'
+            )
+
+            ds_id = database.insert_dataset(
+                cs_ids=[cs_id1, cs_id2],
+                pr_ids=pr_ids1+pr_ids2,
+                name='example_dataset',
+                authors='colabfit',
+                links='https://colabfit.openkim.org/',
+                description='An example dataset',
+                resync=True
+            )
+
+            database.export_dataset(ds_id, tmpdirname, fmt='hdf5', mode='w')
+
+            co_ids = list(co_ids1 + co_ids2)
+
+            with h5py.File(os.path.join(tmpdirname, ds_id+'.hdf5'), 'r') as hdf5:
+
+                # Check definitions
+                prop_definitions = {}
+                for pd_name in property_map:
+                    with open(
+                        os.path.join(
+                            tmpdirname, 'property_definitions', pd_name+'.json'
+                        ),
+                        'r'
+                        ) as f:
+
+                        dct = json.load(f)
+
+                        assert dct == database.get_property_definition(pd_name)['definition']
+
+                        prop_definitions[pd_name] = dct
+
+                # Check DS info
+                ds_doc = database.datasets.find_one({'colabfit_id': ds_id})
+
+                assert hdf5.attrs['description'] == ds_doc['description']
+                assert set(hdf5.attrs['authors'].astype(str).tolist()) == set(ds_doc['authors'])
+                assert set(hdf5.attrs['links'].astype(str).tolist()) == set(ds_doc['links'])
+
+                # Check configurations
+                assert set(co_ids) == set(hdf5['configurations'].keys())
+
+                configurations = database.get_configurations(
+                    co_ids, attach_properties=True
+                )
+
+                for c in configurations:
+                    g = hdf5['configurations'][c.info['colabfit_id']]
+
+                    np.testing.assert_equal(g['atomic_numbers'], c.arrays['numbers'])
+                    np.testing.assert_equal(g['cell'], np.array(c.cell))
+                    np.testing.assert_equal(g['pbc'], c.pbc)
+                    np.testing.assert_equal(g['positions'], c.positions)
+
+                    assert set(g['labels'].asstr()[()].tolist()) == set(c.info['_labels'])
+                    assert set(g['names'].asstr()[()].tolist()) == set(c.info['_name'])
+
+                # Check property instances
+                for pi_doc in database.property_instances.find(
+                        {'colabfit_id': {'$in': pr_ids1+pr_ids2}}
+                    ):
+
+                    g = hdf5['property_instances'][pi_doc['colabfit_id']]
+
+                    assert g['type'].asstr()[()] == pi_doc['type']
+                    assert set(g['methods'].asstr()[()].tolist()) == set(pi_doc['methods'])
+                    assert set(g['labels'].asstr()[()].tolist()) == set(pi_doc['labels'])
+
+                    for k,v in pi_doc[pi_doc['type']].items():
+                        dtype = prop_definitions[pi_doc['type']][k]['type']
+                        if dtype == 'string':
+                            v1 = v['source-value']
+                            v2 = g[pi_doc['type']][k].asstr()[()]
+                        else:
+                            v1 = v['source-value']
+                            v2 = g[pi_doc['type']][k][()]
+
+                        np.testing.assert_equal(v1, v2)
+
+                    pass
