@@ -71,7 +71,7 @@ class Dataset:
         ):
 
         for auth in authors:
-            if not auth.isalpha():
+            if not ''.join(auth.split(' ')).isalpha():
                 raise RuntimeError(
                     "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(auth)
                 )

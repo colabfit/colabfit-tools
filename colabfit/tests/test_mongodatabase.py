@@ -1187,6 +1187,16 @@ class TestDatasets:
                 co_ids2, description='A basic configuration set'
             )
 
+            ds_id = database.insert_dataset(
+                cs_ids=[cs_id1, cs_id2],
+                pr_ids=pr_ids1+pr_ids2,
+                name='example_dataset',
+                authors=['authors with spaces are okay'],
+                links='https://colabfit.openkim.org/',
+                description='An example dataset',
+                resync=True
+            )
+
             with pytest.raises(RuntimeError):
                 ds_id = database.insert_dataset(
                     cs_ids=[cs_id1, cs_id2],
