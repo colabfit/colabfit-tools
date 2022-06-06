@@ -1,4 +1,5 @@
 ase
+h5py
 kim_property
 numpy
 tqdm

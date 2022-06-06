@@ -1,4 +1,5 @@
 import os
+import h5py
 import json
 import shutil
 import markdown
@@ -30,7 +31,8 @@ from colabfit import (
     ID_FORMAT_STRING,
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
-    ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
+    ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD,
+    STRING_DTYPE_SPECIFIER
 )
 from colabfit.tools.configuration import BaseConfiguration, AtomicConfiguration
 from colabfit.tools.property import Property
@@ -72,7 +74,7 @@ class MongoDatabase(MongoClient):
             latice_vectors
             last_modified
             relationships
-                properties
+                property_instances
                 configuration_sets
 
         /property_definitions
@@ -103,7 +105,7 @@ class MongoDatabase(MongoClient):
                 file_name
                 file_contents
             relationships
-                properties
+                property_instances
 
         /configuration_sets
             _id
@@ -158,7 +160,7 @@ class MongoDatabase(MongoClient):
                 property_labels
                 property_labels_counts
             relationships
-                properties
+                property_instances
                 configuration_sets
 
     Attributes:
@@ -446,11 +448,9 @@ class MongoDatabase(MongoClient):
         ):
 
         if isinstance(mongo_login, int):
-            client = MongoClient(
-                'localhost', mongo_login, *login_args, **login_kwargs
-            )
+            client = MongoClient('localhost', mongo_login)
         else:
-            client = MongoClient(mongo_login, *login_args, **login_kwargs)
+            client = MongoClient(mongo_login)
 
         coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
         coll_properties             = client[database_name][_PROPS_COLLECTION]
@@ -479,7 +479,7 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
-            'last_modified', 'definition', '_id', 'colabfit_id', '_settings',
+            'last_modified', 'definition', '_id', 'colabfit_id', 'settings',
             'property-name',
         }
 
@@ -493,13 +493,10 @@ class MongoDatabase(MongoClient):
             for pname in property_map
         }
 
-        config_docs     = []
-        property_docs   = []
-        settings_docs   = []
+        insertions = []
 
         # Add all of the configurations into the Mongo server
         ai = 1
-        # TODO: rename atoms
         for atoms in tqdm(
             configurations,
             desc='Preparing to add configurations to Database',
@@ -509,48 +506,10 @@ class MongoDatabase(MongoClient):
             if transform:
                 transform(atoms)
 
+            #cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
             c_update_doc, cid = _build_c_update_doc(atoms)
 
-            #Old Method processed_fields = process_species_list(atoms)
-            # Add if doesn't exist, else update (since last-modified changed)
-            '''
-            c_update_doc =  {  # update document
-                    '$setOnInsert': {
-                        '_id': cid,
-                        'atomic_numbers': atoms.get_atomic_numbers().tolist(),
-                        'positions': atoms.get_positions().tolist(),
-                        'cell': np.array(atoms.get_cell()).tolist(),
-                        'pbc': atoms.get_pbc().astype(int).tolist(),
-                        'elements': processed_fields['elements'],
-                        'nelements': processed_fields['nelements'],
-                        'elements_ratios': processed_fields['elements_ratios'],
-                        'chemical_formula_reduced': processed_fields['chemical_formula_reduced'],
-                        'chemical_formula_anonymous': processed_fields['chemical_formula_anonymous'],
-                        'chemical_formula_hill': atoms.get_chemical_formula(),
-                        'nsites': len(atoms),
-                        'dimension_types': atoms.get_pbc().astype(int).tolist(),
-                        'nperiodic_dimensions': int(sum(atoms.get_pbc())),
-                        'lattice_vectors': np.array(atoms.get_cell()).tolist(),
-                    },
-                    '$set': {
-                        'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                    },
-                    '$addToSet': {
-                        'names': {
-                            '$each': list(atoms.info[ATOMS_NAME_FIELD])
-                        },
-                        'labels': {
-                            '$each': list(atoms.info[ATOMS_LABELS_FIELD])
-                        },
-                        'relationships.properties': {
-                            '$each': []
-                        }
-                    }
-                }
-'''
-            # TODO: Make Configuration "type" agnostic->Possible all types may not have info/arrays
-            #       but could enforce this.
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
             pid = None
@@ -635,7 +594,7 @@ class MongoDatabase(MongoClient):
 
                         ps_set_on_insert = {
                             'colabfit_id': ps_id,
-                            'method':       ps.method,
+                            'method':      ps.method,
                             'description': ps.description,
                             'files':       ps.files,
                         }
@@ -666,17 +625,17 @@ class MongoDatabase(MongoClient):
                                     'labels': {
                                         '$each': list(ps.labels)
                                     },
-                                    'relationships.properties': {
+                                    'relationships.property_instances': {
                                         '$each': [pid]
                                     }
                                 }
                             }
 
-                        settings_docs.append(UpdateOne(
+                        coll_property_settings.update_one(
                             {'colabfit_id': ps_id},
                             ps_update_doc,
                             upsert=True,
-                        ))
+                        )
 
                         methods.append(ps.method)
                         labels += list(ps.labels)
@@ -727,20 +686,22 @@ class MongoDatabase(MongoClient):
                             }
                         }
 
-                    property_docs.append(UpdateOne(
+                    coll_properties.update_one(
                         {'colabfit_id': pid},
                         p_update_doc,
                         upsert=True,
-                    ))
+                    )
 
-                    c_update_doc['$addToSet']['relationships.properties']['$each'].append(
+                    c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
                         pid
                     )
 
                     yield (cid, pid)
 
-            config_docs.append(
-                UpdateOne({'colabfit_id': cid}, c_update_doc, upsert=True)
+            coll_configurations.update_one(
+                {'colabfit_id': cid},
+                c_update_doc,
+                upsert=True
             )
 
             if not pid:
@@ -749,40 +710,8 @@ class MongoDatabase(MongoClient):
 
             ai += 1
 
-        if config_docs:
-            res = coll_configurations.bulk_write(config_docs, ordered=False)
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate configurations detected'.format(nmatch)
-                )
-        if property_docs:
-            res = coll_properties.bulk_write(property_docs, ordered=False)
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate properties detected'.format(nmatch)
-                )
-
-        if settings_docs:
-            res = coll_property_settings.bulk_write(
-                settings_docs,
-                # [
-                #     UpdateOne(
-                #         {'_id': sid},
-                #         {'$addToSet': {'relationships.properties': {'$each': lst}}}
-                #     ) for sid, lst in settings_docs.items()
-                # ],
-                ordered=False
-            )
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate property settings detected'.format(nmatch)
-                )
-
-
         client.close()
+        return insertions
 
 
 
@@ -891,7 +820,7 @@ class MongoDatabase(MongoClient):
                         'labels': {
                             '$each': list(atoms.info[ATOMS_LABELS_FIELD])
                         },
-                        'relationships.properties': {
+                        'relationships.property_instances': {
                             '$each': []
                         }
                     }
@@ -1012,7 +941,7 @@ class MongoDatabase(MongoClient):
                                     'labels': {
                                         '$each': list(ps.labels)
                                     },
-                                    'relationships.properties': {
+                                    'relationships.property_instances': {
                                         '$each': [pid]
                                     }
                                 }
@@ -1079,7 +1008,7 @@ class MongoDatabase(MongoClient):
                         upsert=True,
                     ))
 
-                    c_update_doc['$addToSet']['relationships.properties']['$each'].append(
+                    c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
                         pid
                     )
 
@@ -1583,7 +1512,7 @@ class MongoDatabase(MongoClient):
             if property_ids is not None:
                 property_ids = list(all_attached_prs.union(set(property_ids)))
             else:
-                property_ids = all_attached_prs
+                property_ids = list(all_attached_prs)
 
             for pr_doc in tqdm(
                     self.property_instances.find( {'colabfit_id': {'$in': property_ids}}),
@@ -1882,7 +1811,7 @@ class MongoDatabase(MongoClient):
         ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
 
         cs_ids = ds_doc['relationships']['configuration_sets']
-        pr_ids = ds_doc['relationships']['properties']
+        pr_ids = ds_doc['relationships']['property_instances']
 
         for csid in cs_ids:
             self.resync_configuration_set(csid, verbose=verbose)
@@ -2286,7 +2215,7 @@ class MongoDatabase(MongoClient):
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
-                    'relationships.properties': {'$each': clean_pr_ids},
+                    'relationships.property_instances': {'$each': clean_pr_ids},
                 },
                 '$setOnInsert': {
                     'colabfit_id': ds_id,
@@ -2361,7 +2290,7 @@ class MongoDatabase(MongoClient):
             'last_modified': ds_doc['last_modified'],
             'dataset': Dataset(
                 configuration_set_ids=ds_doc['relationships']['configuration_sets'],
-                property_ids=ds_doc['relationships']['properties'],
+                property_ids=ds_doc['relationships']['property_instances'],
                 name=ds_doc['name'],
                 authors=ds_doc['authors'],
                 links=ds_doc['links'],
@@ -2815,7 +2744,7 @@ class MongoDatabase(MongoClient):
         if query is None:
             query = {}
 
-        query['colabfit_id'] = {'$in': ds_doc['relationships']['properties']}
+        query['colabfit_id'] = {'$in': ds_doc['relationships']['property_instances']}
 
         cursor = self.property_instances.find(query, retfields)
 
@@ -3334,7 +3263,7 @@ class MongoDatabase(MongoClient):
 
         property_settings = list(
             self.property_settings.find(
-                {'relationships.properties': {'$in': dataset.property_ids}}
+                {'relationships.property_instances': {'$in': dataset.property_ids}}
             )
         )
 
@@ -3514,6 +3443,237 @@ class MongoDatabase(MongoClient):
                 format=data_format,
             )
 
+    def export_dataset(self, ds_id, output_folder, fmt, mode, verbose=False):
+        """
+        Exports the dataset whose :code:`colabfit_id` matches :code:`ds_id` to
+        the given format.
+
+        Args:
+
+            ds_id (str):
+                An ID matching the form DS_XXXXXXXXXXXX_XXX
+
+            output_folder (str):
+                The path to a folder in which to save the dataset. Database
+                contents will be save under
+                :code:`<output_folder>/database.<fmt>`, and all other files
+                (property settings files, property definitions, etc.) will be
+                saved as :code:`<output_folder>/<file_name>`.
+
+            fmt (str):
+                The format to which to export the data. Supported formats:
+                ['hdf5'].
+
+            mode (str):
+                'r', 'w', or 'a'
+
+            verbose (bool, default=True):
+                If True, prints progress bar
+        """
+
+        # Check if folders exist
+        path = os.path.join(output_folder)
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        path = os.path.join(output_folder, 'property_definitions')
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        path = os.path.join(output_folder, 'property_settings_files')
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        supported_formats = ['hdf5']
+        if fmt not in supported_formats:
+            raise RuntimeError(
+                f"The only supported formats are {supported_formats}"
+            )
+
+        ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
+
+        configuration_ids = []
+
+        for cs_id in ds_doc['relationships']['configuration_sets']:
+            configuration_ids += self.get_configuration_set(
+                cs_id
+            )['configuration_set'].configuration_ids
+
+        property_ids = ds_doc['relationships']['property_instances']
+
+        # Write the property definitions to files
+        prop_definitions = {}
+        for pd_name in ds_doc['aggregated_info']['property_types']:
+            pd_doc = self.get_property_definition(pd_name)['definition']
+
+            pd_path = os.path.join(
+                output_folder, 'property_definitions', f'{pd_name}.json'
+            )
+
+            prop_definitions[pd_name] = pd_doc
+
+            with open(pd_path, 'w') as pd_file:
+                json.dump(pd_doc, pd_file, indent=4)
+
+        if fmt == 'hdf5':
+
+            hdf5_path = os.path.join(output_folder, f'{ds_id}.hdf5')
+            with h5py.File(hdf5_path, mode) as outfile:
+                # Build all groups
+
+                pi_coll_group = outfile.create_group(_PROPS_COLLECTION)
+                ps_coll_group = outfile.create_group(_PROPSETTINGS_COLLECTION)
+                co_coll_group = outfile.create_group(_CONFIGS_COLLECTION)
+                cs_coll_group = outfile.create_group(_CONFIGSETS_COLLECTION)
+
+                # Write dataset info
+                outfile.attrs['description'] = ds_doc['description']
+
+                outfile.attrs.create(
+                    'authors',
+                    np.array(ds_doc['authors'], dtype=STRING_DTYPE_SPECIFIER)
+                )
+
+                outfile.attrs.create(
+                    'links',
+                    np.array(ds_doc['links'], dtype=STRING_DTYPE_SPECIFIER)
+                )
+
+                # TODO: decide if you want to export aggregated info too
+                # info_group = outfile.create_group('aggregated_info')
+
+                # for k,v in ds_doc['aggregated_info'].items():
+                #     info_group.create_dataset(k, data=v)
+
+                # Write the configurations
+                for co_doc in self.configurations.find(
+                        {'colabfit_id': {'$in': configuration_ids}}
+                    ):
+
+                    co_group = co_coll_group.create_group(co_doc['colabfit_id'])
+
+                    co_group.create_dataset(
+                        'names',
+                        data=np.array(co_doc['names'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    co_group.create_dataset(
+                        'labels',
+                        data=np.array(co_doc['labels'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    co_group.create_dataset(
+                        'relationships.property_instances',
+                        data=np.array(co_doc['relationships']['property_instances'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    co_group.create_dataset(
+                        'relationships.configuration_sets',
+                        data=np.array(co_doc['relationships']['configuration_sets'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    for key in self.configuration_type.unique_identifier_kw:
+                        co_group.create_dataset(
+                            key,
+                            dtype=self.configuration_type.unique_identifier_kw_types[key],
+                            data=co_doc[key]
+                        )
+
+                # Write property instances
+                ps_ids = []
+                for pi_doc in self.property_instances.find(
+                        {'colabfit_id': {'$in': property_ids}}
+                    ):
+                    pi_group = pi_coll_group.create_group(pi_doc['colabfit_id'])
+
+                    pi_group.create_dataset(
+                        'type',
+                        data=np.array(pi_doc['type'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'methods',
+                        data=np.array(pi_doc['methods'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'labels',
+                        data=np.array(pi_doc['labels'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'relationships.configurations',
+                        data=np.array(pi_doc['relationships']['configurations'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'relationships.property_settings',
+                        data=np.array(pi_doc['relationships']['property_settings'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    ps_ids += pi_doc['relationships']['property_settings']
+
+                    data_group = pi_group.create_group(pi_doc['type'])
+
+                    for key, value in pi_doc[pi_doc['type']].items():
+                        dtype = prop_definitions[pi_doc['type']][key]['type']
+                        if dtype == 'string':
+                            dtype = STRING_DTYPE_SPECIFIER
+
+                        data_group.create_dataset(
+                            key,
+                            dtype=dtype,
+                            data=value['source-value'],
+                        )
+
+                # Write property settings
+                ps_ids = list(set(ps_ids))
+                for ps_doc in self.property_settings.find(
+                    {'colabfit_id': {'$in': ps_ids}}
+                    ):
+
+                    ps_group = ps_coll_group.create_group(ps_doc['colabfit_id'])
+
+                    ps_group.attrs['description'] = ps_doc['description']
+                    ps_group.attrs['method'] = ps_doc['method']
+                    ps_group.attrs.create(
+                        'labels',
+                        np.array(ps_doc['labels'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    for fname, fcontents in ps_doc['files']:
+                        with open(
+                                os.path.join(
+                                    output_folder, 'property_settings_files', fname
+                                ),
+                                'w'
+                            ) as fpointer:
+
+                            fpointer.write(fcontents)
+
+                # Write configuration sets
+                for cs_doc in self.configuration_sets.find(
+                        {'colabfit_id': {
+                                '$in':
+                                ds_doc['relationships']['configuration_sets']
+                            }
+                        },
+                    ):
+
+                    cs_group = cs_coll_group.create_group(cs_doc['colabfit_id'])
+
+                    cs_group.attrs['description'] = cs_doc['description']
+                    cs_group.create_dataset(
+                        'relationships.configurations',
+                        data=np.array(cs_doc['relationships']['configurations'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
 # TODO: May need to make more Configuration "type" agnostic
 def load_data(
     file_path,
@@ -3643,7 +3803,7 @@ def _build_c_update_doc(configuration):
             'labels': {
                 '$each': list(configuration.info[ATOMS_LABELS_FIELD])
             },
-            'relationships.properties': {
+            'relationships.property_instances': {
                 '$each': []
             }
         }

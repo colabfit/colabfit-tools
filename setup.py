@@ -26,6 +26,7 @@ setup(
     ],
     install_requires = [
         'ase',
+        'h5py',
         'kim_property',
         'numpy',
         'tqdm',
