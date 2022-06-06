@@ -2208,6 +2208,12 @@ class MongoDatabase(MongoClient):
         if isinstance(authors, str):
             authors = [authors]
 
+        for auth in authors:
+            if not auth.isalpha():
+                raise RuntimeError(
+                    "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(auth)
+                )
+
         if isinstance(links, str):
             links = [links]
 
@@ -2248,6 +2254,16 @@ class MongoDatabase(MongoClient):
 
             aggregated_info[k] = v
 
+        id_prefix = '_'.join([
+            name,
+            ''.join([
+                auth.split()[-1] for auth in authors
+            ]),
+        ])
+        extended_id = f'{id_prefix}__{ds_id}'
+
+        # TODO: get_dataset should be able to use extended-id; authors can't symbols
+
         self.datasets.update_one(
             {SHORT_ID_STRING_NAME: ds_id},
             {
@@ -2257,6 +2273,7 @@ class MongoDatabase(MongoClient):
                 },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: ds_id,
+                    EXTENDED_ID_STRING_NAME: extended_id,
                     'name': name,
                     'authors': authors,
                     'links': links,

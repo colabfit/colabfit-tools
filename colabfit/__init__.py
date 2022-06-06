@@ -21,7 +21,7 @@ _CONFIGSETS_COLLECTION      = 'configuration_sets'
 _DATASETS_COLLECTION        = 'datasets'
 
 SHORT_ID_STRING_NAME = 'short-id'
-EXTENDED_ID_STRING_NAME = 'short-id'
+EXTENDED_ID_STRING_NAME = 'extended-id'
 
 ATOMS_NAME_FIELD            = '_name'
 ATOMS_LABELS_FIELD          = '_labels'
