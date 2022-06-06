@@ -32,6 +32,7 @@ from colabfit import (
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD,
+    MAX_STRING_LENGTH,
     STRING_DTYPE_SPECIFIER,
     SHORT_ID_STRING_NAME, EXTENDED_ID_STRING_NAME
 )
@@ -2260,6 +2261,11 @@ class MongoDatabase(MongoClient):
                 auth.split()[-1] for auth in authors
             ]),
         ])
+
+        if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
+            id_prefix = id_prefix[:MAX_STRING_LENGTH - len(ds_id) - 2]
+            warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
+
         extended_id = f'{id_prefix}__{ds_id}'
 
         # TODO: get_dataset should be able to use extended-id; authors can't symbols

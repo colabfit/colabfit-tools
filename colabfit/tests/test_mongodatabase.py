@@ -1187,9 +1187,11 @@ class TestDatasets:
                 co_ids2, description='A basic configuration set'
             )
 
+            all_pr_ids = pr_ids1 + pr_ids2
+
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
-                pr_ids=pr_ids1+pr_ids2,
+                pr_ids=all_pr_ids,
                 name='example_dataset',
                 authors=['authors with spaces are okay'],
                 links='https://colabfit.openkim.org/',
@@ -1200,7 +1202,7 @@ class TestDatasets:
             with pytest.raises(RuntimeError):
                 ds_id = database.insert_dataset(
                     cs_ids=[cs_id1, cs_id2],
-                    pr_ids=pr_ids1+pr_ids2,
+                    pr_ids=all_pr_ids[:-1],
                     name='example_dataset',
                     authors=['authors123'],
                     links='https://colabfit.openkim.org/',
@@ -1211,7 +1213,7 @@ class TestDatasets:
             with pytest.raises(RuntimeError):
                 ds_id = database.insert_dataset(
                     cs_ids=[cs_id1, cs_id2],
-                    pr_ids=pr_ids1+pr_ids2,
+                    pr_ids=all_pr_ids[:-2],
                     name='example_dataset',
                     authors=['authors_name'],
                     links='https://colabfit.openkim.org/',
@@ -1222,9 +1224,20 @@ class TestDatasets:
             # Note: in Python3 non-english upper/lowercase are okay
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
-                pr_ids=pr_ids1+pr_ids2,
+                pr_ids=all_pr_ids[:-3],
                 name='example_dataset',
                 authors=['ä'],
+                links='https://colabfit.openkim.org/',
+                description='An example dataset',
+                resync=True
+            )
+
+            # Note: in Python3 non-english upper/lowercase are okay
+            ds_id = database.insert_dataset(
+                cs_ids=[cs_id1, cs_id2],
+                pr_ids=all_pr_ids[:-4],
+                name='example_dataset',
+                authors=['AVeryLongLastNameThatShouldGetClipped'+'a'*255],
                 links='https://colabfit.openkim.org/',
                 description='An example dataset',
                 resync=True
