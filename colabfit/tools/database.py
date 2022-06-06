@@ -2326,7 +2326,7 @@ class MongoDatabase(MongoClient):
         Args:
 
             ds_ids (str):
-                The ID of the dataset to return
+                Either the 'short-id' or 'extended-id' of a dataset
 
             resync (bool):
                 If True, re-aggregates the configuration set and property
@@ -2343,6 +2343,9 @@ class MongoDatabase(MongoClient):
                 'dataset': the dataset object
         """
 
+        if len(ds_id) > 19:
+            # Then this must be an extended ID
+            ds_id = ds_id[-19:]
 
         if resync:
             self.resync_dataset(ds_id, verbose=verbose)
