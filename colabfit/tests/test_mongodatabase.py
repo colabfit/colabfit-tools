@@ -726,12 +726,12 @@ class TestMongoDatabase:
                 assert config_doc['nsites'] == len(config)
                 assert config_doc['nelements'] == 1
                 assert config_doc['nperiodic_dimensions'] == 0
-                assert {pid}.issubset(config_doc['relationships']['properties'])
+                assert {pid}.issubset(config_doc['relationships']['property_instances'])
 
                 assert {cid}.issubset(prop_doc['relationships']['configurations'])
 
                 assert database.property_settings.count_documents({
-                    'relationships.properties': pid
+                    'relationships.property_instances': pid
                 })
 
             database.drop_database(database.database_name)
@@ -877,7 +877,7 @@ class TestMongoDatabase:
             assert ds_doc['links'] == ['https://colabfit.org']
             assert ds_doc['description'] == 'an example dataset'
             assert len(ds_doc['relationships']['configuration_sets']) == 2
-            assert len(ds_doc['relationships']['properties']) == 20
+            assert len(ds_doc['relationships']['property_instances']) == 20
 
             agg = ds_doc['aggregated_info']
 
