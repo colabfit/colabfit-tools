@@ -34,5 +34,6 @@ setup(
         'plotly',
         'pymongo',
         'biopython',
+        'matplotlib'
     ],
 )
