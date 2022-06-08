@@ -26,6 +26,7 @@ jobs:
           password: ${{secrets.MAIL_PASSWORD}}
           subject: PR Testing ${{github.head_ref}}->${{github.base_ref}}
           to: efuemmel@umn.edu
+          cc: vita.joshua@gmail.com
           from: GitHub Unit Testing
           secure: True
           body: file://log.log

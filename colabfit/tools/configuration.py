@@ -7,7 +7,8 @@ from tqdm import tqdm
 from colabfit import (
     HASH_LENGTH, HASH_SHIFT,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
-    ATOMS_CONSTRAINTS_FIELD
+    ATOMS_CONSTRAINTS_FIELD,
+    SHORT_ID_STRING_NAME
 )
 
 class BaseConfiguration:
@@ -42,10 +43,15 @@ class BaseConfiguration:
            unique_identifier_kw (list):
                Class attribute that specifies the keywords to be used for all unique identifiers.
                All Configuration classes should accept each keyword as an argument to their constructor.
+           unique_identifiers_kw_types (dict):
+               Class attribute that specifies the data types of the unique
+               identifier keywords. key = identifier keyword; value = identifier
+               data type.
        """
 
-# TODO: Make this read-only so as to avoid user accidentally renaming
+# TODO: Make these read-only so as to avoid user accidentally renaming
     unique_identifier_kw = None
+    unique_identifier_kw_types = None
 
     def __init__(self, names=None, labels=None):
         """
@@ -143,6 +149,12 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     """
 
     unique_identifier_kw = ['atomic_numbers', 'positions', 'cell', 'pbc']
+    unique_identifier_kw_types = {
+        'atomic_numbers': int,
+        'positions': float,
+        'cell': float,
+        'pbc': bool,
+    }
 
     def __init__(self, names=None, labels=None, **kwargs):
         """
@@ -400,7 +412,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         }
 
         for doc in tqdm(
-            db.configurations.find({'colabfit_id': {'$in': ids}}),
+            db.configurations.find({SHORT_ID_STRING_NAME: {'$in': ids}}),
             desc='Aggregating configuration info',
             disable=not verbose,
             total=len(ids),

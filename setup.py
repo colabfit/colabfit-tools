@@ -26,6 +26,7 @@ setup(
     ],
     install_requires = [
         'ase',
+        'h5py',
         'kim_property',
         'numpy',
         'tqdm',
@@ -33,5 +34,6 @@ setup(
         'plotly',
         'pymongo',
         'biopython',
+        'matplotlib'
     ],
 )
