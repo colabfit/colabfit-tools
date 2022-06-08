@@ -36,6 +36,9 @@ class BaseConfiguration:
            info (dict):
                Stores important metadata for a Configuration. At a minimum, it will include
                keywords "_name" and "_labels".
+           _array_order (array):
+                Optional ordering of array unique identifiers so that trivial permutations do not hash
+                differently
            unique_identifier_kw (list):
                Class attribute that specifies the keywords to be used for all unique identifiers.
                All Configuration classes should accept each keyword as an argument to their constructor.
@@ -52,6 +55,7 @@ class BaseConfiguration:
             labels (str, list of str):
                 Labels to be associated with a Configuration
         """
+        self._array_order = None
         self.info = {}
         if names is None:
             self.info[ATOMS_NAME_FIELD] = set()
@@ -113,9 +117,8 @@ class BaseConfiguration:
             raise Exception('Ensure unique identifiers are properly defined!')
         _hash = sha512()
         for k, v in self.unique_identifiers.items():
-            #print (k,v.dtype)
-            _hash.update(bytes(pre_hash_formatting(v)))
-        return int(str(int(_hash.hexdigest(), 16) - HASH_SHIFT)[:HASH_LENGTH])
+            _hash.update(bytes(pre_hash_formatting(k,v,self._array_order)))
+        return int(_hash.hexdigest(),16)
 
     def __eq__(self, other):
         """
@@ -129,7 +132,7 @@ class BaseConfiguration:
 class AtomicConfiguration(BaseConfiguration, Atoms):
     # TODO: Modify docstring
     # TODO: Don't think AtomicConfigurations will always have _id
-    # TODO: Reimplement contrainsts
+    # TODO: Reimplement constraints
     # - :attr:`~colabfit.ATOMS_CONSTRAINTS_FIELD` = :code:"_constraints"
     """
     An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and an :class:`ase.Atoms`
@@ -167,7 +170,9 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             kwargs.pop('atomic_numbers')
 
         Atoms.__init__(self,**kwargs)
+        self._array_order = np.lexsort((self.arrays['positions'][:,2],self.arrays['positions'][:,1],self.arrays['positions'][:,0]))
         self._hash = hash(self)
+        # sort by x then y then z
         '''
         if ATOMS_NAME_FIELD in self.info:
             v = self.info[ATOMS_NAME_FIELD]
@@ -522,18 +527,25 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
 
 # TODO: string encodings, etc to ensure consistent hashing
 #       Add support for lists, etc
-def pre_hash_formatting(v):
+def pre_hash_formatting(k,v,ordering):
     """
     Ensures proper datatypes, precision, etc. prior to hashing of unique identifiers
 
     Args:
+        k:
+            Key of item to hash
         v:
             Value to hash
+        ordering:
+            Potential ordering of arrays prior to hashing
 
     Returns:
         Reformatted value
 
     """
+    # hard code for positions and numbers for now
+    if k in ['atomic_numbers', 'positions']:
+        v = v[ordering]
     # for now all AtomicConfiguration UIs are defined to be ndarrays
     if isinstance(v, np.ndarray):
         if v.dtype in [np.half, np.single, np.double, np.longdouble]:
