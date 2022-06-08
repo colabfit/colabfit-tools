@@ -50,7 +50,7 @@ class ConfigurationSet:
     def __hash__(self):
 
         cs_hash = sha512()
-        cs_hash.update(self.description)
+        cs_hash.update(self.description.encode('utf-8'))
 
         for i in sorted(self.configuration_ids):
             cs_hash.update(str(i).encode('utf-8'))

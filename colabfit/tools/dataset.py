@@ -96,7 +96,7 @@ class Dataset:
             ds_hash.update(str(i).encode('utf-8'))
 
 
-        return int(_hash.hexdigest(), 16)
+        return int(ds_hash.hexdigest(), 16)
 
 
     def __str__(self):

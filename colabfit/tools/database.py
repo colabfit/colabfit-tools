@@ -643,7 +643,7 @@ class MongoDatabase(MongoClient):
 
                         ps_set_on_insert = {
                             SHORT_ID_STRING_NAME: ps_id,
-                            'hash':ps._hash,
+                            'hash':str(ps._hash),
                             'method':       ps.method,
                             'description': ps.description,
                             'files':       ps.files,
@@ -682,7 +682,7 @@ class MongoDatabase(MongoClient):
                             }
 
                         coll_property_settings.update_one(
-                            {'hash': ps._hash},
+                            {'hash': str(ps._hash)},
                             ps_update_doc,
                             upsert=True,
                             hint='hash'
@@ -729,7 +729,7 @@ class MongoDatabase(MongoClient):
                             },
                             '$setOnInsert': {
                                 SHORT_ID_STRING_NAME: pid,
-                                'hash': hash(prop),
+                                'hash': str(hash(prop)),
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -739,7 +739,7 @@ class MongoDatabase(MongoClient):
                         }
 
                     coll_properties.update_one(
-                        {'hash': hash(prop)},
+                        {'hash': str(hash(prop))},
                         p_update_doc,
                         upsert=True,
                         hint='hash',
@@ -752,7 +752,7 @@ class MongoDatabase(MongoClient):
                     yield (cid, pid)
 
             coll_configurations.update_one(
-                {hash: hash(atoms)},
+                {'hash': str(hash(atoms))},
                 c_update_doc,
                 upsert=True,
                 hint='hash',
@@ -962,7 +962,7 @@ class MongoDatabase(MongoClient):
 
                         ps_set_on_insert = {
                             SHORT_ID_STRING_NAME: ps_id,
-                            'hash':ps._hash,
+                            'hash':str(ps._hash),
                             'method':      ps.method,
                             'description': ps.description,
                             'files':       ps.files,
@@ -1001,7 +1001,7 @@ class MongoDatabase(MongoClient):
                             }
 
                         settings_docs.append(UpdateOne(
-                            {'hash': ps._hash},
+                            {'hash': str(ps._hash)},
                             ps_update_doc,
                             upsert=True,
                             hint='hash',
@@ -1048,7 +1048,7 @@ class MongoDatabase(MongoClient):
                             },
                             '$setOnInsert': {
                                 SHORT_ID_STRING_NAME: pid,
-                                'hash':hash(prop),
+                                'hash':str(hash(prop)),
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -1058,7 +1058,7 @@ class MongoDatabase(MongoClient):
                         }
 
                     property_docs.append(UpdateOne(
-                        {'hash': hash(prop)},
+                        {'hash': str(hash(prop))},
                         p_update_doc,
                         upsert=True,
                         hint='hash',
@@ -1072,7 +1072,7 @@ class MongoDatabase(MongoClient):
 
             config_docs.append(
                 UpdateOne(
-                    {'hash': hash(atoms)},
+                    {'hash': str(hash(atoms))},
                     c_update_doc,
                     upsert=True,
                     hint='hash',
@@ -1239,14 +1239,14 @@ class MongoDatabase(MongoClient):
         ps_id = ID_FORMAT_STRING.format('PS', generate_string(self.property_settings), 0)
 
         self.property_settings.update_one(
-            {'hash': ps_object._hash},
+            {'hash': str(ps_object._hash)},
             {
                 '$addToSet': {
                     'labels': {'$each': list(ps_object.labels)}
                 },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: ps_id,
-                    'hash': ps_object._hash,
+                    'hash': str(ps_object._hash),
                     'method': ps_object.method,
                     'description': ps_object.description,
                     'files': [
@@ -1266,7 +1266,7 @@ class MongoDatabase(MongoClient):
 
     def get_property_settings(self, pso_id):
         pso_doc = self.property_settings.find_one({SHORT_ID_STRING_NAME: pso_id})
-
+        print (pso_doc)
         return PropertySettings(
                 method=pso_doc['method'],
                 description=pso_doc['description'],
@@ -1494,7 +1494,7 @@ class MongoDatabase(MongoClient):
             raise NotImplementedError
 
         if configuration_ids == 'all':
-            query = {}
+            query = {SHORT_ID_STRING_NAME: {'$exists': True}}
         else:
             if isinstance(configuration_ids, str):
                 configuration_ids = [configuration_ids]
@@ -1705,7 +1705,7 @@ class MongoDatabase(MongoClient):
         self.database.concatenate_configurations()
 
 # TODO: If duplicate found, return original's id->Likewise for insert_dataset
-    def insert_configuration_set(self, ids, ordered=False, description='', overloaded_cs_id=None, verbose=False):
+    def insert_configuration_set(self, ids, description='', ordered=False, overloaded_cs_id=None, verbose=False):
         """
         Inserts the configuration set of IDs to the database.
 
@@ -1739,7 +1739,7 @@ class MongoDatabase(MongoClient):
         else:
             cs_id = overloaded_cs_id
         # Check for duplicates
-        if self.configuration_sets.count_documents({'hash': cs_hash}):
+        if self.configuration_sets.count_documents({'hash': str(cs_hash)}):
             return cs_id
 
         # Make sure all of the configurations exist
@@ -1755,7 +1755,7 @@ class MongoDatabase(MongoClient):
         )
 
         self.configuration_sets.update_one(
-            {'hash': cs_hash},
+            {'hash': str(cs_hash)},
             {
                 '$addToSet': {
                     'relationships.configurations': {'$each': ids}
@@ -1763,7 +1763,7 @@ class MongoDatabase(MongoClient):
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: cs_id,
                     'description': description,
-                    'hash': cs_hash,
+                    'hash': str(cs_hash),
                     'ordered': ordered
                 },
                 '$set': {
@@ -2316,7 +2316,7 @@ class MongoDatabase(MongoClient):
             ds_id = overloaded_ds_id
 
         # Check for duplicates
-        if self.datasets.count_documents({'hash': ds_hash}):
+        if self.datasets.count_documents({'hash': str(ds_hash)}):
             if resync:
                 self.resync_dataset(ds_id)
 
@@ -2359,7 +2359,7 @@ class MongoDatabase(MongoClient):
         # TODO: get_dataset should be able to use extended-id; authors can't symbols
 
         self.datasets.update_one(
-            {'hash': ds_hash},
+            {'hash': str(ds_hash)},
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
@@ -2372,7 +2372,7 @@ class MongoDatabase(MongoClient):
                     'authors': authors,
                     'links': links,
                     'description': description,
-                    'hash': ds_hash,
+                    'hash': str(ds_hash),
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
@@ -4005,7 +4005,7 @@ def _build_c_update_doc(configuration,collection):
     c_update_doc = {
         '$setOnInsert' : {
             SHORT_ID_STRING_NAME: cid,
-            'hash': hash(configuration)
+            'hash': str(hash(configuration))
         },
         '$set': {
             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
