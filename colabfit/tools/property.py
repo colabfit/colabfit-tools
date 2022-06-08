@@ -261,7 +261,7 @@ class Property(dict):
             raise RuntimeError(
                 "`Property.configuration_ids` must contain at least 1 entry"
             )
-
+        # Eric-> Do we ever use this
         self.configuration_ids = configuration_ids
 
         # Add settings
@@ -419,7 +419,7 @@ class Property(dict):
 
         return cls(
             definition=definition,
-            configuration_ids=[str(hash(configuration))],
+            configuration_ids=[configuration],
             property_map=property_map,
             settings=settings,
             instance=instance,
@@ -605,8 +605,7 @@ class Property(dict):
         # Don't hash cids
         #for cid in self.configuration_ids:
         #    _hash.update(cid.encode('utf-8'))
-
-        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
+        return int(_hash.hexdigest(), 16)
 
 
     def __eq__(self, other):

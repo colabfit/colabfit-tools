@@ -26,7 +26,7 @@ import kim_edn
 from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
-
+from django.utils.crypto import get_random_string
 from colabfit import (
     HASH_LENGTH,
     HASH_SHIFT,
@@ -262,6 +262,16 @@ class MongoDatabase(MongoClient):
 
         self.nprocs = nprocs
 
+        for col in [self.configurations,self.property_instances,self.property_definitions,
+                    self.property_settings,self.configuration_sets,self.datasets]:
+            result = list(col.find({'_counter':{'$exists': True}}))
+            if len(result)==0:
+                col.insert_one({'_counter':0})
+                #Also index ?
+            elif len(result)>1:
+                raise RuntimeError('A collection should only have one counter!')
+
+
 
     def insert_data(
         self,
@@ -378,7 +388,6 @@ class MongoDatabase(MongoClient):
                     for k, pd in pdict.items():
                         if k in ignore_keys:
                             continue
-
                         if k not in pd_doc['definition']:
                             warnings.warn(
                                 'Provided field "{}" in property_map does not match '\
@@ -513,8 +522,7 @@ class MongoDatabase(MongoClient):
                 transform(atoms)
 
 
-            c_update_doc, cid = _build_c_update_doc(atoms)
-
+            c_update_doc, cid = _build_c_update_doc(atoms,coll_configurations)
             #Old Method processed_fields = process_species_list(atoms)
             # Add if doesn't exist, else update (since last-modified changed)
             '''
@@ -582,11 +590,10 @@ class MongoDatabase(MongoClient):
                         configuration=atoms,
                         property_map=pmap_copy
                     )
-                    # TODO: Change below naming convention
-                    pid = ID_FORMAT_STRING.format('PI', generate_hexstring(), 0)
+
+                    pid = ID_FORMAT_STRING.format('PI', generate_string(coll_properties), 0)
 
                     new_pids.append(pid)
-
                     labels = []
                     methods = []
                     settings_ids = []
@@ -633,8 +640,8 @@ class MongoDatabase(MongoClient):
                             labels=pso_map['labels'] if 'labels' in pso_map else None,
                             fields=gathered_fields,
                         )
-                        # TODO: Change naming convention
-                        ps_id = ID_FORMAT_STRING.format('PS', generate_hexstring(), 0)
+
+                        ps_id = ID_FORMAT_STRING.format('PS', generate_string(coll_property_settings), 0)
 
                         ps_set_on_insert = {
                             'colabfit_id': ps_id,
@@ -723,7 +730,7 @@ class MongoDatabase(MongoClient):
                             },
                             '$setOnInsert': {
                                 'colabfit_id': pid,
-                                #'hash': hash(???),
+                                'hash': hash(prop),
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -863,7 +870,7 @@ class MongoDatabase(MongoClient):
 
             #cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
-            c_update_doc, cid = _build_c_update_doc(atoms)
+            c_update_doc, cid = _build_c_update_doc(atoms,coll_configurations)
             #Old method processed_fields = process_species_list(atoms)
 
             # Add if doesn't exist, else update (since last-modified changed)
@@ -903,7 +910,6 @@ class MongoDatabase(MongoClient):
                 }
 '''         # TODO: Same as above
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
-
             pid = None
 
             new_pids = []
@@ -930,11 +936,10 @@ class MongoDatabase(MongoClient):
                         configuration=atoms,
                         property_map=pmap_copy
                     )
-                    #TODO: Change namoing convention below
-                    pid = ID_FORMAT_STRING.format('PI', generate_hexstring(), 0)
+
+                    pid = ID_FORMAT_STRING.format('PI', generate_string(coll_properties), 0)
 
                     new_pids.append(pid)
-
                     labels = []
                     methods = []
                     settings_ids = []
@@ -982,8 +987,8 @@ class MongoDatabase(MongoClient):
                             fields=gathered_fields,
                         )
 
-                        # TODO: change naming convention
-                        ps_id = ID_FORMAT_STRING.format('PS', generate_hexstring(), 0)
+
+                        ps_id = ID_FORMAT_STRING.format('PS', generate_string(coll_property_settings), 0)
 
                         ps_set_on_insert = {
                             'colabfit_id': ps_id,
@@ -1072,7 +1077,8 @@ class MongoDatabase(MongoClient):
                             },
                             '$setOnInsert': {
                                 'colabfit_id': pid,
-                                #'hash':hash(???),
+
+                                'hash':hash(prop),
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -1104,6 +1110,7 @@ class MongoDatabase(MongoClient):
             ai += 1
 
         if config_docs:
+            print ('here')
             res = coll_configurations.bulk_write(config_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
             if nmatch:
@@ -1111,6 +1118,7 @@ class MongoDatabase(MongoClient):
                     '{} duplicate configurations detected'.format(nmatch)
                 )
         if property_docs:
+            print('here')
             res = coll_properties.bulk_write(property_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
             if nmatch:
@@ -1119,6 +1127,7 @@ class MongoDatabase(MongoClient):
                 )
 
         if settings_docs:
+            print('here')
             res = coll_property_settings.bulk_write(
                 settings_docs,
                 # [
@@ -1253,7 +1262,7 @@ class MongoDatabase(MongoClient):
                 of the object.
         """
 
-        ps_id = ID_FORMAT_STRING.format('PS', generate_hexstring(), 0)
+        ps_id = ID_FORMAT_STRING.format('PS', generate_string(self.property_settings), 0)
 
         self.property_settings.update_one(
             {'colabfit_id': ps_id},
@@ -1721,7 +1730,7 @@ class MongoDatabase(MongoClient):
         self.database.concatenate_configurations()
 
 # TODO: If duplicate found, return original's id->Likewise for insert_dataset
-    def insert_configuration_set(self, ids, description='', overloaded_cs_id=None, verbose=False):
+    def insert_configuration_set(self, ids, ordered=False, description='', overloaded_cs_id=None, verbose=False):
         """
         Inserts the configuration set of IDs to the database.
 
@@ -1730,7 +1739,10 @@ class MongoDatabase(MongoClient):
             ids (list or str):
                 The IDs of the configurations to include in the configuartion
                 set.
-
+            ordered (bool):
+                Flag specifying if COs in CS should be considered ordered.
+            overloaded_cs_id (str):
+                Used to overload naming convention when updating versions
             description (str, optional):
                 A human-readable description of the configuration set.
         """
@@ -1748,7 +1760,7 @@ class MongoDatabase(MongoClient):
 
         cs_hash = int(str(int(cs_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
         if overloaded_cs_id is None:
-            cs_id = ID_FORMAT_STRING.format('CS', generate_hexstring(), 0)
+            cs_id = ID_FORMAT_STRING.format('CS', generate_string(self.configuration_sets), 0)
         else:
             cs_id = overloaded_cs_id
         # Check for duplicates
@@ -1777,6 +1789,7 @@ class MongoDatabase(MongoClient):
                     'colabfit_id': cs_id,
                     'description': description,
                     'hash': cs_hash,
+                    'ordered': ordered
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
@@ -2313,7 +2326,7 @@ class MongoDatabase(MongoClient):
         ds_hash = int(str(int(ds_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
 
         if overloaded_ds_id is None:
-            ds_id = ID_FORMAT_STRING.format('DS', generate_hexstring(), 0)
+            ds_id = ID_FORMAT_STRING.format('DS', generate_string(self.datasets), 0)
         else:
             ds_id = overloaded_ds_id
 
@@ -3747,8 +3760,8 @@ def load_data(
 
 # Moved out of static method to avoid changing insert_data* methods
 # Could consider changing in the future
-def _build_c_update_doc(configuration):
-    cid = ID_FORMAT_STRING.format('CO', generate_hexstring(), 0)
+def _build_c_update_doc(configuration,collection):
+    cid = ID_FORMAT_STRING.format('CO', generate_string(collection), 0)
     processed_fields = configuration.configuration_summary()
     c_update_doc = {
         '$setOnInsert' : {
@@ -3774,15 +3787,11 @@ def _build_c_update_doc(configuration):
     c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
     return c_update_doc, cid
 
-def generate_hexstring():
-    """ Adapted from bson.ObjectId which is used by Mongo
-        4 byte time, 2 byte PID, 2 byte random int
-    """
-    uid = struct.pack(">i", int(time.time()))
-    uid += struct.pack(">H", os.getpid() % 0xFFFF)
-    r = random.randint(0, 0xFFFF)
-    uid += struct.pack(">h", r)
-    return binascii.hexlify(uid).decode()
+
+def generate_string(collection):
+    current = collection.find_one({'_counter':{'$exists': True}})['_counter']
+    collection.update_one({'_counter': {'$exists': True}}, {'$inc': {'_counter': 1}})
+    return current
 
 
 class ConcatenationException(Exception):
