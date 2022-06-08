@@ -285,6 +285,22 @@ class MongoDatabase(MongoClient):
             keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
         )
 
+        self.configurations.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.property_instances.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.property_settings.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.configuration_sets.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.datasets.create_index(
+            keys='hash', name='hash', unique=True
+        )
+
         self.nprocs = nprocs
 
         for col in [self.configurations,self.property_instances,self.property_definitions,
@@ -666,10 +682,10 @@ class MongoDatabase(MongoClient):
                             }
 
                         coll_property_settings.update_one(
-                            {SHORT_ID_STRING_NAME: ps_id},
+                            {'hash': ps._hash},
                             ps_update_doc,
                             upsert=True,
-                            hint=SHORT_ID_STRING_NAME
+                            hint='hash'
                         )
 
                         methods.append(ps.method)
@@ -723,10 +739,10 @@ class MongoDatabase(MongoClient):
                         }
 
                     coll_properties.update_one(
-                        {SHORT_ID_STRING_NAME: pid},
+                        {'hash': hash(prop)},
                         p_update_doc,
                         upsert=True,
-                        hint=SHORT_ID_STRING_NAME,
+                        hint='hash',
                     )
 
                     c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
@@ -736,10 +752,10 @@ class MongoDatabase(MongoClient):
                     yield (cid, pid)
 
             coll_configurations.update_one(
-                {SHORT_ID_STRING_NAME: cid},
+                {hash: hash(atoms)},
                 c_update_doc,
                 upsert=True,
-                hint=SHORT_ID_STRING_NAME,
+                hint='hash',
             )
 
             if not pid:
@@ -985,10 +1001,10 @@ class MongoDatabase(MongoClient):
                             }
 
                         settings_docs.append(UpdateOne(
-                            {SHORT_ID_STRING_NAME: ps_id},
+                            {'hash': ps._hash},
                             ps_update_doc,
                             upsert=True,
-                            hint=SHORT_ID_STRING_NAME,
+                            hint='hash',
                         ))
 
                         methods.append(ps.method)
@@ -1042,10 +1058,10 @@ class MongoDatabase(MongoClient):
                         }
 
                     property_docs.append(UpdateOne(
-                        {SHORT_ID_STRING_NAME: pid},
+                        {'hash': hash(prop)},
                         p_update_doc,
                         upsert=True,
-                        hint=SHORT_ID_STRING_NAME,
+                        hint='hash',
                     ))
 
                     c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
@@ -1056,10 +1072,10 @@ class MongoDatabase(MongoClient):
 
             config_docs.append(
                 UpdateOne(
-                    {SHORT_ID_STRING_NAME: cid},
+                    {'hash': hash(atoms)},
                     c_update_doc,
                     upsert=True,
-                    hint=SHORT_ID_STRING_NAME,
+                    hint='hash',
                 )
             )
 
@@ -1070,7 +1086,6 @@ class MongoDatabase(MongoClient):
             ai += 1
 
         if config_docs:
-            print ('here')
             res = coll_configurations.bulk_write(config_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
             if nmatch:
@@ -1078,7 +1093,6 @@ class MongoDatabase(MongoClient):
                     '{} duplicate configurations detected'.format(nmatch)
                 )
         if property_docs:
-            print('here')
             res = coll_properties.bulk_write(property_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
             if nmatch:
@@ -1087,7 +1101,6 @@ class MongoDatabase(MongoClient):
                 )
 
         if settings_docs:
-            print('here')
             res = coll_property_settings.bulk_write(
                 settings_docs,
                 # [
@@ -1226,7 +1239,7 @@ class MongoDatabase(MongoClient):
         ps_id = ID_FORMAT_STRING.format('PS', generate_string(self.property_settings), 0)
 
         self.property_settings.update_one(
-            {SHORT_ID_STRING_NAME: ps_id},
+            {'hash': ps_object._hash},
             {
                 '$addToSet': {
                     'labels': {'$each': list(ps_object.labels)}
@@ -1245,7 +1258,7 @@ class MongoDatabase(MongoClient):
                 }
             },
             upsert=True,
-            hint=SHORT_ID_STRING_NAME,
+            hint='hash',
         )
 
         return ps_id
@@ -1742,7 +1755,7 @@ class MongoDatabase(MongoClient):
         )
 
         self.configuration_sets.update_one(
-            {SHORT_ID_STRING_NAME: cs_id},
+            {'hash': cs_hash},
             {
                 '$addToSet': {
                     'relationships.configurations': {'$each': ids}
@@ -1759,7 +1772,7 @@ class MongoDatabase(MongoClient):
                 },
             },
             upsert=True,
-            hint=SHORT_ID_STRING_NAME,
+            hint='hash',
         )
 
         # Add the backwards relationships CO->CS
@@ -1815,7 +1828,7 @@ class MongoDatabase(MongoClient):
             )
         }
 
-
+# TODO look at this function to change updating to involve hash
     def resync_configuration_set(self, cs_id, verbose=False):
         """
         Re-synchronizes the configuration set by re-aggregating the information
@@ -2346,7 +2359,7 @@ class MongoDatabase(MongoClient):
         # TODO: get_dataset should be able to use extended-id; authors can't symbols
 
         self.datasets.update_one(
-            {SHORT_ID_STRING_NAME: ds_id},
+            {'hash': ds_hash},
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
@@ -2367,7 +2380,7 @@ class MongoDatabase(MongoClient):
                 },
             },
             upsert=True,
-            hint=SHORT_ID_STRING_NAME,
+            hint='hash',
         )
 
         # Add the backwards relationships CS->DS
