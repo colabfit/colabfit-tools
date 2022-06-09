@@ -224,7 +224,6 @@ class TestMongoDatabase:
             )
 
 
-
     def test_add_configs_props_diff_def(self):
         with tempfile.TemporaryFile() as tmpfile:
 
@@ -288,6 +287,99 @@ class TestMongoDatabase:
             np.testing.assert_allclose(
                 database.get_data('property_instances', 'default.energy', ravel=True),
                 np.hstack(energies)
+            )
+            np.testing.assert_allclose(
+                database.get_data('property_instances', 'default.stress', ravel=True),
+                np.hstack(stress)
+            )
+            decoded_names = database.get_data('property_instances', 'default.name', ravel=True)
+            decoded_names = decoded_names.tolist()
+            assert decoded_names == names
+            np.testing.assert_allclose(
+                database.get_data('property_instances', 'default.nd-same-shape', ravel=True),
+                np.concatenate(nd_same_shape).ravel()
+            )
+            data = database.get_data('property_instances', 'default.nd-diff-shapes')
+            for a1, a2 in zip(data, nd_diff_shape):
+                np.testing.assert_allclose(a1, a2)
+
+            np.testing.assert_allclose(
+                database.get_data('property_instances', 'default.forces', concatenate=True),
+                np.concatenate(forces)
+            )
+            np.testing.assert_allclose(
+                database.get_data('property_instances', 'default.nd-same-shape-arr', concatenate=True),
+                np.concatenate(nd_same_shape_arr)
+            )
+            data = database.get_data('property_instances', 'default.nd-diff-shapes-arr')
+            for a1, a2 in zip(data, nd_diff_shape_arr):
+                np.testing.assert_allclose(a1, a2)
+
+
+    def test_props_default_value(self):
+        with tempfile.TemporaryFile() as tmpfile:
+
+            database = MongoDatabase(self.database_name, drop_database=True,configuration_type=AtomicConfiguration)
+
+            returns = build_n(10)
+
+            images              = returns[0]
+            energies            = returns[1]
+            stress              = returns[2]
+            names               = returns[3]
+            nd_same_shape       = returns[4]
+            nd_diff_shape       = returns[5]
+            forces              = returns[6]
+            nd_same_shape_arr   = returns[7]
+            nd_diff_shape_arr   = returns[8]
+
+            database.insert_property_definition(
+                {
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
+                    'property-title': 'A default property used for testing',
+                    'property-description': 'A description of the property',
+                    'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
+                    'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
+                    'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
+                    'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
+                    'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
+                    'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
+                    'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+                }
+            )
+
+            property_map = {
+                'default': [{
+                    'energy': {'value': 0.1, 'units': 'eV'},
+                    'stress': {'field': 'dft-stress', 'units': 'GPa'},
+                    'name': {'field': 'name', 'units': None},
+                    'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                    'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                    'forces': {'field': 'dft-forces', 'units': 'eV/Ang'},
+                    'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                    'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                }]
+            }
+
+            for img in images:
+                img.info['dft-energy'] = img.info['energy']
+                img.info['dft-stress'] = img.info['stress']
+                img.arrays['dft-forces'] = img.arrays['forces']
+
+                del img.info['energy']
+                del img.info['stress']
+                del img.arrays['forces']
+
+            list(zip(*database.insert_data(
+                images, property_map=property_map
+            )))
+
+            np.testing.assert_allclose(
+                database.get_data('property_instances', 'default.energy', ravel=True),
+                # np.hstack(energies)
+                [0.1]*len(energies)
             )
             np.testing.assert_allclose(
                 database.get_data('property_instances', 'default.stress', ravel=True),

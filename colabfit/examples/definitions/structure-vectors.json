@@ -1,0 +1,55 @@
+{
+    "property-id": "tag:staff@noreply.colabfit.org,2022-05-30:property/structure-vectors",
+    "property-name": "structure-vectors",
+    "property-title": "Structure vector descriptors",
+    "property-description": "The structure vector descriptors for each atom.",
+    "number-of-knots": {
+        "type":         "int",
+        "has-unit":     false,
+        "extent":       [],
+        "required":     true,
+        "description":  "The number of knots used for the splines. Assumed to be uniformly-spaced between inner/outer cutoff"
+    },
+    "inner-boundary-condition": {
+        "type":         "string",
+        "has-unit":     false,
+        "extent":       [],
+        "required":     true,
+        "description":  "The boundary condition used for the left-most knot. Must be 'fixed' or 'natural'."
+    },
+    "outer-boundary-condition": {
+        "type":         "string",
+        "has-unit":     false,
+        "extent":       [],
+        "required":     true,
+        "description":  "The boundary condition used for the left-most knot. Must be 'fixed' or 'natural'."
+    },
+    "inner-cutoff": {
+        "type":         "float",
+        "has-unit":     true,
+        "extent":       [],
+        "required":     true,
+        "description":  "The position of the left-most knot of the radial splines."
+    },
+    "outer-cutoff": {
+        "type":         "float",
+        "has-unit":     true,
+        "extent":       [],
+        "required":     true,
+        "description":  "The position of the right-most knot of the radial splines."
+    },
+    "two-body": {
+        "type":         "float",
+        "has-unit":     false,
+        "extent":       [":", ":"],
+        "required":     true,
+        "description":  "Structure vectors corresponding to the pair interactions."
+    },
+    "three-body": {
+        "type":         "float",
+        "has-unit":     false,
+        "extent":       [":", ":"],
+        "required":     true,
+        "description":  "Structure vectors corresponding to the triplet interactions."
+    }
+}

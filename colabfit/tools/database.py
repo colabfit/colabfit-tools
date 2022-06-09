@@ -514,9 +514,10 @@ class MongoDatabase(MongoClient):
 
         expected_keys = {
             pname: [set(
-                pmap[f]['field'] if 'field' in pmap[f] else None
+                pmap[f]['field']
                 for f in property_definitions[pname].keys() - ignore_keys
                 if property_definitions[pname][f]['required']
+                and 'field' in pmap[f]
             ) for pmap in property_map[pname]]
             for pname in property_map
         }
@@ -791,10 +792,10 @@ class MongoDatabase(MongoClient):
 
         expected_keys = {
             pname: [set(
-                # property_map[pname][f]['field']
-                pmap[f]['field'] if 'field' in pmap[f] else None
+                pmap[f]['field']
                 for f in property_definitions[pname].keys() - ignore_keys
                 if property_definitions[pname][f]['required']
+                and 'field' in pmap[f]
             ) for pmap in property_map[pname]]
             for pname in property_map
         }
