@@ -77,7 +77,7 @@ class Dataset:
         self.links                  = links
         self.description            = description
         self.aggregated_info        = aggregated_info
-
+        self._hash = hash(self)
 
     def __hash__(self):
         """Hashes the dataset using its configuration set and property IDs"""
@@ -89,7 +89,8 @@ class Dataset:
         for i in sorted(self.property_ids):
             ds_hash.update(str(i).encode('utf-8'))
 
-        return int(str(int(ds_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
+
+        return int(ds_hash.hexdigest(), 16)
 
 
     def __str__(self):

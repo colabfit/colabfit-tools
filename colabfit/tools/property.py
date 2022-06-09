@@ -26,7 +26,7 @@ from colabfit import (
 # These are fields that are related to the geometry of the atomic structure
 # or the OpenKIM Property Definition and shouldn't be used for equality checks
 _ignored_fields = [
-    'property-id',
+    #'property-id',         # removed so that if two different properties have identical values they will still hash differently
     'property-title',
     'property-description',
     'instance-id',
@@ -261,7 +261,7 @@ class Property(dict):
             raise RuntimeError(
                 "`Property.configuration_ids` must contain at least 1 entry"
             )
-
+        # Eric-> Do we ever use this
         self.configuration_ids = configuration_ids
 
         # Add settings
@@ -270,6 +270,7 @@ class Property(dict):
         else:
             self.settings = []
 
+        self._hash = hash(self)
 
     @property
     def instance(self):
@@ -421,7 +422,7 @@ class Property(dict):
 
         return cls(
             definition=definition,
-            configuration_ids=[str(hash(configuration))],
+            configuration_ids=[configuration],
             property_map=property_map,
             settings=settings,
             instance=instance,
@@ -572,17 +573,17 @@ class Property(dict):
 
     def __hash__(self):
         """
-        Hashes the Property by hashing its EDN. Note that the property hash also
+        Hashes the Property by hashing its EDN.
+        #Change below
+        Note that the property hash also
         depends upon the hashes of the linked configurations; this is to handle
         the case where two properties happen to be the same even though their
         underlying configurations are different.
         """
 
         _hash = sha512()
-
         for key, val in self.instance.items():
             if key in _ignored_fields: continue
-
             try:
                 hashval =  np.round_(
                     np.array(val['source-value']), decimals=12
@@ -593,19 +594,21 @@ class Property(dict):
                         val['source-value'], dtype=STRING_DTYPE_SPECIFIER
                     ).data.tobytes()
                 except:
-                    raise PropertyHashError(
-                        "Could not hash key {}: {}".format(key, val)
-                    )
+                    try:
+                        hashval = np.array(val,dtype=STRING_DTYPE_SPECIFIER).data.tobytes()
+                    except:
+                        raise PropertyHashError(
+                            "Could not hash key {}: {}".format(key, val)
+                        )
 
             _hash.update(hashval)
-
+            # What if values are identical but are added in different units? Should these hash to unique PIs?
             if 'source-unit' in val:
                 _hash.update(str(val['source-unit']).encode('utf-8'))
-
-        for cid in self.configuration_ids:
-            _hash.update(cid.encode('utf-8'))
-
-        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
+        # Don't hash cids
+        #for cid in self.configuration_ids:
+        #    _hash.update(cid.encode('utf-8'))
+        return int(_hash.hexdigest(), 16)
 
 
     def __eq__(self, other):
@@ -697,7 +700,7 @@ class Property(dict):
     def __repr__(self):
         return str(self)
 
-
+# Eric->Do we need to do this?
 def update_edn_with_conf(edn, conf):
 
     edn['species'] = {
