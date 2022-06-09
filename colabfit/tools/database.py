@@ -3596,7 +3596,10 @@ class MongoDatabase(MongoClient):
 
                 outfile.attrs.create(
                     'authors',
-                    np.array(ds_doc['authors'], dtype=STRING_DTYPE_SPECIFIER)
+                    np.array(
+                        [a.encode('utf-8') for a in ds_doc['authors']],
+                        dtype=STRING_DTYPE_SPECIFIER
+                    )
                 )
 
                 outfile.attrs.create(
@@ -3685,6 +3688,7 @@ class MongoDatabase(MongoClient):
 
                     data_group = pi_group.create_group(pi_doc['type'])
 
+                    # Write all of the data fields
                     for key, value in pi_doc[pi_doc['type']].items():
                         dtype = prop_definitions[pi_doc['type']][key]['type']
                         if dtype == 'string':
