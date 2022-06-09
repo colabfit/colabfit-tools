@@ -19,6 +19,7 @@ _PROPDEFS_COLLECTION        = 'property_definitions'
 _PROPSETTINGS_COLLECTION    = 'property_settings'
 _CONFIGSETS_COLLECTION      = 'configuration_sets'
 _DATASETS_COLLECTION        = 'datasets'
+_COUNTERS_COLLECTION        = 'counters'
 
 SHORT_ID_STRING_NAME = 'short-id'
 EXTENDED_ID_STRING_NAME = 'extended-id'

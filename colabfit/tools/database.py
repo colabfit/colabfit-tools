@@ -27,13 +27,14 @@ import kim_edn
 from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
-from django.utils.crypto import get_random_string
+# from django.utils.crypto import get_random_string
 from colabfit import (
     HASH_LENGTH,
     HASH_SHIFT,
     ID_FORMAT_STRING,
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
+    _COUNTERS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD,
     MAX_STRING_LENGTH,
     STRING_DTYPE_SPECIFIER,
@@ -258,6 +259,7 @@ class MongoDatabase(MongoClient):
         if drop_database:
             self.drop_database(database_name)
 
+        self.counters               = self[database_name][_COUNTERS_COLLECTION]
         self.configurations         = self[database_name][_CONFIGS_COLLECTION]
         self.property_instances     = self[database_name][_PROPS_COLLECTION]
         self.property_definitions   = self[database_name][_PROPDEFS_COLLECTION]
@@ -303,15 +305,18 @@ class MongoDatabase(MongoClient):
 
         self.nprocs = nprocs
 
-        for col in [self.configurations,self.property_instances,self.property_definitions,
-                    self.property_settings,self.configuration_sets,self.datasets]:
-            result = list(col.find({'_counter':{'$exists': True}}))
+        for col in [
+            self.configurations, self.property_instances,
+            self.property_settings, self.configuration_sets, self.datasets
+            ]:
+
+            result = list(self.counters.find({col.name: {'$exists': True}}))
+
             if len(result)==0:
-                col.insert_one({'_counter':0})
-                #Also index ?
+                self.counters.insert_one({col.name: 0})
+                #Also index ? -- no; starting at 0-index is fine
             elif len(result)>1:
                 raise RuntimeError('A collection should only have one counter!')
-
 
 
     def insert_data(
@@ -509,6 +514,7 @@ class MongoDatabase(MongoClient):
         else:
             client = MongoClient(mongo_login)
 
+        coll_counters               = client[database_name][_COUNTERS_COLLECTION]
         coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
         coll_properties             = client[database_name][_PROPS_COLLECTION]
         coll_property_definitions   = client[database_name][_PROPDEFS_COLLECTION]
@@ -565,7 +571,7 @@ class MongoDatabase(MongoClient):
 
             #cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
-            c_update_doc, cid = _build_c_update_doc(atoms,coll_configurations)
+            c_update_doc, cid = _build_c_update_doc(atoms, coll_counters)
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
             pid = None
@@ -595,7 +601,7 @@ class MongoDatabase(MongoClient):
                         property_map=pmap_copy
                     )
 
-                    pid = ID_FORMAT_STRING.format('PI', generate_string(coll_properties), 0)
+                    pid = ID_FORMAT_STRING.format('PI', generate_string(coll_counters, _PROPS_COLLECTION), 0)
 
                     new_pids.append(pid)
                     labels = []
@@ -645,7 +651,7 @@ class MongoDatabase(MongoClient):
                             fields=gathered_fields,
                         )
 
-                        ps_id = ID_FORMAT_STRING.format('PS', generate_string(coll_property_settings), 0)
+                        ps_id = ID_FORMAT_STRING.format('PS', generate_string(coll_counters, _PROPSETTINGS_COLLECTION), 0)
 
                         ps_set_on_insert = {
                             SHORT_ID_STRING_NAME: ps_id,
@@ -787,6 +793,7 @@ class MongoDatabase(MongoClient):
         else:
             client = MongoClient(mongo_login)
 
+        coll_counters               = client[database_name][_COUNTERS_COLLECTION]
         coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
         coll_properties             = client[database_name][_PROPS_COLLECTION]
         coll_property_definitions   = client[database_name][_PROPDEFS_COLLECTION]
@@ -847,7 +854,7 @@ class MongoDatabase(MongoClient):
 
             #cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
-            c_update_doc, cid = _build_c_update_doc(atoms,coll_configurations)
+            c_update_doc, cid = _build_c_update_doc(atoms,coll_counters)
             #Old method processed_fields = process_species_list(atoms)
 
             # Add if doesn't exist, else update (since last-modified changed)
@@ -914,7 +921,7 @@ class MongoDatabase(MongoClient):
                         property_map=pmap_copy
                     )
 
-                    pid = ID_FORMAT_STRING.format('PI', generate_string(coll_properties), 0)
+                    pid = ID_FORMAT_STRING.format('PI', generate_string(coll_counters, _PROPS_COLLECTION), 0)
 
                     new_pids.append(pid)
                     labels = []
@@ -964,7 +971,7 @@ class MongoDatabase(MongoClient):
                         )
 
 
-                        ps_id = ID_FORMAT_STRING.format('PS', generate_string(coll_property_settings), 0)
+                        ps_id = ID_FORMAT_STRING.format('PS', generate_string(coll_counters, _PROPSETTINGS_COLLECTION), 0)
 
                         ps_set_on_insert = {
                             SHORT_ID_STRING_NAME: ps_id,
@@ -1242,7 +1249,7 @@ class MongoDatabase(MongoClient):
                 of the object.
         """
 
-        ps_id = ID_FORMAT_STRING.format('PS', generate_string(self.property_settings), 0)
+        ps_id = ID_FORMAT_STRING.format('PS', generate_string(self.counters, _PROPSETTINGS_COLLECTION), 0)
 
         self.property_settings.update_one(
             {'hash': str(ps_object._hash)},
@@ -1741,7 +1748,7 @@ class MongoDatabase(MongoClient):
 
         cs_hash = int(cs_hash.hexdigest(), 16)
         if overloaded_cs_id is None:
-            cs_id = ID_FORMAT_STRING.format('CS', generate_string(self.configuration_sets), 0)
+            cs_id = ID_FORMAT_STRING.format('CS', generate_string(self.counters, _CONFIGSETS_COLLECTION), 0)
         else:
             cs_id = overloaded_cs_id
         # Check for duplicates
@@ -2311,7 +2318,7 @@ class MongoDatabase(MongoClient):
         ds_hash = int(ds_hash.hexdigest(), 16)
 
         if overloaded_ds_id is None:
-            ds_id = ID_FORMAT_STRING.format('DS', generate_string(self.datasets), 0)
+            ds_id = ID_FORMAT_STRING.format('DS', generate_string(self.counters, _DATASETS_COLLECTION), 0)
         else:
             ds_id = overloaded_ds_id
 
@@ -3884,6 +3891,24 @@ class MongoDatabase(MongoClient):
                         dtype=STRING_DTYPE_SPECIFIER),
                     )
 
+def generate_string(counter_collection, cname):
+    """
+    Args:
+
+        counter_collection (mongodb.Collection):
+            A collection storing document counters
+
+        cname (str):
+            The name of the collection for which to generate the string
+    """
+    # current = collection.find_one({'_counter':{'$exists': True}})['_counter']
+    # collection.update_one({'_counter': {'$exists': True}}, {'$inc': {'_counter': 1}})
+
+    current = counter_collection.find_one({cname: {'$exists': True}})[cname]
+    counter_collection.update_one({cname: {'$exists': True}}, {'$inc': {cname: 1}})
+    return current
+
+
 # TODO: May need to make more Configuration "type" agnostic
 def load_data(
     file_path,
@@ -3996,8 +4021,8 @@ def load_data(
 
 # Moved out of static method to avoid changing insert_data* methods
 # Could consider changing in the future
-def _build_c_update_doc(configuration,collection):
-    cid = ID_FORMAT_STRING.format('CO', generate_string(collection), 0)
+def _build_c_update_doc(configuration, counter_collection):
+    cid = ID_FORMAT_STRING.format('CO', generate_string(counter_collection, _CONFIGS_COLLECTION), 0)
     processed_fields = configuration.configuration_summary()
     c_update_doc = {
         '$setOnInsert' : {
@@ -4022,12 +4047,6 @@ def _build_c_update_doc(configuration,collection):
     c_update_doc['$setOnInsert'].update({k: v.tolist() for k, v in configuration.unique_identifiers.items()})
     c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
     return c_update_doc, cid
-
-
-def generate_string(collection):
-    current = collection.find_one({'_counter':{'$exists': True}})['_counter']
-    collection.update_one({'_counter': {'$exists': True}}, {'$inc': {'_counter': 1}})
-    return current
 
 
 class ConcatenationException(Exception):
