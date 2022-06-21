@@ -105,12 +105,12 @@ class TestMongoDatabase:
             nd_diff_shape_arr   = returns[8]
 
             ids = list(database.insert_data(images))
-
-            assert database.configurations.count_documents({}) == 10
+            #Will be 11 because of _counter
+            assert database.configurations.count_documents({}) == 11
 
             ids = list(database.insert_data(images))
 
-            assert database.configurations.count_documents({}) == 10
+            assert database.configurations.count_documents({}) == 11
 
 
     def test_add_then_update_nochange_config(self):
@@ -194,8 +194,9 @@ class TestMongoDatabase:
                 img.info[ATOMS_NAME_FIELD].add('change2')
                 img.info[ATOMS_LABELS_FIELD] = {'another_label2'}
 
+            # These ids aren't in DB as they were duplicates of previous COs
             ids = list(database.insert_data(images))
-
+            for i in database.get_data('configurations', 'short-id'):
             for n in database.get_data('configurations', 'names'):
                 assert n[0] == 'change'
                 assert n[1] == 'change2'
@@ -784,7 +785,6 @@ class TestMongoDatabase:
             cs_id = database.insert_configuration_set(co_ids, 'a description')
 
             cs_doc = next(database.configuration_sets.find({SHORT_ID_STRING_NAME: cs_id}))
-
             agg_info = cs_doc['aggregated_info']
 
             assert cs_doc['description'] == 'a description'
@@ -1038,6 +1038,7 @@ class TestConfigurationSets:
             # ).tolist()
             assert rebuilt_ids.sort() == ids.sort()
 
+            # Broken because we don't create IDs this way any longer, but don't see purpose of this anyway
             for img in images:
                 img2 = database.get_configuration(
                     ID_FORMAT_STRING.format('CO', hash(img), 0)
