@@ -550,7 +550,7 @@ class MongoDatabase(MongoClient):
                 transform(atoms)
 
 
-            c_update_doc, c_hash = _build_c_update_doc(atoms,coll_configurations)
+            c_update_doc, c_hash = _build_c_update_doc(atoms)
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
             p_hash = None
@@ -827,7 +827,7 @@ class MongoDatabase(MongoClient):
                 transform(atoms)
 
 
-            c_update_doc, c_hash = _build_c_update_doc(atoms,coll_configurations)
+            c_update_doc, c_hash = _build_c_update_doc(atoms)
             #Old method processed_fields = process_species_list(atoms)
 
             # Add if doesn't exist, else update (since last-modified changed)
@@ -1685,7 +1685,7 @@ class MongoDatabase(MongoClient):
         self.database.concatenate_configurations()
 
 # TODO: If duplicate found, return original's id->Likewise for insert_dataset
-    def insert_configuration_set(self, hashes, description='', ordered=False, overloaded_cs_id=None, verbose=False):
+    def insert_configuration_set(self, hashes, name, description='', ordered=False, overloaded_cs_id=None, verbose=False):
         """
         Inserts the configuration set of IDs to the database.
 
@@ -1694,6 +1694,8 @@ class MongoDatabase(MongoClient):
             hashes (list or str):
                 The hashes of the configurations to include in the configuartion
                 set.
+            name (str):
+                Name of CS---used in forming extended-id
             ordered (bool):
                 Flag specifying if COs in CS should be considered ordered.
             overloaded_cs_id (str):
@@ -1742,6 +1744,8 @@ class MongoDatabase(MongoClient):
                 },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: cs_id,
+                    'name': name,
+                    EXTENDED_ID_STRING_NAME: f'{name}__{cs_id}',
                     'description': description,
                     'hash': str(cs_hash),
                     'ordered': ordered
@@ -1803,6 +1807,7 @@ class MongoDatabase(MongoClient):
             'last_modified': cs_doc['last_modified'],
             'configuration_set': ConfigurationSet(
                 configuration_ids=cs_doc['relationships']['configurations'],
+                name=cs_doc['name'],
                 description=cs_doc['description'],
                 aggregated_info=cs_doc['aggregated_info']
             )
@@ -1884,7 +1889,7 @@ class MongoDatabase(MongoClient):
             if len(ids) == init_len:
                 raise RuntimeError('All configurations to be removed are not present in CS.')
 
-
+        # TODO: Eric->add name below
         # insert new version of CS
         self.insert_configuration_set(ids, description=cs_doc['description'], overloaded_cs_id=new_cs_id)
 
@@ -2333,7 +2338,6 @@ class MongoDatabase(MongoClient):
         if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
             id_prefix = id_prefix[:MAX_STRING_LENGTH - len(ds_id) - 2]
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
-
         extended_id = f'{id_prefix}__{ds_id}'
 
         # TODO: get_dataset should be able to use extended-id; authors can't symbols
@@ -3269,9 +3273,10 @@ class MongoDatabase(MongoClient):
                 query=query,
                 ravel=True
             ).tolist()
-
+            # TODO: Eric ->add name below
             cs_id = self.insert_configuration_set(
                 co_ids,
+                name='From-Markdown',
                 description=row[header.index('Description')],
                 verbose=True
             )
@@ -3980,7 +3985,7 @@ def load_data(
 
 # Moved out of static method to avoid changing insert_data* methods
 # Could consider changing in the future
-def _build_c_update_doc(configuration,collection):
+def _build_c_update_doc(configuration):
     processed_fields = configuration.configuration_summary()
     c_hash = str(hash(configuration))
     c_update_doc = {

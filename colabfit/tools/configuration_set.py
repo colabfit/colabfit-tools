@@ -39,8 +39,9 @@ class ConfigurationSet:
 
     """
 
-    def __init__(self, configuration_ids, description, aggregated_info, ordered=False):
+    def __init__(self, configuration_ids, name, description, aggregated_info, ordered=False):
         self.configuration_ids  = configuration_ids
+        self.name = name
         self.description        = description
         self.aggregated_info    = aggregated_info
         self.ordered = ordered

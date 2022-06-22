@@ -783,7 +783,7 @@ class TestMongoDatabase:
 
             co_ids = list(zip(*ids))[0]
 
-            cs_id = database.insert_configuration_set(co_ids, 'a description')
+            cs_id = database.insert_configuration_set(co_ids, 'name','a description')
 
             cs_doc = next(database.configuration_sets.find({SHORT_ID_STRING_NAME: cs_id}))
             agg_info = cs_doc['aggregated_info']
@@ -872,7 +872,7 @@ class TestMongoDatabase:
 
             co_ids1, pr_ids1 = list(zip(*ids))
 
-            cs_id1 = database.insert_configuration_set(co_ids1, 'a description1')
+            cs_id1 = database.insert_configuration_set(co_ids1,  'name','a description1')
 
             images = build_n(10)[0]
 
@@ -889,7 +889,7 @@ class TestMongoDatabase:
 
             co_ids2, pr_ids2 = list(zip(*ids))
 
-            cs_id2 = database.insert_configuration_set(co_ids2, 'a description2')
+            cs_id2 = database.insert_configuration_set(co_ids2, 'name', 'a description2')
 
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
@@ -1025,7 +1025,7 @@ class TestConfigurationSets:
 
 
             cs_id = database.insert_configuration_set(
-                ids, description='A basic configuration set'
+                ids, 'name', description='A basic configuration set'
             )
 
             desc = next(database.configuration_sets.find({SHORT_ID_STRING_NAME: cs_id}))['description']
@@ -1093,7 +1093,7 @@ class TestDatasets:
             co_ids1, pr_ids1 = list(zip(*ids))
 
             cs_id1 = database.insert_configuration_set(
-                co_ids1, description='A basic configuration set'
+                co_ids1, 'name', description='A basic configuration set'
             )
 
             images = build_n(10)[0]
@@ -1108,7 +1108,7 @@ class TestDatasets:
             co_ids2, pr_ids2 = list(zip(*ids))
 
             cs_id2 = database.insert_configuration_set(
-                co_ids2, description='A basic configuration set'
+                co_ids2, 'name', description='A basic configuration set'
             )
 
             ds_id = database.insert_dataset(
@@ -1172,7 +1172,7 @@ class TestDatasets:
             co_ids1, pr_ids1 = list(zip(*ids))
 
             cs_id1 = database.insert_configuration_set(
-                co_ids1, description='A basic configuration set'
+                co_ids1, 'name', description='A basic configuration set'
             )
 
             images = build_n(10)[0]
@@ -1187,7 +1187,7 @@ class TestDatasets:
             co_ids2, pr_ids2 = list(zip(*ids))
 
             cs_id2 = database.insert_configuration_set(
-                co_ids2, description='A basic configuration set'
+                co_ids2, 'name', description='A basic configuration set'
             )
 
             all_pr_ids = pr_ids1 + pr_ids2
@@ -1251,7 +1251,7 @@ class TestDatasets:
             co_ids1, pr_ids1 = list(zip(*ids))
 
             cs_id1 = database.insert_configuration_set(
-                co_ids1, description='A basic configuration set'
+                co_ids1, 'name', description='A basic configuration set'
             )
 
             images = build_n(10)[0]
@@ -1266,7 +1266,7 @@ class TestDatasets:
             co_ids2, pr_ids2 = list(zip(*ids))
 
             cs_id2 = database.insert_configuration_set(
-                co_ids2, description='A basic configuration set'
+                co_ids2, 'name', description='A basic configuration set'
             )
 
             all_pr_ids = pr_ids1 + pr_ids2
@@ -1381,7 +1381,7 @@ class TestDatasets:
             co_ids1, pr_ids1 = list(zip(*ids))
 
             cs_id1 = database.insert_configuration_set(
-                co_ids1, description='A basic configuration set'
+                co_ids1, 'name', description='A basic configuration set'
             )
 
             images = build_n(10)[0]
@@ -1396,7 +1396,7 @@ class TestDatasets:
             co_ids2, pr_ids2 = list(zip(*ids))
 
             cs_id2 = database.insert_configuration_set(
-                co_ids2, description='A basic configuration set'
+                co_ids2, 'name', description='A basic configuration set'
             )
 
             ds_id = database.insert_dataset(
