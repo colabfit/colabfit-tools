@@ -1402,12 +1402,12 @@ class MongoDatabase(MongoClient):
             return data
 
 
-    def get_configuration(self, i, property_ids=None, attach_properties=False):
+    def get_configuration(self, i, property_hashes=None, attach_properties=False):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
         return self.get_configurations(
-            [i], property_ids=property_ids, attach_properties=attach_properties
+            [i], property_hashes=property_hashes, attach_properties=attach_properties
         )[0]
 
 
@@ -1439,7 +1439,7 @@ class MongoDatabase(MongoClient):
 
             attach_properties (bool, default=False):
                 If True, attaches all the data of any linked properties from
-                :code:`property_ids`. The property data will either be added to
+                :code:`property_hashes`. The property data will either be added to
                 the :code:`arrays` dictionary on a Configuration (if it can be
                 converted to a matrix where the first dimension is the same
                 as the number of atoms in the Configuration) or the :code:`info`
@@ -1474,12 +1474,12 @@ class MongoDatabase(MongoClient):
             raise NotImplementedError
 
         if configuration_hashes == 'all':
-            query = {'hashes': {'$exists': True}}
+            query = {'hash': {'$exists': True}}
         else:
             if isinstance(configuration_hashes, str):
-                configuration_ids = [configuration_hashes]
+                configuration_hashes = [configuration_hashes]
 
-            query = {'hashes': {'$in': configuration_hashes}}
+            query = {'hash': {'$in': configuration_hashes}}
 
         if generator:
             raise NotImplementedError
@@ -1492,7 +1492,7 @@ class MongoDatabase(MongoClient):
         else:
             return list(self._get_configurations(
                 query=query,
-                property_ids=property_ids,
+                property_hashes=property_hashes,
                 attach_properties=attach_properties,
                 attach_settings=attach_settings,
                 verbose=verbose
@@ -2641,7 +2641,7 @@ class MongoDatabase(MongoClient):
                 _PROPS_COLLECTION,
                 prop,
                 query=query,
-                ids=ids,
+                hashes=ids,
                 verbose=verbose,
                 ravel=True
             )
@@ -2760,7 +2760,7 @@ class MongoDatabase(MongoClient):
         for field in fields:
 
             data = self.get_data(
-                'properties', field, query=query, ids=ids,
+                'properties', field, query=query, hashes=ids,
                 ravel=True, verbose=verbose
             )
 
@@ -3623,7 +3623,7 @@ class MongoDatabase(MongoClient):
             data_file_name = os.path.join(base_folder, data_file_name)
 
             images = self.get_configurations(
-                configuration_ids=list(set(itertools.chain.from_iterable(
+                configuration_hashes=list(set(itertools.chain.from_iterable(
                     cs.configuration_ids for cs in configuration_sets.values()
                 ))),
                 attach_settings=True,

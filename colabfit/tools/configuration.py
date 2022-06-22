@@ -94,7 +94,7 @@ class BaseConfiguration:
         raise NotImplementedError('All Configuration classes should implement this.')
 
     @staticmethod
-    def aggregate_configuration_summaries(ids):
+    def aggregate_configuration_summaries(hashes):
         """Aggregates information for given configurations.
 
         All Configuration classes should implement this.
@@ -102,8 +102,8 @@ class BaseConfiguration:
         for a collection of Configurations
 
         Args:
-            ids:
-                IDs of Configurations of interest
+            hashes:
+                hashes of Configurations of interest
 
         Returns:
             dict: Key-value pairs of information aggregated from multiple Configurations
@@ -359,7 +359,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         return conf
 
     @staticmethod
-    def aggregate_configuration_summaries(db, ids, verbose=False):
+    def aggregate_configuration_summaries(db, hashes, verbose=False):
         """
           Gathers the following information from a collection of Configurations:
 
@@ -385,9 +385,9 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
         Args:
             db (:code:`MongoDatabase` object):
-                Database client in which to search for IDs
-            ids (list):
-                IDs of Configurations of interest
+                Database client in which to search for hashes
+            hashes (list):
+                hashes of Configurations of interest
             verbose (bool, default=False):
                 If True, prints a progress bar
 
@@ -395,7 +395,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             dict: Aggregated Configuration information
         """
         aggregated_info = {
-            'nconfigurations': len(ids),
+            'nconfigurations': len(hashes),
             'nsites': 0,
             'nelements': 0,
             'chemical_systems': set(),
@@ -412,10 +412,10 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         }
 
         for doc in tqdm(
-            db.configurations.find({SHORT_ID_STRING_NAME: {'$in': ids}}),
+            db.configurations.find({'hash': {'$in': hashes}}),
             desc='Aggregating configuration info',
             disable=not verbose,
-            total=len(ids),
+            total=len(hashes),
             ):
             aggregated_info['nsites'] += doc['nsites']
 
