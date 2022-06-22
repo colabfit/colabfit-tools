@@ -1063,7 +1063,7 @@ class MongoDatabase(MongoClient):
                 )
             )
 
-            if not pid:
+            if not p_hash:
                 # Only yield if something wasn't yielded earlier
                 insertions.append((c_hash, p_hash))
 
@@ -1071,7 +1071,6 @@ class MongoDatabase(MongoClient):
 
         if config_docs:
             res = coll_configurations.bulk_write(config_docs, ordered=False)
-            print (res.bulk_api_result)
             nmatch = res.bulk_api_result['nMatched']
             if nmatch:
                 warnings.warn(
@@ -1216,15 +1215,13 @@ class MongoDatabase(MongoClient):
 
         Returns:
 
-            ps_id (str):
-                The ID of the inserted property settings object. Equals the hash
-                of the object.
+            ps_hash (str):
+                The hash of the inserted property settings object.
         """
 
-        ps_id = ID_FORMAT_STRING.format('PS', generate_string(self.property_settings), 0)
-
+        ps_hash = str(ps_object._hash)
         self.property_settings.update_one(
-            {'hash': str(ps_object._hash)},
+            {'hash': ps_hash},
             {
                 '$addToSet': {
                     'labels': {'$each': list(ps_object.labels)}
@@ -1245,12 +1242,11 @@ class MongoDatabase(MongoClient):
             hint='hash',
         )
 
-        return ps_id
+        return ps_hash
 
 
     def get_property_settings(self, pso_hash):
         pso_doc = self.property_settings.find_one({'hash': pso_hash})
-        print (pso_doc)
         return PropertySettings(
                 method=pso_doc['method'],
                 description=pso_doc['description'],
@@ -1339,11 +1335,11 @@ class MongoDatabase(MongoClient):
         if query is None:
             query = {}
 
-        if ids is not None:
-            if isinstance(ids, str):
-                ids = [ids]
-            elif isinstance(ids, np.ndarray):
-                ids = ids.tolist()
+        if hashes is not None:
+            if isinstance(hashes, str):
+                hashes = [hashes]
+            elif isinstance(hashes, np.ndarray):
+                hashes = hashes.tolist()
 
             query['hash'] = {'$in': hashes}
 
@@ -1352,7 +1348,7 @@ class MongoDatabase(MongoClient):
 
         retfields = {k: 1 for k in fields}
 
-        if keep_ids:
+        if keep_hashes:
             retfields['hash'] = 1
 
         collection = self[self.database_name][collection_name]
@@ -1719,7 +1715,7 @@ class MongoDatabase(MongoClient):
 
         cs_hash = int(cs_hash.hexdigest(), 16)
         if overloaded_cs_id is None:
-            cs_id = ID_FORMAT_STRING.format('CS', generate_string(self.configuration_sets), 0)
+            cs_id = ID_FORMAT_STRING.format('CS', generate_string(), 0)
         else:
             cs_id = overloaded_cs_id
         # Check for duplicates
@@ -2295,7 +2291,7 @@ class MongoDatabase(MongoClient):
         ds_hash = int(ds_hash.hexdigest(), 16)
 
         if overloaded_ds_id is None:
-            ds_id = ID_FORMAT_STRING.format('DS', generate_string(self.datasets), 0)
+            ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
         else:
             ds_id = overloaded_ds_id
 
@@ -3835,7 +3831,7 @@ class MongoDatabase(MongoClient):
                     {'hash': {'$in': ps_ids}}
                     ):
 
-                    ps_group = ps_coll_group.create_group(ps_doc['hash')
+                    ps_group = ps_coll_group.create_group(ps_doc['hash'])
 
                     ps_group.attrs['description'] = ps_doc['description']
                     ps_group.attrs['method'] = ps_doc['method']
@@ -3986,10 +3982,10 @@ def load_data(
 # Could consider changing in the future
 def _build_c_update_doc(configuration,collection):
     processed_fields = configuration.configuration_summary()
-    hash = str(hash(configuration))
+    c_hash = str(hash(configuration))
     c_update_doc = {
         '$setOnInsert' : {
-            'hash': hash
+            'hash': c_hash
         },
         '$set': {
             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -4008,10 +4004,10 @@ def _build_c_update_doc(configuration,collection):
     }
     c_update_doc['$setOnInsert'].update({k: v.tolist() for k, v in configuration.unique_identifiers.items()})
     c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
-    return c_update_doc, hash
+    return c_update_doc, c_hash
 
 
-def generate_short_id():
+def generate_string():
     return get_random_string(12)
 
 
