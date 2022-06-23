@@ -6,6 +6,7 @@ import markdown
 import datetime
 import warnings
 import itertools
+import string
 import numpy as np
 from tqdm import tqdm
 import multiprocessing
@@ -19,12 +20,15 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 from ase.io import write as ase_write
-
+import struct
+import random
+import time
+import binascii
 import kim_edn
 from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
-
+from django.utils.crypto import get_random_string
 from colabfit import (
     HASH_LENGTH,
     HASH_SHIFT,
@@ -262,19 +266,11 @@ class MongoDatabase(MongoClient):
         self.configuration_sets     = self[database_name][_CONFIGSETS_COLLECTION]
         self.datasets               = self[database_name][_DATASETS_COLLECTION]
 
-        self.configurations.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.property_instances.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
         self.property_definitions.create_index(
             keys='definition.property-name', name='definition.property-name',
             unique=True
         )
-        self.property_settings.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
+
         self.configuration_sets.create_index(
             keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
         )
@@ -282,7 +278,33 @@ class MongoDatabase(MongoClient):
             keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
         )
 
+        self.configurations.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.property_instances.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.property_settings.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.configuration_sets.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.datasets.create_index(
+            keys='hash', name='hash', unique=True
+        )
+
         self.nprocs = nprocs
+
+        for col in [self.configurations,self.property_instances,self.property_definitions,
+                    self.property_settings,self.configuration_sets,self.datasets]:
+            result = list(col.find({'_counter':{'$exists': True}}))
+            if len(result)==0:
+                col.insert_one({'_counter':0})
+                #Also index ?
+            elif len(result)>1:
+                raise RuntimeError('A collection should only have one counter!')
+
 
 
     def insert_data(
@@ -400,7 +422,6 @@ class MongoDatabase(MongoClient):
                     for k, pd in pdict.items():
                         if k in ignore_keys:
                             continue
-
                         if k not in pd_doc['definition']:
                             warnings.warn(
                                 'Provided field "{}" in property_map does not match '\
@@ -529,15 +550,13 @@ class MongoDatabase(MongoClient):
             if transform:
                 transform(atoms)
 
-            #cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
-            c_update_doc, cid = _build_c_update_doc(atoms)
-
+            c_update_doc, c_hash = _build_c_update_doc(atoms)
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
-            pid = None
+            p_hash = None
 
-            new_pids = []
+
             for pname, pmap_list in property_map.items():
                 for pmap_i, pmap in enumerate(pmap_list):
                     pmap_copy = dict(pmap)
@@ -562,13 +581,11 @@ class MongoDatabase(MongoClient):
                         property_map=pmap_copy
                     )
 
-                    pid = ID_FORMAT_STRING.format('PI', hash(prop), 0)
-
-                    new_pids.append(pid)
+                    p_hash = str(hash(prop))
 
                     labels = []
                     methods = []
-                    settings_ids = []
+                    settings_hashes = []
 
                     # Attach property settings, if any were given
                     if '_settings' in pmap:
@@ -613,11 +630,10 @@ class MongoDatabase(MongoClient):
                             fields=gathered_fields,
                         )
 
-                        ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
 
                         ps_set_on_insert = {
-                            SHORT_ID_STRING_NAME: ps_id,
-                            'method':      ps.method,
+                            'hash':str(ps._hash),
+                            'method':       ps.method,
                             'description': ps.description,
                             'files':       ps.files,
                         }
@@ -649,21 +665,21 @@ class MongoDatabase(MongoClient):
                                         '$each': list(ps.labels)
                                     },
                                     'relationships.property_instances': {
-                                        '$each': [pid]
+                                        '$each': [p_hash]
                                     }
                                 }
                             }
 
                         coll_property_settings.update_one(
-                            {SHORT_ID_STRING_NAME: ps_id},
+                            {'hash': str(ps._hash)},
                             ps_update_doc,
                             upsert=True,
-                            hint=SHORT_ID_STRING_NAME
+                            hint='hash'
                         )
 
                         methods.append(ps.method)
                         labels += list(ps.labels)
-                        settings_ids.append(ps_id)
+                        settings_hashes.append(str(ps._hash))
 
                     # Prepare the property instance EDN document
                     setOnInsert = {}
@@ -696,12 +712,12 @@ class MongoDatabase(MongoClient):
                                 'labels': {'$each': labels},
                                 # PR -> PSO pointer
                                 'relationships.property_settings': {
-                                    '$each': settings_ids
+                                    '$each': [settings_hashes]
                                 },
-                                'relationships.configurations': cid,
+                                'relationships.configurations': c_hash,
                             },
                             '$setOnInsert': {
-                                SHORT_ID_STRING_NAME: pid,
+                                'hash': p_hash,
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -711,28 +727,28 @@ class MongoDatabase(MongoClient):
                         }
 
                     coll_properties.update_one(
-                        {SHORT_ID_STRING_NAME: pid},
+                        {'hash': p_hash},
                         p_update_doc,
                         upsert=True,
-                        hint=SHORT_ID_STRING_NAME,
+                        hint='hash',
                     )
 
                     c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
-                        pid
+                        p_hash
                     )
 
-                    yield (cid, pid)
+                    yield (c_hash, p_hash)
 
             coll_configurations.update_one(
-                {SHORT_ID_STRING_NAME: cid},
+                {'hash': c_hash},
                 c_update_doc,
                 upsert=True,
-                hint=SHORT_ID_STRING_NAME,
+                hint='hash',
             )
 
-            if not pid:
+            if not p_hash:
                 # Only yield if something wasn't yielded earlier
-                yield (cid, pid)
+                yield (c_hash, p_hash)
 
             ai += 1
 
@@ -811,9 +827,8 @@ class MongoDatabase(MongoClient):
             if transform:
                 transform(atoms)
 
-            #cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
 
-            c_update_doc, cid = _build_c_update_doc(atoms)
+            c_update_doc, c_hash = _build_c_update_doc(atoms)
             #Old method processed_fields = process_species_list(atoms)
 
             # Add if doesn't exist, else update (since last-modified changed)
@@ -853,10 +868,9 @@ class MongoDatabase(MongoClient):
                 }
 '''         # TODO: Same as above
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
+            p_hash = None
 
-            pid = None
-
-            new_pids = []
+            new_p_hashes = []
             for pname, pmap_list in property_map.items():
                 for pmap_i, pmap in enumerate(pmap_list):
                     pmap_copy = dict(pmap)
@@ -881,18 +895,16 @@ class MongoDatabase(MongoClient):
                         property_map=pmap_copy
                     )
 
-                    pid = ID_FORMAT_STRING.format('PI', hash(prop), 0)
+                    p_hash=str(hash(prop))
 
-                    new_pids.append(pid)
-
+                    new_p_hashes.append(p_hash)
                     labels = []
                     methods = []
-                    settings_ids = []
+                    settings_hashes = []
 
                     # Attach property settings, if any were given
                     if '_settings' in pmap:
                         pso_map = pmap['_settings']
-
                         all_ps_fields = set(pso_map.keys()) - {
                             'method', 'description', 'files', 'labels'
                         }
@@ -932,10 +944,11 @@ class MongoDatabase(MongoClient):
                             fields=gathered_fields,
                         )
 
-                        ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
+
+                        ps_hash = str(ps._hash)
 
                         ps_set_on_insert = {
-                            SHORT_ID_STRING_NAME: ps_id,
+                            'hash':        ps_hash,
                             'method':      ps.method,
                             'description': ps.description,
                             'files':       ps.files,
@@ -968,21 +981,21 @@ class MongoDatabase(MongoClient):
                                         '$each': list(ps.labels)
                                     },
                                     'relationships.property_instances': {
-                                        '$each': [pid]
+                                        '$each': [p_hash]
                                     }
                                 }
                             }
 
                         settings_docs.append(UpdateOne(
-                            {SHORT_ID_STRING_NAME: ps_id},
+                            {'hash': ps_hash},
                             ps_update_doc,
                             upsert=True,
-                            hint=SHORT_ID_STRING_NAME,
+                            hint='hash',
                         ))
 
                         methods.append(ps.method)
                         labels += list(ps.labels)
-                        settings_ids.append(ps_id)
+                        settings_hashes.append(ps_hash)
 
                     # Prepare the property instance EDN document
                     setOnInsert = {}
@@ -1008,19 +1021,19 @@ class MongoDatabase(MongoClient):
 
                         if 'source-unit' in prop[k]:
                             setOnInsert[k]['source-unit'] = prop[k]['source-unit']
-
+                        # TODO: Look at
                         p_update_doc = {
                             '$addToSet': {
                                 'methods': {'$each': methods},
                                 'labels': {'$each': labels},
                                 # PR -> PSO pointer
                                 'relationships.property_settings': {
-                                    '$each': settings_ids
+                                    '$each': settings_hashes
                                 },
-                                'relationships.configurations': cid,
+                                'relationships.configurations': c_hash,
                             },
                             '$setOnInsert': {
-                                SHORT_ID_STRING_NAME: pid,
+                                'hash':p_hash,
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -1030,30 +1043,30 @@ class MongoDatabase(MongoClient):
                         }
 
                     property_docs.append(UpdateOne(
-                        {SHORT_ID_STRING_NAME: pid},
+                        {'hash': p_hash},
                         p_update_doc,
                         upsert=True,
-                        hint=SHORT_ID_STRING_NAME,
+                        hint='hash',
                     ))
 
                     c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
-                        pid
+                        p_hash
                     )
 
-                    insertions.append((cid, pid))
+                    insertions.append((c_hash, p_hash))
 
             config_docs.append(
                 UpdateOne(
-                    {SHORT_ID_STRING_NAME: cid},
+                    {'hash': c_hash},
                     c_update_doc,
                     upsert=True,
-                    hint=SHORT_ID_STRING_NAME,
+                    hint='hash',
                 )
             )
 
-            if not pid:
+            if not p_hash:
                 # Only yield if something wasn't yielded earlier
-                insertions.append((cid, pid))
+                insertions.append((c_hash, p_hash))
 
             ai += 1
 
@@ -1203,21 +1216,19 @@ class MongoDatabase(MongoClient):
 
         Returns:
 
-            ps_id (str):
-                The ID of the inserted property settings object. Equals the hash
-                of the object.
+            ps_hash (str):
+                The hash of the inserted property settings object.
         """
 
-        ps_id = ID_FORMAT_STRING.format('PS', hash(ps_object), 0)
-
+        ps_hash = str(ps_object._hash)
         self.property_settings.update_one(
-            {SHORT_ID_STRING_NAME: ps_id},
+            {'hash': ps_hash},
             {
                 '$addToSet': {
                     'labels': {'$each': list(ps_object.labels)}
                 },
                 '$setOnInsert': {
-                    SHORT_ID_STRING_NAME: ps_id,
+                    'hash': str(ps_object._hash),
                     'method': ps_object.method,
                     'description': ps_object.description,
                     'files': [
@@ -1229,15 +1240,14 @@ class MongoDatabase(MongoClient):
                 }
             },
             upsert=True,
-            hint=SHORT_ID_STRING_NAME,
+            hint='hash',
         )
 
-        return ps_id
+        return ps_hash
 
 
-    def get_property_settings(self, pso_id):
-        pso_doc = self.property_settings.find_one({SHORT_ID_STRING_NAME: pso_id})
-
+    def get_property_settings(self, pso_hash):
+        pso_doc = self.property_settings.find_one({'hash': pso_hash})
         return PropertySettings(
                 method=pso_doc['method'],
                 description=pso_doc['description'],
@@ -1254,8 +1264,8 @@ class MongoDatabase(MongoClient):
         self, collection_name,
         fields,
         query=None,
-        ids=None,
-        keep_ids=False,
+        hashes=None,
+        keep_hashes=False,
         concatenate=False,
         vstack=False,
         ravel=False,
@@ -1290,13 +1300,13 @@ class MongoDatabase(MongoClient):
                 A Mongo query dictionary. If None, returns the data for all of
                 the documents in the collection.
 
-            ids (list):
-                The list of IDs to return the data for. If None, returns the
+            hashes (list):
+                The list of hashes to return the data for. If None, returns the
                 data for the entire collection. Note that this information can
                 also be provided using the :code:`query` argument.
 
-            keep_ids (bool, default=False):
-                If True, includes the SHORT_ID_STRING_NAME field as one of the returned values.
+            keep_hashes (bool, default=False):
+                If True, includes the "hash" field as one of the returned values.
 
             concatenate (bool, default=False):
                 If True, concatenates the data before returning.
@@ -1326,21 +1336,21 @@ class MongoDatabase(MongoClient):
         if query is None:
             query = {}
 
-        if ids is not None:
-            if isinstance(ids, str):
-                ids = [ids]
-            elif isinstance(ids, np.ndarray):
-                ids = ids.tolist()
+        if hashes is not None:
+            if isinstance(hashes, str):
+                hashes = [hashes]
+            elif isinstance(hashes, np.ndarray):
+                hashes = hashes.tolist()
 
-            query[SHORT_ID_STRING_NAME] = {'$in': ids}
+            query['hash'] = {'$in': hashes}
 
         if isinstance(fields, str):
             fields = [fields]
 
         retfields = {k: 1 for k in fields}
 
-        if keep_ids:
-            retfields[SHORT_ID_STRING_NAME] = 1
+        if keep_hashes:
+            retfields['hash'] = 1
 
         collection = self[self.database_name][collection_name]
 
@@ -1393,18 +1403,18 @@ class MongoDatabase(MongoClient):
             return data
 
 
-    def get_configuration(self, i, property_ids=None, attach_properties=False):
+    def get_configuration(self, i, property_hashes=None, attach_properties=False):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
         return self.get_configurations(
-            [i], property_ids=property_ids, attach_properties=attach_properties
+            [i], property_hashes=property_hashes, attach_properties=attach_properties
         )[0]
 
 
     def get_configurations(
-        self, configuration_ids,
-        property_ids=None,
+        self, configuration_hashes,
+        property_hashes=None,
         attach_properties=False,
         attach_settings=False,
         generator=False,
@@ -1416,12 +1426,12 @@ class MongoDatabase(MongoClient):
 
         Args:
 
-            configuration_ids (list or 'all'):
-                A list of string IDs specifying which Configurations to return.
+            configuration_hashes (list or 'all'):
+                A list of string hashes specifying which Configurations to return.
                 If 'all', returns all of the configurations in the database.
 
-            property_ids (list, default=None):
-                A list of Property IDs. Used for limiting searches when
+            property_hashes (list, default=None):
+                A list of Property hashes. Used for limiting searches when
                 :code:`attach_properties==True`.  If None,
                 :code:`attach_properties` will attach all linked Properties.
                 Note that this only attaches one property per Configuration, so
@@ -1430,7 +1440,7 @@ class MongoDatabase(MongoClient):
 
             attach_properties (bool, default=False):
                 If True, attaches all the data of any linked properties from
-                :code:`property_ids`. The property data will either be added to
+                :code:`property_hashes`. The property data will either be added to
                 the :code:`arrays` dictionary on a Configuration (if it can be
                 converted to a matrix where the first dimension is the same
                 as the number of atoms in the Configuration) or the :code:`info`
@@ -1464,13 +1474,13 @@ class MongoDatabase(MongoClient):
         if attach_settings:
             raise NotImplementedError
 
-        if configuration_ids == 'all':
-            query = {}
+        if configuration_hashes == 'all':
+            query = {'hash': {'$exists': True}}
         else:
-            if isinstance(configuration_ids, str):
-                configuration_ids = [configuration_ids]
+            if isinstance(configuration_hashes, str):
+                configuration_hashes = [configuration_hashes]
 
-            query = {SHORT_ID_STRING_NAME: {'$in': configuration_ids}}
+            query = {'hash': {'$in': configuration_hashes}}
 
         if generator:
             raise NotImplementedError
@@ -1483,7 +1493,7 @@ class MongoDatabase(MongoClient):
         else:
             return list(self._get_configurations(
                 query=query,
-                property_ids=property_ids,
+                property_hashes=property_hashes,
                 attach_properties=attach_properties,
                 attach_settings=attach_settings,
                 verbose=verbose
@@ -1493,7 +1503,7 @@ class MongoDatabase(MongoClient):
     def _get_configurations(
         self,
         query,
-        property_ids,
+        property_hashes,
         attach_properties,
         attach_settings,
         verbose=False
@@ -1507,7 +1517,7 @@ class MongoDatabase(MongoClient):
                         *self.configuration_type.unique_identifier_kw,
                         'names',
                         'labels',
-                        SHORT_ID_STRING_NAME,
+                        'hash',
                     }
                 ),
                 desc='Getting configurations',
@@ -1517,7 +1527,7 @@ class MongoDatabase(MongoClient):
                 c = self.configuration_type(**{k:v for k, v in co_doc.items()
                                                if k in self.configuration_type.unique_identifier_kw})
 
-                c.info[SHORT_ID_STRING_NAME] = co_doc[SHORT_ID_STRING_NAME]
+                c.info['hash'] = co_doc['hash']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
                 c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
 
@@ -1533,24 +1543,24 @@ class MongoDatabase(MongoClient):
                 c = self.configuration_type(**{k: v for k, v in co_doc.items()
                                                if k in self.configuration_type.unique_identifier_kw})
 
-                c.info[SHORT_ID_STRING_NAME] = co_doc[SHORT_ID_STRING_NAME]
+                c.info['hash'] = co_doc['hash']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
                 c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
 
-                config_dict[co_doc[SHORT_ID_STRING_NAME]] = c
+                config_dict[co_doc['hash']] = c
 
-            all_attached_prs = set([_[SHORT_ID_STRING_NAME] for _ in self.property_instances.find(
-                {'relationships.configurations': query[SHORT_ID_STRING_NAME]},
-                {SHORT_ID_STRING_NAME}
+            all_attached_prs = set([_['hash'] for _ in self.property_instances.find(
+                {'relationships.configurations': query['hash']},
+                {'hash'}
             )])
 
-            if property_ids is not None:
-                property_ids = list(all_attached_prs.union(set(property_ids)))
+            if property_hashes is not None:
+                property_hashes = list(all_attached_prs.union(set(property_hashes)))
             else:
-                property_ids = list(all_attached_prs)
+                property_hashes = list(all_attached_prs)
 
             for pr_doc in tqdm(
-                    self.property_instances.find( {SHORT_ID_STRING_NAME: {'$in': property_ids}}),
+                    self.property_instances.find( {'hash': {'$in': property_hashes}}),
                     desc='Attaching properties',
                     disable=not verbose
                 ):
@@ -1675,59 +1685,71 @@ class MongoDatabase(MongoClient):
         """
         self.database.concatenate_configurations()
 
-
-    def insert_configuration_set(self, ids, description=''):
+# TODO: If duplicate found, return original's id->Likewise for insert_dataset
+    def insert_configuration_set(self, hashes, name, description='', ordered=False, overloaded_cs_id=None, verbose=False):
         """
         Inserts the configuration set of IDs to the database.
 
         Args:
 
-            ids (list or str):
-                The IDs of the configurations to include in the configuartion
+            hashes (list or str):
+                The hashes of the configurations to include in the configuartion
                 set.
-
+            name (str):
+                Name of CS---used in forming extended-id
+            ordered (bool):
+                Flag specifying if COs in CS should be considered ordered.
+            overloaded_cs_id (str):
+                Used to overload naming convention when updating versions
             description (str, optional):
                 A human-readable description of the configuration set.
         """
 
-        if isinstance(ids, str):
-            ids = [ids]
+        if isinstance(hashes, str):
+            hashes = [hashes]
 
-        ids = list(set(ids))
+        hashes = list(set(hashes))
 
+        # TODO: Look at below
         cs_hash = sha512()
         cs_hash.update(description.encode('utf-8'))
-        for i in sorted(ids):
+        for i in sorted(hashes):
             cs_hash.update(str(i).encode('utf-8'))
 
-        cs_hash = int(str(int(cs_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
-        cs_id = ID_FORMAT_STRING.format('CS', cs_hash, 0)
-
+        cs_hash = int(cs_hash.hexdigest(), 16)
+        if overloaded_cs_id is None:
+            cs_id = ID_FORMAT_STRING.format('CS', generate_string(), 0)
+        else:
+            cs_id = overloaded_cs_id
         # Check for duplicates
-        if self.configuration_sets.count_documents({SHORT_ID_STRING_NAME: cs_id}):
+        if self.configuration_sets.count_documents({'hash': str(cs_hash)}):
             return cs_id
 
         # Make sure all of the configurations exist
-        if self.configurations.count_documents({SHORT_ID_STRING_NAME: {'$in': ids}}) != len(ids):
+        if self.configurations.count_documents({'hash': {'$in': hashes}}) != len(hashes):
             raise MissingEntryError(
-                "Not all of the IDs provided to insert_configuration_set exist"\
+                "Not all of the COs provided to insert_configuration_set exist"\
                 " in the database."
             )
 
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
-            ids,
+            hashes,
         )
 
         self.configuration_sets.update_one(
-            {SHORT_ID_STRING_NAME: cs_id},
+            {'hash': str(cs_hash)},
             {
                 '$addToSet': {
-                    'relationships.configurations': {'$each': ids}
+                    'relationships.configurations': {'$each': hashes}
                 },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: cs_id,
+                    'name': name,
+                    EXTENDED_ID_STRING_NAME: f'{name}__{cs_id}',
                     'description': description,
+                    'hash': str(cs_hash),
+                    'ordered': ordered
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
@@ -1735,20 +1757,20 @@ class MongoDatabase(MongoClient):
                 },
             },
             upsert=True,
-            hint=SHORT_ID_STRING_NAME,
+            hint='hash',
         )
 
         # Add the backwards relationships CO->CS
         config_docs = []
-        for cid in ids:
+        for c_hash in hashes:
             config_docs.append(UpdateOne(
-                {SHORT_ID_STRING_NAME: cid},
+                {'hash': c_hash},
                 {
                     '$addToSet': {
                         'relationships.configuration_sets': cs_id
                     }
                 },
-                hint=SHORT_ID_STRING_NAME,
+                hint='hash',
             ))
 
         self.configurations.bulk_write(config_docs)
@@ -1786,12 +1808,13 @@ class MongoDatabase(MongoClient):
             'last_modified': cs_doc['last_modified'],
             'configuration_set': ConfigurationSet(
                 configuration_ids=cs_doc['relationships']['configurations'],
+                name=cs_doc['name'],
                 description=cs_doc['description'],
                 aggregated_info=cs_doc['aggregated_info']
             )
         }
 
-
+# TODO look at this function to change updating to involve hash
     def resync_configuration_set(self, cs_id, verbose=False):
         """
         Re-synchronizes the configuration set by re-aggregating the information
@@ -1826,7 +1849,52 @@ class MongoDatabase(MongoClient):
             hint=SHORT_ID_STRING_NAME,
         )
 
+    # TODO: need to make sure can't make duplicate CS just with different versions
+    # TODO: Could do this by creating ConfigurationSets for all versioned CS and use a defined equality with hashing
+    def update_configuration_set(self, cs_id, add_ids=None, remove_ids=None):
 
+        if add_ids is None and remove_ids is None:
+            raise RuntimeError('Please input configuration IDs to add or remove from the configuration set.')
+
+        # increment version number
+        current_hash, current_version = cs_id.split('_')[1:]
+        family_ids = self.configuration_sets.find({'colabfit_id': {'$regex':f'CS_{current_hash}_...'}}, '_id')
+        family_ids = sorted([f['colabfit_id'] for f in family_ids])
+        version = int(family_ids[-1].split('_')[-1]) + 1
+        new_cs_id = ID_FORMAT_STRING.format('CS', int(current_hash), version)
+
+        # Get configuration ids from current version and append and/or remove
+        cs_doc = self.configuration_sets.find_one({'colabfit_id': cs_id})
+        ids = cs_doc['relationships']['configurations']
+        init_len = len(ids)
+
+        if add_ids is not None:
+            if isinstance(add_ids, str):
+                add_ids = [add_ids]
+            ids.extend(add_ids)
+            ids = list(set(ids))
+            if len(ids) == init_len:
+                raise RuntimeError('All configurations to be added are already present in CS.')
+            init_len = len(ids)
+
+        if remove_ids is not None:
+            if isinstance(remove_ids, str):
+                remove_ids = [remove_ids]
+            remove_ids = list(set(remove_ids))
+            for r in remove_ids:
+                try:
+                    ids.remove(r)
+                except:
+                    raise UserWarning(f'A configuration with the ID {r} was not'
+                                      f'in the original CS, so it could not be removed.')
+            if len(ids) == init_len:
+                raise RuntimeError('All configurations to be removed are not present in CS.')
+
+        # TODO: Eric->add name below
+        # insert new version of CS
+        self.insert_configuration_set(ids, description=cs_doc['description'], overloaded_cs_id=new_cs_id)
+
+    # TODO: May need to recompute hash-But when is resyncing necessary?
     def resync_dataset(self, ds_id, verbose=False):
         """
         Re-synchronizes the dataset by aggregating all necessary data from
@@ -1855,6 +1923,7 @@ class MongoDatabase(MongoClient):
             self.resync_configuration_set(csid, verbose=verbose)
 
         aggregated_info = {}
+
         for k,v in self.aggregate_configuration_set_info(cs_ids).items():
             if k == 'labels':
                 k = 'configuration_labels'
@@ -1882,7 +1951,7 @@ class MongoDatabase(MongoClient):
 
     # TODO Work on making this Configuration "type" agnostic->Seems to be HIGHLY Configuration type dependent
     #  Could define another configuration method for this->Just do this for now
-    def aggregate_configuration_info(self, ids, verbose=False):
+    def aggregate_configuration_info(self, hashes, verbose=False):
         """
         Gathers the following information from a collection of configurations:
 
@@ -1916,7 +1985,7 @@ class MongoDatabase(MongoClient):
         """
 
         aggregated_info = {
-            'nconfigurations': len(ids),
+            'nconfigurations': len(hashes),
             'nsites': 0,
             'nelements': 0,
             'chemical_systems': set(),
@@ -1933,7 +2002,7 @@ class MongoDatabase(MongoClient):
         }
 
         for doc in tqdm(
-            self.configurations.find({SHORT_ID_STRING_NAME: {'$in': ids}}),
+            self.configurations.find({'hash': {'$in': hashes}}),
             desc='Aggregating configuration info',
             disable=not verbose,
             total=len(ids),
@@ -1986,7 +2055,7 @@ class MongoDatabase(MongoClient):
         return aggregated_info
 
 
-    def aggregate_property_info(self, pr_ids, verbose=False):
+    def aggregate_property_info(self, pr_hashes, verbose=False):
         """
         Aggregates the following information from a list of properties:
 
@@ -2008,8 +2077,8 @@ class MongoDatabase(MongoClient):
                 All of the aggregated info
         """
 
-        if isinstance(pr_ids, str):
-            pr_ids = [pr_ids]
+        if isinstance(pr_hashes, str):
+            pr_hashes = [pr_hashes]
 
         aggregated_info = {
             'types': [],
@@ -2024,14 +2093,14 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description', '_id',
-            SHORT_ID_STRING_NAME, 'property-name'
+            SHORT_ID_STRING_NAME, 'property-name', 'hash'
         }
 
         for doc in tqdm(
-            self.property_instances.find({SHORT_ID_STRING_NAME: {'$in': pr_ids}}),
+            self.property_instances.find({'hash': {'$in': pr_hashes}}),
             desc='Aggregating property info',
             disable=not verbose,
-            total=len(pr_ids)
+            total=len(pr_hashes)
             ):
             if doc['type'] not in aggregated_info['types']:
                 aggregated_info['types'].append(doc['type'])
@@ -2124,12 +2193,13 @@ class MongoDatabase(MongoClient):
 
 
     def insert_dataset(
-        self, cs_ids, pr_ids, name,
+        self, cs_ids, pr_hashes, name,
         authors=None,
         links=None,
         description='',
         resync=False,
         verbose=False,
+        overloaded_ds_id=None,
         ):
         """
         Inserts a dataset into the database.
@@ -2139,8 +2209,8 @@ class MongoDatabase(MongoClient):
             cs_ids (list or str):
                 The IDs of the configuration sets to link to the dataset.
 
-            pr_ids (list or str):
-                The IDs of the properties to link to the dataset
+            pr_hashes (list or str):
+                The hashes of the properties to link to the dataset
 
             name (str):
                 The name of the dataset
@@ -2174,12 +2244,12 @@ class MongoDatabase(MongoClient):
         if isinstance(cs_ids, str):
             cs_ids = [cs_ids]
 
-        if isinstance(pr_ids, str):
-            pr_ids = [pr_ids]
+        if isinstance(pr_hashes, str):
+            pr_hashes = [pr_hashes]
 
         # Remove possible duplicates
         cs_ids = list(set(cs_ids))
-        pr_ids = list(set(pr_ids))
+        pr_hashes = list(set(pr_hashes))
 
         # Make sure to only include PRs with COs contained by the given CSs
         all_co_ids = []
@@ -2188,21 +2258,21 @@ class MongoDatabase(MongoClient):
 
         all_co_ids = list(set(all_co_ids))
 
-        clean_pr_ids = [
-            _[SHORT_ID_STRING_NAME] for _ in self.property_instances.find(
+        clean_pr_hashes = [
+            _['hash'] for _ in self.property_instances.find(
                 {
-                    SHORT_ID_STRING_NAME: {'$in': pr_ids},
+                    'hash': {'$in': pr_hashes},
                     'relationships.configurations': {'$in': all_co_ids},
                 },
-                {SHORT_ID_STRING_NAME}
+                {'hash'}
             )
         ]
 
-        if len(pr_ids) != len(clean_pr_ids):
+        if len(pr_hashes) != len(clean_pr_hashes):
             warnings.warn(
                 "{} PR IDs passed to insert_dataset, but only {} point to COs "\
                 "contained by the given CSs".format(
-                    len(pr_ids), len(clean_pr_ids)
+                    len(pr_hashes), len(clean_pr_hashes)
                 )
             )
 
@@ -2221,14 +2291,18 @@ class MongoDatabase(MongoClient):
         ds_hash = sha512()
         for ci in sorted(cs_ids):
             ds_hash.update(str(ci).encode('utf-8'))
-        for pi in sorted(clean_pr_ids):
+        for pi in sorted(clean_pr_hashes):
             ds_hash.update(str(pi).encode('utf-8'))
 
-        ds_hash = int(str(int(ds_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
-        ds_id = ID_FORMAT_STRING.format('DS', ds_hash, 0)
+        ds_hash = int(ds_hash.hexdigest(), 16)
+
+        if overloaded_ds_id is None:
+            ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
+        else:
+            ds_id = overloaded_ds_id
 
         # Check for duplicates
-        if self.datasets.count_documents({SHORT_ID_STRING_NAME: ds_id}):
+        if self.datasets.count_documents({'hash': str(ds_hash)}):
             if resync:
                 self.resync_dataset(ds_id)
 
@@ -2245,7 +2319,7 @@ class MongoDatabase(MongoClient):
             aggregated_info[k] = v
 
         for k,v in self.aggregate_property_info(
-            clean_pr_ids, verbose=verbose).items():
+            clean_pr_hashes, verbose=verbose).items():
             if k in {
                 'labels', 'labels_counts',
                 'types',  'types_counts',
@@ -2265,17 +2339,16 @@ class MongoDatabase(MongoClient):
         if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
             id_prefix = id_prefix[:MAX_STRING_LENGTH - len(ds_id) - 2]
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
-
         extended_id = f'{id_prefix}__{ds_id}'
 
         # TODO: get_dataset should be able to use extended-id; authors can't symbols
 
         self.datasets.update_one(
-            {SHORT_ID_STRING_NAME: ds_id},
+            {'hash': str(ds_hash)},
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
-                    'relationships.property_instances': {'$each': clean_pr_ids},
+                    'relationships.property_instances': {'$each': clean_pr_hashes},
                 },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: ds_id,
@@ -2284,6 +2357,7 @@ class MongoDatabase(MongoClient):
                     'authors': authors,
                     'links': links,
                     'description': description,
+                    'hash': str(ds_hash),
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
@@ -2291,7 +2365,7 @@ class MongoDatabase(MongoClient):
                 },
             },
             upsert=True,
-            hint=SHORT_ID_STRING_NAME,
+            hint='hash',
         )
 
         # Add the backwards relationships CS->DS
@@ -2307,11 +2381,11 @@ class MongoDatabase(MongoClient):
 
         # Add the backwards relationships PR->DS
         property_docs = []
-        for pid in tqdm(clean_pr_ids, desc='Updating PR->DS relationships'):
+        for pid in tqdm(clean_pr_hashes, desc='Updating PR->DS relationships'):
             property_docs.append(UpdateOne(
-                {SHORT_ID_STRING_NAME: pid},
+                {'hash': pid},
                 {'$addToSet': {'relationships.datasets': ds_id}},
-                hint=SHORT_ID_STRING_NAME,
+                hint='hash',
             ))
 
         self.property_instances.bulk_write(property_docs)
@@ -2366,7 +2440,63 @@ class MongoDatabase(MongoClient):
             )
         }
 
+# TODO: Handle properties somewhere->should we allow for only properties to be update?
+# TODO: Allow for metadata updating
+    def update_dataset(self, ds_id, add_cs_ids=None, remove_cs_ids=None):
 
+        if add_cs_ids is None and remove_cs_ids is None:
+            raise RuntimeError('Please input configuration set IDs/properties to add or remove from the dataset.')
+
+        # increment version number
+        current_hash, current_version = ds_id.split('_')[1:]
+        family_ids = self.datasets.find({'colabfit_id': {'$regex':f'DS_{current_hash}_...'}}, 'colabfit_id')
+        family_ids = sorted([f['colabfit_id'] for f in family_ids])
+        version = int(family_ids[-1].split('_')[-1]) + 1
+        new_ds_id = ID_FORMAT_STRING.format('DS', int(current_hash), version)
+
+        # Get configuration set ids from current version and append and/or remove
+        ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
+        cs_ids = ds_doc['relationships']['configuration_sets'],
+        property_ids = ds_doc['relationships']['properties']
+        init_len = len(cs_ids)
+
+        if add_cs_ids is not None:
+            if isinstance(cs_ids,str):
+                add_cs_ids = [add_cs_ids]
+            cs_ids.extend(add_cs_ids)
+            cs_ids = list(set(cs_ids))
+            if len(cs_ids) == init_len:
+                raise RuntimeError('All configuration sets to be added are already present in DS.')
+            init_len = len(cs_ids)
+
+            # Remove old version of CS if new version is in added
+            for id in add_cs_ids:
+                current_hash, version = id.split('_')[1:]
+                if int(version) > 0:
+                    try:
+                        old_version = self.configuration_sets.find_one(
+                            {'colabfit_id': {'$regex': f'CS_{current_hash}_...'}}, 'colabfit_id'
+                        )
+                        cs_ids.remove(old_version)
+                    except:
+                        pass
+
+        if remove_cs_ids is not None:
+            if isinstance(remove_cs_ids, str):
+                remove_cs_ids = [remove_cs_ids]
+            remove_cs_ids = list(set(remove_cs_ids))
+            for r in remove_cs_ids:
+                try:
+                    cs_ids.remove(r)
+                except:
+                    raise UserWarning(f'A configuration set with the ID {r} was not'
+                                      f'in the original DS, so it could not be removed.')
+            if len(cs_ids) == init_len:
+                raise RuntimeError('All configuration sets to be removed are not present in DS.')
+
+        # insert new version of DS
+        self.insert_dataset(cs_ids, name=ds_doc['name'], authors=ds_doc['authors'],
+                            links=ds_doc['links'], description=ds_doc['description'], overloaded_ds_id=new_ds_id)
 
     def aggregate_dataset_info(self, ds_ids):
         """
@@ -2414,16 +2544,16 @@ class MongoDatabase(MongoClient):
 
             cs_ids = dataset.configuration_set_ids
 
-            all_co_ids = list(set(itertools.chain.from_iterable(
+            all_co_hashes = list(set(itertools.chain.from_iterable(
                 cs_doc['relationships']['configurations'] for cs_doc in
                 self.configuration_sets.find({SHORT_ID_STRING_NAME: {'$in': cs_ids}})
             )))
 
-            query[SHORT_ID_STRING_NAME] = {'$in': all_co_ids}
+            query['hash'] = {'$in': all_co_hashes}
         elif collection_name == 'properties':
             collection = self.property_instances
 
-            query[SHORT_ID_STRING_NAME] = {'$in': dataset.property_ids}
+            query['hash'] = {'$in': dataset.property_ids}
         else:
             raise RuntimeError(
                 "collection_name must be 'configurations' or 'properties'"
@@ -2433,16 +2563,16 @@ class MongoDatabase(MongoClient):
             labels = {labels}
 
         for doc in tqdm(
-            collection.find(query, {SHORT_ID_STRING_NAME: 1}),
+            collection.find(query, {'hash': 1}),
             desc='Applying configuration labels',
             disable=not verbose
             ):
-            doc_id = doc[SHORT_ID_STRING_NAME]
+            doc_hash = doc['hash']
 
             collection.update_one(
-                {SHORT_ID_STRING_NAME: doc_id},
+                {'hash': doc_hash},
                 {'$addToSet': {'labels': {'$each': list(labels)}}},
-                hint=SHORT_ID_STRING_NAME,
+                hint='hash',
             )
 
 
@@ -2516,7 +2646,7 @@ class MongoDatabase(MongoClient):
                 _PROPS_COLLECTION,
                 prop,
                 query=query,
-                ids=ids,
+                hashes=ids,
                 verbose=verbose,
                 ravel=True
             )
@@ -2635,7 +2765,7 @@ class MongoDatabase(MongoClient):
         for field in fields:
 
             data = self.get_data(
-                'properties', field, query=query, ids=ids,
+                'properties', field, query=query, hashes=ids,
                 ravel=True, verbose=verbose
             )
 
@@ -2705,32 +2835,33 @@ class MongoDatabase(MongoClient):
 
             query[SHORT_ID_STRING_NAME] = {'$in': cs_doc['relationships']['configurations']}
 
-            co_ids = self.get_data('configurations', fields=SHORT_ID_STRING_NAME, query=query)
+            co_hashes = self.get_data('configurations', fields='hash', query=query)
 
             # Build the filtered configuration sets
             configuration_sets.append(
                 ConfigurationSet(
-                    configuration_ids=co_ids,
+                    configuration_ids=co_hashes,
                     description=cs_doc['description'],
                     aggregated_info=self.configuration_type.aggregate_configuration_summaries(
                         self,
-                        co_ids,
+                        co_hashes,
                         verbose=verbose,
                     )
                 )
             )
 
         # Now get the corresponding properties
-        property_ids = [_[SHORT_ID_STRING_NAME] for _ in self.property_instances.filter(
+        # TODO: Eric->Check correctness here
+        property_hashes = [_['hash'] for _ in self.property_instances.filter(
             {
-            SHORT_ID_STRING_NAME: {'$in': list(itertools.chain.from_iterable(
+            'hash': {'$in': list(itertools.chain.from_iterable(
                 cs.configuration_ids for cs in configuration_sets
             ))}
             },
-            {SHORT_ID_STRING_NAME: 1}
+            {'hash': 1}
         )]
 
-        return configuration_sets, property_ids
+        return configuration_sets, property_hashes
 
 
     def filter_on_properties(
@@ -2798,10 +2929,10 @@ class MongoDatabase(MongoClient):
         ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         configuration_sets = []
-        property_ids = []
+        property_hashes = []
 
         # Filter the properties
-        retfields = {SHORT_ID_STRING_NAME: 1, 'relationships.configurations': 1}
+        retfields = {'hash': 1, 'relationships.configurations': 1}
         if fields is not None:
             if isinstance(fields, str):
                 fields = [fields]
@@ -2812,46 +2943,46 @@ class MongoDatabase(MongoClient):
         if query is None:
             query = {}
 
-        query[SHORT_ID_STRING_NAME] = {'$in': ds_doc['relationships']['property_instances']}
+        query['hash'] = {'$in': ds_doc['relationships']['property_instances']}
 
         cursor = self.property_instances.find(query, retfields)
 
-        all_co_ids = []
+        all_co_hashes = []
         for pr_doc in tqdm(
             cursor,
             desc='Filtering on properties',
             disable=not verbose,
             ):
             if filter_fxn(pr_doc):
-                property_ids.append(pr_doc[SHORT_ID_STRING_NAME])
-                all_co_ids.append(pr_doc['relationships']['configurations'])
+                property_hashes.append(pr_doc['hash'])
+                all_co_hashes.append(pr_doc['relationships']['configurations'])
 
-        all_co_ids = list(set(itertools.chain.from_iterable(all_co_ids)))
+        all_co_hashes = list(set(itertools.chain.from_iterable(all_co_hashes)))
 
         # Then filter the configuration sets
         for cs_doc in self.configuration_sets.find({
             SHORT_ID_STRING_NAME: {'$in': ds_doc['relationships']['configuration_sets']}
             }):
 
-            co_ids =list(
+            co_hashes =list(
                 set(cs_doc['relationships']['configurations']).intersection(
-                    all_co_ids
+                    all_co_hashes
                 )
             )
 
             configuration_sets.append(
                 ConfigurationSet(
-                    configuration_ids=co_ids,
+                    configuration_ids=co_hashes,
                     description=cs_doc['description'],
                     aggregated_info=self.configuration_type.aggregate_configuration_summaries(
                         self,
-                        co_ids,
+                        co_hashes,
                         verbose=verbose
                     )
                 )
             )
 
-        return configuration_sets, property_ids
+        return configuration_sets, property_hashes
 
 
     # def apply_transformation(
@@ -3135,17 +3266,18 @@ class MongoDatabase(MongoClient):
         header = config_sets[0]
         for row in config_sets[1:]:
             query = literal_eval(row[header.index('Query')])
-            query[SHORT_ID_STRING_NAME] = {'$in': all_co_ids}
+            query['hash'] = {'$in': all_co_ids}
 
             co_ids = self.get_data(
                 'configurations',
-                fields=SHORT_ID_STRING_NAME,
+                fields='hash',
                 query=query,
                 ravel=True
             ).tolist()
-
+            # TODO: Eric ->add name below
             cs_id = self.insert_configuration_set(
                 co_ids,
+                name='From-Markdown',
                 description=row[header.index('Description')],
                 verbose=True
             )
@@ -3155,7 +3287,7 @@ class MongoDatabase(MongoClient):
         # Define the Dataset
         ds_id = self.insert_dataset(
             cs_ids=cs_ids,
-            pr_ids=all_pr_ids,
+            pr_hashes=all_pr_ids,
             name='Mo_PRM2019',
             authors=parser.data['Authors'],
             links=parser.data['Links'],
@@ -3168,7 +3300,7 @@ class MongoDatabase(MongoClient):
         header = labels[0]
         for row in labels[1:]:
             query = literal_eval(row[header.index('Query')])
-            query[SHORT_ID_STRING_NAME] = {'$in': all_co_ids}
+            query['hash'] = {'$in': all_co_ids}
 
             self.apply_labels(
                 dataset_id=ds_id,
@@ -3306,7 +3438,7 @@ class MongoDatabase(MongoClient):
 
         property_map = {}
         for pr_doc in self.property_instances.find(
-            {SHORT_ID_STRING_NAME: {'$in': dataset.property_ids}}
+            {'hash': {'$in': dataset.property_ids}}
             ):
             if pr_doc['type'] not in property_map:
                 property_map[pr_doc['type']] = {
@@ -3497,7 +3629,7 @@ class MongoDatabase(MongoClient):
             data_file_name = os.path.join(base_folder, data_file_name)
 
             images = self.get_configurations(
-                configuration_ids=list(set(itertools.chain.from_iterable(
+                configuration_hashes=list(set(itertools.chain.from_iterable(
                     cs.configuration_ids for cs in configuration_sets.values()
                 ))),
                 attach_settings=True,
@@ -3615,10 +3747,10 @@ class MongoDatabase(MongoClient):
 
                 # Write the configurations
                 for co_doc in self.configurations.find(
-                        {SHORT_ID_STRING_NAME: {'$in': configuration_ids}}
+                        {'hash': {'$in': configuration_ids}}
                     ):
 
-                    co_group = co_coll_group.create_group(co_doc[SHORT_ID_STRING_NAME])
+                    co_group = co_coll_group.create_group(co_doc['hash'])
 
                     co_group.create_dataset(
                         'names',
@@ -3650,9 +3782,9 @@ class MongoDatabase(MongoClient):
                 # Write property instances
                 ps_ids = []
                 for pi_doc in self.property_instances.find(
-                        {SHORT_ID_STRING_NAME: {'$in': property_ids}}
+                        {'hash': {'$in': property_ids}}
                     ):
-                    pi_group = pi_coll_group.create_group(pi_doc[SHORT_ID_STRING_NAME])
+                    pi_group = pi_coll_group.create_group(pi_doc['hash'])
 
                     pi_group.create_dataset(
                         'type',
@@ -3702,10 +3834,10 @@ class MongoDatabase(MongoClient):
                 # Write property settings
                 ps_ids = list(set(ps_ids))
                 for ps_doc in self.property_settings.find(
-                    {SHORT_ID_STRING_NAME: {'$in': ps_ids}}
+                    {'hash': {'$in': ps_ids}}
                     ):
 
-                    ps_group = ps_coll_group.create_group(ps_doc[SHORT_ID_STRING_NAME])
+                    ps_group = ps_coll_group.create_group(ps_doc['hash'])
 
                     ps_group.attrs['description'] = ps_doc['description']
                     ps_group.attrs['method'] = ps_doc['method']
@@ -3855,11 +3987,11 @@ def load_data(
 # Moved out of static method to avoid changing insert_data* methods
 # Could consider changing in the future
 def _build_c_update_doc(configuration):
-    cid = ID_FORMAT_STRING.format('CO', hash(configuration), 0)
     processed_fields = configuration.configuration_summary()
+    c_hash = str(hash(configuration))
     c_update_doc = {
         '$setOnInsert' : {
-            SHORT_ID_STRING_NAME: cid,
+            'hash': c_hash
         },
         '$set': {
             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -3878,7 +4010,12 @@ def _build_c_update_doc(configuration):
     }
     c_update_doc['$setOnInsert'].update({k: v.tolist() for k, v in configuration.unique_identifiers.items()})
     c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
-    return c_update_doc, cid
+    return c_update_doc, c_hash
+
+
+def generate_string():
+    return get_random_string(12,allowed_chars=string.ascii_lowercase+'1234567890')
+
 
 class ConcatenationException(Exception):
     pass

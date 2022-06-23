@@ -105,12 +105,12 @@ class TestMongoDatabase:
             nd_diff_shape_arr   = returns[8]
 
             ids = list(database.insert_data(images))
-
-            assert database.configurations.count_documents({}) == 10
+            #Will be 11 because of _counter
+            assert database.configurations.count_documents({}) == 11
 
             ids = list(database.insert_data(images))
 
-            assert database.configurations.count_documents({}) == 10
+            assert database.configurations.count_documents({}) == 11
 
 
     def test_add_then_update_nochange_config(self):
@@ -194,8 +194,8 @@ class TestMongoDatabase:
                 img.info[ATOMS_NAME_FIELD].add('change2')
                 img.info[ATOMS_LABELS_FIELD] = {'another_label2'}
 
+            # These ids aren't in DB as they were duplicates of previous COs
             ids = list(database.insert_data(images))
-
             for n in database.get_data('configurations', 'names'):
                 assert n[0] == 'change'
                 assert n[1] == 'change2'
@@ -203,7 +203,6 @@ class TestMongoDatabase:
             for n in database.get_data('configurations', 'labels'):
                 assert n[0] == 'another_label'
                 assert n[1] == 'another_label2'
-
             database.get_configuration(ids[0][0])
 
             np.testing.assert_allclose(
@@ -563,9 +562,12 @@ class TestMongoDatabase:
             images = build_n(10)[0]
 
             database.insert_data(images)
-
             count = 0
-            for atoms, img in zip(database.get_configurations('all'), images):
+            # Sort by hashes to match up CO order
+            returned_cos = database.get_configurations('all')
+            idx_0 = np.argsort([hash(i) for i in images])
+            idx_1 = np.argsort([hash(i) for i in returned_cos])
+            for atoms, img in zip([returned_cos[i] for i in idx_1], [images[i] for i in idx_0]):
                 assert atoms == img
                 count += 1
             assert count == 10
@@ -729,11 +731,11 @@ class TestMongoDatabase:
             )
 
             for i, ((cid, pid), config) in enumerate(zip(ids, images)):
-                config_doc = next(database.configurations.find({SHORT_ID_STRING_NAME: cid}))
-                prop_doc   = next(database.property_instances.find({SHORT_ID_STRING_NAME: pid}))
+                config_doc = next(database.configurations.find({'hash': cid}))
+                prop_doc   = next(database.property_instances.find({'hash': pid}))
 
                 pn = database.get_data(
-                    'property_instances', 'default.forces', ids=[pid], concatenate=True
+                    'property_instances', 'default.forces', hashes=[pid], concatenate=True
                 ).shape[0]
 
                 na = len(config)
@@ -781,10 +783,9 @@ class TestMongoDatabase:
 
             co_ids = list(zip(*ids))[0]
 
-            cs_id = database.insert_configuration_set(co_ids, 'a description')
+            cs_id = database.insert_configuration_set(co_ids, 'name','a description')
 
             cs_doc = next(database.configuration_sets.find({SHORT_ID_STRING_NAME: cs_id}))
-
             agg_info = cs_doc['aggregated_info']
 
             assert cs_doc['description'] == 'a description'
@@ -871,7 +872,7 @@ class TestMongoDatabase:
 
             co_ids1, pr_ids1 = list(zip(*ids))
 
-            cs_id1 = database.insert_configuration_set(co_ids1, 'a description1')
+            cs_id1 = database.insert_configuration_set(co_ids1,  'name','a description1')
 
             images = build_n(10)[0]
 
@@ -888,11 +889,11 @@ class TestMongoDatabase:
 
             co_ids2, pr_ids2 = list(zip(*ids))
 
-            cs_id2 = database.insert_configuration_set(co_ids2, 'a description2')
+            cs_id2 = database.insert_configuration_set(co_ids2, 'name', 'a description2')
 
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
-                pr_ids=pr_ids1+pr_ids2,
+                pr_hashes=pr_ids1+pr_ids2,
                 name='example_dataset',
                 authors=['colabfit'],
                 links=['https://colabfit.org'],
@@ -1022,8 +1023,9 @@ class TestConfigurationSets:
 
             ids = [_[0] for _ in database.insert_data(images)]
 
+
             cs_id = database.insert_configuration_set(
-                ids, description='A basic configuration set'
+                ids, 'name', description='A basic configuration set'
             )
 
             desc = next(database.configuration_sets.find({SHORT_ID_STRING_NAME: cs_id}))['description']
@@ -1038,11 +1040,11 @@ class TestConfigurationSets:
             # ).tolist()
             assert rebuilt_ids.sort() == ids.sort()
 
+
             for img in images:
                 img2 = database.get_configuration(
-                    ID_FORMAT_STRING.format('CO', hash(img), 0)
+                    str(hash(img))
                 )
-
                 assert img == img2
 
 class TestDatasets:
@@ -1091,7 +1093,7 @@ class TestDatasets:
             co_ids1, pr_ids1 = list(zip(*ids))
 
             cs_id1 = database.insert_configuration_set(
-                co_ids1, description='A basic configuration set'
+                co_ids1, 'name', description='A basic configuration set'
             )
 
             images = build_n(10)[0]
@@ -1106,12 +1108,12 @@ class TestDatasets:
             co_ids2, pr_ids2 = list(zip(*ids))
 
             cs_id2 = database.insert_configuration_set(
-                co_ids2, description='A basic configuration set'
+                co_ids2, 'name', description='A basic configuration set'
             )
 
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
-                pr_ids=pr_ids1+pr_ids2,
+                pr_hashes=pr_ids1+pr_ids2,
                 name='example_dataset',
                 authors=['colabfit', 'Josh Vita', 'Eric Fuemmeler'],
                 links='https://colabfit.openkim.org/',
@@ -1170,7 +1172,7 @@ class TestDatasets:
             co_ids1, pr_ids1 = list(zip(*ids))
 
             cs_id1 = database.insert_configuration_set(
-                co_ids1, description='A basic configuration set'
+                co_ids1, 'name', description='A basic configuration set'
             )
 
             images = build_n(10)[0]
@@ -1185,14 +1187,14 @@ class TestDatasets:
             co_ids2, pr_ids2 = list(zip(*ids))
 
             cs_id2 = database.insert_configuration_set(
-                co_ids2, description='A basic configuration set'
+                co_ids2, 'name', description='A basic configuration set'
             )
 
             all_pr_ids = pr_ids1 + pr_ids2
 
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
-                pr_ids=all_pr_ids,
+                pr_hashes=all_pr_ids,
                 name='example_dataset',
                 authors=['colabfit', 'Josh Vita', 'Eric Fuemmeler'],
                 links='https://colabfit.openkim.org/',
@@ -1249,7 +1251,7 @@ class TestDatasets:
             co_ids1, pr_ids1 = list(zip(*ids))
 
             cs_id1 = database.insert_configuration_set(
-                co_ids1, description='A basic configuration set'
+                co_ids1, 'name', description='A basic configuration set'
             )
 
             images = build_n(10)[0]
@@ -1264,14 +1266,14 @@ class TestDatasets:
             co_ids2, pr_ids2 = list(zip(*ids))
 
             cs_id2 = database.insert_configuration_set(
-                co_ids2, description='A basic configuration set'
+                co_ids2, 'name', description='A basic configuration set'
             )
 
             all_pr_ids = pr_ids1 + pr_ids2
 
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
-                pr_ids=all_pr_ids,
+                pr_hashes=all_pr_ids,
                 name='example_dataset',
                 authors=['authors with spaces are okay'],
                 links='https://colabfit.openkim.org/',
@@ -1282,7 +1284,7 @@ class TestDatasets:
             with pytest.raises(RuntimeError):
                 ds_id = database.insert_dataset(
                     cs_ids=[cs_id1, cs_id2],
-                    pr_ids=all_pr_ids[:-1],
+                    pr_hashes=all_pr_ids[:-1],
                     name='example_dataset',
                     authors=['authors123'],
                     links='https://colabfit.openkim.org/',
@@ -1293,7 +1295,7 @@ class TestDatasets:
             with pytest.raises(RuntimeError):
                 ds_id = database.insert_dataset(
                     cs_ids=[cs_id1, cs_id2],
-                    pr_ids=all_pr_ids[:-2],
+                    pr_hashes=all_pr_ids[:-2],
                     name='example_dataset',
                     authors=['authors_name'],
                     links='https://colabfit.openkim.org/',
@@ -1304,7 +1306,7 @@ class TestDatasets:
             # Note: in Python3 non-english upper/lowercase are okay
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
-                pr_ids=all_pr_ids[:-3],
+                pr_hashes=all_pr_ids[:-3],
                 name='example_dataset',
                 authors=['ä'],
                 links='https://colabfit.openkim.org/',
@@ -1315,7 +1317,7 @@ class TestDatasets:
             # Note: in Python3 non-english upper/lowercase are okay
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
-                pr_ids=all_pr_ids[:-4],
+                pr_hashes=all_pr_ids[:-4],
                 name='example_dataset',
                 authors=['AVeryLongLastNameThatShouldGetClipped'+'a'*255],
                 links='https://colabfit.openkim.org/',
@@ -1379,7 +1381,7 @@ class TestDatasets:
             co_ids1, pr_ids1 = list(zip(*ids))
 
             cs_id1 = database.insert_configuration_set(
-                co_ids1, description='A basic configuration set'
+                co_ids1, 'name', description='A basic configuration set'
             )
 
             images = build_n(10)[0]
@@ -1394,12 +1396,12 @@ class TestDatasets:
             co_ids2, pr_ids2 = list(zip(*ids))
 
             cs_id2 = database.insert_configuration_set(
-                co_ids2, description='A basic configuration set'
+                co_ids2, 'name', description='A basic configuration set'
             )
 
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
-                pr_ids=pr_ids1+pr_ids2,
+                pr_hashes=pr_ids1+pr_ids2,
                 name='example_dataset',
                 authors='colabfit',
                 links='https://colabfit.openkim.org/',
@@ -1444,7 +1446,7 @@ class TestDatasets:
                 )
 
                 for c in configurations:
-                    g = hdf5['configurations'][c.info[SHORT_ID_STRING_NAME]]
+                    g = hdf5['configurations'][c.info['hash']]
 
                     np.testing.assert_equal(g['atomic_numbers'], c.arrays['numbers'])
                     np.testing.assert_equal(g['cell'], np.array(c.cell))

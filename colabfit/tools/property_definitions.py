@@ -48,14 +48,14 @@ cauchy_stress_pd = {
     "property-name": "cauchy-stress",
     "property-title": "Cauchy stress tensor from a static calculation",
     "property-description": "Full 3x3 Cauchy stress tensor from a calculation of a static configuration.",
-    "forces": {
+    "stress": {
         "type": "float",
         "has-unit": True,
         "extent": [
-            ":",
+            3,
             3
         ],
         "required": False,
-        "description": "The [x,y,z] components of the force on each particle."
+        "description": "Cauchy stress tensor."
     }
 }
