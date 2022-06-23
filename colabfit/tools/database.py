@@ -6,6 +6,7 @@ import markdown
 import datetime
 import warnings
 import itertools
+import string
 import numpy as np
 from tqdm import tqdm
 import multiprocessing
@@ -4013,7 +4014,7 @@ def _build_c_update_doc(configuration):
 
 
 def generate_string():
-    return get_random_string(12)
+    return get_random_string(12,allowed_chars=string.ascii_lowercase+'1234567890')
 
 
 class ConcatenationException(Exception):
