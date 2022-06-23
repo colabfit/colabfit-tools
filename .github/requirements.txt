@@ -9,3 +9,4 @@ pymongo
 biopython
 pytest
 wheel
+django
