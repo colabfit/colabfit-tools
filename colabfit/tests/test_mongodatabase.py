@@ -268,6 +268,12 @@ class TestMongoDatabase:
                     'forces': {'field': 'dft-forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                    '_settings': {
+                        'method': 'VASP',
+                        'labels': ['label1', 'label2'],
+                        'files': [('dummy_file.txt', 'dummy contents\nwith a newline\n')],
+                        'description': 'A dummy property settings object'
+                    },
                 }]
             }
 
@@ -1083,6 +1089,12 @@ class TestDatasets:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                    '_settings': {
+                        'method': 'VASP',
+                        'labels': ['label1', 'label2'],
+                        'files': [('dummy_file.txt', 'dummy contents\nwith a newline\n')],
+                        'description': 'A dummy property settings object'
+                    },
                 }]
             }
 
@@ -1162,6 +1174,12 @@ class TestDatasets:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                    '_settings': {
+                        'method': 'VASP',
+                        'labels': ['label1', 'label2'],
+                        'files': [('dummy_file.txt', 'dummy contents\nwith a newline\n')],
+                        'description': 'A dummy property settings object'
+                    },
                 }]
             }
 
@@ -1241,6 +1259,12 @@ class TestDatasets:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+                    '_settings': {
+                        'method': 'VASP',
+                        'labels': ['label1', 'label2'],
+                        'files': [('dummy_file.txt', 'dummy contents\nwith a newline\n')],
+                        'description': 'A dummy property settings object'
+                    },
                 }]
             }
 

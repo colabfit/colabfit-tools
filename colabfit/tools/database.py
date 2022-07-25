@@ -574,14 +574,14 @@ class MongoDatabase(MongoClient):
                         #     )
                         # )
                         continue
+                    # TODO: Move below PS
+                   # prop = Property.from_definition(
+                   #     definition=property_definitions[pname],
+                   #     configuration=atoms,
+                   #     property_map=pmap_copy
+                   # )
 
-                    prop = Property.from_definition(
-                        definition=property_definitions[pname],
-                        configuration=atoms,
-                        property_map=pmap_copy
-                    )
-
-                    p_hash = str(hash(prop))
+                    #p_hash = str(hash(prop))
 
                     labels = []
                     methods = []
@@ -655,6 +655,14 @@ class MongoDatabase(MongoClient):
                             if 'source-unit' in gf_dict:
                                 ps_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
 
+
+                        prop = Property.from_definition(
+                            definition=property_definitions[pname],
+                            configuration=atoms,
+                            property_setting=str(ps._hash),
+                            property_map=pmap_copy
+                        )
+                        p_hash = str(hash(prop))
                         ps_update_doc =  {  # update document
                                 '$setOnInsert': ps_set_on_insert,
                                 '$set': {
@@ -669,6 +677,8 @@ class MongoDatabase(MongoClient):
                                     }
                                 }
                             }
+
+
 
                         coll_property_settings.update_one(
                             {'hash': str(ps._hash)},
@@ -888,20 +898,21 @@ class MongoDatabase(MongoClient):
                         #     )
                         # )
                         continue
+                    # TODO: Move below PS
+                    #prop = Property.from_definition(
+                     #   definition=property_definitions[pname],
+                      #  configuration=atoms,
+                       # property_map=pmap_copy
+                    #)
 
-                    prop = Property.from_definition(
-                        definition=property_definitions[pname],
-                        configuration=atoms,
-                        property_map=pmap_copy
-                    )
+                    #p_hash=str(hash(prop))
 
-                    p_hash=str(hash(prop))
-
-                    new_p_hashes.append(p_hash)
+                    #new_p_hashes.append(p_hash)
                     labels = []
                     methods = []
                     settings_hashes = []
 
+                    # TODO: Should we make PS required?
                     # Attach property settings, if any were given
                     if '_settings' in pmap:
                         pso_map = pmap['_settings']
@@ -971,31 +982,42 @@ class MongoDatabase(MongoClient):
                             if 'source-unit' in gf_dict:
                                 ps_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
 
-                        ps_update_doc =  {  # update document
-                                '$setOnInsert': ps_set_on_insert,
-                                '$set': {
-                                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                                },
-                                '$addToSet': {
-                                    'labels': {
-                                        '$each': list(ps.labels)
-                                    },
-                                    'relationships.property_instances': {
-                                        '$each': [p_hash]
-                                    }
-                                }
+
+                    prop = Property.from_definition(
+                        definition=property_definitions[pname],
+                        configuration=atoms,
+                        property_setting=ps_hash,
+                        property_map=pmap_copy
+                    )
+                    p_hash=str(hash(prop))
+
+                    new_p_hashes.append(p_hash)
+                    ps_update_doc = {  # update document
+                        '$setOnInsert': ps_set_on_insert,
+                        '$set': {
+                            'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                        },
+                        '$addToSet': {
+                            'labels': {
+                                '$each': list(ps.labels)
+                            },
+                            'relationships.property_instances': {
+                                '$each': [p_hash]
                             }
+                        }
+                    }
 
-                        settings_docs.append(UpdateOne(
-                            {'hash': ps_hash},
-                            ps_update_doc,
-                            upsert=True,
-                            hint='hash',
-                        ))
+                    settings_docs.append(UpdateOne(
+                        {'hash': ps_hash},
+                        ps_update_doc,
+                        upsert=True,
+                        hint='hash',
+                    ))
 
-                        methods.append(ps.method)
-                        labels += list(ps.labels)
-                        settings_hashes.append(ps_hash)
+                    methods.append(ps.method)
+                    labels += list(ps.labels)
+                    settings_hashes.append(ps_hash)
+
 
                     # Prepare the property instance EDN document
                     setOnInsert = {}

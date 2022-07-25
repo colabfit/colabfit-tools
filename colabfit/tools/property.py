@@ -48,7 +48,7 @@ class MissingPropertyFieldWarning(Warning):
 
 class InvalidPropertyDefinition(Exception):
     pass
-
+# TODO:Remove Configuration and add Property Setting
 class Property(dict):
     """
     A Property is used to store the results of some kind of calculation or
@@ -70,6 +70,9 @@ class Property(dict):
             Configuration should be passed to the :meth:`from_definition`
             function.
 
+        property_setting (str):
+            The hash of the PropertySetting defining the conditions under which the property was obtained.
+
         property_map (dict):
             key = a string that can be used as a key like :code:`self.instance[key]`
 
@@ -85,14 +88,9 @@ class Property(dict):
                 and anything preceded by a '*'. It will be divided by anything
                 preceded by a '/'.
 
-        configuration_ids (list):
-            A list of IDs of Configuration objects.
 
-        settings (PropertySettings):
-            A :class:`~colabfit.tools.property_settings.PropertySettings` object
-            defining the conditions under which the propoerty was obtained. This
-            is allowed to be None, but it is highly recommended that it be
-            provided.
+
+
     """
 
     _observers = []
@@ -101,9 +99,8 @@ class Property(dict):
         self,
         definition,
         instance,
-        configuration_ids,
+        property_setting,
         property_map=None,
-        settings=None,
         instance_id=1,
         convert_units=False
         ):
@@ -116,11 +113,8 @@ class Property(dict):
             instance (dict):
                 A dictionary defining an OpenKIM Property Instance
 
-            configuration_ids (list):
-                A list of IDs of ColabFit Configuration objects
-
-            settings (PropertySettings):
-                A `colabfit.property.PropertySettings` objects specifying how to
+            property_setting (str):
+                The hash of the PropertySetting object specifying how to
                 compute the property.
 
             property_map (dict):
@@ -257,18 +251,12 @@ class Property(dict):
         if convert_units:
             self.convert_units()
 
-        if len(configuration_ids) < 1:
-            raise RuntimeError(
-                "`Property.configuration_ids` must contain at least 1 entry"
-            )
-        # Eric-> Do we ever use this
-        self.configuration_ids = configuration_ids
 
-        # Add settings
-        if settings is not None:
-            self.settings = settings
-        else:
-            self.settings = []
+
+
+
+        self.property_setting = property_setting
+
 
         self._hash = hash(self)
 
@@ -298,12 +286,12 @@ class Property(dict):
 
     @classmethod
     def from_definition(
-        cls, definition, configuration, property_map,
-        settings=None, instance_id=1, convert_units=False
+        cls, definition, configuration, property_setting, property_map,
+            instance_id=1, convert_units=False
     ):
 
         """
-        A function for constructing a Property given a configuration, a property
+        A function for constructing a Property given a property setting hash, a property
         definition, and a property map.
 
 
@@ -312,8 +300,11 @@ class Property(dict):
             definition (dict):
                 A valid KIM Property Definition
 
-            configuration (Configuration):
-                A Configuration objects from which to extract the property data
+            configuration (AtomicConfiguration):
+                An AtomicConfiguration object from which to extract the property data
+
+            property_setting (str):
+                A hash of the PropertySetting
 
             property_map (dict):
                 A property map as described in the Property attributes section.
@@ -419,9 +410,8 @@ class Property(dict):
 
         return cls(
             definition=definition,
-            configuration_ids=[configuration],
+            property_setting=property_setting,
             property_map=property_map,
-            settings=settings,
             instance=instance,
             convert_units=convert_units,
         )
@@ -571,13 +561,9 @@ class Property(dict):
     def __hash__(self):
         """
         Hashes the Property by hashing its EDN.
-        #Change below
         Note that the property hash also
-        depends upon the hashes of the linked configurations; this is to handle
-        the case where two properties happen to be the same even though their
-        underlying configurations are different.
+        depends upon the hash of the PropertySetting
         """
-
         _hash = sha512()
         for key, val in self.instance.items():
             if key in _ignored_fields: continue
@@ -605,6 +591,7 @@ class Property(dict):
         # Don't hash cids
         #for cid in self.configuration_ids:
         #    _hash.update(cid.encode('utf-8'))
+        _hash.update(self.property_setting.encode('utf-8'))
         return int(_hash.hexdigest(), 16)
 
 
