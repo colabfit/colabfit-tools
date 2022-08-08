@@ -57,6 +57,9 @@ class Dataset:
                     methods_counts
                     property_labels
                     property_labels_counts
+
+        data_license (str):
+            License associated with the Dataset's data
     """
 
     def __init__(
@@ -68,6 +71,7 @@ class Dataset:
         links,
         description,
         aggregated_info,
+        data_license='CC-BY-ND-4.0'
         ):
 
         for auth in authors:
@@ -83,6 +87,7 @@ class Dataset:
         self.links                  = links
         self.description            = description
         self.aggregated_info        = aggregated_info
+        self.data_license                = data_license
         self._hash = hash(self)
 
     def __hash__(self):

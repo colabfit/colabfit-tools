@@ -2219,6 +2219,7 @@ class MongoDatabase(MongoClient):
         authors=None,
         links=None,
         description='',
+        data_license= 'CC-BY-ND-4.0',
         resync=False,
         verbose=False,
         overloaded_ds_id=None,
@@ -2249,6 +2250,9 @@ class MongoDatabase(MongoClient):
             description (str or None):
                 A human-readable description of the dataset. If None, then not
                 description is added.
+
+            data_license (str):
+                License associated with the Dataset's data
 
             resync (bool):
                 If True, re-synchronizes the configuration sets and properties
@@ -2380,6 +2384,7 @@ class MongoDatabase(MongoClient):
                     'links': links,
                     'description': description,
                     'hash': str(ds_hash),
+                    'license': data_license,
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
@@ -2458,6 +2463,7 @@ class MongoDatabase(MongoClient):
                 authors=ds_doc['authors'],
                 links=ds_doc['links'],
                 description=ds_doc['description'],
+                data_license=ds_doc['license'],
                 aggregated_info=ds_doc['aggregated_info']
             )
         }
