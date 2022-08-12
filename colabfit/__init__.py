@@ -6,7 +6,7 @@ HASH_LENGTH = 12
 HASH_SHIFT = 0
 # HASH_SHIFT = 2**63
 
-ID_FORMAT_STRING= '{}_{:05d}_{:03d}'
+ID_FORMAT_STRING= '{}_{}_{:03d}'
 
 MAX_STRING_LENGTH = 255
 STRING_DTYPE_SPECIFIER = f'S{MAX_STRING_LENGTH}'
@@ -19,6 +19,7 @@ _PROPDEFS_COLLECTION        = 'property_definitions'
 _PROPSETTINGS_COLLECTION    = 'property_settings'
 _CONFIGSETS_COLLECTION      = 'configuration_sets'
 _DATASETS_COLLECTION        = 'datasets'
+_COUNTERS_COLLECTION        = 'counters'
 
 SHORT_ID_STRING_NAME = 'short-id'
 EXTENDED_ID_STRING_NAME = 'extended-id'

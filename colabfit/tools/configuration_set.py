@@ -39,21 +39,24 @@ class ConfigurationSet:
 
     """
 
-    def __init__(self, configuration_ids, description, aggregated_info):
+    def __init__(self, configuration_ids, name, description, aggregated_info, ordered=False):
         self.configuration_ids  = configuration_ids
+        self.name = name
         self.description        = description
         self.aggregated_info    = aggregated_info
+        self.ordered = ordered
+        self._hash = hash(self)
 
 
     def __hash__(self):
 
         cs_hash = sha512()
-        cs_hash.update(self.description)
+        cs_hash.update(self.description.encode('utf-8'))
 
         for i in sorted(self.configuration_ids):
             cs_hash.update(str(i).encode('utf-8'))
 
-        return int(str(int(cs_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
+        return int(cs_hash.hexdigest(), 16)
 
     def __str__(self):
         return "ConfigurationSet(description='{}', nconfigurations={})".format(

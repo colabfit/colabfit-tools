@@ -78,7 +78,7 @@ class PropertySettings:
 
         self.parse_labels_from_files()
 
-
+        self._hash = hash(self)
     def parse_labels_from_files(self):
         pass
 
@@ -120,7 +120,7 @@ class PropertySettings:
         _hash.update(self.method.encode('utf-8'))
         # _hash.update(self.description.encode('utf-8'))
 
-        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
+        return int(_hash.hexdigest(), 16)
 
 
     def __eq__(self, other):

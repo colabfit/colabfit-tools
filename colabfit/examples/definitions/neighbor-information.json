@@ -1,0 +1,34 @@
+{
+    "property-id": "tag:staff@noreply.colabfit.org,2022-05-30:property/neighbor-information",
+    "property-name": "neighbor-information",
+    "property-title": "Neighbor list information",
+    "property-description": "The vectors pointing from each atom to each of its neighbors within a cutoff.",
+    "cutoff": {
+        "type":         "float",
+        "has-unit":     true,
+        "extent":       [],
+        "required":     true,
+        "description":  "The cutoff distance used for constructing the neighbor list."
+    },
+    "max-nneigh": {
+        "type":         "float",
+        "has-unit":     false,
+        "extent":       [],
+        "required":     true,
+        "description":  "The maximum allowed number of neighbors"
+    },
+    "neighbor-vectors": {
+        "type":         "float",
+        "has-unit":     true,
+        "extent":       [":", ":", 3],
+        "required":     true,
+        "description":  "The vectors pointing from each atom to each of its neighbors. Padded to have the shape (natoms, <max-nneigh>, 3)."
+    },
+    "neighbor-ids": {
+        "type":         "int",
+        "has-unit":     false,
+        "extent":       [":", ":"],
+        "required":     true,
+        "description":  "The IDs of the neighbors for each atom. Padded to have the shape (natoms, 1+<max-nneigh>)."
+    }
+}
