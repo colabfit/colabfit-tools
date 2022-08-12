@@ -619,15 +619,19 @@ class MongoDatabase(MongoClient):
 
                         gathered_fields = {}
                         for ps_field in all_ps_fields:
-                            psf_key = pso_map[ps_field]['field']
 
-                            if ps_field in atoms.info:
-                                v = atoms.info[psf_key]
-                            elif ps_field in atoms.arrays:
-                                v = atoms.arrays[psf_key]
+                            if 'value' in pso_map[ps_field]:
+                                v = pso_map[ps_field]['value']
                             else:
-                                # No keys are required; ignored if missing
-                                continue
+                                psf_key = pso_map[ps_field]['field']
+
+                                if ps_field in atoms.info:
+                                    v = atoms.info[psf_key]
+                                elif ps_field in atoms.arrays:
+                                    v = atoms.arrays[psf_key]
+                                else:
+                                    # No keys are required; ignored if missing
+                                    continue
 
                             gathered_fields[ps_field] = {
                                 # 'required': pso_map[ps_field]['required'],
@@ -934,15 +938,19 @@ class MongoDatabase(MongoClient):
 
                         gathered_fields = {}
                         for ps_field in all_ps_fields:
-                            psf_key = pso_map[ps_field]['field']
 
-                            if ps_field in atoms.info:
-                                v = atoms.info[psf_key]
-                            elif ps_field in atoms.arrays:
-                                v = atoms.arrays[psf_key]
+                            if 'value' in pso_map[ps_field]:
+                                v = pso_map[ps_field]['value']
                             else:
-                                # No keys are required; ignored if missing
-                                continue
+                                psf_key = pso_map[ps_field]['field']
+
+                                if ps_field in atoms.info:
+                                    v = atoms.info[psf_key]
+                                elif ps_field in atoms.arrays:
+                                    v = atoms.arrays[psf_key]
+                                else:
+                                    # No keys are required; ignored if missing
+                                    continue
 
                             gathered_fields[ps_field] = {
                                 # 'required': pso_map[ps_field]['required'],
