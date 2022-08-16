@@ -296,14 +296,14 @@ class MongoDatabase(MongoClient):
 
         self.nprocs = nprocs
 
-        for col in [self.configurations,self.property_instances,self.property_definitions,
-                    self.property_settings,self.configuration_sets,self.datasets]:
-            result = list(col.find({'_counter':{'$exists': True}}))
-            if len(result)==0:
-                col.insert_one({'_counter':0})
-                #Also index ?
-            elif len(result)>1:
-                raise RuntimeError('A collection should only have one counter!')
+        #for col in [self.configurations,self.property_instances,self.property_definitions,
+        #            self.property_settings,self.configuration_sets,self.datasets]:
+        #    result = list(col.find({'_counter':{'$exists': True}}))
+        #    if len(result)==0:
+        #        col.insert_one({'_counter':0})
+        #        #Also index ?
+        #    elif len(result)>1:
+        #        raise RuntimeError('A collection should only have one counter!')
 
 
 
@@ -2406,16 +2406,17 @@ class MongoDatabase(MongoClient):
 
         self.configuration_sets.bulk_write(config_set_docs)
 
-        # Add the backwards relationships PR->DS
+        # Add the backwards relationships PR->DS and origin using aggregation pipeline for logic
         property_docs = []
         for pid in tqdm(clean_pr_hashes, desc='Updating PR->DS relationships'):
             property_docs.append(UpdateOne(
                 {'hash': pid},
-                {'$addToSet': {'relationships.datasets': ds_id}},
+                [{'$set': {'relationships.origin':{'$ifNull':['$relationships.origin',ds_id]}
+                ,'relationships.datasets': {'$setUnion':[{'$ifNull':['$relationships.datasets',[]]},[ds_id]]}}}],
                 hint='hash',
             ))
-
         self.property_instances.bulk_write(property_docs)
+
 
         return ds_id
 

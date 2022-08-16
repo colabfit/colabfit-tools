@@ -106,11 +106,11 @@ class TestMongoDatabase:
 
             ids = list(database.insert_data(images))
             #Will be 11 because of _counter
-            assert database.configurations.count_documents({}) == 11
+            assert database.configurations.count_documents({}) == 10
 
             ids = list(database.insert_data(images))
 
-            assert database.configurations.count_documents({}) == 11
+            assert database.configurations.count_documents({}) == 10
 
 
     def test_add_then_update_nochange_config(self):
@@ -1294,7 +1294,6 @@ class TestDatasets:
             )
 
             all_pr_ids = pr_ids1 + pr_ids2
-
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
                 pr_hashes=all_pr_ids,
@@ -1315,7 +1314,6 @@ class TestDatasets:
                     description='An example dataset',
                     resync=True
                 )
-
             with pytest.raises(RuntimeError):
                 ds_id = database.insert_dataset(
                     cs_ids=[cs_id1, cs_id2],
@@ -1326,7 +1324,6 @@ class TestDatasets:
                     description='An example dataset',
                     resync=True
                 )
-
             # Note: in Python3 non-english upper/lowercase are okay
             ds_id = database.insert_dataset(
                 cs_ids=[cs_id1, cs_id2],
@@ -1348,7 +1345,6 @@ class TestDatasets:
                 description='An example dataset',
                 resync=True
             )
-
 
     def test_export_ds(self):
         # with tempfile.NamedTemporaryFile() as tmpfile:
