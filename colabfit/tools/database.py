@@ -20,6 +20,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 from ase.io import write as ase_write
+import periodictable
 import struct
 import random
 import time
@@ -3936,7 +3937,8 @@ def load_data(
             `file_format == 'folder'`, `name_field` will be set to 'name'.
 
         elements (list):
-            A list of strings of element types
+            A list of strings of allowed element types. If None, all element
+            types are allowed.
 
         default_name (list):
             Default name to be used if `name_field==None`.
@@ -3952,8 +3954,7 @@ def load_data(
 
         glob_string (str):
             A string to use with `Path(file_path).rglob(glob_string)` to
-            generate a list of files to be passed to `self.reader`. Only used
-            for `file_format == 'folder'`.
+            generate a list of files to be passed to `self.reader`.
 
         generator (bool, default=True):
             If True, returns a generator of Configurations. If False, returns a
@@ -3965,6 +3966,10 @@ def load_data(
     All other keyword arguments will be passed with
     `converter.load(..., **kwargs)`
     """
+
+    if elements is None:
+        elements = [e.symbol for e in periodictable.elements]
+        elements.remove('n')
 
     if file_format == 'folder':
         if reader is None:
@@ -4003,6 +4008,7 @@ def load_data(
             elements=elements,
             default_name=default_name,
             labels_field=labels_field,
+            glob_string=glob_string,
             verbose=verbose,
         )
     else:
