@@ -607,7 +607,10 @@ class MongoDatabase(MongoClient):
 
                         gathered_fields = {}
                         for ps_field in all_ps_fields:
-                            psf_key = pso_map[ps_field]['field']
+                            if 'value' in pso_map[ps_field]:
+                                v = pso_map[ps_field]['value']
+                            else:
+                                psf_key = pso_map[ps_field]['field']
 
                             if ps_field in atoms.info:
                                 v = atoms.info[psf_key]
@@ -932,7 +935,10 @@ class MongoDatabase(MongoClient):
 
                         gathered_fields = {}
                         for ps_field in all_ps_fields:
-                            psf_key = pso_map[ps_field]['field']
+                            if 'value' in pso_map[ps_field]:
+                                v = pso_map[ps_field]['value']
+                            else:
+                                psf_key = pso_map[ps_field]['field']
 
                             if ps_field in atoms.info:
                                 v = atoms.info[psf_key]
