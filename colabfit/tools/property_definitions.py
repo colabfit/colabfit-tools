@@ -59,3 +59,31 @@ cauchy_stress_pd = {
         "description": "Cauchy stress tensor."
     }
 }
+
+free_energy_pd = {
+    "property-id": "tag:staff@noreply.colabfit.org,2022-05-30:property/free-energy",
+    "property-name": "free-energy",
+    "property-title": "Free energy from a static calculation",
+    "property-description": "Free energy from a calculation of a static configuration. Energies must be specified to be per-atom or supercell. If a reference energy has been used, this must be specified as well.",
+    "energy": {
+        "type": "float",
+        "has-unit": true,
+        "extent": [],
+        "required": false,
+        "description": "The free energy of the system."
+    },
+    "per-atom": {
+        "type": "bool",
+        "has-unit": false,
+        "extent": [],
+        "required": true,
+        "description": "If True, \"energy\" is the total energy of the system, and has NOT been divided by the number of atoms in the configuration."
+    },
+    "reference-energy": {
+        "type": "float",
+        "has-unit": true,
+        "extent": [],
+        "required": false,
+        "description": "If provided, then \"energy\" is the energy (either of the whole system, or per-atom) LESS the energy of a reference configuration (E = E_0 - E_reference). Note that \"reference-energy\" is just provided for documentation, and that \"energy\" should already have this value subtracted off. The reference energy must have the same units as \"energy\"."
+    }
+}
