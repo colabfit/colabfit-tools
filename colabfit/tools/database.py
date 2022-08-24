@@ -408,7 +408,7 @@ class MongoDatabase(MongoClient):
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
             'last_modified', 'definition', '_id', SHORT_ID_STRING_NAME, '_settings',
-            'property-name',
+            'property-name', EXTENDED_ID_STRING_NAME
         }
 
         # Sanity checks for property map
@@ -428,11 +428,16 @@ class MongoDatabase(MongoClient):
                                 'Provided field "{}" in property_map does not match '\
                                 'property definition'.format(k)
                             )
-
-                        if ('field' not in pd) or (pd['field'] is None):
-                            raise RuntimeError(
-                                "Must specify all 'field' sections in property_map"
-                            )
+                        if 'value' in pd:
+                            if 'field' in pd and pd['field'] is not None:
+                                raise RuntimeError(
+                                    "Error with key '{}'. property_map must specify exactly ONE of 'field' or 'value'".format(k)
+                                )
+                        else:
+                            if ('field' not in pd) or (pd['field'] is None):
+                                raise RuntimeError(
+                                    "Error with key '{}'. property_map must specify exactly ONE of 'field' or 'value'".format(k)
+                                )
 
                         if 'units' not in pd:
                             raise RuntimeError(
@@ -525,7 +530,7 @@ class MongoDatabase(MongoClient):
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
             'last_modified', 'definition', '_id', SHORT_ID_STRING_NAME, 'settings',
-            'property-name',
+            'property-name', EXTENDED_ID_STRING_NAME
         }
 
         expected_keys = {
@@ -534,6 +539,7 @@ class MongoDatabase(MongoClient):
                 pmap[f]['field']
                 for f in property_definitions[pname].keys() - ignore_keys
                 if property_definitions[pname][f]['required']
+                and 'field' in pmap[f]
             ) for pmap in property_map[pname]]
             for pname in property_map
         }
@@ -659,14 +665,15 @@ class MongoDatabase(MongoClient):
                             if 'source-unit' in gf_dict:
                                 ps_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
 
-
                         prop = Property.from_definition(
                             definition=property_definitions[pname],
                             configuration=atoms,
-                            property_setting=str(ps._hash),
+                            property_setting=ps_hash,
                             property_map=pmap_copy
                         )
                         p_hash = str(hash(prop))
+
+
                         ps_update_doc =  {  # update document
                                 '$setOnInsert': ps_set_on_insert,
                                 '$set': {
@@ -694,7 +701,14 @@ class MongoDatabase(MongoClient):
                         methods.append(ps.method)
                         labels += list(ps.labels)
                         settings_hashes.append(str(ps._hash))
-
+                    else:
+                        prop = Property.from_definition(
+                            definition=property_definitions[pname],
+                            configuration=atoms,
+                            property_setting=str(ps._hash),
+                            property_map=pmap_copy
+                        )
+                        p_hash = str(hash(prop))
                     # Prepare the property instance EDN document
                     setOnInsert = {}
                     # for k in property_map[pname]:
@@ -820,6 +834,7 @@ class MongoDatabase(MongoClient):
                 pmap[f]['field']
                 for f in property_definitions[pname].keys() - ignore_keys
                 if property_definitions[pname][f]['required']
+                and 'field' in pmap[f]
             ) for pmap in property_map[pname]]
             for pname in property_map
         }
@@ -915,7 +930,7 @@ class MongoDatabase(MongoClient):
                     labels = []
                     methods = []
                     settings_hashes = []
-
+                    ps_hash = None
                     # TODO: Should we make PS required?
                     # Attach property settings, if any were given
                     if '_settings' in pmap:
@@ -989,43 +1004,52 @@ class MongoDatabase(MongoClient):
                             if 'source-unit' in gf_dict:
                                 ps_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
 
+                        prop = Property.from_definition(
+                            definition=property_definitions[pname],
+                            configuration=atoms,
+                            property_setting=ps_hash,
+                            property_map=pmap_copy
+                        )
+                        p_hash = str(hash(prop))
 
-                    prop = Property.from_definition(
-                        definition=property_definitions[pname],
-                        configuration=atoms,
-                        property_setting=ps_hash,
-                        property_map=pmap_copy
-                    )
-                    p_hash=str(hash(prop))
+                        new_p_hashes.append(p_hash)
 
-                    new_p_hashes.append(p_hash)
-                    ps_update_doc = {  # update document
-                        '$setOnInsert': ps_set_on_insert,
-                        '$set': {
-                            'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                        },
-                        '$addToSet': {
-                            'labels': {
-                                '$each': list(ps.labels)
+                        ps_update_doc = {  # update document
+                            '$setOnInsert': ps_set_on_insert,
+                            '$set': {
+                                'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                             },
-                            'relationships.property_instances': {
-                                '$each': [p_hash]
+                            '$addToSet': {
+                                'labels': {
+                                    '$each': list(ps.labels)
+                                },
+                                'relationships.property_instances': {
+                                    '$each': [p_hash]
+                                }
                             }
                         }
-                    }
 
-                    settings_docs.append(UpdateOne(
-                        {'hash': ps_hash},
-                        ps_update_doc,
-                        upsert=True,
-                        hint='hash',
-                    ))
+                        settings_docs.append(UpdateOne(
+                            {'hash': ps_hash},
+                            ps_update_doc,
+                            upsert=True,
+                            hint='hash',
+                        ))
 
-                    methods.append(ps.method)
-                    labels += list(ps.labels)
-                    settings_hashes.append(ps_hash)
+                        methods.append(ps.method)
+                        labels += list(ps.labels)
+                        settings_hashes.append(ps_hash)
 
+                    else:
+                        prop = Property.from_definition(
+                            definition=property_definitions[pname],
+                            configuration=atoms,
+                            property_setting=ps_hash,
+                            property_map=pmap_copy
+                        )
+                        p_hash = str(hash(prop))
 
+                        new_p_hashes.append(p_hash)
                     # Prepare the property instance EDN document
                     setOnInsert = {}
                     # for k in property_map[pname]:

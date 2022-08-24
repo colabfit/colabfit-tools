@@ -381,7 +381,10 @@ class Property(dict):
         update_edn_with_conf(instance, configuration)
 
         for key, val in property_map.items():
-            if val['field'] in configuration.info:
+            if 'value' in val:
+                # Default value provided
+                data = val['value']
+            elif val['field'] in configuration.info:
                 data = configuration.info[val['field']]
             elif val['field'] in configuration.arrays:
                 data = configuration.arrays[val['field']]
@@ -591,7 +594,8 @@ class Property(dict):
         # Don't hash cids
         #for cid in self.configuration_ids:
         #    _hash.update(cid.encode('utf-8'))
-        _hash.update(self.property_setting.encode('utf-8'))
+        if self.property_setting:
+            _hash.update(self.property_setting.encode('utf-8'))
         return int(_hash.hexdigest(), 16)
 
 
