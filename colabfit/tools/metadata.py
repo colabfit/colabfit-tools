@@ -13,7 +13,7 @@ class Metadata:
 
     """
 
-    def __init__(self,metadata):
+    def __init__(self, metadata):
         self.metadata = metadata
         self._hash = hash(self)
 
@@ -36,3 +36,6 @@ class Metadata:
             else:
                 _hash.update(bytes(v))
         return int(_hash.hexdigest(), 16)
+
+    def __str__(self):
+        return str(self.metadata)
