@@ -70,8 +70,6 @@ class Property(dict):
             Configuration should be passed to the :meth:`from_definition`
             function.
 
-        property_setting (str):
-            The hash of the PropertySetting defining the conditions under which the property was obtained.
 
         property_map (dict):
             key = a string that can be used as a key like :code:`self.instance[key]`
@@ -99,7 +97,6 @@ class Property(dict):
         self,
         definition,
         instance,
-        property_setting,
         property_map=None,
         instance_id=1,
         convert_units=False
@@ -112,10 +109,6 @@ class Property(dict):
 
             instance (dict):
                 A dictionary defining an OpenKIM Property Instance
-
-            property_setting (str):
-                The hash of the PropertySetting object specifying how to
-                compute the property.
 
             property_map (dict):
                 A property map as described in the Property attributes section.
@@ -255,8 +248,6 @@ class Property(dict):
 
 
 
-        self.property_setting = property_setting
-
 
         self._hash = hash(self)
 
@@ -286,7 +277,7 @@ class Property(dict):
 
     @classmethod
     def from_definition(
-        cls, definition, configuration, property_setting, property_map,
+        cls, definition, configuration, property_map,
             instance_id=1, convert_units=False
     ):
 
@@ -302,9 +293,6 @@ class Property(dict):
 
             configuration (AtomicConfiguration):
                 An AtomicConfiguration object from which to extract the property data
-
-            property_setting (str):
-                A hash of the PropertySetting
 
             property_map (dict):
                 A property map as described in the Property attributes section.
@@ -413,7 +401,6 @@ class Property(dict):
 
         return cls(
             definition=definition,
-            property_setting=property_setting,
             property_map=property_map,
             instance=instance,
             convert_units=convert_units,
@@ -560,12 +547,10 @@ class Property(dict):
 
             self.property_map[key]['units'] = self.instance[edn_key]['source-unit']
 
-
+# TODO: Do we need to hash definition?
     def __hash__(self):
         """
         Hashes the Property by hashing its EDN.
-        Note that the property hash also
-        depends upon the hash of the PropertySetting
         """
         _hash = sha512()
         for key, val in self.instance.items():
@@ -591,11 +576,7 @@ class Property(dict):
             # What if values are identical but are added in different units? Should these hash to unique PIs?
             if 'source-unit' in val:
                 _hash.update(str(val['source-unit']).encode('utf-8'))
-        # Don't hash cids
-        #for cid in self.configuration_ids:
-        #    _hash.update(cid.encode('utf-8'))
-        if self.property_setting:
-            _hash.update(self.property_setting.encode('utf-8'))
+
         return int(_hash.hexdigest(), 16)
 
 
