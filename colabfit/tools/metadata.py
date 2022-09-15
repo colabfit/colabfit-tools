@@ -4,16 +4,20 @@ from collections import OrderedDict
 class Metadata:
     """
         A Metadata object contains key-value pairs of generic information which can be
-        attached to Configurations, ?ConfigurationSets and DataSets?
+        attached to Configurations, PropertyInstances, ConfigurationSets and DataSets.
 
         Attributes:
-
+            linked_type (str)
+                Identity of linked object: must be one of ["CO","PI","CS","DS"]
             metadata (dict):
-                A dict of all metadata
+                A dict of arbitrary metadata
 
     """
 
-    def __init__(self, metadata):
+    def __init__(self, linked_type=None, metadata=None):
+        if linked_type not in ["CO", "PI", "CS", "DS"]:
+            raise RuntimeError('linked_type must be one of CO, PI, CS, or DS')
+
         self.metadata = metadata
         self._hash = hash(self)
 
