@@ -68,7 +68,6 @@ class MongoDatabase(MongoClient):
             cell
             pbc
             names
-            labels
             elements
             nelements
             elements_ratios
@@ -96,7 +95,6 @@ class MongoDatabase(MongoClient):
             property_name
                 each field in the property definition
             methods
-            labels
             last_modified
             relationships
                 property_settings
@@ -107,7 +105,6 @@ class MongoDatabase(MongoClient):
             short-id
             method
             decription
-            labels
             files
                 file_name
                 file_contents
@@ -127,8 +124,6 @@ class MongoDatabase(MongoClient):
                 elements
                 individual_elements_ratios
                 total_elements_ratios
-                labels
-                labels_counts
                 chemical_formula_reduced
                 chemical_formula_anonymous
                 chemical_formula_hill
@@ -152,8 +147,6 @@ class MongoDatabase(MongoClient):
                 elements
                 individual_elements_ratios
                 total_elements_ratios
-                configuration_labels
-                configuration_labels_counts
                 chemical_formula_reduced
                 chemical_formula_anonymous
                 chemical_formula_hill
@@ -165,8 +158,6 @@ class MongoDatabase(MongoClient):
                 property_fields
                 methods
                 methods_counts
-                property_labels
-                property_labels_counts
             relationships
                 property_instances
                 configuration_sets
@@ -590,7 +581,6 @@ class MongoDatabase(MongoClient):
 
                     #p_hash = str(hash(prop))
 
-                    labels = []
                     methods = []
                     settings_hashes = []
 
@@ -599,7 +589,7 @@ class MongoDatabase(MongoClient):
                         pso_map = pmap['_settings']
 
                         all_ps_fields = set(pso_map.keys()) - {
-                            'method', 'description', 'files', 'labels'
+                            'method', 'description', 'files'
                         }
 
                         # ps_not_required = {
@@ -737,7 +727,6 @@ class MongoDatabase(MongoClient):
                         p_update_doc = {
                             '$addToSet': {
                                 'methods': {'$each': methods},
-                                'labels': {'$each': labels},
                                 # PR -> PSO pointer
                                 'relationships.property_settings': {
                                     '$each': [settings_hashes]
@@ -927,7 +916,6 @@ class MongoDatabase(MongoClient):
                     #p_hash=str(hash(prop))
 
                     #new_p_hashes.append(p_hash)
-                    labels = []
                     methods = []
                     settings_hashes = []
                     ps_hash = None
@@ -936,7 +924,7 @@ class MongoDatabase(MongoClient):
                     if '_settings' in pmap:
                         pso_map = pmap['_settings']
                         all_ps_fields = set(pso_map.keys()) - {
-                            'method', 'description', 'files', 'labels'
+                            'method', 'description', 'files'
                         }
 
                         # ps_not_required = {
@@ -1044,7 +1032,6 @@ class MongoDatabase(MongoClient):
                         prop = Property.from_definition(
                             definition=property_definitions[pname],
                             configuration=atoms,
-                            property_setting=ps_hash,
                             property_map=pmap_copy
                         )
                         p_hash = str(hash(prop))
@@ -1078,7 +1065,6 @@ class MongoDatabase(MongoClient):
                         p_update_doc = {
                             '$addToSet': {
                                 'methods': {'$each': methods},
-                                'labels': {'$each': labels},
                                 # PR -> PSO pointer
                                 'relationships.property_settings': {
                                     '$each': settings_hashes
@@ -1569,7 +1555,6 @@ class MongoDatabase(MongoClient):
                     {
                         *self.configuration_type.unique_identifier_kw,
                         'names',
-                        'labels',
                         'hash',
                     }
                 ),
@@ -1582,7 +1567,6 @@ class MongoDatabase(MongoClient):
 
                 c.info['hash'] = co_doc['hash']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
-                c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
 
                 yield c
         else:
@@ -1598,7 +1582,6 @@ class MongoDatabase(MongoClient):
 
                 c.info['hash'] = co_doc['hash']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
-                c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
 
                 config_dict[co_doc['hash']] = c
 
@@ -1978,16 +1961,10 @@ class MongoDatabase(MongoClient):
         aggregated_info = {}
 
         for k,v in self.aggregate_configuration_set_info(cs_ids).items():
-            if k == 'labels':
-                k = 'configuration_labels'
-            elif k == 'labels_counts':
-                k = 'configuration_labels_counts'
-
             aggregated_info[k] = v
 
         for k,v in self.aggregate_property_info(pr_ids, verbose=verbose).items():
             if k in {
-                'labels', 'labels_counts',
                 'types',  'types_counts',
                 'fields', 'fields_counts'
                 }:
@@ -2002,110 +1979,6 @@ class MongoDatabase(MongoClient):
             hint=SHORT_ID_STRING_NAME,
         )
 
-    # TODO Work on making this Configuration "type" agnostic->Seems to be HIGHLY Configuration type dependent
-    #  Could define another configuration method for this->Just do this for now
-    def aggregate_configuration_info(self, hashes, verbose=False):
-        """
-        Gathers the following information from a collection of configurations:
-
-        * :code:`nconfigurations`: the total number of configurations
-        * :code:`nsites`: the total number of sites
-        * :code:`nelements`: the total number of unique element types
-        * :code:`elements`: the element types
-        * :code:`individual_elements_ratios`: a set of elements ratios generated
-          by looping over each configuration, extracting its concentration of
-          each element, and adding the tuple of concentrations to the set
-        * :code:`total_elements_ratios`: the ratio of the total count of atoms
-            of each element type over :code:`nsites`
-        * :code:`labels`: the union of all configuration labels
-        * :code:`labels_counts`: the total count of each label
-        * :code:`chemical_formula_reduced`: the set of all reduced chemical
-            formulae
-        * :code:`chemical_formula_anonymous`: the set of all anonymous chemical
-            formulae
-        * :code:`chemical_formula_hill`: the set of all hill chemical formulae
-        * :code:`nperiodic_dimensions`: the set of all numbers of periodic
-            dimensions
-        * :code:`dimension_types`: the set of all periodic boundary choices
-
-        Returns:
-
-            aggregated_info (dict):
-                All of the aggregated info
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
-        """
-
-        aggregated_info = {
-            'nconfigurations': len(hashes),
-            'nsites': 0,
-            'nelements': 0,
-            'chemical_systems': set(),
-            'elements': [],
-            'individual_elements_ratios': {},
-            'total_elements_ratios': {},
-            'labels': [],
-            'labels_counts': [],
-            'chemical_formula_reduced': set(),
-            'chemical_formula_anonymous': set(),
-            'chemical_formula_hill': set(),
-            'nperiodic_dimensions': set(),
-            'dimension_types': set(),
-        }
-
-        for doc in tqdm(
-            self.configurations.find({'hash': {'$in': hashes}}),
-            desc='Aggregating configuration info',
-            disable=not verbose,
-            total=len(ids),
-            ):
-            aggregated_info['nsites'] += doc['nsites']
-
-            aggregated_info['chemical_systems'].add(''.join(doc['elements']))
-
-            for e, er in zip(doc['elements'], doc['elements_ratios']):
-                if e not in aggregated_info['elements']:
-                    aggregated_info['nelements'] += 1
-                    aggregated_info['elements'].append(e)
-                    aggregated_info['total_elements_ratios'][e] = er*doc['nsites']
-                    aggregated_info['individual_elements_ratios'][e] = set(
-                        [np.round_(er, decimals=2)]
-                    )
-                else:
-                    aggregated_info['total_elements_ratios'][e] += er*doc['nsites']
-                    aggregated_info['individual_elements_ratios'][e].add(
-                        np.round_(er, decimals=2)
-                    )
-
-            for l in doc['labels']:
-                if l not in aggregated_info['labels']:
-                    aggregated_info['labels'].append(l)
-                    aggregated_info['labels_counts'].append(1)
-                else:
-                    idx = aggregated_info['labels'].index(l)
-                    aggregated_info['labels_counts'][idx] += 1
-
-            aggregated_info['chemical_formula_reduced'].add(doc['chemical_formula_reduced'])
-            aggregated_info['chemical_formula_anonymous'].add(doc['chemical_formula_anonymous'])
-            aggregated_info['chemical_formula_hill'].add(doc['chemical_formula_hill'])
-
-            aggregated_info['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
-            aggregated_info['dimension_types'].add(tuple(doc['dimension_types']))
-
-        for e in aggregated_info['elements']:
-            aggregated_info['total_elements_ratios'][e] /= aggregated_info['nsites']
-            aggregated_info['individual_elements_ratios'][e] = list(aggregated_info['individual_elements_ratios'][e])
-
-        aggregated_info['chemical_systems'] = list(aggregated_info['chemical_systems'])
-
-        aggregated_info['chemical_formula_reduced'] = list(aggregated_info['chemical_formula_reduced'])
-        aggregated_info['chemical_formula_anonymous'] = list(aggregated_info['chemical_formula_anonymous'])
-        aggregated_info['chemical_formula_hill'] = list(aggregated_info['chemical_formula_hill'])
-        aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
-        aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
-
-        return aggregated_info
 
 
     def aggregate_property_info(self, pr_hashes, verbose=False):
@@ -2140,8 +2013,6 @@ class MongoDatabase(MongoClient):
             'fields_counts': [],
             'methods': [],
             'methods_counts': [],
-            'labels': [],
-            'labels_counts': []
         }
 
         ignore_keys = {
@@ -2174,13 +2045,6 @@ class MongoDatabase(MongoClient):
                     idx = aggregated_info['fields'].index(l)
                     aggregated_info['fields_counts'][idx] += 1
 
-            for l in doc['labels']:
-                if l not in aggregated_info['labels']:
-                    aggregated_info['labels'].append(l)
-                    aggregated_info['labels_counts'].append(1)
-                else:
-                    idx = aggregated_info['labels'].index(l)
-                    aggregated_info['labels_counts'][idx] += 1
 
 
             for l in doc['methods']:
@@ -2205,8 +2069,6 @@ class MongoDatabase(MongoClient):
             * elements
             * individual_elements_ratios
             * total_elements_ratios
-            * labels
-            * labels_counts
             * chemical_formula_reduced
             * chemical_formula_anonymous
             * chemical_formula_hill
@@ -2368,17 +2230,13 @@ class MongoDatabase(MongoClient):
         aggregated_info = {}
         for k,v in self.aggregate_configuration_set_info(
             cs_ids, verbose=verbose).items():
-            if k == 'labels':
-                k = 'configuration_labels'
-            elif k == 'labels_counts':
-                k = 'configuration_labels_counts'
+
 
             aggregated_info[k] = v
 
         for k,v in self.aggregate_property_info(
             clean_pr_hashes, verbose=verbose).items():
             if k in {
-                'labels', 'labels_counts',
                 'types',  'types_counts',
                 'fields', 'fields_counts'
                 }:
@@ -2570,70 +2428,6 @@ class MongoDatabase(MongoClient):
         pass
 
 
-    def apply_labels(
-        self, dataset_id, collection_name, query, labels, verbose=False
-        ):
-        """
-        Applies the given labels to all objects in the specified collection that
-        match the query and are linked to the given dataset.
-
-        Args:
-
-            dataset_id (str):
-                The ID of the dataset. Used as a safety measure to only update
-                entries for the given dataset.
-
-            collection_name (str):
-                One of 'configurations' or 'properties'.
-
-            query (dict):
-                A Mongo-style query for filtering the collection. For
-                example: :code:`query = {'nsites': {'$lt': 100}}`.
-
-            labels (set or str):
-                A set of labels to apply to the matching entries.
-
-            verbose (bool):
-                If True, prints progress bar.
-        """
-
-        dataset = self.get_dataset(dataset_id)['dataset']
-
-        if collection_name == 'configurations':
-            collection = self.configurations
-
-            cs_ids = dataset.configuration_set_ids
-
-            all_co_hashes = list(set(itertools.chain.from_iterable(
-                cs_doc['relationships']['configurations'] for cs_doc in
-                self.configuration_sets.find({SHORT_ID_STRING_NAME: {'$in': cs_ids}})
-            )))
-
-            query['hash'] = {'$in': all_co_hashes}
-        elif collection_name == 'properties':
-            collection = self.property_instances
-
-            query['hash'] = {'$in': dataset.property_ids}
-        else:
-            raise RuntimeError(
-                "collection_name must be 'configurations' or 'properties'"
-            )
-
-        if isinstance(labels, str):
-            labels = {labels}
-
-        for doc in tqdm(
-            collection.find(query, {'hash': 1}),
-            desc='Applying configuration labels',
-            disable=not verbose
-            ):
-            doc_hash = doc['hash']
-
-            collection.update_one(
-                {'hash': doc_hash},
-                {'$addToSet': {'labels': {'$each': list(labels)}}},
-                hint='hash',
-            )
 
 
     def plot_histograms(
@@ -3175,7 +2969,7 @@ class MongoDatabase(MongoClient):
 
     #     return res
 
-
+'''
     def dataset_from_markdown(
         self,
         html_file_path,
@@ -3374,7 +3168,9 @@ class MongoDatabase(MongoClient):
 
         return self.get_dataset(ds_id, resync=True, verbose=verbose)
 
+'''
 
+'''
     def dataset_to_markdown(
         self,
         ds_id,
@@ -3702,7 +3498,9 @@ class MongoDatabase(MongoClient):
                 images=images,
                 format=data_format,
             )
+'''
 
+'''
     def export_dataset(self, ds_id, output_folder, fmt, mode, verbose=False):
         """
         Exports the dataset whose :code:`SHORT_ID_STRING_NAME` matches :code:`ds_id` to
@@ -3933,8 +3731,10 @@ class MongoDatabase(MongoClient):
                         data=np.array(cs_doc['relationships']['configurations'],
                         dtype=STRING_DTYPE_SPECIFIER),
                     )
+'''
 
-# TODO: May need to make more Configuration "type" agnostic
+
+# TODO: Change labels_field to metadata_fields
 def load_data(
     file_path,
     file_format,
@@ -4064,9 +3864,6 @@ def _build_c_update_doc(configuration):
         '$addToSet': {
             'names': {
                 '$each': list(configuration.info[ATOMS_NAME_FIELD])
-            },
-            'labels': {
-                '$each': list(configuration.info[ATOMS_LABELS_FIELD])
             },
             'relationships.property_instances': {
                 '$each': []
