@@ -53,13 +53,11 @@ class BaseConfiguration:
     unique_identifier_kw = None
     unique_identifier_kw_types = None
 
-    def __init__(self, names=None, labels=None):
+    def __init__(self, names=None):
         """
         Args:
             names (str, list of str):
                 Names to be associated with a Configuration
-            labels (str, list of str):
-                Labels to be associated with a Configuration
         """
         self._array_order = None
         self.info = {}
@@ -67,10 +65,6 @@ class BaseConfiguration:
             self.info[ATOMS_NAME_FIELD] = set()
         else:
             self.info[ATOMS_NAME_FIELD] = set(list(names))
-        if labels is None:
-            self.info[ATOMS_LABELS_FIELD] = set()
-        else:
-            self.info[ATOMS_LABELS_FIELD] = set(list(labels))
 
 
     @property
@@ -156,7 +150,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         'pbc': bool,
     }
 
-    def __init__(self, names=None, labels=None, **kwargs):
+    def __init__(self, names=None, **kwargs):
         """
         Constructs an AtomicConfiguration. Calls :meth:`BaseConfiguration.__init__()`
         and :meth:`ase.Atoms.__init__()`
@@ -164,16 +158,13 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         Args:
             names (str, list of str):
                 Names to be associated with a Configuration
-            labels (str, list of str):
-                Labels to be associated with a Configuration
             **kwargs:
                 Other keyword arguments that can be passed to :meth:`ase.Atoms.__init__()`
         """
 
         BaseConfiguration.__init__(
             self,
-            names=names,
-            labels=labels,
+            names=names
         )
 
         kwargs['info'] = self.info
@@ -372,8 +363,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
           each element, and adding the tuple of concentrations to the set
         * :code:`total_elements_ratios`: the ratio of the total count of atoms
           of each element type over :code:`nsites`
-        * :code:`labels`: the union of all configuration labels
-        * :code:`labels_counts`: the total count of each label
         * :code:`chemical_formula_reduced`: the set of all reduced chemical
           formulae
         * :code:`chemical_formula_anonymous`: the set of all anonymous chemical
@@ -402,8 +391,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             'elements': [],
             'individual_elements_ratios': {},
             'total_elements_ratios': {},
-            'labels': [],
-            'labels_counts': [],
             'chemical_formula_reduced': set(),
             'chemical_formula_anonymous': set(),
             'chemical_formula_hill': set(),
@@ -435,13 +422,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                         np.round_(er, decimals=2)
                     )
 
-            for l in doc['labels']:
-                if l not in aggregated_info['labels']:
-                    aggregated_info['labels'].append(l)
-                    aggregated_info['labels_counts'].append(1)
-                else:
-                    idx = aggregated_info['labels'].index(l)
-                    aggregated_info['labels_counts'][idx] += 1
 
             aggregated_info['chemical_formula_reduced'].add(doc['chemical_formula_reduced'])
             aggregated_info['chemical_formula_anonymous'].add(doc['chemical_formula_anonymous'])
