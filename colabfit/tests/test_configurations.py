@@ -11,14 +11,14 @@ class TestConfigurations(unittest.TestCase):
         conf = AtomicConfiguration()
 
         self.assertEqual(conf.info[ATOMS_NAME_FIELD], set())
-        self.assertSetEqual(conf.info[ATOMS_LABELS_FIELD], set())
+        #self.assertSetEqual(conf.info[ATOMS_LABELS_FIELD], set())
 
 
     def test_from_ase(self):
         atoms = Atoms('H4', pbc=True)
         atoms.info[ATOMS_NAME_FIELD] = 'test'
-        labels = {'label1', 'label2'}
-        atoms.info[ATOMS_LABELS_FIELD] = labels
+        #labels = {'label1', 'label2'}
+        #atoms.info[ATOMS_LABELS_FIELD] = labels
 
         natoms = len(atoms)
 
@@ -37,7 +37,7 @@ class TestConfigurations(unittest.TestCase):
         # self.assertEqual(conf, atoms)
 
         self.assertEqual(conf.info[ATOMS_NAME_FIELD], {'test'})
-        self.assertSetEqual(conf.info[ATOMS_LABELS_FIELD], labels)
+        #self.assertSetEqual(conf.info[ATOMS_LABELS_FIELD], labels)
 
         np.testing.assert_allclose(conf.arrays['positions'], pos)
         np.testing.assert_allclose(conf.arrays['numbers'], np.ones(natoms))
@@ -49,7 +49,7 @@ class TestConfigurations(unittest.TestCase):
         atoms = Atoms('H4', pbc=True)
         atoms.info[ATOMS_NAME_FIELD] = 'test'
         labels = {'label1', 'label2'}
-        atoms.info[ATOMS_LABELS_FIELD] = labels
+        #atoms.info[ATOMS_LABELS_FIELD] = labels
 
         natoms = len(atoms)
 
@@ -72,8 +72,8 @@ class TestConfigurations(unittest.TestCase):
     def test_hashing_different(self):
         atoms = Atoms('H4', pbc=True)
         atoms.info[ATOMS_NAME_FIELD] = 'test'
-        labels = {'label1', 'label2'}
-        atoms.info[ATOMS_LABELS_FIELD] = labels
+        #labels = {'label1', 'label2'}
+        #atoms.info[ATOMS_LABELS_FIELD] = labels
 
         natoms = len(atoms)
 
