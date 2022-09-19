@@ -547,7 +547,6 @@ class Property(dict):
 
             self.property_map[key]['units'] = self.instance[edn_key]['source-unit']
 
-# TODO: Do we need to hash definition?
     def __hash__(self):
         """
         Hashes the Property by hashing its EDN.
