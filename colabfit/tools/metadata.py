@@ -7,19 +7,47 @@ class Metadata:
         attached to Configurations, PropertyInstances, ConfigurationSets and DataSets.
 
         Attributes:
-            linked_type (str)
-                Identity of linked object: must be one of ["CO","PI","CS","DS"]
             metadata (dict):
                 A dict of arbitrary metadata
 
     """
 
-    def __init__(self, linked_type=None, metadata=None):
-        if linked_type not in ["CO", "PI", "CS", "DS"]:
-            raise RuntimeError('linked_type must be one of CO, PI, CS, or DS')
-        self.linked_type = linked_type
+    def __init__(self, metadata=None):
         self.metadata = metadata
         self._hash = hash(self)
+
+
+    @classmethod
+    def from_map(cls,map,source):
+        gathered_fields = {}
+        for md_field in map.keys():
+            if 'value' in map[md_field]:
+                v = map[md_field]['value']
+            elif 'field' in map[md_field]:
+                field_key = map[md_field]['field']
+
+                if field_key in source.info:
+                    v = source.info[field_key]
+                elif field_key in source.arrays:
+                    v = source.arrays[field_key]
+                else:
+                    # No keys are required; ignored if missing
+                    continue
+            else:
+                # No keys are required; ignored if missing
+                continue
+
+            if "units" in map[md_field]:
+                gathered_fields[md_field] = {
+                    'source-value': v,
+                    'source-unit': map[md_field]['units'],
+                }
+            else:
+                gathered_fields[md_field] = {
+                    'source-value': v
+                }
+        return cls(metadata=gathered_fields)
+
 
     def __hash__(self):
         """

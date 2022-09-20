@@ -296,6 +296,7 @@ class MongoDatabase(MongoClient):
         self,
         configurations,
         property_map=None,
+        co_md_map=None,
         transform=None,
         generator=False,
         verbose=True
@@ -352,6 +353,11 @@ class MongoDatabase(MongoClient):
                 The '_settings' key is a special key that can be used to specify
                 the contents of a PropertySettings object that will be
                 constructed and linked to each associated property instance.
+
+
+            co_md_map (dict):
+                A dictionary that is used to specify how to load metadata
+                defined for a configuration.
 
             transform (callable, default=None):
                 If provided, `transform` will be called on each configuration in
@@ -461,6 +467,7 @@ class MongoDatabase(MongoClient):
                 mongo_login=mongo_login,
                 database_name=self.database_name,
                 property_map=property_map,
+                co_md_map=co_md_map,
                 transform=transform,
                 verbose=verbose
             )
@@ -742,7 +749,7 @@ class MongoDatabase(MongoClient):
 
     @staticmethod
     def _insert_data(
-        configurations, database_name, mongo_login,
+        configurations, database_name, mongo_login,co_md_map=None,
         property_map=None, transform=None,
         verbose=False
         ):
@@ -813,7 +820,28 @@ class MongoDatabase(MongoClient):
 
 
             c_update_doc, c_hash = _build_c_update_doc(atoms)
-  # TODO: Same as above
+            if co_md_map:
+                co_md = Metadata.from_map(map=co_md_map,source=atoms)
+                co_md_set_on_insert= _build_md_insert_doc(co_md)
+                co_md_update_doc = {  # update document
+                    '$setOnInsert': co_md_set_on_insert,
+                    '$addToSet': {
+                        'relationships.configurations': {
+                            '$each': [c_hash]
+                        },
+                    },
+                    '$set': {
+                        'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                    },
+                }
+
+                meta_docs.append(UpdateOne(
+                    {'hash': str(co_md._hash)},
+                    co_md_update_doc,
+                    upsert=True,
+                    hint='hash',
+                ))
+                c_update_doc['$addToSet']['relationships.metadata']={'$each': [str(co_md._hash)]}
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
             p_hash = None
 
@@ -837,10 +865,11 @@ class MongoDatabase(MongoClient):
                         continue
 
                     metadata_hashes = []
-                    ps_hash = None
                     # Attach property metadata, if any were given
                     if '_metadata' in pmap:
-                        pi_md_map = pmap['_metadata']
+                        pi_md = Metadata.from_map(map=pmap['_metadata'],source=atoms)
+                        # TODO: Use metadata from_map function
+                        '''
                         gathered_fields = {}
                         for pi_md_field in pi_md_map.keys():
                             if 'value' in pi_md_map[pi_md_field]:
@@ -868,14 +897,14 @@ class MongoDatabase(MongoClient):
                         pi_md = Metadata(linked_type='PI',
                                          metadata=gathered_fields
                                          )
-
-
+'''
+                        '''
+                        # TODO: use a generic metadata document builder function
                         pi_md_set_on_insert = {
                             'hash': str(pi_md._hash),
-                            'linked_type': pi_md.linked_type
                         }
 
-                        for gf, gf_dict in gathered_fields.items():
+                        for gf, gf_dict in pi_md.metadata.items():
                             if isinstance(gf_dict['source-value'], (int, float, str)):
                                 # Add directly
                                 pi_md_set_on_insert[gf] = {
@@ -891,7 +920,8 @@ class MongoDatabase(MongoClient):
 
                             if 'source-unit' in gf_dict:
                                 pi_md_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
-
+'''
+                        pi_md_set_on_insert = _build_md_insert_doc(pi_md)
                         prop = Property.from_definition(
                             definition=property_definitions[pname],
                             configuration=atoms,
@@ -904,7 +934,7 @@ class MongoDatabase(MongoClient):
                         pi_md_update_doc =  {  # update document
                                 '$setOnInsert': pi_md_set_on_insert,
                             '$addToSet': {
-                                'relationships': {
+                                'relationships.property_instances': {
                                     '$each': [p_hash]
                                 },
                             },
@@ -3767,6 +3797,28 @@ def _build_c_update_doc(configuration):
     c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
     return c_update_doc, c_hash
 
+def _build_md_insert_doc(metadata):
+    md_set_on_insert = {
+                            'hash': str(metadata._hash),
+                        }
+
+    for gf, gf_dict in metadata.metadata.items():
+            if isinstance(gf_dict['source-value'], (int, float, str)):
+            # Add directly
+                md_set_on_insert[gf] = {
+                    'source-value': gf_dict['source-value']
+                }
+            else:
+                # Then it's array-like and should be converted to a list
+                md_set_on_insert[gf] = {
+                    'source-value': np.atleast_1d(
+                        gf_dict['source-value']
+                    ).tolist()
+                }
+
+            if 'source-unit' in gf_dict:
+                md_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
+    return md_set_on_insert
 
 def generate_string():
     return get_random_string(12,allowed_chars=string.ascii_lowercase+'1234567890')
