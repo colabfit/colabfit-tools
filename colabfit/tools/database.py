@@ -2035,7 +2035,7 @@ class MongoDatabase(MongoClient):
         authors=None,
         links=None,
         description='',
-        data_license= 'CC-BY-ND-4.0',
+        data_license= 'CC0',
         resync=False,
         verbose=False,
         overloaded_ds_id=None,
@@ -2157,15 +2157,17 @@ class MongoDatabase(MongoClient):
 
             aggregated_info[k] = v
 
-        for k,v in self.aggregate_property_info(
-            clean_pr_hashes, verbose=verbose).items():
-            if k in {
-                'types',  'types_counts',
-                'fields', 'fields_counts'
-                }:
-                k = 'property_' + k
+# TODO: Reintroduce once new property keys are setup
 
-            aggregated_info[k] = v
+        #for k,v in self.aggregate_property_info(
+        #    clean_pr_hashes, verbose=verbose).items():
+        #    if k in {
+        #        'types',  'types_counts',
+        #        'fields', 'fields_counts'
+        #        }:
+        #        k = 'property_' + k
+
+        #    aggregated_info[k] = v
 
         id_prefix = '_'.join([
             name,
