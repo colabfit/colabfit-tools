@@ -1709,7 +1709,7 @@ class MongoDatabase(MongoClient):
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: cs_id,
                     'name': name,
-                    EXTENDED_ID_STRING_NAME: f'{name}__{cs_id}',
+                    EXTENDED_ID_STRING_NAME: f'{name}_{cs_id}',
                     'description': description,
                     'hash': str(cs_hash),
                     'ordered': ordered
@@ -2183,7 +2183,7 @@ class MongoDatabase(MongoClient):
         if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
             id_prefix = id_prefix[:MAX_STRING_LENGTH - len(ds_id) - 2]
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
-        extended_id = f'{id_prefix}__{ds_id}'
+        extended_id = f'{id_prefix}_{ds_id}'
 
         # TODO: get_dataset should be able to use extended-id; authors can't symbols
 
