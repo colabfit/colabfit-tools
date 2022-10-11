@@ -448,6 +448,7 @@ class MongoDatabase(MongoClient):
                 database_name=self.database_name,
                 configurations=configurations,
                 property_map=property_map,
+                co_md_map=co_md_map,
                 transform=transform,
                 verbose=verbose
             )
@@ -484,7 +485,9 @@ class MongoDatabase(MongoClient):
         mongo_login,
         login_args,
         login_kwargs,
-        property_map=None, transform=None,
+        property_map=None,
+        co_md_map=None,
+        transform=None,
         verbose=False
         ):
 
@@ -550,6 +553,7 @@ class MongoDatabase(MongoClient):
 
 
             c_update_doc, c_hash = _build_c_update_doc(atoms)
+
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
             p_hash = None
@@ -2122,7 +2126,7 @@ class MongoDatabase(MongoClient):
             authors = [authors]
 
         for auth in authors:
-            if not ''.join(auth.split(' ')).isalpha():
+            if not ''.join(auth.split(' ')[-1].replace('-','')).isalpha():
                 raise RuntimeError(
                     "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(auth)
                 )
