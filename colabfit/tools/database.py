@@ -867,6 +867,14 @@ class MongoDatabase(MongoClient):
                         #     )
                         # )
                         continue
+# checks if property is present in atoms->if not, skip over it
+# TODO: Fix when pmap uses value rather than field
+                    available = 0
+                    for k in pmap_copy.keys():
+                        if pmap_copy[k]['field'] in available_keys:
+                            available += 1
+                    if not available:
+                        continue
 
                     metadata_hashes = []
                     # Attach property metadata, if any were given
