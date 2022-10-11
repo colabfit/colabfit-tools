@@ -994,7 +994,7 @@ class MongoDatabase(MongoClient):
                             '$addToSet': {
                                 # PR -> PSO pointer
                                 'relationships.metadata': {
-                                    '$each': [metadata_hashes]
+                                    '$each': metadata_hashes
                                 },
                                 'relationships.configurations': c_hash,
                             },
@@ -1680,14 +1680,17 @@ class MongoDatabase(MongoClient):
             cs_hash.update(str(i).encode('utf-8'))
 
         cs_hash = int(cs_hash.hexdigest(), 16)
+
+        # Check for duplicates
+        try:
+            return self.configuration_sets.find_one({'hash': str(cs_hash)})[SHORT_ID_STRING_NAME]
+        except:
+            pass
+
         if overloaded_cs_id is None:
             cs_id = ID_FORMAT_STRING.format('CS', generate_string(), 0)
         else:
             cs_id = overloaded_cs_id
-        # Check for duplicates
-        if self.configuration_sets.count_documents({'hash': str(cs_hash)}):
-            return cs_id
-
         # Make sure all of the configurations exist
         if self.configurations.count_documents({'hash': {'$in': hashes}}) != len(hashes):
             raise MissingEntryError(
@@ -2141,18 +2144,18 @@ class MongoDatabase(MongoClient):
             ds_hash.update(str(pi).encode('utf-8'))
 
         ds_hash = int(ds_hash.hexdigest(), 16)
+        # Check for duplicates
+        try:
+            return self.datasets.find_one({'hash': str(ds_hash)})[SHORT_ID_STRING_NAME]
+        except:
+            pass
+
 
         if overloaded_ds_id is None:
             ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
         else:
             ds_id = overloaded_ds_id
 
-        # Check for duplicates
-        if self.datasets.count_documents({'hash': str(ds_hash)}):
-            if resync:
-                self.resync_dataset(ds_id)
-
-            return ds_id
 
         aggregated_info = {}
         for k,v in self.aggregate_configuration_set_info(
