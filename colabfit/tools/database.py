@@ -810,7 +810,7 @@ class MongoDatabase(MongoClient):
         config_docs     = []
         property_docs   = []
         meta_docs   = []
-
+        meta_update_dict = {}
         # Add all of the configurations into the Mongo server
         ai = 1
         for atoms in tqdm(
@@ -880,7 +880,7 @@ class MongoDatabase(MongoClient):
                     # Attach property metadata, if any were given
                     if '_metadata' in pmap:
                         pi_md = Metadata.from_map(map=pmap['_metadata'],source=atoms)
-                        # TODO: Use metadata from_map function
+
                         '''
                         gathered_fields = {}
                         for pi_md_field in pi_md_map.keys():
@@ -911,7 +911,7 @@ class MongoDatabase(MongoClient):
                                          )
 '''
                         '''
-                        # TODO: use a generic metadata document builder function
+                        
                         pi_md_set_on_insert = {
                             'hash': str(pi_md._hash),
                         }
@@ -955,12 +955,17 @@ class MongoDatabase(MongoClient):
                                 },
                                 }
 
-                        meta_docs.append(UpdateOne(
-                            {'hash': str(pi_md._hash)},
-                            pi_md_update_doc,
-                            upsert=True,
-                            hint='hash',
-                        ))
+                        if str(pi_md._hash) in meta_update_dict:
+                            meta_update_dict[str(pi_md._hash)]['$addToSet']['relationships.property_instances']['$each'].append(p_hash)
+                        else:
+                            meta_update_dict[str(pi_md._hash)]=pi_md_update_doc
+
+                       # meta_docs.append(UpdateOne(
+                       #     {'hash': str(pi_md._hash)},
+                       #     pi_md_update_doc,
+                       #     upsert=True,
+                       #     hint='hash',
+                       # ))
 
                         metadata_hashes.append(str(pi_md._hash))
 
@@ -997,7 +1002,7 @@ class MongoDatabase(MongoClient):
 
                         if 'source-unit' in prop[k]:
                             setOnInsert[k]['source-unit'] = prop[k]['source-unit']
-                        # TODO: Look at
+                        # TODO: Look at: can probably safely move out one level
                         p_update_doc = {
                             '$addToSet': {
                                 # PR -> PSO pointer
@@ -1043,6 +1048,27 @@ class MongoDatabase(MongoClient):
                 insertions.append((c_hash, p_hash))
 
             ai += 1
+        # Clean PI hashes here to avoid long set comparison since relationships aren't indexed
+        # if PI points to MD with current hash, we know it was already added and can remove it but remove process is same problem as addtoset!!!!
+        # therefore do all set logic outside mongo->doesn't work with multiprocessing
+        # Preprocess metadata to avoid write conflicts
+        itr = 0
+        for k, v in meta_update_dict.items():
+        # TODO: Not ideal
+            ap = list(coll_properties.find(
+                    {"relationships.metadata": {"$in": [k]}}
+                    , {'_id': 0, 'hash': 1}))
+            s = set([i['hash'] for i in ap])
+            s.update(v['$addToSet']['relationships.property_instances']['$each'])
+            v.pop('$addToSet')
+            v['$set']['relationships.property_instances'] = list(s)
+            meta_docs.append(UpdateOne(
+                    {'hash': str(k)},
+                    v,
+                    upsert=True,
+                    hint='hash',
+                ))
+            itr += 1
 
         if config_docs:
             res = coll_configurations.bulk_write(config_docs, ordered=False)
@@ -1656,7 +1682,7 @@ class MongoDatabase(MongoClient):
         """
         self.database.concatenate_configurations()
 
-# TODO: If duplicate found, return original's id->Likewise for insert_dataset
+
     def insert_configuration_set(self, hashes, name, description='', ordered=False, overloaded_cs_id=None, verbose=False):
         """
         Inserts the configuration set of IDs to the database.
