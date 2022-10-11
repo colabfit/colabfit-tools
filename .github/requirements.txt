@@ -10,3 +10,4 @@ biopython
 pytest
 wheel
 django
+periodictable

@@ -35,6 +35,7 @@ setup(
         'pymongo',
         'biopython',
         'matplotlib',
-        'django'
+        'django',
+        'periodictable'
     ],
 )
