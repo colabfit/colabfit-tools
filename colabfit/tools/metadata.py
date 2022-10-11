@@ -1,6 +1,6 @@
 from hashlib import sha512
 from collections import OrderedDict
-
+import numpy as np
 class Metadata:
     """
         A Metadata object contains key-value pairs of generic information which can be
@@ -62,11 +62,11 @@ class Metadata:
                     if isinstance(i,str):
                         _hash.update(i.encode('utf-8'))
                     else:
-                        _hash.update(bytes(i))
+                        _hash.update(np.array(i).data.tobytes())
             elif isinstance(v['source-value'],str):
                 _hash.update(v['source-value'].encode('utf-8'))
             else:
-                _hash.update(bytes(v['source-value']))
+                _hash.update(np.array(i).data.tobytes())
             if 'source-units' in v:
                 _hash.update(v['source-unit'].encode('utf-8'))
         return int(_hash.hexdigest(), 16)
