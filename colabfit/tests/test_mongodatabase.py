@@ -17,6 +17,7 @@ from colabfit import (
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.database import MongoDatabase
 from colabfit.tools.property_settings import PropertySettings
+from colabfit.tools.metadata import Metadata
 
 
 def build_n(n):
@@ -180,19 +181,19 @@ class TestMongoDatabase:
 
             for img in images:
                 img.info[ATOMS_NAME_FIELD].add('change')
-                img.info[ATOMS_LABELS_FIELD].add('another_label')
+                #img.info[ATOMS_LABELS_FIELD].add('another_label')
 
             list(database.insert_data(images))
 
             for n in database.get_data('configurations', 'names', concatenate=True):
                 assert n == 'change'
 
-            for n in database.get_data('configurations', 'labels', concatenate=True):
-                assert n == 'another_label'
+            #for n in database.get_data('configurations', 'labels', concatenate=True):
+            #    assert n == 'another_label'
 
             for img in images:
                 img.info[ATOMS_NAME_FIELD].add('change2')
-                img.info[ATOMS_LABELS_FIELD] = {'another_label2'}
+             #   img.info[ATOMS_LABELS_FIELD] = {'another_label2'}
 
             # These ids aren't in DB as they were duplicates of previous COs
             ids = list(database.insert_data(images))
@@ -200,9 +201,9 @@ class TestMongoDatabase:
                 assert n[0] == 'change'
                 assert n[1] == 'change2'
 
-            for n in database.get_data('configurations', 'labels'):
-                assert n[0] == 'another_label'
-                assert n[1] == 'another_label2'
+            #for n in database.get_data('configurations', 'labels'):
+             #   assert n[0] == 'another_label'
+             #   assert n[1] == 'another_label2'
             database.get_configuration(ids[0][0])
 
             np.testing.assert_allclose(
@@ -268,11 +269,8 @@ class TestMongoDatabase:
                     'forces': {'field': 'dft-forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
-                    '_settings': {
-                        'method': 'VASP',
-                        'labels': ['label1', 'label2'],
-                        'files': [('dummy_file.txt', 'dummy contents\nwith a newline\n')],
-                        'description': 'A dummy property settings object'
+                    '_metadata': {
+                        'method': {'value':'VASP'},
                     },
                 }]
             }
@@ -367,10 +365,10 @@ class TestMongoDatabase:
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
 
-                    '_settings': {
-                        'method': 'VASP',
-                        'description': 'A basic test calculation',
-                        'files': [('dummy_name', 'dummy file contents')],
+                    '_metadata': {
+                        'method': {'value':'VASP'},
+                        'description': {'value':'A basic test calculation'},
+                        'files': {'value':[('dummy_name', 'dummy file contents')]},
                     }
                 }]
             }
@@ -510,10 +508,10 @@ class TestMongoDatabase:
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
 
-                    '_settings': {
-                        'method': 'VASP',
-                        'description': 'A basic test calculation',
-                        'files': [('dummy_name', 'dummy file contents')],
+                    '_metadata': {
+                        'method': {'value':'VASP'},
+                        'description': {'value':'A basic test calculation'},
+                        'files': {'value':[('dummy_name', 'dummy file contents')]},
                     }
                 }]
             }
@@ -718,18 +716,17 @@ class TestMongoDatabase:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
-
-                    '_settings': {
-                        'method': 'VASP',
-                        'description': 'A basic test calculation',
-                        'files': [('dummy_name', 'dummy file contents')],
+                    '_metadata': {
+                        'method': {'value': 'VASP'},
+                        'description': {'value': 'A basic test calculation'},
+                        'files': {'value': [('dummy_name', 'dummy file contents')]},
                     }
                 }]
             }
 
             for i, img in enumerate(images):
                 img.info[ATOMS_NAME_FIELD].add(f'config_{i}')
-                img.info[ATOMS_LABELS_FIELD].add('a_label')
+                #img.info[ATOMS_LABELS_FIELD].add('a_label')
 
             ids = database.insert_data(
                 images,
@@ -754,7 +751,7 @@ class TestMongoDatabase:
                 assert config_doc['dimension_types'] == [0, 0, 0]
                 assert config_doc['elements'] == ['H']
                 assert config_doc['elements_ratios'] == [1.0]
-                assert {'a_label'}.issubset(config_doc['labels'])
+               # assert {'a_label'}.issubset(config_doc['labels'])
                 np.testing.assert_allclose(
                     config_doc['cell'],
                     np.array(config.get_cell())
@@ -767,7 +764,7 @@ class TestMongoDatabase:
 
                 assert {cid}.issubset(prop_doc['relationships']['configurations'])
 
-                assert database.property_settings.count_documents({
+                assert database.metadata.count_documents({
                     'relationships.property_instances': pid
                 })
 
@@ -783,7 +780,7 @@ class TestMongoDatabase:
 
             for i, img in enumerate(images):
                 img.info[ATOMS_NAME_FIELD].add(f'config_{i}')
-                img.info[ATOMS_LABELS_FIELD].add('a_label')
+                #img.info[ATOMS_LABELS_FIELD].add('a_label')
 
             ids = database.insert_data(images)
 
@@ -802,8 +799,8 @@ class TestMongoDatabase:
             assert agg_info['elements'] == ['H']
             assert agg_info['individual_elements_ratios'] == {'H': [1.0]}
             assert agg_info['total_elements_ratios'] == {'H': 1.0}
-            assert agg_info['labels'] == ['a_label']
-            assert agg_info['labels_counts'] == [len(ids)]
+            #assert agg_info['labels'] == ['a_label']
+            #assert agg_info['labels_counts'] == [len(ids)]
             assert agg_info['chemical_formula_reduced'] == ['H']
             assert agg_info['chemical_formula_anonymous'] == ['A']
             assert set(agg_info['chemical_formula_hill']) == {
@@ -847,11 +844,10 @@ class TestMongoDatabase:
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
 
-                    '_settings': {
-                        'method': 'VASP',
-                        'description': 'A basic test calculation',
-                        'files': [('dummy_name', 'dummy file contents')],
-                        'labels': ['pso_label1', 'pso_label2']
+                    '_metadata': {
+                        'method': {'value':'VASP'},
+                        'description': {'value':'A basic test calculation'},
+                        'files': {'value':[('dummy_name', 'dummy file contents')]},
                     }
                 }]
             }
@@ -869,7 +865,7 @@ class TestMongoDatabase:
 
             for i, img in enumerate(images):
                 img.info[ATOMS_NAME_FIELD].add(f'config_{i}')
-                img.info[ATOMS_LABELS_FIELD].add('a_label')
+                #img.info[ATOMS_LABELS_FIELD].add('a_label')
 
             ids = database.insert_data(
                 images,
@@ -884,7 +880,7 @@ class TestMongoDatabase:
 
             for i, img in enumerate(images):
                 img.info[ATOMS_NAME_FIELD].add(f'second_config_{i}')
-                img.info[ATOMS_LABELS_FIELD].add('a_second_label')
+                #img.info[ATOMS_LABELS_FIELD].add('a_second_label')
 
                 img.info['energy'] += 100000
 
@@ -923,7 +919,7 @@ class TestMongoDatabase:
             assert agg['elements'] == ['H']
             assert agg['individual_elements_ratios'] == {'H': [1.0]}
             assert agg['total_elements_ratios'] == {'H': 1.0}
-            assert {'a_label', 'a_second_label'}.issubset(agg['configuration_labels'])
+            #assert {'a_label', 'a_second_label'}.issubset(agg['configuration_labels'])
             assert agg['chemical_formula_reduced'] == ['H']
             assert agg['chemical_formula_anonymous'] == ['A']
             assert set(agg['chemical_formula_hill']) == {
@@ -933,10 +929,95 @@ class TestMongoDatabase:
             assert agg['dimension_types'] == [[0,0,0]]
 
             assert agg['property_types'] == ['default']
-            assert set(agg['property_labels']) == {'pso_label1', 'pso_label2'}
+            #assert set(agg['property_labels']) == {'pso_label1', 'pso_label2'}
 
             database.drop_database(database.database_name)
+class TestMetadata:
+    database_name = 'colabfit-test'
 
+    def test_co_md(self):
+        with tempfile.TemporaryFile() as tmpfile:
+            database = MongoDatabase(self.database_name, drop_database=True, configuration_type=AtomicConfiguration)
+
+            returns = build_n(10)
+
+            images = returns[0]
+            energies = returns[1]
+            stress = returns[2]
+            names = returns[3]
+            nd_same_shape = returns[4]
+            nd_diff_shape = returns[5]
+            forces = returns[6]
+            nd_same_shape_arr = returns[7]
+            nd_diff_shape_arr = returns[8]
+
+            database.insert_property_definition(
+                {
+                    'property-id': 'tag:dummy@email.com,0000-00-00:property/default',
+                    'property-name': 'default',
+                    'property-title': 'A default property used for testing',
+                    'property-description': 'A description of the property',
+                    'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True,
+                               'description': 'empty'},
+                    'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True,
+                               'description': 'empty'},
+                    'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True,
+                             'description': 'empty'},
+                    'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2, 3, 5], 'required': True,
+                                      'description': 'empty'},
+                    'nd-diff-shapes': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True,
+                                       'description': 'empty'},
+                    'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True,
+                               'description': 'empty'},
+                    'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True,
+                                          'description': 'empty'},
+                    'nd-diff-shapes-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'],
+                                           'required': True, 'description': 'empty'},
+                }
+            )
+
+            property_map = {
+                'default': [{
+                    'energy': {'field': 'energy', 'units': 'eV'},
+                    'stress': {'field': 'stress', 'units': 'GPa'},
+                    'name': {'field': 'name', 'units': None},
+                    'nd-same-shape': {'field': 'nd-same-shape', 'units': 'eV'},
+                    'nd-diff-shapes': {'field': 'nd-diff-shapes', 'units': 'eV'},
+                    'forces': {'field': 'forces', 'units': 'eV/Ang'},
+                    'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
+                    'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
+
+                    '_metadata': {
+                        'method': {'value':'VASP'},
+                        'description':  {'value':'A basic test calculation'},
+                        'files':  {'value':['dummy_name', 'dummy file contents']},
+                    }
+                }]
+            }
+            for i in images[:-1]:
+                i.info['meta1'] = 'test'
+            images[-1].info['meta2']='test'
+            co_md_map = {'MetaName1':{'field':'meta1'},'MetaName2':{'field':'meta2'}}
+
+            ids=database.insert_data(
+                images,
+                property_map=property_map,
+                co_md_map=co_md_map
+            )
+            co_ids1, pr_ids1 = list(zip(*ids))
+
+            cs_id1 = database.insert_configuration_set(co_ids1,  'name','a description1')
+            print (list(database.configuration_sets.find()))
+            ds_id = database.insert_dataset(
+                cs_ids=[cs_id1],
+                pr_hashes=pr_ids1,
+                name='example_dataset',
+                authors=['colabfit', 'Josh Vita', 'Eric Fuemmeler'],
+                links='https://colabfit.openkim.org/',
+                description='An example dataset',
+                resync=True
+            )
+            print (list(database.datasets.find()))
 
 class TestPropertyDefinitionsAndSettings:
     database_name = 'colabfit_test'
@@ -979,25 +1060,21 @@ class TestPropertyDefinitionsAndSettings:
             assert  get_def == property_definition
 
 
-    def test_settings_setter_getter(self):
-        with tempfile.TemporaryFile() as tmpfile:
-            database = MongoDatabase(self.database_name, drop_database=True,configuration_type=AtomicConfiguration)
+    #def test_metadata_setter_getter(self):
+    #    with tempfile.TemporaryFile() as tmpfile:
+    #        database = MongoDatabase(self.database_name, drop_database=True,configuration_type=AtomicConfiguration)
 
-            dummy_file_contents = 'this is a dummy file\nwith nonsense contents'
+    #        dummy_file_contents = 'this is a dummy file\nwith nonsense contents'
 
-            pso = PropertySettings(
-                method='VASP',
-                description='A basic test calculation',
-                files=[('dummy_name', dummy_file_contents)],
-            )
+     #       pso = Metadata({'dummy':'dummy'})
 
-            pso_id = database.insert_property_settings(pso)
+      #      pso_id = database.insert_property_settings(pso)
 
-            rebuilt_pso = database.get_property_settings(pso_id)
+       #     rebuilt_pso = database.get_property_settings(pso_id)
 
-            assert pso == rebuilt_pso
+        #    assert pso == rebuilt_pso
 
-
+'''
     def test_settings_duplicate(self):
         with tempfile.TemporaryFile() as tmpfile:
             database = MongoDatabase(self.database_name, drop_database=True,configuration_type=AtomicConfiguration)
@@ -1016,7 +1093,7 @@ class TestPropertyDefinitionsAndSettings:
             rebuilt_pso = database.get_property_settings(pso_id)
 
             assert pso == rebuilt_pso
-
+'''
 class TestConfigurationSets:
 
     database_name = 'colabfit_test'
@@ -1089,12 +1166,11 @@ class TestDatasets:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
-                    '_settings': {
-                        'method': 'VASP',
-                        'labels': ['label1', 'label2'],
-                        'files': [('dummy_file.txt', 'dummy contents\nwith a newline\n')],
-                        'description': 'A dummy property settings object'
-                    },
+                    '_metadata': {
+                        'method': {'value':'VASP'},
+                        'description':  {'value':'A basic test calculation'},
+                        'files':  {'value':['dummy_name', 'dummy file contents']},
+                    }
                 }]
             }
 
@@ -1174,12 +1250,11 @@ class TestDatasets:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
-                    '_settings': {
-                        'method': 'VASP',
-                        'labels': ['label1', 'label2'],
-                        'files': [('dummy_file.txt', 'dummy contents\nwith a newline\n')],
-                        'description': 'A dummy property settings object'
-                    },
+                    '_metadata': {
+                        'method': {'value':'VASP'},
+                        'description':  {'value':'A basic test calculation'},
+                        'files':  {'value':['dummy_name', 'dummy file contents']},
+                    }
                 }]
             }
 
@@ -1259,12 +1334,11 @@ class TestDatasets:
                     'forces': {'field': 'forces', 'units': 'eV/Ang'},
                     'nd-same-shape-arr': {'field': 'nd-same-shape-arr', 'units': 'eV/Ang'},
                     'nd-diff-shapes-arr': {'field': 'nd-diff-shapes-arr', 'units': 'eV/Ang'},
-                    '_settings': {
-                        'method': 'VASP',
-                        'labels': ['label1', 'label2'],
-                        'files': [('dummy_file.txt', 'dummy contents\nwith a newline\n')],
-                        'description': 'A dummy property settings object'
-                    },
+                    '_metadata': {
+                        'method': {'value':'VASP'},
+                        'description':  {'value':'A basic test calculation'},
+                        'files':  {'value':['dummy_name', 'dummy file contents']},
+                    }
                 }]
             }
 
@@ -1581,7 +1655,7 @@ class TestDatasets:
                 description='An example dataset',
                 resync=True
             )
-
+'''
     def test_export_ds(self):
         # with tempfile.NamedTemporaryFile() as tmpfile:
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1735,3 +1809,4 @@ class TestDatasets:
                         np.testing.assert_equal(v1, v2)
 
                     pass
+'''

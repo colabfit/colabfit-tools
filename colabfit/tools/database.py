@@ -868,10 +868,12 @@ class MongoDatabase(MongoClient):
                         # )
                         continue
 # checks if property is present in atoms->if not, skip over it
-# TODO: Fix when pmap uses value rather than field
+
                     available = 0
                     for k in pmap_copy.keys():
-                        if pmap_copy[k]['field'] in available_keys:
+                        if 'value' in pmap_copy[k]:
+                            available += 1
+                        elif pmap_copy[k]['field'] in available_keys:
                             available += 1
                     if not available:
                         continue
@@ -1746,7 +1748,7 @@ class MongoDatabase(MongoClient):
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: cs_id,
                     'name': name,
-                    EXTENDED_ID_STRING_NAME: f'{name}_{cs_id}',
+                    EXTENDED_ID_STRING_NAME: f'{name}__{cs_id}',
                     'description': description,
                     'hash': str(cs_hash),
                     'ordered': ordered
@@ -1975,8 +1977,8 @@ class MongoDatabase(MongoClient):
             'types_counts': [],
             'fields': [],
             'fields_counts': [],
-            'methods': [],
-            'methods_counts': [],
+            #'methods': [],
+            #'methods_counts': [],
         }
 
         ignore_keys = {
@@ -2011,13 +2013,13 @@ class MongoDatabase(MongoClient):
 
 
 
-            for l in doc['methods']:
-                if l not in aggregated_info['methods']:
-                    aggregated_info['methods'].append(l)
-                    aggregated_info['methods_counts'].append(1)
-                else:
-                    idx = aggregated_info['methods'].index(l)
-                    aggregated_info['methods_counts'][idx] += 1
+            #for l in doc['methods']:
+            #    if l not in aggregated_info['methods']:
+            #        aggregated_info['methods'].append(l)
+            #        aggregated_info['methods_counts'].append(1)
+            #    else:
+            #        idx = aggregated_info['methods'].index(l)
+            #        aggregated_info['methods_counts'][idx] += 1
 
         return aggregated_info
 
@@ -2200,15 +2202,15 @@ class MongoDatabase(MongoClient):
 
 # TODO: Reintroduce once new property keys are setup
 
-        #for k,v in self.aggregate_property_info(
-        #    clean_pr_hashes, verbose=verbose).items():
-        #    if k in {
-        #        'types',  'types_counts',
-        #        'fields', 'fields_counts'
-        #        }:
-        #        k = 'property_' + k
+        for k,v in self.aggregate_property_info(
+            clean_pr_hashes, verbose=verbose).items():
+            if k in {
+                'types',  'types_counts',
+                'fields', 'fields_counts'
+                }:
+                k = 'property_' + k
 
-        #    aggregated_info[k] = v
+            aggregated_info[k] = v
 
         id_prefix = '_'.join([
             name,
@@ -2220,7 +2222,7 @@ class MongoDatabase(MongoClient):
         if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
             id_prefix = id_prefix[:MAX_STRING_LENGTH - len(ds_id) - 2]
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
-        extended_id = f'{id_prefix}_{ds_id}'
+        extended_id = f'{id_prefix}__{ds_id}'
 
         # TODO: get_dataset should be able to use extended-id; authors can't symbols
 
