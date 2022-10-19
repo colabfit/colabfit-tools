@@ -554,6 +554,29 @@ class MongoDatabase(MongoClient):
 
             c_update_doc, c_hash = _build_c_update_doc(atoms)
 
+            if co_md_map:
+                co_md = Metadata.from_map(map=co_md_map,source=atoms)
+                co_md_set_on_insert= _build_md_insert_doc(co_md)
+                co_md_update_doc = {  # update document
+                    '$setOnInsert': co_md_set_on_insert,
+                    '$addToSet': {
+                        'relationships.configurations': {
+                            '$each': [c_hash]
+                        },
+                    },
+                    '$set': {
+                        'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                    },
+                }
+                coll_metadata.update_one(
+                    {'hash': str(co_md._hash)},
+                    co_md_update_doc,
+                    upsert=True,
+                    hint='hash'
+                )
+
+                c_update_doc['$addToSet']['relationships.metadata'] = {'$each': [str(co_md._hash)]}
+
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
             p_hash = None
@@ -577,113 +600,30 @@ class MongoDatabase(MongoClient):
                         # )
                         continue
 
+                        # checks if property is present in atoms->if not, skip over it
+                        available = 0
+                        for k in pmap_copy.keys():
+                            if 'value' in pmap_copy[k]:
+                                available += 1
+                            elif pmap_copy[k]['field'] in available_keys:
+                                available += 1
+                        if not available:
+                            continue
 
-
-                    metadata_hashes = []
-
-                    # Attach property settings, if any were given
-                    if '_metadata' in pmap:
-                        pi_md_map = pmap['_metadata']
-
-                        gathered_fields = {}
-                        for pi_md_field in pi_md_map.keys():
-                            if 'value' in pi_md_map[pi_md_field]:
-                                v = pi_md_map[pi_md_field]['value']
-                            else:
-                                field_key = pi_md_map[pi_md_field]['field']
-
-                                if field_key in atoms.info:
-                                    v = atoms.info[field_key]
-                                elif field_key in atoms.arrays:
-                                    v = atoms.arrays[field_key]
-                                else:
-                                # No keys are required; ignored if missing
-                                    continue
-
-                            if "units" in pi_md_map[pi_md_field]:
-                                gathered_fields[pi_md_field] = {
-                                    'source-value': v,
-                                    'source-unit':  pi_md_map[pi_md_field]['units'],
-                                }
-                            else:
-                                gathered_fields[pi_md_field] = {
-                                    'source-value': v
-                                }
-
-
-
-                        pi_md = Metadata(linked_type='PI',
-                                         metadata=gathered_fields
-                                         )
-
-                        pi_md_set_on_insert = {
-                            'hash':str(pi_md._hash),
-                            'linked_type':pi_md.linked_type
-                        }
-
-                        for gf, gf_dict in gathered_fields.items():
-                            if isinstance(gf_dict['source-value'], (int, float, str)):
-                                # Add directly
-                                pi_md_set_on_insert[gf] = {
-                                    'source-value': gf_dict['source-value']
-                                }
-                            else:
-                                # Then it's array-like and should be converted to a list
-                                pi_md_set_on_insert[gf] = {
-                                    'source-value': np.atleast_1d(
-                                        gf_dict['source-value']
-                                    ).tolist()
-                                }
-
-                            if 'source-unit' in gf_dict:
-                                pi_md_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
-
-                        prop = Property.from_definition(
-                            definition=property_definitions[pname],
-                            configuration=atoms,
-                            property_map=pmap_copy
-                        )
-                        p_hash = str(hash(prop))
-
-
-                        pi_md_update_doc =  {  # update document
-                                '$setOnInsert': pi_md_set_on_insert,
-                            '$addToSet': {
-                                'relationships': {
-                                    '$each': [p_hash]
-                                },
-                            },
-                                '$set': {
-                                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                                },
-                                }
-
-
-
-# CHECK HERE!!!
-                        coll_metadata.update_one(
-                            {'hash': str(pi_md._hash)},
-                            pi_md_update_doc,
-                            upsert=True,
-                            hint='hash'
-                        )
-
-                        metadata_hashes.append(str(pi_md._hash))
-                    else:
-                        prop = Property.from_definition(
-                            definition=property_definitions[pname],
-                            configuration=atoms,
-                            property_map=pmap_copy
-                        )
-                        p_hash = str(hash(prop))
+                    prop = Property.from_definition(
+                        definition=property_definitions[pname],
+                        configuration=atoms,
+                        property_map=pmap_copy
+                    )
+                    p_hash = str(hash(prop))
                     # Prepare the property instance EDN document
                     setOnInsert = {}
                     # for k in property_map[pname]:
-                # CHECK HERE!!!
+                    # CHECK HERE!!!
                     for k in pmap:
                         if k not in prop.keys():
-                            # To allow for missing non-required keys.
-                            # Required keys checked for in Property.from_definition
+                        # To allow for missing non-required keys.
+                        # Required keys checked for in Property.from_definition
                             continue
 
                         if isinstance(prop[k]['source-value'], (int, float, str)):
@@ -704,10 +644,6 @@ class MongoDatabase(MongoClient):
 
                         p_update_doc = {
                             '$addToSet': {
-                                # PR -> PSO pointer
-                                'relationships.metadata': {
-                                    '$each': [metadata_hashes]
-                                },
                                 'relationships.configurations': c_hash,
                             },
                             '$setOnInsert': {
@@ -719,6 +655,34 @@ class MongoDatabase(MongoClient):
                                 'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                             }
                         }
+
+                    # Attach property metadata, if any were given
+                    if '_metadata' in pmap:
+                        pi_md = Metadata.from_map(map=pmap['_metadata'], source=atoms)
+                        pi_md_set_on_insert = _build_md_insert_doc(pi_md)
+
+                        pi_md_update_doc =  {  # update document
+                                '$setOnInsert': pi_md_set_on_insert,
+                            '$addToSet': {
+                                'relationships': {
+                                    '$each': [p_hash]
+                                },
+                            },
+                                '$set': {
+                                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                                },
+                                }
+
+                        p_update_doc['$addToSet']['relationships.metadata'] = str(pi_md._hash)
+
+
+# CHECK HERE!!!
+                        coll_metadata.update_one(
+                            {'hash': str(pi_md._hash)},
+                            pi_md_update_doc,
+                            upsert=True,
+                            hint='hash'
+                        )
 
                     coll_properties.update_one(
                         {'hash': p_hash},
