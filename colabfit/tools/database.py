@@ -648,6 +648,7 @@ class MongoDatabase(MongoClient):
                             },
                             '$setOnInsert': {
                                 'hash': p_hash,
+                                SHORT_ID_STRING_NAME: 'PI_'+p_hash,
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -979,6 +980,7 @@ class MongoDatabase(MongoClient):
                             },
                             '$setOnInsert': {
                                 'hash':p_hash,
+                                SHORT_ID_STRING_NAME: 'PI_' + p_hash,
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -2268,7 +2270,7 @@ class MongoDatabase(MongoClient):
 
         if len(ds_id) > 19:
             # Then this must be an extended ID
-            ds_id = ds_id[-19:]
+            ds_id = ds_id.split('__')[-1]
 
         if resync:
             self.resync_dataset(ds_id, verbose=verbose)
@@ -3788,7 +3790,8 @@ def _build_c_update_doc(configuration):
     c_hash = str(hash(configuration))
     c_update_doc = {
         '$setOnInsert' : {
-            'hash': c_hash
+            'hash': c_hash,
+            SHORT_ID_STRING_NAME: 'CO_'+c_hash
         },
         '$set': {
             'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -3809,6 +3812,7 @@ def _build_c_update_doc(configuration):
 def _build_md_insert_doc(metadata):
     md_set_on_insert = {
                             'hash': str(metadata._hash),
+                            SHORT_ID_STRING_NAME: 'MD_'+str(metadata._hash)
                         }
 
     for gf, gf_dict in metadata.metadata.items():

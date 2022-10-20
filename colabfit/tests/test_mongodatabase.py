@@ -106,7 +106,7 @@ class TestMongoDatabase:
             nd_diff_shape_arr   = returns[8]
 
             ids = list(database.insert_data(images))
-            #Will be 11 because of _counter
+
             assert database.configurations.count_documents({}) == 10
 
             ids = list(database.insert_data(images))
