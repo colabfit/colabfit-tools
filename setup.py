@@ -4,7 +4,7 @@ setup(
     name = "colabfit-tools",
     version = "0.0.1",
     author = "ColabFit",
-    description = ("A suite of tools for working with traiing datasets for interatomic potentials"),
+    description = ("A suite of tools for working with training datasets for interatomic potentials"),
     license = "BSD",
     keywords = "machine learning interatomic potentials",
     url = "http://colabfit.org",
@@ -36,6 +36,6 @@ setup(
         'biopython',
         'matplotlib',
         'django',
-        'periodictable'
+        'periodictable',
     ],
 )

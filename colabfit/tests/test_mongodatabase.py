@@ -1208,8 +1208,8 @@ class TestDatasets:
                 description='An example dataset',
                 resync=True
             )
-
             ds_doc = next(database.datasets.find({SHORT_ID_STRING_NAME: ds_id}))
+            print ('here',ds_doc['aggregated_info'])
             assert set(ds_doc['authors']) == {'colabfit', 'Josh Vita', 'Eric Fuemmeler'}
             assert ds_doc['extended-id'] == 'example_dataset_colabfitVitaFuemmeler__' + ds_id
 
