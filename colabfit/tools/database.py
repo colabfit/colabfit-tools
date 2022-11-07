@@ -34,7 +34,7 @@ from colabfit import (
     HASH_LENGTH,
     HASH_SHIFT,
     ID_FORMAT_STRING,
-    _CONFIGS_COLLECTION, _PROPS_COLLECTION, _METADATA_COLLECTION,
+    _CONFIGS_COLLECTION, _PROPS_COLLECTION, _METADATA_COLLECTION, _CALCULATION_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD,
     MAX_STRING_LENGTH,
@@ -47,6 +47,7 @@ from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.dataset import Dataset
 from colabfit.tools.metadata import Metadata
+from colabfit.tools.calculation import Calculation
 from colabfit.tools.dataset_parser import (
     DatasetParser, MarkdownFormatError, BadTableFormatting
 )
@@ -247,6 +248,7 @@ class MongoDatabase(MongoClient):
         self.configurations         = self[database_name][_CONFIGS_COLLECTION]
         self.property_instances     = self[database_name][_PROPS_COLLECTION]
         self.property_definitions   = self[database_name][_PROPDEFS_COLLECTION]
+        self.calculations = self[database_name][_CALCULATION_COLLECTION]
         self.metadata      = self[database_name][_METADATA_COLLECTION]
         self.configuration_sets     = self[database_name][_CONFIGSETS_COLLECTION]
         self.datasets               = self[database_name][_DATASETS_COLLECTION]
@@ -270,6 +272,9 @@ class MongoDatabase(MongoClient):
             keys='hash', name='hash', unique=True
         )
         self.metadata.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.calculations.create_index(
             keys='hash', name='hash', unique=True
         )
         self.configuration_sets.create_index(
@@ -722,14 +727,13 @@ class MongoDatabase(MongoClient):
         property_map=None, transform=None,
         verbose=False
         ):
-
         if isinstance(mongo_login, int):
             client = MongoClient('localhost', mongo_login)
         else:
             client = MongoClient(mongo_login)
-
         coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
         coll_properties             = client[database_name][_PROPS_COLLECTION]
+        coll_calculations = client[database_name][_CALCULATION_COLLECTION]
         coll_property_definitions   = client[database_name][_PROPDEFS_COLLECTION]
         coll_metadata      = client[database_name][_METADATA_COLLECTION]
 
@@ -774,6 +778,7 @@ class MongoDatabase(MongoClient):
 
         config_docs     = []
         property_docs   = []
+        calc_docs = []
         meta_docs   = []
         meta_update_dict = {}
         # Add all of the configurations into the Mongo server
@@ -784,11 +789,16 @@ class MongoDatabase(MongoClient):
             disable=not verbose,
             ):
 
+            calc_lists = {}
+            calc_lists['PI']=[]
+            calc_lists['PI_type'] = []
             if transform:
                 transform(atoms)
 
 
             c_update_doc, c_hash = _build_c_update_doc(atoms)
+            calc_lists['CO'] = c_hash
+            calc_lists['CO_hill'] = atoms.configuration_summary()['chemical_formula_hill']
             if co_md_map:
                 co_md = Metadata.from_map(map=co_md_map,source=atoms)
                 co_md_set_on_insert= _build_md_insert_doc(co_md)
@@ -814,6 +824,7 @@ class MongoDatabase(MongoClient):
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
             p_hash = None
 
+            # TODO: Need to aggregate properties here to form Calculation object
             new_p_hashes = []
             for pname, pmap_list in property_map.items():
                 for pmap_i, pmap in enumerate(pmap_list):
@@ -945,6 +956,8 @@ class MongoDatabase(MongoClient):
                         p_hash = str(hash(prop))
 
                         new_p_hashes.append(p_hash)
+                    calc_lists['PI'].append(p_hash)
+                    calc_lists['PI_type'].append(pname)
                     # Prepare the property instance EDN document
                     setOnInsert = {}
                     # for k in property_map[pname]:
@@ -1010,6 +1023,32 @@ class MongoDatabase(MongoClient):
                     hint='hash',
                 )
             )
+            # Build Calculation object
+            calc = Calculation(calc_lists['CO'],calc_lists['PI'])
+            ca_hash=str(calc._hash)
+            ca_insert_doc = _build_ca_insert_doc(calc)
+            ca_insert_doc['chemical_formula_hill']=calc_lists['CO_hill']
+            ca_update_doc = {  # update document
+                '$setOnInsert': ca_insert_doc,
+                '$addToSet': {'relationships.property_instances': {'$each': calc.properties},
+                              'property_types': {'$each': calc_lists['PI_type']}
+                              },
+                '$inc': {
+                    'ncounts': 1
+                },
+
+                '$set': {
+                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                },
+            }
+            calc_docs.append(
+                UpdateOne(
+                    {'hash': ca_hash},
+                    ca_update_doc,
+                    upsert=True,
+                    hint='hash',
+                )
+            )
 
             if not p_hash:
                 # Only yield if something wasn't yielded earlier
@@ -1051,6 +1090,13 @@ class MongoDatabase(MongoClient):
             if nmatch:
                 warnings.warn(
                     '{} duplicate properties detected'.format(nmatch)
+                )
+        if calc_docs:
+            res = coll_calculations.bulk_write(calc_docs, ordered=False)
+            nmatch = res.bulk_api_result['nMatched']
+            if nmatch:
+                warnings.warn(
+                    '{} duplicate calculation objects detected'.format(nmatch)
                 )
 
         if meta_docs:
@@ -3832,6 +3878,18 @@ def _build_md_insert_doc(metadata):
             if 'source-unit' in gf_dict:
                 md_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
     return md_set_on_insert
+
+def _build_ca_insert_doc(calculation):
+
+    ca_set_on_insert = {
+                            'hash': str(calculation._hash),
+                            SHORT_ID_STRING_NAME: 'CA_'+str(calculation._hash),
+                            'relationships.configurations': calculation.configuration,
+                            #'$addToSet': {'relationships.property_instances':  {'$each': calculation.properties}},
+                            #'ncounts': 0,
+
+                        }
+    return ca_set_on_insert
 
 def generate_string():
     return get_random_string(12,allowed_chars=string.ascii_lowercase+'1234567890')
