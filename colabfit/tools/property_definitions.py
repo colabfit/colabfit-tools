@@ -67,23 +67,23 @@ free_energy_pd = {
     "property-description": "Free energy from a calculation of a static configuration. Energies must be specified to be per-atom or supercell. If a reference energy has been used, this must be specified as well.",
     "energy": {
         "type": "float",
-        "has-unit": true,
+        "has-unit": True,
         "extent": [],
-        "required": false,
+        "required": False,
         "description": "The free energy of the system."
     },
     "per-atom": {
         "type": "bool",
-        "has-unit": false,
+        "has-unit": False,
         "extent": [],
-        "required": true,
+        "required": True,
         "description": "If True, \"energy\" is the total energy of the system, and has NOT been divided by the number of atoms in the configuration."
     },
     "reference-energy": {
         "type": "float",
-        "has-unit": true,
+        "has-unit": True,
         "extent": [],
-        "required": false,
+        "required": False,
         "description": "If provided, then \"energy\" is the energy (either of the whole system, or per-atom) LESS the energy of a reference configuration (E = E_0 - E_reference). Note that \"reference-energy\" is just provided for documentation, and that \"energy\" should already have this value subtracted off. The reference energy must have the same units as \"energy\"."
     }
 }
