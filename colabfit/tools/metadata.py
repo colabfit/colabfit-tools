@@ -68,7 +68,7 @@ class Metadata:
             else:
                 _hash.update(np.array(v['source-value']).data.tobytes())
             if 'source-units' in v:
-                _hash.update(v['source-unit'.encode('utf-8'))
+                _hash.update(v['source-unit'].encode('utf-8'))
         return int(_hash.hexdigest(), 16)
 
     def __str__(self):
