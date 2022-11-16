@@ -775,7 +775,7 @@ class MongoDatabase(MongoClient):
         }
 
         insertions = []
-
+        ca_ids = set()
         config_docs     = []
         property_docs   = []
         calc_docs = []
@@ -1026,6 +1026,7 @@ class MongoDatabase(MongoClient):
             # Build Calculation object
             calc = Calculation(calc_lists['CO'],calc_lists['PI'])
             ca_hash=str(calc._hash)
+            ca_ids.add(ca_hash)
             ca_insert_doc = _build_ca_insert_doc(calc)
             ca_insert_doc['chemical_formula_hill']=calc_lists['CO_hill']
             ca_update_doc = {  # update document
@@ -1115,7 +1116,28 @@ class MongoDatabase(MongoClient):
                 warnings.warn(
                     '{} duplicate metadata objects detected'.format(nmatch)
                 )
+        # Add the backwards relationships CO/PI->CA
+        co_ca_docs = []
+        pi_ca_docs = []
+        for ca_id in ca_ids:
+            q = coll_calculations.find_one({'hash':{'$eq':ca_id}})
+            co_ids = q['relationships']['configurations']
+            pi_ids = q['relationships']['property_instances']
+            for co_id in co_ids:
+                co_ca_docs.append(UpdateOne(
+                    {'hash': co_id },
+                    {'$addToSet': {'relationships.calculations': ca_id}},
+                    hint='hash',
+                ))
+            for pi_id in pi_ids:
+                pi_ca_docs.append(UpdateOne(
+                    {'hash': pi_id },
+                    {'$addToSet': {'relationships.calculations': ca_id}},
+                    hint='hash',
+                ))
 
+        coll_configurations.bulk_write(co_ca_docs)
+        coll_properties.bulk_write(pi_ca_docs)
 
         client.close()
         return insertions
@@ -3893,6 +3915,8 @@ def _build_ca_insert_doc(calculation):
 
 def generate_string():
     return get_random_string(12,allowed_chars=string.ascii_lowercase+'1234567890')
+
+#def export_ds_to_xyz(ds_id):
 
 
 class ConcatenationException(Exception):
