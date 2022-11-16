@@ -8,6 +8,7 @@ import warnings
 import itertools
 import string
 import numpy as np
+import pymongo
 from tqdm import tqdm
 import multiprocessing
 from copy import deepcopy
@@ -20,6 +21,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 from ase.io import write as ase_write
+from ase import Atoms
 import periodictable
 import struct
 import random
@@ -1121,13 +1123,12 @@ class MongoDatabase(MongoClient):
         pi_ca_docs = []
         for ca_id in ca_ids:
             q = coll_calculations.find_one({'hash':{'$eq':ca_id}})
-            co_ids = q['relationships']['configurations']
+            co_id = q['relationships']['configurations']
             pi_ids = q['relationships']['property_instances']
-            for co_id in co_ids:
-                co_ca_docs.append(UpdateOne(
-                    {'hash': co_id },
-                    {'$addToSet': {'relationships.calculations': ca_id}},
-                    hint='hash',
+            co_ca_docs.append(UpdateOne(
+                 {'hash': co_id },
+                 {'$addToSet': {'relationships.calculations': ca_id}},
+                 hint='hash',
                 ))
             for pi_id in pi_ids:
                 pi_ca_docs.append(UpdateOne(
@@ -2102,12 +2103,12 @@ class MongoDatabase(MongoClient):
             total=len(pr_hashes)
             ):
          for i in range (len(doc['property_types'])):
-            if doc['property_types'][i] not in aggregated_info['types']:
-                aggregated_info['types'].append(doc['property_types'][i])
-                aggregated_info['types_counts'].append(1)
+            if doc['property_types'][i] not in aggregated_info['property_types']:
+                aggregated_info['property_types'].append(doc['property_types'][i])
+                aggregated_info['property_types_counts'].append(1)
             else:
-                idx = aggregated_info['types'].index(doc['property_types'][i])
-                aggregated_info['types_counts'][idx] += 1
+                idx = aggregated_info['property_types'].index(doc['property_types'][i])
+                aggregated_info['property_types_counts'][idx] += 1
         return aggregated_info
     '''
             for l in doc[doc['property_types']]:
@@ -3042,7 +3043,7 @@ class MongoDatabase(MongoClient):
 
     #     return res
 
-'''
+    '''
     def dataset_from_markdown(
         self,
         html_file_path,
@@ -3241,9 +3242,9 @@ class MongoDatabase(MongoClient):
 
         return self.get_dataset(ds_id, resync=True, verbose=verbose)
 
-'''
+    '''
 
-'''
+    '''
     def dataset_to_markdown(
         self,
         ds_id,
@@ -3571,9 +3572,9 @@ class MongoDatabase(MongoClient):
                 images=images,
                 format=data_format,
             )
-'''
+    '''
 
-'''
+    '''
     def export_dataset(self, ds_id, output_folder, fmt, mode, verbose=False):
         """
         Exports the dataset whose :code:`SHORT_ID_STRING_NAME` matches :code:`ds_id` to
@@ -3804,7 +3805,41 @@ class MongoDatabase(MongoClient):
                         data=np.array(cs_doc['relationships']['configurations'],
                         dtype=STRING_DTYPE_SPECIFIER),
                     )
-'''
+    '''
+    def export_ds_to_xyz(self, ds_id):
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME:{'$eq': ds_id}})
+        cas = ds_doc['relationships']['calculations']
+        cos = list(self.configurations.find({'relationships.calculations': {'$in': cas}}).sort('relationships.calculations',1))
+        pis = list(self.property_instances.find({'relationships.calculations': {'$in': cas}}).sort('relationships.calculations',1))
+        atoms = []
+        start = 0
+        for co in tqdm(cos[:2]):
+            a = Atoms(numbers=co['atomic_numbers'],positions=co['positions'],cell=co['cell'],pbc=co['pbc'])
+            for i,pi in enumerate(pis[start:]):
+             if pi['relationships']['calculations']==co['relationships']['calculations']:
+                for k,v in pi.items():
+                    if isinstance(v,dict):
+                        for k2,v2 in v.items():
+                            if isinstance(v2,dict):
+                                if 'source-value' in pi[k][k2]:
+                                    #hardcode whether property goes in info or arrays for now
+                                    if k2=='forces':
+                                        a.arrays['force'] = np.array(pi[k][k2]['source-value'])
+                                    else:
+                                        if k2 =='stress': # Needed so that ASE formats properly
+                                            a.info['stress'] = np.array(pi[k][k2]['source-value'])
+                                        else:
+                                            a.info['%s.%s' %(k,k2)] = np.array(pi[k][k2]['source-value'])
+
+             else:
+                start+=i
+                break
+
+            atoms.append(a)
+            ase_write('%s.xyz' %ds_doc['extended-id'],atoms)
+
+
+
 
 
 # TODO: Change labels_field to metadata_fields
@@ -3986,9 +4021,6 @@ def _build_ca_insert_doc(calculation):
 
 def generate_string():
     return get_random_string(12,allowed_chars=string.ascii_lowercase+'1234567890')
-
-#def export_ds_to_xyz(ds_id):
-
 
 class ConcatenationException(Exception):
     pass
