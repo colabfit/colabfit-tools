@@ -3813,7 +3813,7 @@ class MongoDatabase(MongoClient):
         pis = list(self.property_instances.find({'relationships.calculations': {'$in': cas}}).sort('relationships.calculations',1))
         atoms = []
         start = 0
-        for co in tqdm(cos[:2]):
+        for co in tqdm(cos):
             a = Atoms(numbers=co['atomic_numbers'],positions=co['positions'],cell=co['cell'],pbc=co['pbc'])
             for i,pi in enumerate(pis[start:]):
              if pi['relationships']['calculations']==co['relationships']['calculations']:
