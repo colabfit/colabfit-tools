@@ -3836,7 +3836,7 @@ class MongoDatabase(MongoClient):
                 break
 
             atoms.append(a)
-            ase_write('%s.xyz' %ds_doc['extended-id'],atoms)
+        ase_write('%s.xyz' %ds_doc['extended-id'],atoms)
 
 
 
