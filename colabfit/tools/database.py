@@ -1013,7 +1013,7 @@ class MongoDatabase(MongoClient):
                         p_hash
                     )
 
-                    insertions.append((c_hash, p_hash))
+                    #insertions.append((c_hash, p_hash))
 
             config_docs.append(
                 UpdateOne(
@@ -1050,10 +1050,10 @@ class MongoDatabase(MongoClient):
                     hint='hash',
                 )
             )
-
+            insertions.append((c_hash, ca_hash))
             if not p_hash:
                 # Only yield if something wasn't yielded earlier
-                insertions.append((c_hash, p_hash))
+                insertions.append((c_hash, ca_hash))
 
             ai += 1
         # Clean PI hashes here to avoid long set comparison since relationships aren't indexed
@@ -1963,7 +1963,7 @@ class MongoDatabase(MongoClient):
         for k,v in self.aggregate_configuration_set_info(cs_ids).items():
             aggregated_info[k] = v
 
-        for k,v in self.aggregate_property_info(pr_ids, verbose=verbose).items():
+        for k,v in self.aggregate_calculation_info(pr_ids, verbose=verbose).items():
             if k in {
                 'types',  'types_counts',
                 'fields', 'fields_counts'
@@ -2056,6 +2056,82 @@ class MongoDatabase(MongoClient):
             #        aggregated_info['methods_counts'][idx] += 1
 
         return aggregated_info
+
+    def aggregate_calculation_info(self, pr_hashes, verbose=False):
+        """
+        Aggregates the following information from a list of calculations:
+
+            * types
+            * types_counts
+
+        Args:
+
+            pr_ids (list or str):
+                The IDs of the configurations to aggregate information from
+
+            verbose (bool, default=False):
+                If True, prints a progress bar
+
+        Returns:
+
+            aggregated_info (dict):
+                All of the aggregated info
+        """
+
+        if isinstance(pr_hashes, str):
+            pr_hashes = [pr_hashes]
+
+        aggregated_info = {
+            'property_types': [],
+            'property_types_counts': [],
+            #'fields': [],
+            #'fields_counts': [],
+            #'methods': [],
+            #'methods_counts': [],
+        }
+
+        ignore_keys = {
+            'property-id', 'property-title', 'property-description', '_id',
+            SHORT_ID_STRING_NAME, 'property-name', 'hash'
+        }
+
+        for doc in tqdm(
+            self.calculations.find({'hash': {'$in': pr_hashes}}),
+            desc='Aggregating calculation info',
+            disable=not verbose,
+            total=len(pr_hashes)
+            ):
+         for i in range (len(doc['property_types'])):
+            if doc['property_types'][i] not in aggregated_info['types']:
+                aggregated_info['types'].append(doc['property_types'][i])
+                aggregated_info['types_counts'].append(1)
+            else:
+                idx = aggregated_info['types'].index(doc['property_types'][i])
+                aggregated_info['types_counts'][idx] += 1
+        return aggregated_info
+    '''
+            for l in doc[doc['property_types']]:
+                if l in ignore_keys: continue
+
+                l = '.'.join([doc['property_types'], l])
+
+                if l not in aggregated_info['fields']:
+                    aggregated_info['fields'].append(l)
+                    aggregated_info['fields_counts'].append(1)
+                else:
+                    idx = aggregated_info['fields'].index(l)
+                    aggregated_info['fields_counts'][idx] += 1
+    '''
+
+
+            #for l in doc['methods']:
+            #    if l not in aggregated_info['methods']:
+            #        aggregated_info['methods'].append(l)
+            #        aggregated_info['methods_counts'].append(1)
+            #    else:
+            #        idx = aggregated_info['methods'].index(l)
+            #        aggregated_info['methods_counts'][idx] += 1
+
 
     # TODO: Make Configuration "type" agnostic (only need to change docstring)
     def aggregate_configuration_set_info(self, cs_ids, resync=False, verbose=False):
@@ -2178,7 +2254,7 @@ class MongoDatabase(MongoClient):
         all_co_ids = list(set(all_co_ids))
 
         clean_pr_hashes = [
-            _['hash'] for _ in self.property_instances.find(
+            _['hash'] for _ in self.calculations.find(
                 {
                     'hash': {'$in': pr_hashes},
                     'relationships.configurations': {'$in': all_co_ids},
@@ -2236,13 +2312,8 @@ class MongoDatabase(MongoClient):
 
 # TODO: Reintroduce once new property keys are setup
 
-        for k,v in self.aggregate_property_info(
+        for k,v in self.aggregate_calculation_info(
             clean_pr_hashes, verbose=verbose).items():
-            if k in {
-                'types',  'types_counts',
-                'fields', 'fields_counts'
-                }:
-                k = 'property_' + k
 
             aggregated_info[k] = v
 
@@ -2265,7 +2336,7 @@ class MongoDatabase(MongoClient):
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
-                    'relationships.property_instances': {'$each': clean_pr_hashes},
+                    'relationships.calculations': {'$each': clean_pr_hashes},
                 },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: ds_id,
@@ -2299,14 +2370,14 @@ class MongoDatabase(MongoClient):
 
         # Add the backwards relationships PR->DS and origin using aggregation pipeline for logic
         property_docs = []
-        for pid in tqdm(clean_pr_hashes, desc='Updating PR->DS relationships'):
+        for pid in tqdm(clean_pr_hashes, desc='Updating CA->DS relationships'):
             property_docs.append(UpdateOne(
                 {'hash': pid},
                 [{'$set': {'relationships.origin':{'$ifNull':['$relationships.origin',ds_id]}
                 ,'relationships.datasets': {'$setUnion':[{'$ifNull':['$relationships.datasets',[]]},[ds_id]]}}}],
                 hint='hash',
             ))
-        self.property_instances.bulk_write(property_docs)
+        self.calculations.bulk_write(property_docs)
 
 
         return ds_id
