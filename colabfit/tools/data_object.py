@@ -2,9 +2,9 @@ from hashlib import sha512
 
 
 
-class Calculation:
+class DataObject:
     """
-    A Calculation object groups a Configuration with one or more PropertyInstances.
+    A DataObject groups a Configuration with one or more PropertyInstances.
 
     Attributes:
 
@@ -21,15 +21,15 @@ class Calculation:
         self._hash = hash(self)
 
     def __hash__(self):
-        cs_hash = sha512()
-        cs_hash.update(self.configuration.encode('utf-8'))
+        hash = sha512()
+        hash.update(self.configuration.encode('utf-8'))
         for i in sorted(self.properties):
-            cs_hash.update(str(i).encode('utf-8'))
+            hash.update(str(i).encode('utf-8'))
 
-        return int(cs_hash.hexdigest(), 16)
+        return int(hash.hexdigest(), 16)
 
     def __str__(self):
-        return "Calculation(Configuration='{}', Number of Attached PropertyInstances={})".format(
+        return "DataObject(Configuration='{}', Number of Attached PropertyInstances={})".format(
             self.configuration,
             len(self.properties),
         )

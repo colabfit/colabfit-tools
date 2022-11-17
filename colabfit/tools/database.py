@@ -36,7 +36,7 @@ from colabfit import (
     HASH_LENGTH,
     HASH_SHIFT,
     ID_FORMAT_STRING,
-    _CONFIGS_COLLECTION, _PROPS_COLLECTION, _METADATA_COLLECTION, _CALCULATION_COLLECTION,
+    _CONFIGS_COLLECTION, _PROPS_COLLECTION, _METADATA_COLLECTION, _DATAOBJECT_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD,
     MAX_STRING_LENGTH,
@@ -49,7 +49,7 @@ from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.dataset import Dataset
 from colabfit.tools.metadata import Metadata
-from colabfit.tools.calculation import Calculation
+from colabfit.tools.data_object import DataObject
 from colabfit.tools.dataset_parser import (
     DatasetParser, MarkdownFormatError, BadTableFormatting
 )
@@ -250,7 +250,7 @@ class MongoDatabase(MongoClient):
         self.configurations         = self[database_name][_CONFIGS_COLLECTION]
         self.property_instances     = self[database_name][_PROPS_COLLECTION]
         self.property_definitions   = self[database_name][_PROPDEFS_COLLECTION]
-        self.calculations = self[database_name][_CALCULATION_COLLECTION]
+        self.data_objects = self[database_name][_DATAOBJECT_COLLECTION]
         self.metadata      = self[database_name][_METADATA_COLLECTION]
         self.configuration_sets     = self[database_name][_CONFIGSETS_COLLECTION]
         self.datasets               = self[database_name][_DATASETS_COLLECTION]
@@ -276,7 +276,7 @@ class MongoDatabase(MongoClient):
         self.metadata.create_index(
             keys='hash', name='hash', unique=True
         )
-        self.calculations.create_index(
+        self.data_objects.create_index(
             keys='hash', name='hash', unique=True
         )
         self.configuration_sets.create_index(
@@ -735,7 +735,7 @@ class MongoDatabase(MongoClient):
             client = MongoClient(mongo_login)
         coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
         coll_properties             = client[database_name][_PROPS_COLLECTION]
-        coll_calculations = client[database_name][_CALCULATION_COLLECTION]
+        coll_data_objects = client[database_name][_DATAOBJECT_COLLECTION]
         coll_property_definitions   = client[database_name][_PROPDEFS_COLLECTION]
         coll_metadata      = client[database_name][_METADATA_COLLECTION]
 
@@ -826,7 +826,7 @@ class MongoDatabase(MongoClient):
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
             p_hash = None
 
-            # TODO: Need to aggregate properties here to form Calculation object
+
             new_p_hashes = []
             for pname, pmap_list in property_map.items():
                 for pmap_i, pmap in enumerate(pmap_list):
@@ -1025,8 +1025,8 @@ class MongoDatabase(MongoClient):
                     hint='hash',
                 )
             )
-            # Build Calculation object
-            calc = Calculation(calc_lists['CO'],calc_lists['PI'])
+
+            calc = DataObject(calc_lists['CO'], calc_lists['PI'])
             ca_hash=str(calc._hash)
             ca_ids.add(ca_hash)
             ca_insert_doc = _build_ca_insert_doc(calc)
@@ -1095,11 +1095,11 @@ class MongoDatabase(MongoClient):
                     '{} duplicate properties detected'.format(nmatch)
                 )
         if calc_docs:
-            res = coll_calculations.bulk_write(calc_docs, ordered=False)
+            res = coll_data_objects.bulk_write(calc_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
             if nmatch:
                 warnings.warn(
-                    '{} duplicate calculation objects detected'.format(nmatch)
+                    '{} duplicate data objects detected'.format(nmatch)
                 )
 
         if meta_docs:
@@ -1122,18 +1122,18 @@ class MongoDatabase(MongoClient):
         co_ca_docs = []
         pi_ca_docs = []
         for ca_id in ca_ids:
-            q = coll_calculations.find_one({'hash':{'$eq':ca_id}})
+            q = coll_data_objects.find_one({'hash':{'$eq':ca_id}})
             co_id = q['relationships']['configurations']
             pi_ids = q['relationships']['property_instances']
             co_ca_docs.append(UpdateOne(
                  {'hash': co_id },
-                 {'$addToSet': {'relationships.calculations': ca_id}},
+                 {'$addToSet': {'relationships.data_objects': ca_id}},
                  hint='hash',
                 ))
             for pi_id in pi_ids:
                 pi_ca_docs.append(UpdateOne(
                     {'hash': pi_id },
-                    {'$addToSet': {'relationships.calculations': ca_id}},
+                    {'$addToSet': {'relationships.data_objects': ca_id}},
                     hint='hash',
                 ))
 
@@ -1964,7 +1964,7 @@ class MongoDatabase(MongoClient):
         for k,v in self.aggregate_configuration_set_info(cs_ids).items():
             aggregated_info[k] = v
 
-        for k,v in self.aggregate_calculation_info(pr_ids, verbose=verbose).items():
+        for k,v in self.aggregate_data_object_info(pr_ids, verbose=verbose).items():
             if k in {
                 'types',  'types_counts',
                 'fields', 'fields_counts'
@@ -2058,9 +2058,9 @@ class MongoDatabase(MongoClient):
 
         return aggregated_info
 
-    def aggregate_calculation_info(self, pr_hashes, verbose=False):
+    def aggregate_data_object_info(self, pr_hashes, verbose=False):
         """
-        Aggregates the following information from a list of calculations:
+        Aggregates the following information from a list of data_objects:
 
             * types
             * types_counts
@@ -2097,8 +2097,8 @@ class MongoDatabase(MongoClient):
         }
 
         for doc in tqdm(
-            self.calculations.find({'hash': {'$in': pr_hashes}}),
-            desc='Aggregating calculation info',
+            self.data_objects.find({'hash': {'$in': pr_hashes}}),
+            desc='Aggregating data_object info',
             disable=not verbose,
             total=len(pr_hashes)
             ):
@@ -2255,7 +2255,7 @@ class MongoDatabase(MongoClient):
         all_co_ids = list(set(all_co_ids))
 
         clean_pr_hashes = [
-            _['hash'] for _ in self.calculations.find(
+            _['hash'] for _ in self.data_objects.find(
                 {
                     'hash': {'$in': pr_hashes},
                     'relationships.configurations': {'$in': all_co_ids},
@@ -2313,7 +2313,7 @@ class MongoDatabase(MongoClient):
 
 # TODO: Reintroduce once new property keys are setup
 
-        for k,v in self.aggregate_calculation_info(
+        for k,v in self.aggregate_data_object_info(
             clean_pr_hashes, verbose=verbose).items():
 
             aggregated_info[k] = v
@@ -2337,7 +2337,7 @@ class MongoDatabase(MongoClient):
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
-                    'relationships.calculations': {'$each': clean_pr_hashes},
+                    'relationships.data_objects': {'$each': clean_pr_hashes},
                 },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: ds_id,
@@ -2378,7 +2378,7 @@ class MongoDatabase(MongoClient):
                 ,'relationships.datasets': {'$setUnion':[{'$ifNull':['$relationships.datasets',[]]},[ds_id]]}}}],
                 hint='hash',
             ))
-        self.calculations.bulk_write(property_docs)
+        self.data_objects.bulk_write(property_docs)
 
 
         return ds_id
@@ -3808,15 +3808,15 @@ class MongoDatabase(MongoClient):
     '''
     def export_ds_to_xyz(self, ds_id):
         ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME:{'$eq': ds_id}})
-        cas = ds_doc['relationships']['calculations']
-        cos = list(self.configurations.find({'relationships.calculations': {'$in': cas}}).sort('relationships.calculations',1))
-        pis = list(self.property_instances.find({'relationships.calculations': {'$in': cas}}).sort('relationships.calculations',1))
+        cas = ds_doc['relationships']['data_objects']
+        cos = list(self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',1))
+        pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',1))
         atoms = []
         start = 0
         for co in tqdm(cos):
             a = Atoms(numbers=co['atomic_numbers'],positions=co['positions'],cell=co['cell'],pbc=co['pbc'])
             for i,pi in enumerate(pis[start:]):
-             if pi['relationships']['calculations']==co['relationships']['calculations']:
+             if pi['relationships']['data_objects']==co['relationships']['data_objects']:
                 for k,v in pi.items():
                     if isinstance(v,dict):
                         for k2,v2 in v.items():
