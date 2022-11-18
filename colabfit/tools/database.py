@@ -568,7 +568,7 @@ class MongoDatabase(MongoClient):
                     '$setOnInsert': co_md_set_on_insert,
                     '$addToSet': {
                         'relationships.configurations': {
-                            '$each': [c_hash]
+                            '$each': ['CO_%s' %c_hash]
                         },
                     },
                     '$set': {
@@ -582,7 +582,7 @@ class MongoDatabase(MongoClient):
                     hint='hash'
                 )
 
-                c_update_doc['$addToSet']['relationships.metadata'] = {'$each': [str(co_md._hash)]}
+                c_update_doc['$addToSet']['relationships.metadata'] = {'$each': ['MD_%s' %str(co_md._hash)]}
 
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
 
@@ -651,7 +651,7 @@ class MongoDatabase(MongoClient):
 
                         p_update_doc = {
                             '$addToSet': {
-                                'relationships.configurations': c_hash,
+                                'relationships.configurations': 'CO_%s' %c_hash,
                             },
                             '$setOnInsert': {
                                 'hash': p_hash,
@@ -673,7 +673,7 @@ class MongoDatabase(MongoClient):
                                 '$setOnInsert': pi_md_set_on_insert,
                             '$addToSet': {
                                 'relationships': {
-                                    '$each': [p_hash]
+                                    '$each': ['PI_%s' %p_hash]
                                 },
                             },
                                 '$set': {
@@ -681,7 +681,7 @@ class MongoDatabase(MongoClient):
                                 },
                                 }
 
-                        p_update_doc['$addToSet']['relationships.metadata'] = str(pi_md._hash)
+                        p_update_doc['$addToSet']['relationships.metadata'] = 'MD_'+str(pi_md._hash)
 
 
 # CHECK HERE!!!
@@ -700,10 +700,10 @@ class MongoDatabase(MongoClient):
                     )
 
                     c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
-                        p_hash
+                        'PI_'+p_hash
                     )
 
-                    yield (c_hash, p_hash)
+                    yield ('CO_'+c_hash, 'DO_'+p_hash)
 
             coll_configurations.update_one(
                 {'hash': c_hash},
@@ -808,7 +808,7 @@ class MongoDatabase(MongoClient):
                     '$setOnInsert': co_md_set_on_insert,
                     '$addToSet': {
                         'relationships.configurations': {
-                            '$each': [c_hash]
+                            '$each': ['CO_%s' %c_hash]
                         },
                     },
                     '$set': {
@@ -822,7 +822,7 @@ class MongoDatabase(MongoClient):
                     upsert=True,
                     hint='hash',
                 ))
-                c_update_doc['$addToSet']['relationships.metadata']={'$each': [str(co_md._hash)]}
+                c_update_doc['$addToSet']['relationships.metadata']={'$each': ['MD_%s' %str(co_md._hash)]}
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
             p_hash = None
 
@@ -927,7 +927,7 @@ class MongoDatabase(MongoClient):
                                 '$setOnInsert': pi_md_set_on_insert,
                             '$addToSet': {
                                 'relationships.property_instances': {
-                                    '$each': [p_hash]
+                                    '$each': ['PI_%s' %p_hash]
                                 },
                             },
                                 '$set': {
@@ -936,7 +936,7 @@ class MongoDatabase(MongoClient):
                                 }
 
                         if str(pi_md._hash) in meta_update_dict:
-                            meta_update_dict[str(pi_md._hash)]['$addToSet']['relationships.property_instances']['$each'].append(p_hash)
+                            meta_update_dict[str(pi_md._hash)]['$addToSet']['relationships.property_instances']['$each'].append('PI_'+p_hash)
                         else:
                             meta_update_dict[str(pi_md._hash)]=pi_md_update_doc
 
@@ -989,9 +989,9 @@ class MongoDatabase(MongoClient):
                             '$addToSet': {
                                 # PR -> PSO pointer
                                 'relationships.metadata': {
-                                    '$each': metadata_hashes
+                                    '$each': ['MD_'+i for i in metadata_hashes]
                                 },
-                                'relationships.configurations': c_hash,
+                                'relationships.configurations': 'CO_'+c_hash,
                             },
                             '$setOnInsert': {
                                 'hash':p_hash,
@@ -1012,7 +1012,7 @@ class MongoDatabase(MongoClient):
                     ))
 
                     c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
-                        p_hash
+                        'PI_'+p_hash
                     )
 
                     #insertions.append((c_hash, p_hash))
@@ -1033,7 +1033,7 @@ class MongoDatabase(MongoClient):
             ca_insert_doc['chemical_formula_hill']=calc_lists['CO_hill']
             ca_update_doc = {  # update document
                 '$setOnInsert': ca_insert_doc,
-                '$addToSet': {'relationships.property_instances': {'$each': calc.properties},
+                '$addToSet': {'relationships.property_instances': {'$each': ['PI_'+i for i in calc.properties]},
                               'property_types': {'$each': calc_lists['PI_type']}
                               },
                 '$inc': {
@@ -1053,9 +1053,10 @@ class MongoDatabase(MongoClient):
                 )
             )
             insertions.append((c_hash, ca_hash))
-            if not p_hash:
+            # TODO: Fix this as it duplicates things when no property is present
+            #if not p_hash:
                 # Only yield if something wasn't yielded earlier
-                insertions.append((c_hash, ca_hash))
+            #    insertions.append((c_hash, ca_hash))
 
             ai += 1
         # Clean PI hashes here to avoid long set comparison since relationships aren't indexed
@@ -1123,22 +1124,23 @@ class MongoDatabase(MongoClient):
         pi_ca_docs = []
         for ca_id in ca_ids:
             q = coll_data_objects.find_one({'hash':{'$eq':ca_id}})
-            co_id = q['relationships']['configurations']
-            pi_ids = q['relationships']['property_instances']
+            co_id = q['relationships']['configurations'].replace('CO_','')
+            pi_ids = [i.replace('PI_','') for i in q['relationships']['property_instances']]
             co_ca_docs.append(UpdateOne(
                  {'hash': co_id },
-                 {'$addToSet': {'relationships.data_objects': ca_id}},
+                 {'$addToSet': {'relationships.data_objects': 'DO_'+ca_id}},
                  hint='hash',
                 ))
             for pi_id in pi_ids:
                 pi_ca_docs.append(UpdateOne(
                     {'hash': pi_id },
-                    {'$addToSet': {'relationships.data_objects': ca_id}},
+                    {'$addToSet': {'relationships.data_objects': 'DO_'+ca_id}},
                     hint='hash',
                 ))
-
-        coll_configurations.bulk_write(co_ca_docs)
-        coll_properties.bulk_write(pi_ca_docs)
+        if co_ca_docs:
+            coll_configurations.bulk_write(co_ca_docs)
+        if pi_ca_docs:
+            coll_properties.bulk_write(pi_ca_docs)
 
         client.close()
         return insertions
@@ -1778,7 +1780,7 @@ class MongoDatabase(MongoClient):
             {'hash': str(cs_hash)},
             {
                 '$addToSet': {
-                    'relationships.configurations': {'$each': hashes}
+                    'relationships.configurations': {'$each': ['CO_'+i for i in hashes]}
                 },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: cs_id,
@@ -2181,7 +2183,7 @@ class MongoDatabase(MongoClient):
             cs_doc['relationships']['configurations'] for cs_doc in
             self.configuration_sets.find({SHORT_ID_STRING_NAME: {'$in': cs_ids}})
         )))
-        return self.configuration_type.aggregate_configuration_summaries(self, co_ids, verbose=verbose)
+        return self.configuration_type.aggregate_configuration_summaries(self, [i.replace('CO_','') for i in co_ids], verbose=verbose)
 
 
     def insert_dataset(
@@ -2337,7 +2339,7 @@ class MongoDatabase(MongoClient):
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
-                    'relationships.data_objects': {'$each': clean_pr_hashes},
+                    'relationships.data_objects': {'$each': ['DO_'+i for i in clean_pr_hashes]},
                 },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: ds_id,
@@ -2422,7 +2424,7 @@ class MongoDatabase(MongoClient):
             'last_modified': ds_doc['last_modified'],
             'dataset': Dataset(
                 configuration_set_ids=ds_doc['relationships']['configuration_sets'],
-                property_ids=ds_doc['relationships']['property_instances'],
+                property_ids=ds_doc['relationships']['data_objects'],
                 name=ds_doc['name'],
                 authors=ds_doc['authors'],
                 links=ds_doc['links'],
@@ -4011,8 +4013,8 @@ def _build_ca_insert_doc(calculation):
 
     ca_set_on_insert = {
                             'hash': str(calculation._hash),
-                            SHORT_ID_STRING_NAME: 'CA_'+str(calculation._hash),
-                            'relationships.configurations': calculation.configuration,
+                            SHORT_ID_STRING_NAME: 'DO_'+str(calculation._hash),
+                            'relationships.configurations': 'CO_'+calculation.configuration,
                             #'$addToSet': {'relationships.property_instances':  {'$each': calculation.properties}},
                             #'ncounts': 0,
 
