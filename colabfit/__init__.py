@@ -21,7 +21,7 @@ _METADATA_COLLECTION    = 'metadata'
 _CONFIGSETS_COLLECTION      = 'configuration_sets'
 _DATASETS_COLLECTION        = 'datasets'
 
-SHORT_ID_STRING_NAME = 'short-id'
+SHORT_ID_STRING_NAME = 'colabfit-id'
 EXTENDED_ID_STRING_NAME = 'extended-id'
 
 ATOMS_NAME_FIELD            = '_name'
