@@ -22,6 +22,7 @@ from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 from ase.io import write as ase_write
 from ase import Atoms
+from unidecode import unidecode
 import periodictable
 import struct
 import random
@@ -1067,9 +1068,9 @@ class MongoDatabase(MongoClient):
         for k, v in meta_update_dict.items():
         # TODO: Not ideal
             ap = list(coll_properties.find(
-                    {"relationships.metadata": {"$in": [k]}}
-                    , {'_id': 0, 'hash': 1}))
-            s = set([i['hash'] for i in ap])
+                    {"relationships.metadata": {"$in": ['MD_'+k]}}
+                    , {'_id': 0, SHORT_ID_STRING_NAME: 1}))
+            s = set([i[SHORT_ID_STRING_NAME] for i in ap])
             s.update(v['$addToSet']['relationships.property_instances']['$each'])
             v.pop('$addToSet')
             v['$set']['relationships.property_instances'] = list(s)
@@ -1080,7 +1081,6 @@ class MongoDatabase(MongoClient):
                     hint='hash',
                 ))
             itr += 1
-
         if config_docs:
             res = coll_configurations.bulk_write(config_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
@@ -1897,14 +1897,13 @@ class MongoDatabase(MongoClient):
 
         # increment version number
         current_hash, current_version = cs_id.split('_')[1:]
-        family_ids = self.configuration_sets.find({'colabfit_id': {'$regex':f'CS_{current_hash}_...'}}, '_id')
-        family_ids = sorted([f['colabfit_id'] for f in family_ids])
+        cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: {'$eq':cs_id}})
+        family_ids = cs_doc[SHORT_ID_STRING_NAME]
         version = int(family_ids[-1].split('_')[-1]) + 1
-        new_cs_id = ID_FORMAT_STRING.format('CS', int(current_hash), version)
-
+        new_cs_id = 'CS_'+current_hash+'_'+str(version)
         # Get configuration ids from current version and append and/or remove
-        cs_doc = self.configuration_sets.find_one({'colabfit_id': cs_id})
         ids = cs_doc['relationships']['configurations']
+        ids=[i.split('_')[-1] for i in ids]
         init_len = len(ids)
 
         if add_ids is not None:
@@ -1929,10 +1928,9 @@ class MongoDatabase(MongoClient):
             if len(ids) == init_len:
                 raise RuntimeError('All configurations to be removed are not present in CS.')
 
-        # TODO: Eric->add name below
         # insert new version of CS
-        self.insert_configuration_set(ids, description=cs_doc['description'], overloaded_cs_id=new_cs_id)
-
+        self.insert_configuration_set(ids, name=cs_doc['name'], description=cs_doc['description'], overloaded_cs_id=new_cs_id)
+        return new_cs_id
     # TODO: May need to recompute hash-But when is resyncing necessary?
     def resync_dataset(self, ds_id, verbose=False):
         """
@@ -2323,7 +2321,7 @@ class MongoDatabase(MongoClient):
         id_prefix = '_'.join([
             name,
             ''.join([
-                auth.split()[-1] for auth in authors
+                unidecode(auth.split()[-1]) for auth in authors
             ]),
         ])
 
@@ -2436,26 +2434,26 @@ class MongoDatabase(MongoClient):
 
 # TODO: Handle properties somewhere->should we allow for only properties to be update?
 # TODO: Allow for metadata updating
-    def update_dataset(self, ds_id, add_cs_ids=None, remove_cs_ids=None):
+    def update_dataset(self, ds_id, add_cs_ids=None, remove_cs_ids=None, add_do_ids=None, remove_do_ids=None):
 
         if add_cs_ids is None and remove_cs_ids is None:
             raise RuntimeError('Please input configuration set IDs/properties to add or remove from the dataset.')
 
         # increment version number
         current_hash, current_version = ds_id.split('_')[1:]
-        family_ids = self.datasets.find({'colabfit_id': {'$regex':f'DS_{current_hash}_...'}}, 'colabfit_id')
-        family_ids = sorted([f['colabfit_id'] for f in family_ids])
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: {'$eq':ds_id}})
+        family_ids = ds_doc[SHORT_ID_STRING_NAME]
         version = int(family_ids[-1].split('_')[-1]) + 1
-        new_ds_id = ID_FORMAT_STRING.format('DS', int(current_hash), version)
+        new_ds_id = 'DS_'+ current_hash +'_' + str(version)
 
         # Get configuration set ids from current version and append and/or remove
-        ds_doc = self.datasets.find_one({'colabfit_id': ds_id})
-        cs_ids = ds_doc['relationships']['configuration_sets'],
-        property_ids = ds_doc['relationships']['properties']
+        cs_ids = ds_doc['relationships']['configuration_sets']
+        do_ids = ds_doc['relationships']['data_objects']
+        do_ids = [i.split('_')[-1] for i in do_ids]
         init_len = len(cs_ids)
 
         if add_cs_ids is not None:
-            if isinstance(cs_ids,str):
+            if isinstance(add_cs_ids,str):
                 add_cs_ids = [add_cs_ids]
             cs_ids.extend(add_cs_ids)
             cs_ids = list(set(cs_ids))
@@ -2469,7 +2467,7 @@ class MongoDatabase(MongoClient):
                 if int(version) > 0:
                     try:
                         old_version = self.configuration_sets.find_one(
-                            {'colabfit_id': {'$regex': f'CS_{current_hash}_...'}}, 'colabfit_id'
+                            {SHORT_ID_STRING_NAME: {'$regex': f'CS_{current_hash}_.*'}}
                         )
                         cs_ids.remove(old_version)
                     except:
@@ -2488,10 +2486,35 @@ class MongoDatabase(MongoClient):
             if len(cs_ids) == init_len:
                 raise RuntimeError('All configuration sets to be removed are not present in DS.')
 
-        # insert new version of DS
-        self.insert_dataset(cs_ids, name=ds_doc['name'], authors=ds_doc['authors'],
-                            links=ds_doc['links'], description=ds_doc['description'], overloaded_ds_id=new_ds_id)
+        init_len_do = len(do_ids)
 
+        if add_do_ids is not None:
+            if isinstance(do_ids, str):
+                add_do_ids = [add_do_ids]
+            do_ids.extend(add_do_ids)
+            do_ids = list(set(do_ids))
+            if len(do_ids) == init_len_do:
+                raise RuntimeError('All data objects to be added are already present in DS.')
+        init_len_do = len(do_ids)
+
+
+        if remove_do_ids is not None:
+            if isinstance(remove_do_ids, str):
+                remove_do_ids = [remove_do_ids]
+            remove_do_ids = list(set(remove_do_ids))
+            for r in remove_do_ids:
+                try:
+                    do_ids.remove(r)
+                except:
+                    raise UserWarning(f'A data object with the ID {r} was not'
+                                      f'in the original DS, so it could not be removed.')
+            if len(do_ids) == init_len_do:
+                raise RuntimeError('All data objects to be removed are not present in DS.')
+        # insert new version of DS
+
+        self.insert_dataset(cs_ids, do_ids, name=ds_doc['name'], authors=ds_doc['authors'],
+                            links=ds_doc['links'], description=ds_doc['description'], overloaded_ds_id=new_ds_id)
+        return (new_ds_id)
     def aggregate_dataset_info(self, ds_ids):
         """
         Aggregates information from a list of datasets.
@@ -3808,40 +3831,47 @@ class MongoDatabase(MongoClient):
                         dtype=STRING_DTYPE_SPECIFIER),
                     )
     '''
-    def export_ds_to_xyz(self, ds_id):
-        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME:{'$eq': ds_id}})
+
+    def export_ds_to_xyz(self, ds_id, nprocs=1):
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: {'$eq': ds_id}})
         cas = ds_doc['relationships']['data_objects']
-        cos = list(self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',1))
-        pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',1))
-        atoms = []
-        start = 0
-        for co in tqdm(cos):
-            a = Atoms(numbers=co['atomic_numbers'],positions=co['positions'],cell=co['cell'],pbc=co['pbc'])
-            for i,pi in enumerate(pis[start:]):
-             if pi['relationships']['data_objects']==co['relationships']['data_objects']:
-                for k,v in pi.items():
-                    if isinstance(v,dict):
-                        for k2,v2 in v.items():
-                            if isinstance(v2,dict):
-                                if 'source-value' in pi[k][k2]:
-                                    #hardcode whether property goes in info or arrays for now
-                                    if k2=='forces':
-                                        a.arrays['force'] = np.array(pi[k][k2]['source-value'])
-                                    else:
-                                        if k2 =='stress': # Needed so that ASE formats properly
-                                            a.info['stress'] = np.array(pi[k][k2]['source-value'])
-                                        else:
-                                            a.info['%s.%s' %(k,k2)] = np.array(pi[k][k2]['source-value'])
-
-             else:
-                start+=i
-                break
-
-            atoms.append(a)
-        ase_write('%s.xyz' %ds_doc['extended-id'],atoms)
+        cos = list(
+            self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',
+                                                                                        1))
+        pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort(
+            'relationships.data_objects', 1))
+        p = multiprocessing.Pool(nprocs)
+        results = []
+        # results.append(result for result in tqdm(p.imap_unordered(partial(build_do,client_name=self.database_name),cas)))
+        for result in tqdm(p.imap_unordered(partial(build_do, client_name=self.database_name), cas), total=len(cas)):
+            results.append(result)
+        p.close()
+        p.join()
+        ase_write('%s.xyz' % ds_doc['extended-id'], results, tolerant=True)
 
 
-
+def build_do(ca, client_name):
+    client = MongoDatabase(client_name)
+    co = client.configurations.find_one({'relationships.data_objects': {'$in': [ca]}})
+    pis = list(client.property_instances.find({'relationships.data_objects': {'$in': [ca]}}))
+    a = Atoms(numbers=co['atomic_numbers'], positions=co['positions'], cell=co['cell'], pbc=co['pbc'])
+    a.info['do-colabfit-id'] = co['relationships']['data_objects']
+    for i, pi in enumerate(pis):
+        # print ('pi_type',pi['type'])
+        for k, v in pi.items():
+            if isinstance(v, dict):
+                for k2, v2 in v.items():
+                    if isinstance(v2, dict):
+                        if 'source-value' in pi[k][k2]:
+                            # hardcode whether property goes in info or arrays for now
+                            if k2 == 'forces':
+                                a.arrays['forces'] = np.array(pi[k][k2]['source-value'])
+                            else:
+                                if k2 == 'stress':  # Needed so that ASE formats properly
+                                    a.info['stress'] = np.array(pi[k][k2]['source-value'])
+                                else:
+                                    a.info['%s.%s' % (k, k2)] = pi[k][k2]['source-value']
+    return a
 
 
 # TODO: Change labels_field to metadata_fields
