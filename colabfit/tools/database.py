@@ -992,7 +992,7 @@ class MongoDatabase(MongoClient):
                                 'relationships.metadata': {
                                     '$each': ['MD_'+i for i in metadata_hashes]
                                 },
-                                'relationships.configurations': 'CO_'+c_hash,
+                                #'relationships.configurations': 'CO_'+c_hash, #can probably safely remove since linked to DO
                             },
                             '$setOnInsert': {
                                 'hash':p_hash,
@@ -1012,9 +1012,9 @@ class MongoDatabase(MongoClient):
                         hint='hash',
                     ))
 
-                    c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
-                        'PI_'+p_hash
-                    )
+                    #c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
+                    #    'PI_'+p_hash
+                    #) #can probably safely remove since linked to DO
 
                     #insertions.append((c_hash, p_hash))
 
@@ -1053,6 +1053,7 @@ class MongoDatabase(MongoClient):
                     hint='hash',
                 )
             )
+
             insertions.append((c_hash, ca_hash))
             # TODO: Fix this as it duplicates things when no property is present
             #if not p_hash:
