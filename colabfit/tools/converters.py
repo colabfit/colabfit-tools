@@ -352,7 +352,7 @@ class FolderConverter(BaseConverter):
         ai = 0
         files = list(Path(file_path).rglob(glob_string))
         nf = len(files)
-        for fi, fpath in enumerate(files):
+        for fi, fpath in tqdm(enumerate(files)):
             new = self.reader(fpath, **kwargs)
 
             # if not isinstance(new, list):
