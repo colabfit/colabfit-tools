@@ -286,7 +286,9 @@ class MongoDatabase(MongoClient):
         self.datasets.create_index(
             keys='hash', name='hash', unique=True
         )
-
+        self.property_instances.create_index(
+            keys='relationships.metadata', name='relationships.metadata'
+        )
         self.nprocs = nprocs
 
         #for col in [self.configurations,self.property_instances,self.property_definitions,
@@ -1065,6 +1067,7 @@ class MongoDatabase(MongoClient):
         # if PI points to MD with current hash, we know it was already added and can remove it but remove process is same problem as addtoset!!!!
         # therefore do all set logic outside mongo->doesn't work with multiprocessing
         # Preprocess metadata to avoid write conflicts
+        start = time.time()
         itr = 0
         for k, v in meta_update_dict.items():
         # TODO: Not ideal
@@ -1082,6 +1085,9 @@ class MongoDatabase(MongoClient):
                     hint='hash',
                 ))
             itr += 1
+        end= time.time()
+        print ('DO stuff',end-start)
+        start = time.time()
         if config_docs:
             res = coll_configurations.bulk_write(config_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
@@ -1120,6 +1126,9 @@ class MongoDatabase(MongoClient):
                 warnings.warn(
                     '{} duplicate metadata objects detected'.format(nmatch)
                 )
+        end= time.time()
+        print ('bulk write',end-start)
+        start= time.time()
         # Add the backwards relationships CO/PI->CA
         co_ca_docs = []
         pi_ca_docs = []
@@ -1142,7 +1151,8 @@ class MongoDatabase(MongoClient):
             coll_configurations.bulk_write(co_ca_docs)
         if pi_ca_docs:
             coll_properties.bulk_write(pi_ca_docs)
-
+        end= time.time()
+        print ('DO_backwards',end-start)
         client.close()
         return insertions
 
