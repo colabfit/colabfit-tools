@@ -1086,7 +1086,7 @@ class MongoDatabase(MongoClient):
                 ))
             itr += 1
         end= time.time()
-        print ('DO stuff',end-start)
+        #print ('DO stuff',end-start)
         start = time.time()
         if config_docs:
             res = coll_configurations.bulk_write(config_docs, ordered=False)
@@ -1127,7 +1127,7 @@ class MongoDatabase(MongoClient):
                     '{} duplicate metadata objects detected'.format(nmatch)
                 )
         end= time.time()
-        print ('bulk write',end-start)
+        #print ('bulk write',end-start)
         start= time.time()
         # Add the backwards relationships CO/PI->CA
         co_ca_docs = []
@@ -1152,7 +1152,7 @@ class MongoDatabase(MongoClient):
         if pi_ca_docs:
             coll_properties.bulk_write(pi_ca_docs)
         end= time.time()
-        print ('DO_backwards',end-start)
+        #print ('DO_backwards',end-start)
         client.close()
         return insertions
 
