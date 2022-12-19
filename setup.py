@@ -37,5 +37,6 @@ setup(
         'matplotlib',
         'django',
         'periodictable',
+        'unidecode',
     ],
 )
