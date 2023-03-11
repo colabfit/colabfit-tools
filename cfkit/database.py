@@ -19,7 +19,6 @@ from unidecode import unidecode
 import periodictable
 import time
 from kim_property.definition import check_property_definition
-from kim_property.create import KIM_PROPERTIES
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from django.utils.crypto import get_random_string
 from cfkit import (
@@ -270,19 +269,41 @@ class MongoDatabase(MongoClient):
         self.datasets.create_index(
             keys='hash', name='hash', unique=True
         )
+        self.configurations.create_index(
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+        )
         self.property_instances.create_index(
-            keys='relationships.metadata', name='relationships.metadata'
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+        )
+        self.metadata.create_index(
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+        )
+        self.data_objects.create_index(
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+        )
+        self.property_instances.create_index(
+            keys='relationships.metadata', name='pi_relationships.metadata'
+        )
+        self.configuration_sets.create_index(
+            keys='relationships.datasets', name='cs_relationships.datasets'
+        )
+        self.configurations.create_index(
+            keys='relationships.metadata', name='co_relationships.metadata'
+        )
+        self.configurations.create_index(
+            keys='relationships.data_objects', name='co_relationships.data_objects'
+        )
+        self.property_instances.create_index(
+            keys='relationships.data_objects', name='pi_relationships.data_objects'
+        )
+        self.data_objects.create_index(
+            keys='relationships.datasets', name='do_relationships.datasets'
+        )
+        self.configurations.create_index(
+            keys='relationships.configuration_sets', name='co_relationships.configuration_sets'
         )
         self.nprocs = nprocs
 
-        # for col in [self.configurations,self.property_instances,self.property_definitions,
-        #            self.property_settings,self.configuration_sets,self.datasets]:
-        #    result = list(col.find({'_counter':{'$exists': True}}))
-        #    if len(result)==0:
-        #        col.insert_one({'_counter':0})
-        #        #Also index ?
-        #    elif len(result)>1:
-        #        raise RuntimeError('A collection should only have one counter!')
 
     def insert_data(
             self,
