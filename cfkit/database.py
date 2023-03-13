@@ -1592,7 +1592,7 @@ class MongoDatabase(MongoClient):
         cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: {'$eq': cs_id}})
         family_ids = cs_doc[SHORT_ID_STRING_NAME]
         # Remove first -1
-        version = int(family_ids[-1].split('_')[-1]) + 1
+        version = int(family_ids.split('_')[-1]) + 1
         new_cs_id = 'CS_' + current_hash + '_' + str(version)
         # Get configuration ids from current version and append and/or remove
         ids = cs_doc['relationships']['configurations']
@@ -2103,7 +2103,7 @@ class MongoDatabase(MongoClient):
         current_hash, current_version = ds_id.split('_')[1:]
         ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: {'$eq': ds_id}})
         family_ids = ds_doc[SHORT_ID_STRING_NAME]
-        version = int(family_ids[-1].split('_')[-1]) + 1
+        version = int(family_ids.split('_')[-1]) + 1
         new_ds_id = 'DS_' + current_hash + '_' + str(version)
 
         # Get configuration set ids from current version and append and/or remove
