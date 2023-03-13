@@ -311,7 +311,6 @@ class MongoDatabase(MongoClient):
             property_map=None,
             co_md_map=None,
             transform=None,
-            generator=False,
             verbose=True
     ):
         """
@@ -378,11 +377,6 @@ class MongoDatabase(MongoClient):
                 Note that this happens before anything else is done. `transform`
                 should modify the Configuration in-place.
 
-            generator (bool, default=False):
-                If True, returns a generator of the results; otherwise returns
-                a list. If True, uses :code:`update_one` instead of
-                :code:`bulk_write` to avoid having to store update documents in
-                memory.
 
             verbose (bool, default=False):
                 If True, prints a progress bar
@@ -455,19 +449,7 @@ class MongoDatabase(MongoClient):
                     'existing definition in the database.'.format(pname)
                 )
 
-        if generator:
-            return self._insert_data_generator(
-                mongo_login=mongo_login,
-                login_args=self.login_args,
-                login_kwargs=self.login_kwargs,
-                database_name=self.database_name,
-                configurations=configurations,
-                property_map=property_map,
-                co_md_map=co_md_map,
-                transform=transform,
-                verbose=verbose
-            )
-        else:
+        if 1:
             configurations = list(configurations)
 
             n = len(configurations)
