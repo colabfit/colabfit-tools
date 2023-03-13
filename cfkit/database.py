@@ -766,9 +766,7 @@ class MongoDatabase(MongoClient):
             ca_insert_doc['chemical_formula_hill'] = calc_lists['CO_hill']
             ca_update_doc = {  # update document
                 '$setOnInsert': ca_insert_doc,
-                #'$addToSet': {'relationships.property_instances': {'$each': ['PI_' + i for i in calc.properties]},
-                #              'property_types': {'$each': calc_lists['PI_type']}
-                #              },
+                '$addToSet': {'property_types': {'$each': calc_lists['PI_type']}},
                 '$inc': {
                     'ncounts': 1
                 },
@@ -1939,30 +1937,6 @@ class MongoDatabase(MongoClient):
         cs_ids = list(set(cs_ids))
         pr_hashes = list(set(pr_hashes))
 
-        # Make sure to only include PRs with COs contained by the given CSs
-        all_co_ids = []
-        for cs_doc in self.configuration_sets.find({SHORT_ID_STRING_NAME: {'$in': cs_ids}}):
-            all_co_ids += cs_doc['relationships']['configurations']
-
-        all_co_ids = list(set(all_co_ids))
-
-        clean_pr_hashes = [
-            _['hash'] for _ in self.data_objects.find(
-                {
-                    'hash': {'$in': pr_hashes},
-                    'relationships.configurations': {'$in': all_co_ids},
-                },
-                {'hash'}
-            )
-        ]
-
-        if len(pr_hashes) != len(clean_pr_hashes):
-            warnings.warn(
-                "{} PR IDs passed to insert_dataset, but only {} point to COs " \
-                "contained by the given CSs".format(
-                    len(pr_hashes), len(clean_pr_hashes)
-                )
-            )
 
         if isinstance(authors, str):
             authors = [authors]
@@ -1979,7 +1953,7 @@ class MongoDatabase(MongoClient):
         ds_hash = sha512()
         for ci in sorted(cs_ids):
             ds_hash.update(str(ci).encode('utf-8'))
-        for pi in sorted(clean_pr_hashes):
+        for pi in sorted(pr_hashes):
             ds_hash.update(str(pi).encode('utf-8'))
 
         ds_hash = int(ds_hash.hexdigest(), 16)
@@ -2002,7 +1976,7 @@ class MongoDatabase(MongoClient):
         # TODO: Reintroduce once new property keys are setup
 
         for k, v in self.aggregate_data_object_info(
-                clean_pr_hashes, verbose=verbose).items():
+                pr_hashes, verbose=verbose).items():
             aggregated_info[k] = v
 
         id_prefix = '_'.join([
@@ -2024,7 +1998,7 @@ class MongoDatabase(MongoClient):
             {
                 '$addToSet': {
                     'relationships.configuration_sets': {'$each': cs_ids},
-                    'relationships.data_objects': {'$each': ['DO_' + i for i in clean_pr_hashes]},
+                    'relationships.data_objects': {'$each': ['DO_' + i for i in pr_hashes]},
                 },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: ds_id,
@@ -2058,7 +2032,7 @@ class MongoDatabase(MongoClient):
 
         # Add the backwards relationships PR->DS and origin using aggregation pipeline for logic
         property_docs = []
-        for pid in tqdm(clean_pr_hashes, desc='Updating CA->DS relationships'):
+        for pid in tqdm(pr_hashes, desc='Updating DO->DS relationships'):
             property_docs.append(UpdateOne(
                 {'hash': pid},
                 [{'$set': {'relationships.origin': {'$ifNull': ['$relationships.origin', ds_id]}
