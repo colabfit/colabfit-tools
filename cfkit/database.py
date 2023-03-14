@@ -1000,7 +1000,13 @@ class MongoDatabase(MongoClient):
             ]
         )
 
-    def query_in_batches(self, collection_name, query_key, query_list, batch_size=100000, **kwargs):
+    def query_in_batches(self,
+                         collection_name,
+                         query_key,
+                         query_list,
+                         other_query,
+                         batch_size=100000,
+                         **kwargs):
 
         """
             Queries the database in batches and returns results. This should be used for large queries when building CS
@@ -1017,6 +1023,9 @@ class MongoDatabase(MongoClient):
                 query_list (list):
                     List of values to search over using '$in'
 
+                other_query (dict, default=None):
+                    Any other query that should also be performed along with '$in' query
+
                 batch_size (int, default=100000):
                     Number of values that the query searches over using $in functionality
 
@@ -1032,9 +1041,19 @@ class MongoDatabase(MongoClient):
         collection = self[self.database_name][collection_name]
         for i in range(nbatches):
             if i+1 < nbatches:
-                cursor = collection.find({query_key: {'$in': query_list[i*batch_size:(i+1)*batch_size]}}, **kwargs)
+                if other_query not None:
+                    cursor = collection.find(
+                        {query_key: {'$in': query_list[i*batch_size:(i+1)*batch_size]}, other_query}, **kwargs)
+                else:
+                    cursor = collection.find(
+                        {query_key: {'$in': query_list[i * batch_size:(i + 1) * batch_size]}}, **kwargs)
             else:
-                cursor = collection.find({query_key: {'$in': query_list[i * batch_size:]}}, **kwargs)
+                if other_query not None:
+                    cursor = collection.find(
+                        {query_key: {'$in': query_list[i * batch_size:]},other_query}, **kwargs)
+                else:
+                    cursor = collection.find(
+                        {query_key: {'$in': query_list[i * batch_size:]}}, **kwargs)
             for j in cursor:
                 yield j
 
