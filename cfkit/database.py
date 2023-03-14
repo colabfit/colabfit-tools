@@ -1000,7 +1000,7 @@ class MongoDatabase(MongoClient):
             ]
         )
 
-    def query_in_batches(self, collection_name, query_key, query_list, batch_size=100000, *args, **kwargs):
+    def query_in_batches(self, collection_name, query_key, query_list, batch_size=100000):
 
         """
             Queries the database in batches and returns results. This should be used for large queries when building CS
@@ -1032,10 +1032,11 @@ class MongoDatabase(MongoClient):
         collection = self[self.database_name][collection_name]
         for i in range(nbatches):
             if i+1 < nbatches:
-                cursor = collection.find({query_key:{'$in': query_list[i*batch_size:(i+1)*batch_size]}})
+                cursor = collection.find({query_key: {'$in': query_list[i*batch_size:(i+1)*batch_size]}})
             else:
                 cursor = collection.find({query_key: {'$in': query_list[i * batch_size:]}})
-            yield cursor
+            for j in cursor:
+                yield j
 
     # @staticmethod
     def get_data(
