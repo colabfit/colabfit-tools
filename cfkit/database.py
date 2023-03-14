@@ -1041,14 +1041,14 @@ class MongoDatabase(MongoClient):
         collection = self[self.database_name][collection_name]
         for i in range(nbatches):
             if i+1 < nbatches:
-                if other_query not None:
+                if other_query is not None:
                     cursor = collection.find(
                         {query_key: {'$in': query_list[i*batch_size:(i+1)*batch_size]}, other_query}, **kwargs)
                 else:
                     cursor = collection.find(
                         {query_key: {'$in': query_list[i * batch_size:(i + 1) * batch_size]}}, **kwargs)
             else:
-                if other_query not None:
+                if other_query is not None:
                     cursor = collection.find(
                         {query_key: {'$in': query_list[i * batch_size:]},other_query}, **kwargs)
                 else:
