@@ -3,6 +3,8 @@ import datetime
 import warnings
 import itertools
 import string
+from math import ceil
+
 import numpy as np
 from tqdm import tqdm
 import multiprocessing
@@ -997,6 +999,43 @@ class MongoDatabase(MongoClient):
                 for d in pso_doc['files']
             ]
         )
+
+    def query_in_batches(self, collection_name, query_key, query_list, batch_size=100000, *args, **kwargs):
+
+        """
+            Queries the database in batches and returns results. This should be used for large queries when building CS
+            and DS. Queries are called using '$in' functionality
+
+            Args:
+
+                collection_name (str):
+                    The name of a collection in the database.
+
+                query_key (str):
+                    Key to use in an '$in' query
+
+                query_list (list):
+                    List of values to search over using '$in'
+
+                batch_size (int, default=100000):
+                    Number of values that the query searches over using $in functionality
+
+               Other arguments in a typical PyMongo 'find'
+
+            Returns:
+
+                data (dict):
+                    key = k for k in keys. val = in-memory data
+            """
+
+        nbatches = ceil(len(query_list)/batch_size)
+        collection = self[self.database_name][collection_name]
+        for i in range(nbatches):
+            if i+1 < nbatches:
+                cursor = collection.find({query_key:{'$in': query_list[i*batch_size:(i+1)*batch_size]}})
+            else:
+                cursor = collection.find({query_key: {'$in': query_list[i * batch_size:]}})
+            yield cursor
 
     # @staticmethod
     def get_data(
