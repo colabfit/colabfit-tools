@@ -1042,15 +1042,17 @@ class MongoDatabase(MongoClient):
         for i in range(nbatches):
             if i+1 < nbatches:
                 if other_query is not None:
+                    oq_k, oq_v = other_query.items()
                     cursor = collection.find(
-                        {query_key: {'$in': query_list[i*batch_size:(i+1)*batch_size]}, other_query}, **kwargs)
+                        {query_key: {'$in': query_list[i*batch_size:(i+1)*batch_size]}, oq_k: oq_v}, **kwargs)
                 else:
                     cursor = collection.find(
                         {query_key: {'$in': query_list[i * batch_size:(i + 1) * batch_size]}}, **kwargs)
             else:
                 if other_query is not None:
+                    oq_k, oq_v = other_query.items()
                     cursor = collection.find(
-                        {query_key: {'$in': query_list[i * batch_size:]},other_query}, **kwargs)
+                        {query_key: {'$in': query_list[i * batch_size:]}, oq_k: oq_v}, **kwargs)
                 else:
                     cursor = collection.find(
                         {query_key: {'$in': query_list[i * batch_size:]}}, **kwargs)
