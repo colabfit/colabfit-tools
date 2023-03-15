@@ -1004,7 +1004,7 @@ class MongoDatabase(MongoClient):
                          collection_name,
                          query_key,
                          query_list,
-                         other_query,
+                         other_query=None,
                          batch_size=100000,
                          **kwargs):
 
