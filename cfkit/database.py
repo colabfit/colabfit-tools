@@ -1050,7 +1050,7 @@ class MongoDatabase(MongoClient):
             else:
                 if other_query is not None:
                     cursor = collection.find(
-                        {query_key: {'$in': query_list[i * batch_size:]}}.update(other_query, **kwargs)
+                        {query_key: {'$in': query_list[i * batch_size:]}}.update(other_query), **kwargs)
                 else:
                     cursor = collection.find(
                         {query_key: {'$in': query_list[i * batch_size:]}}, **kwargs)
