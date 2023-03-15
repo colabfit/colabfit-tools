@@ -1005,6 +1005,7 @@ class MongoDatabase(MongoClient):
                          query_key,
                          query_list,
                          other_query=None,
+                         return_key=None,
                          batch_size=100000,
                          **kwargs):
 
@@ -1025,6 +1026,9 @@ class MongoDatabase(MongoClient):
 
                 other_query (dict, default=None):
                     Any other query that should also be performed along with '$in' query
+
+                return_key (str, default=None):
+                    If not None, values corresponding to return_key are yielded, otherwise everything is yielded.
 
                 batch_size (int, default=100000):
                     Number of values that the query searches over using $in functionality
@@ -1055,7 +1059,10 @@ class MongoDatabase(MongoClient):
                     cursor = collection.find(
                         {query_key: {'$in': query_list[i * batch_size:]}}, **kwargs)
             for j in cursor:
-                yield j[query_key]
+                if return_key is not None:
+                    yield j[return_key]
+                else:
+                    yield j
 
     # @staticmethod
     def get_data(
