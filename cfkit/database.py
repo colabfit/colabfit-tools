@@ -1719,8 +1719,9 @@ class MongoDatabase(MongoClient):
 
         aggregated_info = {}
 
-        for k, v in self.aggregate_configuration_set_info(cs_ids).items():
-            aggregated_info[k] = v
+        # Aggregate over DOs
+        #for k, v in self.aggregate_configuration_set_info(cs_ids).items():
+        #    aggregated_info[k] = v
 
         for k, v in self.aggregate_data_object_info(pr_ids, verbose=verbose).items():
             if k in {
@@ -1851,7 +1852,8 @@ class MongoDatabase(MongoClient):
         }
 
         for doc in tqdm(
-                self.data_objects.find({'hash': {'$in': pr_hashes}}),
+                #self.data_objects.find({'hash': {'$in': pr_hashes}}),
+                self.query_in_batches(query_key='hash',query_list=pr_hashes,collection_name='data_objects'),
                 desc='Aggregating data_object info',
                 disable=not verbose,
                 total=len(pr_hashes)
@@ -1863,6 +1865,13 @@ class MongoDatabase(MongoClient):
                 else:
                     idx = aggregated_info['property_types'].index(doc['property_types'][i])
                     aggregated_info['property_types_counts'][idx] += 1
+        do_ids = ['DO_%s' %i for i in pr_hashes]
+        co_ids = self.query_in_batches(collection_name='configurations', query_key='relationships.data_objects',
+                                       query_list=do_ids, return_key='hash', projection= {'hash':1})
+        ag_2 = self.configuration_type.aggregate_configuration_summaries(self, co_ids,
+                                                                         verbose=verbose)
+        aggregated_info.update(ag_2)
+
         return aggregated_info
 
     '''
@@ -2033,11 +2042,11 @@ class MongoDatabase(MongoClient):
             ds_id = overloaded_ds_id
 
         aggregated_info = {}
-        for k, v in self.aggregate_configuration_set_info(
-                cs_ids, verbose=verbose).items():
-            aggregated_info[k] = v
 
-        # TODO: Reintroduce once new property keys are setup
+        # Aggregate over DOs instead
+        #for k, v in self.aggregate_configuration_set_info(
+        #        cs_ids, verbose=verbose).items():
+        #    aggregated_info[k] = v
 
         for k, v in self.aggregate_data_object_info(
                 pr_hashes, verbose=verbose).items():
