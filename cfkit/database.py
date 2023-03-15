@@ -2069,10 +2069,6 @@ class MongoDatabase(MongoClient):
         self.datasets.update_one(
             {'hash': str(ds_hash)},
             {
-                '$addToSet': {
-                    'relationships.configuration_sets': {'$each': cs_ids},
-                    'relationships.data_objects': {'$each': ['DO_' + i for i in pr_hashes]},
-                },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: ds_id,
                     EXTENDED_ID_STRING_NAME: extended_id,
