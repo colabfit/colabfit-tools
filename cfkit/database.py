@@ -1518,11 +1518,11 @@ class MongoDatabase(MongoClient):
         else:
             cs_id = overloaded_cs_id
         # Make sure all of the configurations exist
-        if self.configurations.count_documents({'hash': {'$in': hashes}}) != len(hashes):
-            raise MissingEntryError(
-                "Not all of the COs provided to insert_configuration_set exist" \
-                " in the database."
-            )
+        #if self.configurations.count_documents({'hash': {'$in': hashes}}) != len(hashes):
+        #    raise MissingEntryError(
+        #        "Not all of the COs provided to insert_configuration_set exist" \
+        #        " in the database."
+        #    )
 
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
@@ -1930,6 +1930,7 @@ class MongoDatabase(MongoClient):
             cs_doc['relationships']['configurations'] for cs_doc in
             self.configuration_sets.find({SHORT_ID_STRING_NAME: {'$in': cs_ids}})
         )))
+
         return self.configuration_type.aggregate_configuration_summaries(self, [i.replace('CO_', '') for i in co_ids],
                                                                          verbose=verbose)
 
