@@ -394,7 +394,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         }
 
         for doc in tqdm(
-                db.configurations.find({'hash': {'$in': hashes}}),
+                #db.configurations.find({'hash': {'$in': hashes}}),
+                db.query_in_batches(query_key='hash', query_list=hashes, collection='configurations'),
                 desc='Aggregating configuration info',
                 disable=not verbose,
                 total=len(hashes),
