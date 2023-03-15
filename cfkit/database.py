@@ -1948,8 +1948,9 @@ class MongoDatabase(MongoClient):
                                                                          verbose=verbose)
 
     def insert_dataset(
-            self, cs_ids, pr_hashes, name,
+            self, pr_hashes, name,
             authors=None,
+            cs_ids=None,
             links=None,
             description='',
             data_license='CC0',
@@ -1962,9 +1963,6 @@ class MongoDatabase(MongoClient):
 
         Args:
 
-            cs_ids (list or str):
-                The IDs of the configuration sets to link to the dataset.
-
             pr_hashes (list or str):
                 The hashes of the properties to link to the dataset
 
@@ -1974,6 +1972,10 @@ class MongoDatabase(MongoClient):
             authors (list or str or None):
                 The names of the authors of the dataset. If None, then no
                 authors are added.
+
+
+            cs_ids (list or str, default=None):
+                The IDs of the configuration sets to link to the dataset.
 
             links (list or str or None):
                 External links (e.g., journal articles, Git repositories, ...)
@@ -2007,7 +2009,8 @@ class MongoDatabase(MongoClient):
             pr_hashes = [pr_hashes]
 
         # Remove possible duplicates
-        cs_ids = list(set(cs_ids))
+        if cs_ids is not None:
+            cs_ids = list(set(cs_ids))
         pr_hashes = list(set(pr_hashes))
 
 
@@ -2024,8 +2027,9 @@ class MongoDatabase(MongoClient):
             links = [links]
 
         ds_hash = sha512()
-        for ci in sorted(cs_ids):
-            ds_hash.update(str(ci).encode('utf-8'))
+        if cs_ids is not None:
+            for ci in sorted(cs_ids):
+                ds_hash.update(str(ci).encode('utf-8'))
         for pi in sorted(pr_hashes):
             ds_hash.update(str(pi).encode('utf-8'))
 
@@ -2089,15 +2093,16 @@ class MongoDatabase(MongoClient):
         )
 
         # Add the backwards relationships CS->DS
-        config_set_docs = []
-        for csid in cs_ids:
-            config_set_docs.append(UpdateOne(
-                {SHORT_ID_STRING_NAME: csid},
-                {'$addToSet': {'relationships.datasets': ds_id}},
-                hint=SHORT_ID_STRING_NAME,
-            ))
+        if cs_ids is not None:
+            config_set_docs = []
+            for csid in cs_ids:
+                config_set_docs.append(UpdateOne(
+                    {SHORT_ID_STRING_NAME: csid},
+                    {'$addToSet': {'relationships.datasets': ds_id}},
+                    hint=SHORT_ID_STRING_NAME,
+                ))
 
-        self.configuration_sets.bulk_write(config_set_docs)
+            self.configuration_sets.bulk_write(config_set_docs)
 
         # Add the backwards relationships PR->DS and origin using aggregation pipeline for logic
         property_docs = []
