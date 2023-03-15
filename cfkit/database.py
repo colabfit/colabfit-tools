@@ -1055,7 +1055,7 @@ class MongoDatabase(MongoClient):
                     cursor = collection.find(
                         {query_key: {'$in': query_list[i * batch_size:]}}, **kwargs)
             for j in cursor:
-                yield j
+                yield j[query_key]
 
     # @staticmethod
     def get_data(
