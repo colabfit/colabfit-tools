@@ -1539,9 +1539,6 @@ class MongoDatabase(MongoClient):
         self.configuration_sets.update_one(
             {'hash': str(cs_hash)},
             {
-                '$addToSet': {
-                    'relationships.configurations': {'$each': ['CO_' + i for i in hashes]}
-                },
                 '$setOnInsert': {
                     SHORT_ID_STRING_NAME: cs_id,
                     'name': name,
