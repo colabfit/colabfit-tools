@@ -313,7 +313,8 @@ class MongoDatabase(MongoClient):
             property_map=None,
             co_md_map=None,
             transform=None,
-            verbose=True
+            verbose=True,
+            generator=None,
     ):
         """
         A wrapper to Database.insert_data() which also adds important queryable
@@ -1956,7 +1957,6 @@ class MongoDatabase(MongoClient):
             data_license='CC0',
             resync=False,
             verbose=False,
-            generator=None,
             overloaded_ds_id=None,
     ):
         """
