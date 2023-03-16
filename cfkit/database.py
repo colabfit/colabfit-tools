@@ -1956,6 +1956,7 @@ class MongoDatabase(MongoClient):
             data_license='CC0',
             resync=False,
             verbose=False,
+            generator=None,
             overloaded_ds_id=None,
     ):
         """
