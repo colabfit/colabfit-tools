@@ -5,7 +5,7 @@ from ase.io import read
 from pathlib import Path
 
 from colabfit import ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD
-from colabfit import AtomicConfiguration
+from colabfit.tools.configuration import AtomicConfiguration
 
 __all__ = [
     'BaseConverter',
