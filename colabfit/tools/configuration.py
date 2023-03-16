@@ -4,7 +4,7 @@ from ase import Atoms
 from string import ascii_lowercase, ascii_uppercase
 from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
-from colabfit.tools import (
+from colabfit import (
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
 )
 
