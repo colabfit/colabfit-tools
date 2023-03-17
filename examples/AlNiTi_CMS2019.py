@@ -1,6 +1,6 @@
-from cfkit.database import MongoDatabase, load_data
-from cfkit.configuration import AtomicConfiguration
-from cfkit.property_definitions import potential_energy_pd, atomic_forces_pd, cauchy_stress_pd
+from colabfit.tools.database import MongoDatabase, load_data
+from colabfit.tools.configuration import AtomicConfiguration
+from colabfit.tools.property_definitions import potential_energy_pd, atomic_forces_pd, cauchy_stress_pd
 import argparse
 
 
