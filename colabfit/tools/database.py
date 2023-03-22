@@ -1604,7 +1604,13 @@ class MongoDatabase(MongoClient):
                                             projection={"hash": 1, "_id": 0}
                                             ))
         print(f'Inserting configuration set', f'({name}):'.rjust(22), f'{len(filtered_cos)}'.rjust(7))
-        return self.insert_configuration_set(filtered_cos,description=description,name=name)
+        return self.insert_configuration_set(
+            filtered_cos,
+            description=description,
+            name=name,
+            ordered=ordered,
+            overloaded_cs_id=overloaded_cs_id
+        )
 
     def get_configuration_set(self, cs_id, resync=False):
         """
@@ -1981,7 +1987,7 @@ class MongoDatabase(MongoClient):
                                                                          verbose=verbose)
 
     def insert_dataset(
-            self, pr_hashes, name,
+            self, do_hashes, name,
             authors=None,
             cs_ids=None,
             links=None,
@@ -1996,8 +2002,8 @@ class MongoDatabase(MongoClient):
 
         Args:
 
-            pr_hashes (list or str):
-                The hashes of the properties to link to the dataset
+            do_hashes (list or str):
+                The hashes of the data objects to link to the dataset
 
             name (str):
                 The name of the dataset
@@ -2038,13 +2044,13 @@ class MongoDatabase(MongoClient):
         if isinstance(cs_ids, str):
             cs_ids = [cs_ids]
 
-        if isinstance(pr_hashes, str):
-            pr_hashes = [pr_hashes]
+        if isinstance(do_hashes, str):
+            do_hashes = [do_hashes]
 
         # Remove possible duplicates
         if cs_ids is not None:
             cs_ids = list(set(cs_ids))
-        pr_hashes = list(set(pr_hashes))
+        do_hashes = list(set(do_hashes))
 
 
         if isinstance(authors, str):
@@ -2063,7 +2069,7 @@ class MongoDatabase(MongoClient):
         if cs_ids is not None:
             for ci in sorted(cs_ids):
                 ds_hash.update(str(ci).encode('utf-8'))
-        for pi in sorted(pr_hashes):
+        for pi in sorted(do_hashes):
             ds_hash.update(str(pi).encode('utf-8'))
 
         ds_hash = int(ds_hash.hexdigest(), 16)
@@ -2086,7 +2092,7 @@ class MongoDatabase(MongoClient):
         #    aggregated_info[k] = v
 
         for k, v in self.aggregate_data_object_info(
-                pr_hashes, verbose=verbose).items():
+                do_hashes, verbose=verbose).items():
             aggregated_info[k] = v
 
         id_prefix = '_'.join([
@@ -2139,7 +2145,7 @@ class MongoDatabase(MongoClient):
 
         # Add the backwards relationships PR->DS and origin using aggregation pipeline for logic
         property_docs = []
-        for pid in tqdm(pr_hashes, desc='Updating DO->DS relationships'):
+        for pid in tqdm(do_hashes, desc='Updating DO->DS relationships'):
             property_docs.append(UpdateOne(
                 {'hash': pid},
                 [{'$set': {'relationships.origin': {'$ifNull': ['$relationships.origin', ds_id]}
