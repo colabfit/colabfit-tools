@@ -1535,6 +1535,7 @@ class MongoDatabase(MongoClient):
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
             hashes,
+            verbose=True
         )
 
         self.configuration_sets.update_one(
