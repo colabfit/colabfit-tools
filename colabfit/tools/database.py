@@ -1602,7 +1602,7 @@ class MongoDatabase(MongoClient):
                                             return_key='hash',
                                             projection={"hash": 1, "_id": 0}
                                             )
-        print(f'Inserting configuration set', f'({regex}):'.rjust(22), f'{len(filtered_cos)}'.rjust(7))
+        print(f'Inserting configuration set', f'({name}):'.rjust(22), f'{len(filtered_cos)}'.rjust(7))
         return self.insert_configuration_set(filtered_cos,description=description,name=name)
 
     def get_configuration_set(self, cs_id, resync=False):
