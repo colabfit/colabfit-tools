@@ -2222,9 +2222,10 @@ class MongoDatabase(MongoClient):
         new_ds_id = 'DS_' + current_hash + '_' + str(version)
 
         # Get configuration set ids from current version and append and/or remove
-        cs_ids = ds_doc['relationships']['configuration_sets']
-        do_ids = ds_doc['relationships']['data_objects']
-        do_ids = [i.split('_')[-1] for i in do_ids]
+        cs_docs = list(self.configuration_sets.find({'relationships.datasets':ds_id}, {'colabfit-id': 1}))
+        do_docs = list(self.data_objects.find({'relationships.datasets': ds_id}, {'hash': 1}))
+        cs_ids = [i['colabfit-id'] for i in cs_docs]
+        do_ids = [i['hash'] for i in do_docs]
         init_len = len(cs_ids)
 
         if add_cs_ids is not None:
