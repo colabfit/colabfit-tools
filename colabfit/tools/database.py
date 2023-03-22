@@ -2287,7 +2287,7 @@ class MongoDatabase(MongoClient):
                 raise RuntimeError('All data objects to be removed are not present in DS.')
         # insert new version of DS
 
-        self.insert_dataset(cs_ids, do_ids, name=ds_doc['name'], authors=ds_doc['authors'],
+        self.insert_dataset(do_ids, name=ds_doc['name'], cs_ids=cs_ids, authors=ds_doc['authors'],
                             links=ds_doc['links'], description=ds_doc['description'], overloaded_ds_id=new_ds_id)
         return (new_ds_id)
 
