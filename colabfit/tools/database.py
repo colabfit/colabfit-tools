@@ -1594,14 +1594,14 @@ class MongoDatabase(MongoClient):
                 A human-readable description of the configuration set.
         """
 
-        filtered_cos = self.query_in_batches(
+        filtered_cos = list(self.query_in_batches(
                                             'configurations',
                                             'hash',
                                             co_hashes,
                                             query,
                                             return_key='hash',
                                             projection={"hash": 1, "_id": 0}
-                                            )
+                                            ))
         print(f'Inserting configuration set', f'({name}):'.rjust(22), f'{len(filtered_cos)}'.rjust(7))
         return self.insert_configuration_set(filtered_cos,description=description,name=name)
 
