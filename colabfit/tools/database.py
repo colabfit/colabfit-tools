@@ -1697,8 +1697,10 @@ class MongoDatabase(MongoClient):
         version = int(family_ids.split('_')[-1]) + 1
         new_cs_id = 'CS_' + current_hash + '_' + str(version)
         # Get configuration ids from current version and append and/or remove
-        ids = cs_doc['relationships']['configurations']
-        ids = [i.split('_')[-1] for i in ids]
+        #ids = cs_doc['relationships']['configurations']
+        #ids = [i.split('_')[-1] for i in ids]
+        co_docs = list(self.configurations.find({'relationships.configuration_sets':cs_id}),{'hash': 1, '_id': 0})
+        ids = [i["hash"] for i in co_docs]
         init_len = len(ids)
 
         if add_ids is not None:
