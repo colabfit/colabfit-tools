@@ -1490,7 +1490,7 @@ class MongoDatabase(MongoClient):
         Args:
 
             hashes (list or str):
-                The hashes of the configurations to include in the configuartion
+                The hashes of the configurations to include in the configuration
                 set.
             name (str):
                 Name of CS---used in forming extended-id
@@ -1573,6 +1573,37 @@ class MongoDatabase(MongoClient):
         self.configurations.bulk_write(config_docs)
 
         return cs_id
+
+    def query_and_insert_configuration_set(self, co_hashes, query, name, description='', ordered=False, overloaded_cs_id=None):
+        """
+        Finds COs and inserts their grouping as a configuration into the database.
+
+        Args:
+
+            co_hashes (list or str):
+                The hashes of the configurations over which to query
+            query (dict):
+                PyMongo query to filter COs---Will usually be over name field
+            name (str):
+                Name of CS---used in forming extended-id
+            ordered (bool):
+                Flag specifying if COs in CS should be considered ordered.
+            overloaded_cs_id (str):
+                Used to overload naming convention when updating versions
+            description (str, optional):
+                A human-readable description of the configuration set.
+        """
+
+        filtered_cos = self.query_in_batches(
+                                            'configurations',
+                                            'hash',
+                                            co_hashes,
+                                            query,
+                                            return_key='hash',
+                                            projection={"hash": 1, "_id": 0}
+                                            )
+        print(f'Inserting configuration set {i}', f'({regex}):'.rjust(22), f'{len(filtered_cos)}'.rjust(7))
+        return self.insert_configuration_set(filtered_cos,description=description,name=name)
 
     def get_configuration_set(self, cs_id, resync=False):
         """

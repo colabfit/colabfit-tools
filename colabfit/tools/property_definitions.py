@@ -69,8 +69,7 @@ cauchy_stress_pd = {
     "volume-normalized": {
         "type": "bool",
         "has-unit": False,
-        "extent": [
-        ],
+        "extent": [],
         "required": False,
         "description": "If True, the stress has been multiplied by the cell volume."
     }
