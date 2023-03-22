@@ -14,7 +14,7 @@ You should also follow the instructions in the documentation for [installing and
 The documentation can be found online at https://colabfit.github.io/colabfit-tools/.
 
 # Example data
-Contact [Josh](https://github.com/jvita/) if you would like access to the datasets associated with [the provided examples](colabfit/examples).
+Contact [Eric](https://github.com/EFuem/) if you would like access to the datasets associated with [the provided examples](colabfit/examples).
 
 # License
 The ColabFit Tools package is copyrighted by the Regents of the University of
