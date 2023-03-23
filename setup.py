@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "colabfit-tools",
-    version = "0.0.1",
+    version = "0.0.2",
     author = "ColabFit",
     description = ("A suite of tools for working with training datasets for interatomic potentials"),
     license = "BSD",
