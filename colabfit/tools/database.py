@@ -1,46 +1,43 @@
-import os
 import json
-import shutil
-import markdown
 import datetime
 import warnings
 import itertools
+import string
+from math import ceil
+
 import numpy as np
 from tqdm import tqdm
 import multiprocessing
 from copy import deepcopy
 from hashlib import sha512
-from getpass import getpass
-from ast import literal_eval
 from functools import partial
 from pymongo import MongoClient, UpdateOne
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 from ase.io import write as ase_write
-
-import kim_edn
+from ase import Atoms
+from unidecode import unidecode
+import periodictable
+import time
 from kim_property.definition import check_property_definition
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
-from kim_property.create import KIM_PROPERTIES
-
+from django.utils.crypto import get_random_string
 from colabfit import (
-    HASH_LENGTH,
-    HASH_SHIFT,
     ID_FORMAT_STRING,
-    _CONFIGS_COLLECTION, _PROPS_COLLECTION, _PROPSETTINGS_COLLECTION,
+    _CONFIGS_COLLECTION, _PROPS_COLLECTION, _METADATA_COLLECTION, _DATAOBJECT_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
-    ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD, ATOMS_LAST_MODIFIED_FIELD
+    ATOMS_NAME_FIELD, MAX_STRING_LENGTH,
+    SHORT_ID_STRING_NAME, EXTENDED_ID_STRING_NAME
 )
-from colabfit.tools.configuration import Configuration, process_species_list
+from colabfit.tools.configuration import BaseConfiguration, AtomicConfiguration
 from colabfit.tools.property import Property
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.dataset import Dataset
-from colabfit.tools.property_settings import PropertySettings
-from colabfit.tools.dataset_parser import (
-    DatasetParser, MarkdownFormatError, BadTableFormatting
-)
+from colabfit.tools.metadata import Metadata
+from colabfit.tools.data_object import DataObject
+
 
 class MongoDatabase(MongoClient):
     """
@@ -53,12 +50,12 @@ class MongoDatabase(MongoClient):
 
         /configurations
             _id
+            short-id 
             atomic_numbers
             positions
             cell
             pbc
             names
-            labels
             elements
             nelements
             elements_ratios
@@ -71,38 +68,33 @@ class MongoDatabase(MongoClient):
             latice_vectors
             last_modified
             relationships
-                properties
+                property_instances
                 configuration_sets
 
         /property_definitions
             _id
+            short-id
             definition
 
         /properties
             _id
+            short-id
             type
             property_name
                 each field in the property definition
             methods
-            labels
             last_modified
             relationships
-                property_settings
+                metadata
                 configurations
 
-        /property_settings
-            _id
-            method
-            decription
-            labels
-            files
-                file_name
-                file_contents
-            relationships
-                properties
+        /metadata
+            hash
+            dict
 
         /configuration_sets
             _id
+            short-id
             last_modified
             aggregated_info
                 (from configurations)
@@ -113,8 +105,6 @@ class MongoDatabase(MongoClient):
                 elements
                 individual_elements_ratios
                 total_elements_ratios
-                labels
-                labels_counts
                 chemical_formula_reduced
                 chemical_formula_anonymous
                 chemical_formula_hill
@@ -126,6 +116,8 @@ class MongoDatabase(MongoClient):
 
         /datasets
             _id
+            short-id
+            extended-id
             last_modified
             aggregated_info
                 (from configuration sets)
@@ -136,8 +128,6 @@ class MongoDatabase(MongoClient):
                 elements
                 individual_elements_ratios
                 total_elements_ratios
-                configuration_labels
-                configuration_labels_counts
                 chemical_formula_reduced
                 chemical_formula_anonymous
                 chemical_formula_hill
@@ -149,10 +139,8 @@ class MongoDatabase(MongoClient):
                 property_fields
                 methods
                 methods_counts
-                property_labels
-                property_labels_counts
             relationships
-                properties
+                property_instances
                 configuration_sets
 
     Attributes:
@@ -169,8 +157,8 @@ class MongoDatabase(MongoClient):
         property_definitions (Collection):
             A Mongo collection of property definitions
 
-        property_settings (Collection):
-            A Mongo collection of property setting documents
+        metadata (Collection):
+            A Mongo collection of metadata documents
 
         configuration_sets (Collection):
             A Mongo collection of configuration set documents
@@ -178,16 +166,22 @@ class MongoDatabase(MongoClient):
         datasets (Collection):
             A Mongo collection of dataset documents
     """
+
+    # TODO: Should database be instantiated with nprocs, or should it be passed in as an
+    #       argument to methods in which this would be relevant
     def __init__(
-        self, database_name, nprocs=1, uri=None,
-        drop_database=False, user=None, pwrd=None, port=27017,
-        *args, **kwargs
-        ):
+            self, database_name, configuration_type=AtomicConfiguration, nprocs=1, uri=None,
+            drop_database=False, user=None, pwrd=None, port=27017,
+            *args, **kwargs
+    ):
         """
         Args:
 
             database_name (str):
                 The name of the database
+
+            configuration_type (Configuration, default=BaseConfiguration):
+                The configuration type that will be stored in the database.
 
             nprocs (int):
                 The size of the processor pool
@@ -213,8 +207,8 @@ class MongoDatabase(MongoClient):
 
 
         """
-
-        self.uri  = uri
+        self.configuration_type = configuration_type
+        self.uri = uri
         self.login_args = args
         self.login_kwargs = kwargs
 
@@ -239,24 +233,89 @@ class MongoDatabase(MongoClient):
         if drop_database:
             self.drop_database(database_name)
 
-        self.configurations         = self[database_name][_CONFIGS_COLLECTION]
-        self.properties             = self[database_name][_PROPS_COLLECTION]
-        self.property_definitions   = self[database_name][_PROPDEFS_COLLECTION]
-        self.property_settings      = self[database_name][_PROPSETTINGS_COLLECTION]
-        self.configuration_sets     = self[database_name][_CONFIGSETS_COLLECTION]
-        self.datasets               = self[database_name][_DATASETS_COLLECTION]
+        self.configurations = self[database_name][_CONFIGS_COLLECTION]
+        self.property_instances = self[database_name][_PROPS_COLLECTION]
+        self.property_definitions = self[database_name][_PROPDEFS_COLLECTION]
+        self.data_objects = self[database_name][_DATAOBJECT_COLLECTION]
+        self.metadata = self[database_name][_METADATA_COLLECTION]
+        self.configuration_sets = self[database_name][_CONFIGSETS_COLLECTION]
+        self.datasets = self[database_name][_DATASETS_COLLECTION]
 
+        self.property_definitions.create_index(
+            keys='definition.property-name', name='definition.property-name',
+            unique=True
+        )
+
+        self.configuration_sets.create_index(
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+        )
+        self.datasets.create_index(
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+        )
+
+        self.configurations.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.property_instances.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.metadata.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.data_objects.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.configuration_sets.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.datasets.create_index(
+            keys='hash', name='hash', unique=True
+        )
+        self.configurations.create_index(
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+        )
+        self.property_instances.create_index(
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+        )
+        self.metadata.create_index(
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+        )
+        self.data_objects.create_index(
+            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+        )
+        self.property_instances.create_index(
+            keys='relationships.metadata', name='pi_relationships.metadata'
+        )
+        self.configuration_sets.create_index(
+            keys='relationships.datasets', name='cs_relationships.datasets'
+        )
+        self.configurations.create_index(
+            keys='relationships.metadata', name='co_relationships.metadata'
+        )
+        self.configurations.create_index(
+            keys='relationships.data_objects', name='co_relationships.data_objects'
+        )
+        self.property_instances.create_index(
+            keys='relationships.data_objects', name='pi_relationships.data_objects'
+        )
+        self.data_objects.create_index(
+            keys='relationships.datasets', name='do_relationships.datasets'
+        )
+        self.configurations.create_index(
+            keys='relationships.configuration_sets', name='co_relationships.configuration_sets'
+        )
         self.nprocs = nprocs
 
 
     def insert_data(
-        self,
-        configurations,
-        property_map=None,
-        transform=None,
-        generator=False,
-        verbose=True
-        ):
+            self,
+            configurations,
+            property_map=None,
+            co_md_map=None,
+            transform=None,
+            verbose=True,
+            generator=None,
+    ):
         """
         A wrapper to Database.insert_data() which also adds important queryable
         metadata about the configurations into the Client's server.
@@ -291,10 +350,10 @@ class MongoDatabase(MongoClient):
                                 'per-atom': {'field': 'per-atom', 'units': None},
 
                                 '_settings': {
-                                    '_method': 'VASP',
-                                    '_description': 'A static VASP calculation',
-                                    '_files': None,
-                                    '_labels': ['Monkhorst-Pack'],
+                                    'method': 'VASP',
+                                    'description': 'A static VASP calculation',
+                                    'files': None,
+                                    'labels': ['Monkhorst-Pack'],
 
                                     'xc-functional': {'field': 'xcf', 'units': None}
                                 }
@@ -310,17 +369,17 @@ class MongoDatabase(MongoClient):
                 the contents of a PropertySettings object that will be
                 constructed and linked to each associated property instance.
 
+
+            co_md_map (dict):
+                A dictionary that is used to specify how to load metadata
+                defined for a configuration.
+
             transform (callable, default=None):
                 If provided, `transform` will be called on each configuration in
                 :code:`configurations` as :code:`transform(configuration)`.
                 Note that this happens before anything else is done. `transform`
                 should modify the Configuration in-place.
 
-            generator (bool, default=False):
-                If True, returns a generator of the results; otherwise returns
-                a list. If True, uses :code:`update_one` instead of
-                :code:`bulk_write` to avoid having to store update documents in
-                memory.
 
             verbose (bool, default=False):
                 If True, prints a progress bar
@@ -348,12 +407,15 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
-            'last_modified', 'definition', '_id', '_settings'
+            'last_modified', 'definition', '_id', SHORT_ID_STRING_NAME, '_settings',
+            'property-name', EXTENDED_ID_STRING_NAME, '_metadata'
         }
 
         # Sanity checks for property map
         for pname, pdict_list in property_map.items():
-            pd_doc = self.property_definitions.find_one({'_id': pname})
+            pd_doc = self.property_definitions.find_one({
+                'definition.property-name': pname
+            })
 
             if pd_doc:
                 # property_field_name, {'ase_field': ..., 'units': ...}
@@ -361,48 +423,43 @@ class MongoDatabase(MongoClient):
                     for k, pd in pdict.items():
                         if k in ignore_keys:
                             continue
-
                         if k not in pd_doc['definition']:
                             warnings.warn(
-                                'Provided field "{}" in property_map does not match '\
+                                'Provided field "{}" in property_map does not match ' \
                                 'property definition'.format(k)
                             )
-
-                        if ('field' not in pd) or (pd['field'] is None):
-                            raise RuntimeError(
-                                "Must specify all 'field' sections in property_map"
-                            )
+                        if 'value' in pd:
+                            if 'field' in pd and pd['field'] is not None:
+                                raise RuntimeError(
+                                    "Error with key '{}'. property_map must specify exactly ONE of 'field' or 'value'".format(
+                                        k)
+                                )
+                        else:
+                            if ('field' not in pd) or (pd['field'] is None):
+                                raise RuntimeError(
+                                    "Error with key '{}'. property_map must specify exactly ONE of 'field' or 'value'".format(
+                                        k)
+                                )
 
                         if 'units' not in pd:
                             raise RuntimeError(
-                                "Must specify all 'units' sections in "\
+                                "Must specify all 'units' sections in " \
                                 "property_map. Set value to None if no units."
                             )
             else:
                 warnings.warn(
-                    'Property name "{}" in property_map does not have an '\
+                    'Property name "{}" in property_map does not have an ' \
                     'existing definition in the database.'.format(pname)
                 )
 
-        if generator:
-            return self._insert_data_generator(
-                mongo_login=mongo_login,
-                login_args=self.login_args,
-                login_kwargs=self.login_kwargs,
-                database_name=self.database_name,
-                configurations=configurations,
-                property_map=property_map,
-                transform=transform,
-                verbose=verbose
-            )
-        else:
+        if 1:
             configurations = list(configurations)
 
             n = len(configurations)
             k = self.nprocs
 
             split_configs = [
-                configurations[i*(n//k)+min(i, n%k):(i+1)*(n//k)+min(i+1, n%k)]
+                configurations[i * (n // k) + min(i, n % k):(i + 1) * (n // k) + min(i + 1, n % k)]
                 for i in range(k)
             ]
 
@@ -411,6 +468,7 @@ class MongoDatabase(MongoClient):
                 mongo_login=mongo_login,
                 database_name=self.database_name,
                 property_map=property_map,
+                co_md_map=co_md_map,
                 transform=transform,
                 verbose=verbose
             )
@@ -421,369 +479,23 @@ class MongoDatabase(MongoClient):
                 pool.map(pfunc, split_configs)
             ))
 
-
-    @staticmethod
-    def _insert_data_generator(
-        configurations, database_name,
-        mongo_login,
-        login_args,
-        login_kwargs,
-        property_map=None, transform=None,
-        verbose=False
-        ):
-
-        if isinstance(mongo_login, int):
-            client = MongoClient(
-                'localhost', mongo_login, *login_args, **login_kwargs
-            )
-        else:
-            client = MongoClient(mongo_login, *login_args, **login_kwargs)
-
-        coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
-        coll_properties             = client[database_name][_PROPS_COLLECTION]
-        coll_property_definitions   = client[database_name][_PROPDEFS_COLLECTION]
-        coll_property_settings      = client[database_name][_PROPSETTINGS_COLLECTION]
-
-        if isinstance(configurations, Configuration):
-            configurations = [configurations]
-
-        if property_map is None:
-            property_map = {}
-
-        property_definitions = {}
-        for pname in property_map:
-            doc = coll_property_definitions.find_one({'_id': pname})
-
-            if doc is None:
-                raise RuntimeError(
-                    "Property definition '{}' does not exist. "\
-                    "Use insert_property_definition() first".format(pname)
-                )
-            else:
-                property_definitions[pname] = doc['definition']
-
-        ignore_keys = {
-            'property-id', 'property-title', 'property-description',
-            'last_modified', 'definition', '_id', '_settings'
-        }
-
-        expected_keys = {
-            pname: [set(
-                # property_map[pname][f]['field']
-                pmap[f]['field']
-                for f in property_definitions[pname].keys() - ignore_keys
-                if property_definitions[pname][f]['required']
-            ) for pmap in property_map[pname]]
-            for pname in property_map
-        }
-
-        config_docs     = []
-        property_docs   = []
-        settings_docs   = []
-
-        # Add all of the configurations into the Mongo server
-        ai = 1
-        for atoms in tqdm(
-            configurations,
-            desc='Preparing to add configurations to Database',
-            disable=not verbose,
-            ):
-
-            if transform:
-                transform(atoms)
-
-            cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
-
-            processed_fields = process_species_list(atoms)
-
-            # Add if doesn't exist, else update (since last-modified changed)
-            c_update_doc =  {  # update document
-                    '$setOnInsert': {
-                        '_id': cid,
-                        'atomic_numbers': atoms.get_atomic_numbers().tolist(),
-                        'positions': atoms.get_positions().tolist(),
-                        'cell': np.array(atoms.get_cell()).tolist(),
-                        'pbc': atoms.get_pbc().astype(int).tolist(),
-                        'elements': processed_fields['elements'],
-                        'nelements': processed_fields['nelements'],
-                        'elements_ratios': processed_fields['elements_ratios'],
-                        'chemical_formula_reduced': processed_fields['chemical_formula_reduced'],
-                        'chemical_formula_anonymous': processed_fields['chemical_formula_anonymous'],
-                        'chemical_formula_hill': atoms.get_chemical_formula(),
-                        'nsites': len(atoms),
-                        'dimension_types': atoms.get_pbc().astype(int).tolist(),
-                        'nperiodic_dimensions': int(sum(atoms.get_pbc())),
-                        'lattice_vectors': np.array(atoms.get_cell()).tolist(),
-                    },
-                    '$set': {
-                        'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                    },
-                    '$addToSet': {
-                        'names': {
-                            '$each': list(atoms.info[ATOMS_NAME_FIELD])
-                        },
-                        'labels': {
-                            '$each': list(atoms.info[ATOMS_LABELS_FIELD])
-                        },
-                        'relationships.properties': {
-                            '$each': []
-                        }
-                    }
-                }
-
-            available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
-
-            pid = None
-
-            new_pids = []
-            for pname, pmap_list in property_map.items():
-                for pmap_i, pmap in enumerate(pmap_list):
-                    pmap_copy = dict(pmap)
-                    if '_settings' in pmap_copy:
-                        del pmap_copy['_settings']
-
-                    # Pre-check to avoid having to delete partially-added properties
-                    missing_keys = expected_keys[pname][pmap_i] - available_keys
-                    if missing_keys:
-                        # warnings.warn(
-                        #     "Configuration is missing keys {} for Property"\
-                        #     "Instance construction. Available keys: {}. "\
-                        #     "Skipping".format(
-                        #         missing_keys, available_keys
-                        #     )
-                        # )
-                        continue
-
-                    prop = Property.from_definition(
-                        definition=property_definitions[pname],
-                        configuration=atoms,
-                        property_map=pmap_copy
-                    )
-
-                    pid = ID_FORMAT_STRING.format('PI', hash(prop), 0)
-
-                    new_pids.append(pid)
-
-                    labels = []
-                    methods = []
-                    settings_ids = []
-
-                    # Attach property settings, if any were given
-                    if '_settings' in pmap:
-                        pso_map = pmap['_settings']
-
-                        all_ps_fields = set(pso_map.keys()) - {
-                            '_method', '_description', '_files', '_labels'
-                        }
-
-                        # ps_not_required = {
-                        #     psk for psk in all_ps_fields if not pso_map[psk]['required']
-                        # }
-
-                        # ps_missing_keys = all_ps_fields  - available_keys - ps_not_required
-
-                        # if not ps_missing_keys:
-                        #     # Has all of the required PS keys
-
-                        gathered_fields = {}
-                        for ps_field in all_ps_fields:
-                            psf_key = pso_map[ps_field]['field']
-
-                            if ps_field in atoms.info:
-                                v = atoms.info[psf_key]
-                            elif ps_field in atoms.arrays:
-                                v = atoms.arrays[psf_key]
-                            else:
-                                # No keys are required; ignored if missing
-                                continue
-
-                            gathered_fields[ps_field] = {
-                                # 'required': pso_map[ps_field]['required'],
-                                'source-value': v,
-                                'source-unit':  pso_map[ps_field]['units'],
-                            }
-
-                        ps = PropertySettings(
-                            method=pso_map['_method'] if '_method' in pso_map else None,
-                            description=pso_map['_description'] if '_description' in pso_map else None,
-                            files=pso_map['_files'] if '_files' in pso_map else None,
-                            labels=pso_map['_labels'] if '_labels' in pso_map else None,
-                            fields=gathered_fields,
-                        )
-
-                        ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
-
-                        ps_set_on_insert = {
-                            '_id': ps_id,
-                            '_method':       ps.method,
-                            '_description': ps.description,
-                            '_files':       ps.files,
-                        }
-
-                        for gf, gf_dict in gathered_fields.items():
-                            if isinstance(gf_dict['source-value'], (int, float, str)):
-                                # Add directly
-                                ps_set_on_insert[gf] = {
-                                    'source-value': gf_dict['source-value']
-                                }
-                            else:
-                                # Then it's array-like and should be converted to a list
-                                ps_set_on_insert[gf] = {
-                                    'source-value': np.atleast_1d(
-                                        gf_dict['source-value']
-                                    ).tolist()
-                                }
-
-                            if 'source-unit' in gf_dict:
-                                ps_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
-
-                        ps_update_doc =  {  # update document
-                                '$setOnInsert': ps_set_on_insert,
-                                '$set': {
-                                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                                },
-                                '$addToSet': {
-                                    '_labels': {
-                                        '$each': list(ps.labels)
-                                    },
-                                    'relationships.properties': {
-                                        '$each': [pid]
-                                    }
-                                }
-                            }
-
-                        settings_docs.append(UpdateOne(
-                            {'_id': ps_id},
-                            ps_update_doc,
-                            upsert=True,
-                        ))
-
-                        methods.append(ps.method)
-                        labels += list(ps.labels)
-                        settings_ids.append(ps_id)
-
-                    # Prepare the property instance EDN document
-                    setOnInsert = {}
-                    # for k in property_map[pname]:
-                    for k in pmap:
-                        if k not in prop.keys():
-                            # To allow for missing non-required keys.
-                            # Required keys checked for in Property.from_definition
-                            continue
-
-                        if isinstance(prop[k]['source-value'], (int, float, str)):
-                            # Add directly
-                            setOnInsert[k] = {
-                                'source-value': prop[k]['source-value']
-                            }
-                        else:
-                            # Then it's array-like and should be converted to a list
-                            setOnInsert[k] = {
-                                'source-value': np.atleast_1d(
-                                    prop[k]['source-value']
-                                ).tolist()
-                            }
-
-                        if 'source-unit' in prop[k]:
-                            setOnInsert[k]['source-unit'] = prop[k]['source-unit']
-
-                        p_update_doc = {
-                            '$addToSet': {
-                                'methods': {'$each': methods},
-                                'labels': {'$each': labels},
-                                # PR -> PSO pointer
-                                'relationships.property_settings': {
-                                    '$each': settings_ids
-                                },
-                                'relationships.configurations': cid,
-                            },
-                            '$setOnInsert': {
-                                '_id': pid,
-                                'type': pname,
-                                pname: setOnInsert
-                            },
-                            '$set': {
-                                'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                            }
-                        }
-
-                    property_docs.append(UpdateOne(
-                        {'_id': pid},
-                        p_update_doc,
-                        upsert=True,
-                    ))
-
-                    c_update_doc['$addToSet']['relationships.properties']['$each'].append(
-                        pid
-                    )
-
-                    yield (cid, pid)
-
-            config_docs.append(
-                UpdateOne({'_id': cid}, c_update_doc, upsert=True)
-            )
-
-            if not pid:
-                # Only yield if something wasn't yielded earlier
-                yield (cid, pid)
-
-            ai += 1
-
-        if config_docs:
-            res = coll_configurations.bulk_write(config_docs, ordered=False)
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate configurations detected'.format(nmatch)
-                )
-        if property_docs:
-            res = coll_properties.bulk_write(property_docs, ordered=False)
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate properties detected'.format(nmatch)
-                )
-
-        if settings_docs:
-            res = coll_property_settings.bulk_write(
-                settings_docs,
-                # [
-                #     UpdateOne(
-                #         {'_id': sid},
-                #         {'$addToSet': {'relationships.properties': {'$each': lst}}}
-                #     ) for sid, lst in settings_docs.items()
-                # ],
-                ordered=False
-            )
-            nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
-                warnings.warn(
-                    '{} duplicate property settings detected'.format(nmatch)
-                )
-
-
-        client.close()
-
-
-
     @staticmethod
     def _insert_data(
-        configurations, database_name, mongo_login,
-        property_map=None, transform=None,
-        verbose=False
-        ):
-
+            configurations, database_name, mongo_login, co_md_map=None,
+            property_map=None, transform=None,
+            verbose=False
+    ):
         if isinstance(mongo_login, int):
             client = MongoClient('localhost', mongo_login)
         else:
             client = MongoClient(mongo_login)
+        coll_configurations = client[database_name][_CONFIGS_COLLECTION]
+        coll_properties = client[database_name][_PROPS_COLLECTION]
+        coll_data_objects = client[database_name][_DATAOBJECT_COLLECTION]
+        coll_property_definitions = client[database_name][_PROPDEFS_COLLECTION]
+        coll_metadata = client[database_name][_METADATA_COLLECTION]
 
-        coll_configurations         = client[database_name][_CONFIGS_COLLECTION]
-        coll_properties             = client[database_name][_PROPS_COLLECTION]
-        coll_property_definitions   = client[database_name][_PROPDEFS_COLLECTION]
-        coll_property_settings      = client[database_name][_PROPSETTINGS_COLLECTION]
-
-        if isinstance(configurations, Configuration):
+        if isinstance(configurations, BaseConfiguration):
             configurations = [configurations]
 
         if property_map is None:
@@ -791,11 +503,13 @@ class MongoDatabase(MongoClient):
 
         property_definitions = {}
         for pname in property_map:
-            doc = coll_property_definitions.find_one({'_id': pname})
+            doc = coll_property_definitions.find_one({
+                'definition.property-name': pname
+            })
 
             if doc is None:
                 raise RuntimeError(
-                    "Property definition '{}' does not exist. "\
+                    "Property definition '{}' does not exist. " \
                     "Use insert_property_definition() first".format(pname)
                 )
             else:
@@ -803,7 +517,8 @@ class MongoDatabase(MongoClient):
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description',
-            'last_modified', 'definition', '_id', '_settings'
+            'last_modified', 'definition', '_id', SHORT_ID_STRING_NAME, 'settings',
+            'property-name',
         }
 
         expected_keys = {
@@ -812,76 +527,62 @@ class MongoDatabase(MongoClient):
                 pmap[f]['field']
                 for f in property_definitions[pname].keys() - ignore_keys
                 if property_definitions[pname][f]['required']
+                and 'field' in pmap[f]
             ) for pmap in property_map[pname]]
             for pname in property_map
         }
 
         insertions = []
-
-        config_docs     = []
-        property_docs   = []
-        settings_docs   = []
-
+        ca_ids = set()
+        config_docs = []
+        property_docs = []
+        calc_docs = []
+        meta_docs = []
+        meta_update_dict = {}
         # Add all of the configurations into the Mongo server
         ai = 1
         for atoms in tqdm(
-            configurations,
-            desc='Preparing to add configurations to Database',
-            disable=not verbose,
-            ):
-
+                configurations,
+                desc='Preparing to add configurations to Database',
+                disable=not verbose,
+        ):
+            property_docs_do = []
+            calc_lists = {}
+            calc_lists['PI'] = []
+            calc_lists['PI_type'] = []
             if transform:
                 transform(atoms)
 
-            cid = ID_FORMAT_STRING.format('CO', hash(atoms), 0)
-
-            processed_fields = process_species_list(atoms)
-
-            # Add if doesn't exist, else update (since last-modified changed)
-            c_update_doc =  {  # update document
-                    '$setOnInsert': {
-                        '_id': cid,
-                        'atomic_numbers': atoms.get_atomic_numbers().tolist(),
-                        'positions': atoms.get_positions().tolist(),
-                        'cell': np.array(atoms.get_cell()).tolist(),
-                        'pbc': atoms.get_pbc().astype(int).tolist(),
-                        'elements': processed_fields['elements'],
-                        'nelements': processed_fields['nelements'],
-                        'elements_ratios': processed_fields['elements_ratios'],
-                        'chemical_formula_reduced': processed_fields['chemical_formula_reduced'],
-                        'chemical_formula_anonymous': processed_fields['chemical_formula_anonymous'],
-                        'chemical_formula_hill': atoms.get_chemical_formula(),
-                        'nsites': len(atoms),
-                        'dimension_types': atoms.get_pbc().astype(int).tolist(),
-                        'nperiodic_dimensions': int(sum(atoms.get_pbc())),
-                        'lattice_vectors': np.array(atoms.get_cell()).tolist(),
-                    },
+            c_update_doc, c_hash = _build_c_update_doc(atoms)
+            c_update_doc['$addToSet']['relationships.data_objects']={}
+            calc_lists['CO'] = c_hash
+            calc_lists['CO_hill'] = atoms.configuration_summary()['chemical_formula_hill']
+            if co_md_map:
+                co_md = Metadata.from_map(d=co_md_map, source=atoms)
+                co_md_set_on_insert = _build_md_insert_doc(co_md)
+                co_md_update_doc = {  # update document
+                    '$setOnInsert': co_md_set_on_insert,
                     '$set': {
                         'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                     },
-                    '$addToSet': {
-                        'names': {
-                            '$each': list(atoms.info[ATOMS_NAME_FIELD])
-                        },
-                        'labels': {
-                            '$each': list(atoms.info[ATOMS_LABELS_FIELD])
-                        },
-                        'relationships.properties': {
-                            '$each': []
-                        }
-                    }
                 }
 
+                meta_docs.append(UpdateOne(
+                    {'hash': str(co_md._hash)},
+                    co_md_update_doc,
+                    upsert=True,
+                    hint='hash',
+                ))
+                c_update_doc['$addToSet']['relationships.metadata'] = {'$each': ['MD_%s' % str(co_md._hash)]}
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
+            p_hash = None
 
-            pid = None
-
-            new_pids = []
+            new_p_hashes = []
             for pname, pmap_list in property_map.items():
                 for pmap_i, pmap in enumerate(pmap_list):
                     pmap_copy = dict(pmap)
-                    if '_settings' in pmap_copy:
-                        del pmap_copy['_settings']
+                    if '_metadata' in pmap_copy:
+                        del pmap_copy['_metadata']
 
                     # Pre-check to avoid having to delete partially-added properties
                     missing_keys = expected_keys[pname][pmap_i] - available_keys
@@ -894,115 +595,112 @@ class MongoDatabase(MongoClient):
                         #     )
                         # )
                         continue
+                    # checks if property is present in atoms->if not, skip over it
 
-                    prop = Property.from_definition(
-                        definition=property_definitions[pname],
-                        configuration=atoms,
-                        property_map=pmap_copy
-                    )
+                    available = 0
+                    for k in pmap_copy.keys():
+                        if 'value' in pmap_copy[k]:
+                            available += 1
+                        elif pmap_copy[k]['field'] in available_keys:
+                            available += 1
+                    if not available:
+                        continue
 
-                    pid = ID_FORMAT_STRING.format('PI', hash(prop), 0)
+                    metadata_hashes = []
+                    # Attach property metadata, if any were given
+                    if '_metadata' in pmap:
+                        pi_md = Metadata.from_map(d=pmap['_metadata'], source=atoms)
 
-                    new_pids.append(pid)
-
-                    labels = []
-                    methods = []
-                    settings_ids = []
-
-                    # Attach property settings, if any were given
-                    if '_settings' in pmap:
-                        pso_map = pmap['_settings']
-
-                        all_ps_fields = set(pso_map.keys()) - {
-                            '_method', '_description', '_files', '_labels'
-                        }
-
-                        # ps_not_required = {
-                        #     psk for psk in all_ps_fields if not pso_map[psk]['required']
-                        # }
-
-                        # ps_missing_keys = all_ps_fields  - available_keys - ps_not_required
-
-                        # if not ps_missing_keys:
-                        #     # Has all of the required PS keys
-
+                        '''
                         gathered_fields = {}
-                        for ps_field in all_ps_fields:
-                            psf_key = pso_map[ps_field]['field']
-
-                            if ps_field in atoms.info:
-                                v = atoms.info[psf_key]
-                            elif ps_field in atoms.arrays:
-                                v = atoms.arrays[psf_key]
+                        for pi_md_field in pi_md_map.keys():
+                            if 'value' in pi_md_map[pi_md_field]:
+                                v = pi_md_map[pi_md_field]['value']
                             else:
+                                field_key = pi_md_map[pi_md_field]['field']
+
+                                if field_key in atoms.info:
+                                    v = atoms.info[field_key]
+                                elif field_key in atoms.arrays:
+                                    v = atoms.arrays[field_key]
+                                else:
                                 # No keys are required; ignored if missing
-                                continue
+                                    continue
+                            if "units" in pi_md_map[pi_md_field]:
+                                gathered_fields[pi_md_field] = {
+                                    'source-value': v,
+                                    'source-unit':  pi_md_map[pi_md_field]['units'],
+                                }
+                            else:
+                                gathered_fields[pi_md_field] = {
+                                    'source-value': v
+                                }
 
-                            gathered_fields[ps_field] = {
-                                # 'required': pso_map[ps_field]['required'],
-                                'source-value': v,
-                                'source-unit':  pso_map[ps_field]['units'],
-                            }
-
-                        ps = PropertySettings(
-                            method=pso_map['_method'] if '_method' in pso_map else None,
-                            description=pso_map['_description'] if '_description' in pso_map else None,
-                            files=pso_map['_files'] if '_files' in pso_map else None,
-                            labels=pso_map['_labels'] if '_labels' in pso_map else None,
-                            fields=gathered_fields,
-                        )
-
-                        ps_id = ID_FORMAT_STRING.format('PS', hash(ps), 0)
-
-                        ps_set_on_insert = {
-                            '_id': ps_id,
-                            '_method':       ps.method,
-                            '_description': ps.description,
-                            '_files':       ps.files,
+                        pi_md = Metadata(linked_type='PI',
+                                         metadata=gathered_fields
+                                         )
+'''
+                        '''
+                        
+                        pi_md_set_on_insert = {
+                            'hash': str(pi_md._hash),
                         }
 
-                        for gf, gf_dict in gathered_fields.items():
+                        for gf, gf_dict in pi_md.metadata.items():
                             if isinstance(gf_dict['source-value'], (int, float, str)):
                                 # Add directly
-                                ps_set_on_insert[gf] = {
+                                pi_md_set_on_insert[gf] = {
                                     'source-value': gf_dict['source-value']
                                 }
                             else:
                                 # Then it's array-like and should be converted to a list
-                                ps_set_on_insert[gf] = {
+                                pi_md_set_on_insert[gf] = {
                                     'source-value': np.atleast_1d(
                                         gf_dict['source-value']
                                     ).tolist()
                                 }
 
                             if 'source-unit' in gf_dict:
-                                ps_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
+                                pi_md_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
+'''
+                        pi_md_set_on_insert = _build_md_insert_doc(pi_md)
+                        prop = Property.from_definition(
+                            definition=property_definitions[pname],
+                            configuration=atoms,
+                            property_map=pmap_copy
+                        )
+                        p_hash = str(hash(prop))
 
-                        ps_update_doc =  {  # update document
-                                '$setOnInsert': ps_set_on_insert,
-                                '$set': {
-                                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                                },
-                                '$addToSet': {
-                                    '_labels': {
-                                        '$each': list(ps.labels)
-                                    },
-                                    'relationships.properties': {
-                                        '$each': [pid]
-                                    }
-                                }
-                            }
+                        new_p_hashes.append(p_hash)
 
-                        settings_docs.append(UpdateOne(
-                            {'_id': ps_id},
-                            ps_update_doc,
-                            upsert=True,
-                        ))
+                        pi_md_update_doc = {  # update document
+                            '$setOnInsert': pi_md_set_on_insert,
+                            '$set': {
+                                'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                            },
+                        }
+                        #meta_update_dict[str(pi_md._hash)] = pi_md_update_doc
 
-                        methods.append(ps.method)
-                        labels += list(ps.labels)
-                        settings_ids.append(ps_id)
+                        meta_docs.append(UpdateOne(
+                             {'hash': str(pi_md._hash)},
+                             pi_md_update_doc,
+                             upsert=True,
+                             hint='hash',
+                         ))
 
+                        metadata_hashes.append(str(pi_md._hash))
+
+                    else:
+                        prop = Property.from_definition(
+                            definition=property_definitions[pname],
+                            configuration=atoms,
+                            property_map=pmap_copy
+                        )
+                        p_hash = str(hash(prop))
+
+                        new_p_hashes.append(p_hash)
+                    calc_lists['PI'].append(p_hash)
+                    calc_lists['PI_type'].append(pname)
                     # Prepare the property instance EDN document
                     setOnInsert = {}
                     # for k in property_map[pname]:
@@ -1027,19 +725,18 @@ class MongoDatabase(MongoClient):
 
                         if 'source-unit' in prop[k]:
                             setOnInsert[k]['source-unit'] = prop[k]['source-unit']
-
+                        # TODO: Look at: can probably safely move out one level
                         p_update_doc = {
                             '$addToSet': {
-                                'methods': {'$each': methods},
-                                'labels': {'$each': labels},
                                 # PR -> PSO pointer
-                                'relationships.property_settings': {
-                                    '$each': settings_ids
+                                'relationships.metadata': {
+                                    '$each': ['MD_' + i for i in metadata_hashes]
                                 },
-                                'relationships.configurations': cid,
+                                'relationships.data_objects': {},
                             },
                             '$setOnInsert': {
-                                '_id': pid,
+                                'hash': p_hash,
+                                SHORT_ID_STRING_NAME: 'PI_' + p_hash,
                                 'type': pname,
                                 pname: setOnInsert
                             },
@@ -1048,28 +745,72 @@ class MongoDatabase(MongoClient):
                             }
                         }
 
-                    property_docs.append(UpdateOne(
-                        {'_id': pid},
-                        p_update_doc,
+                    property_docs_do.append(p_update_doc)
+
+                    # c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
+                    #    'PI_'+p_hash
+                    # ) #can probably safely remove since linked to DO
+
+                    # insertions.append((c_hash, p_hash))
+
+#            config_docs.append(
+#                UpdateOne(
+#                    {'hash': c_hash},
+#                    c_update_doc,
+#                    upsert=True,
+#                    hint='hash',
+#                )
+#            )
+
+            calc = DataObject(calc_lists['CO'], calc_lists['PI'])
+            ca_hash = str(calc._hash)
+            ca_ids.add(ca_hash)
+            ca_insert_doc = _build_ca_insert_doc(calc)
+            ca_insert_doc['chemical_formula_hill'] = calc_lists['CO_hill']
+            ca_update_doc = {  # update document
+                '$setOnInsert': ca_insert_doc,
+                '$addToSet': {'property_types': {'$each': calc_lists['PI_type']}},
+                '$inc': {
+                    'ncounts': 1
+                },
+
+                '$set': {
+                    'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                },
+            }
+            calc_docs.append(
+                UpdateOne(
+                    {'hash': ca_hash},
+                    ca_update_doc,
+                    upsert=True,
+                    hint='hash',
+                )
+            )
+            for pi_doc in property_docs_do:
+                pi_doc['$addToSet'] ['relationships.data_objects']={'$each': ["DO_%s" %ca_hash]}
+                property_docs.append(UpdateOne(
+                        {'hash': pi_doc['$setOnInsert']['hash']},
+                        pi_doc,
                         upsert=True,
+                        hint='hash',
                     ))
-
-                    c_update_doc['$addToSet']['relationships.properties']['$each'].append(
-                        pid
-                    )
-
-                    insertions.append((cid, pid))
-
+            c_update_doc['$addToSet']['relationships.data_objects'] = {'$each': ["DO_%s" %ca_hash]}
             config_docs.append(
-                UpdateOne({'_id': cid}, c_update_doc, upsert=True)
+                UpdateOne(
+                    {'hash': c_hash},
+                    c_update_doc,
+                    upsert=True,
+                    hint='hash',
+                )
             )
 
-            if not pid:
-                # Only yield if something wasn't yielded earlier
-                insertions.append((cid, pid))
+            insertions.append((c_hash, ca_hash))
+            # TODO: Fix this as it duplicates things when no property is present
+            # if not p_hash:
+            # Only yield if something wasn't yielded earlier
+            #    insertions.append((c_hash, ca_hash))
 
             ai += 1
-
         if config_docs:
             res = coll_configurations.bulk_write(config_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
@@ -1083,11 +824,18 @@ class MongoDatabase(MongoClient):
             if nmatch:
                 warnings.warn(
                     '{} duplicate properties detected'.format(nmatch)
+               )
+        if calc_docs:
+            res = coll_data_objects.bulk_write(calc_docs, ordered=False)
+            nmatch = res.bulk_api_result['nMatched']
+            if nmatch:
+                warnings.warn(
+                    '{} duplicate data objects detected'.format(nmatch)
                 )
 
-        if settings_docs:
-            res = coll_property_settings.bulk_write(
-                settings_docs,
+        if meta_docs:
+            res = coll_metadata.bulk_write(
+                meta_docs,
                 # [
                 #     UpdateOne(
                 #         {'_id': sid},
@@ -1099,13 +847,11 @@ class MongoDatabase(MongoClient):
             nmatch = res.bulk_api_result['nMatched']
             if nmatch:
                 warnings.warn(
-                    '{} duplicate property settings detected'.format(nmatch)
+                    '{} duplicate metadata objects detected'.format(nmatch)
                 )
-
 
         client.close()
         return insertions
-
 
     def insert_property_definition(self, definition):
         """
@@ -1119,9 +865,8 @@ class MongoDatabase(MongoClient):
             definition (dict or string):
                 The map defining the property. See the example below, or the
                 `OpenKIM Properties Framework <https://openkim.org/doc/schema/properties-framework/>`_
-                for more details. If a string is provided, it must be the name
-                of an existing property definition from the
-                `OpenKIM Properties List <https://openkim.org/properties>`_.
+                for more details. If a string is provided, it must be the full
+                path to an existing property definition.
 
         Example definition:
 
@@ -1144,49 +889,62 @@ class MongoDatabase(MongoClient):
         """
 
         if isinstance(definition, str):
-            definition = KIM_PROPERTIES[definition]
+            # definition = KIM_PROPERTIES[definition]
+            with open(definition, 'r') as f:
+                definition = json.load(f)
 
         if self.property_definitions.count_documents(
-            {'_id': definition['property-id']}
-            ):
+                {'definition.property-name': definition['property-name']}
+        ):
             warnings.warn(
-                "Property definition with name '{}' already exists. "\
+                "Property definition with name '{}' already exists. " \
                 "Using existing definition.".format(
-                    definition['property-id']
+                    definition['property-name']
                 )
             )
 
         dummy_dict = deepcopy(definition)
 
-        # Spoof if necessary
-        if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
-            # Invalid ID. Try spoofing it
+        if 'property-id' not in dummy_dict:
             dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
-            dummy_dict['property-id'] += definition['property-id']
-            warnings.warn(
-                "Invalid KIM property-id; "\
-                "Temporarily renaming to {}. "\
-                "See https://openkim.org/doc/schema/properties-framework/ "\
-                "for more details.".format(dummy_dict['property-id'])
-            )
+            dummy_dict['property-id'] += definition['property-name']
+        else:
+
+            # Spoof if necessary
+            if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
+                # Invalid ID. Try spoofing it
+                dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
+                dummy_dict['property-id'] += definition['property-id']
+                warnings.warn(
+                    "Invalid KIM property-id; " \
+                    "Temporarily renaming to {}. " \
+                    "See https://openkim.org/doc/schema/properties-framework/ " \
+                    "for more details.".format(dummy_dict['property-id'])
+                )
+
+        # Hack to avoid the fact that "property-name" has to be a dictionary
+        # in order for OpenKIM's check_property_definition to work
+        tmp = dummy_dict['property-name']
+        del dummy_dict['property-name']
 
         check_property_definition(dummy_dict)
 
+        dummy_dict['property-name'] = tmp
+
         self.property_definitions.update_one(
-            {'_id': definition['property-id']},
+            {'definition.property-name': definition['property-name']},
             {
                 '$setOnInsert': {
-                    '_id': definition['property-id'],
                     'definition': dummy_dict
                 }
             },
-            upsert=True
+            upsert=True,
+            hint='definition.property-name',
         )
 
-
     def get_property_definition(self, name):
-        return self.property_definitions.find_one({'_id': name})
-
+        """Returns a property definition using its 'definition.property-name' key"""
+        return self.property_definitions.find_one({'definition.property-name': name})
 
     def insert_property_settings(self, ps_object):
         """
@@ -1202,21 +960,19 @@ class MongoDatabase(MongoClient):
 
         Returns:
 
-            ps_id (str):
-                The ID of the inserted property settings object. Equals the hash
-                of the object.
+            ps_hash (str):
+                The hash of the inserted property settings object.
         """
 
-        ps_id = ID_FORMAT_STRING.format('PS', hash(ps_object), 0)
-
+        ps_hash = str(ps_object._hash)
         self.property_settings.update_one(
-            {'_id': ps_id},
+            {'hash': ps_hash},
             {
                 '$addToSet': {
                     'labels': {'$each': list(ps_object.labels)}
                 },
                 '$setOnInsert': {
-                    '_id': ps_id,
+                    'hash': str(ps_object._hash),
                     'method': ps_object.method,
                     'description': ps_object.description,
                     'files': [
@@ -1227,39 +983,101 @@ class MongoDatabase(MongoClient):
                     ],
                 }
             },
-            upsert=True
+            upsert=True,
+            hint='hash',
         )
 
-        return ps_id
+        return ps_hash
 
-
-    def get_property_settings(self, pso_id):
-        pso_doc = self.property_settings.find_one({'_id': pso_id})
-
+    def get_property_settings(self, pso_hash):
+        pso_doc = self.property_settings.find_one({'hash': pso_hash})
         return PropertySettings(
-                method=pso_doc['method'],
-                description=pso_doc['description'],
-                labels=set(pso_doc['labels']),
-                files=[
-                    (d['file_name'], d['file_contents'])
-                    for d in pso_doc['files']
-                ]
-            )
+            method=pso_doc['method'],
+            description=pso_doc['description'],
+            labels=set(pso_doc['labels']),
+            files=[
+                (d['file_name'], d['file_contents'])
+                for d in pso_doc['files']
+            ]
+        )
 
+    def query_in_batches(self,
+                         collection_name,
+                         query_key,
+                         query_list,
+                         other_query=None,
+                         return_key=None,
+                         batch_size=100000,
+                         **kwargs):
+
+        """
+            Queries the database in batches and returns results. This should be used for large queries when building CS
+            and DS. Queries are called using '$in' functionality
+
+            Args:
+
+                collection_name (str):
+                    The name of a collection in the database.
+
+                query_key (str):
+                    Key to use in an '$in' query
+
+                query_list (list):
+                    List of values to search over using '$in'
+
+                other_query (dict, default=None):
+                    Any other query that should also be performed along with '$in' query
+
+                return_key (str, default=None):
+                    If not None, values corresponding to return_key are yielded, otherwise everything is yielded.
+
+                batch_size (int, default=100000):
+                    Number of values that the query searches over using $in functionality
+
+               Other arguments in a typical PyMongo 'find'
+
+            Returns:
+
+                data (dict):
+                    key = k for k in keys. val = in-memory data
+            """
+
+        nbatches = ceil(len(query_list)/batch_size)
+        collection = self[self.database_name][collection_name]
+        for i in range(nbatches):
+            if i+1 < nbatches:
+                if other_query is not None:
+                    cursor = collection.find(
+                        {query_key: {'$in': query_list[i*batch_size:(i+1)*batch_size]}}.update(other_query), **kwargs)
+                else:
+                    cursor = collection.find(
+                        {query_key: {'$in': query_list[i * batch_size:(i + 1) * batch_size]}}, **kwargs)
+            else:
+                if other_query is not None:
+                    cursor = collection.find(
+                        {query_key: {'$in': query_list[i * batch_size:]}}.update(other_query), **kwargs)
+                else:
+                    cursor = collection.find(
+                        {query_key: {'$in': query_list[i * batch_size:]}}, **kwargs)
+            for j in cursor:
+                if return_key is not None:
+                    yield j[return_key]
+                else:
+                    yield j
 
     # @staticmethod
     def get_data(
-        self, collection_name,
-        fields,
-        query=None,
-        ids=None,
-        keep_ids=False,
-        concatenate=False,
-        vstack=False,
-        ravel=False,
-        unpack_properties=True,
-        verbose=False,
-        ):
+            self, collection_name,
+            fields,
+            query=None,
+            hashes=None,
+            keep_hashes=False,
+            concatenate=False,
+            vstack=False,
+            ravel=False,
+            unpack_properties=True,
+            verbose=False,
+    ):
         """
         Queries the database and returns the fields specified by `keys` as a
         list or an array of values. Returns the results in memory.
@@ -1270,7 +1088,7 @@ class MongoDatabase(MongoClient):
 
             data = database.get_data(
                 collection_name='properties',
-                query={'_id': {'$in': <list_of_property_IDs>}},
+                query={SHORT_ID_STRING_NAME: {'$in': <list_of_property_IDs>}},
                 fields=['property_name_1.energy', 'property_name_1.forces'],
                 cache=True
             )
@@ -1288,13 +1106,13 @@ class MongoDatabase(MongoClient):
                 A Mongo query dictionary. If None, returns the data for all of
                 the documents in the collection.
 
-            ids (list):
-                The list of IDs to return the data for. If None, returns the
+            hashes (list):
+                The list of hashes to return the data for. If None, returns the
                 data for the entire collection. Note that this information can
                 also be provided using the :code:`query` argument.
 
-            keep_ids (bool, default=False):
-                If True, includes the '_id' field as one of the returned values.
+            keep_hashes (bool, default=False):
+                If True, includes the "hash" field as one of the returned values.
 
             concatenate (bool, default=False):
                 If True, concatenates the data before returning.
@@ -1324,21 +1142,21 @@ class MongoDatabase(MongoClient):
         if query is None:
             query = {}
 
-        if ids is not None:
-            if isinstance(ids, str):
-                ids = [ids]
-            elif isinstance(ids, np.ndarray):
-                ids = ids.tolist()
+        if hashes is not None:
+            if isinstance(hashes, str):
+                hashes = [hashes]
+            elif isinstance(hashes, np.ndarray):
+                hashes = hashes.tolist()
 
-            query['_id'] = {'$in': ids}
+            query['hash'] = {'$in': hashes}
 
         if isinstance(fields, str):
             fields = [fields]
 
         retfields = {k: 1 for k in fields}
 
-        if keep_ids:
-            retfields['_id'] = 1
+        if keep_hashes:
+            retfields['hash'] = 1
 
         collection = self[self.database_name][collection_name]
 
@@ -1369,9 +1187,9 @@ class MongoDatabase(MongoClient):
 
                     data[k].append(v)
 
-        for k,v in data.items():
+        for k, v in data.items():
             # data[k] = np.array(data[k])
-
+            # TODO: Standardize=> Currently, output is array if numpy operations are used, otherwise it's list
             if concatenate or ravel:
                 try:
                     data[k] = np.concatenate(v)
@@ -1382,7 +1200,7 @@ class MongoDatabase(MongoClient):
                 data[k] = np.vstack(v)
 
         if ravel:
-            for k,v in data.items():
+            for k, v in data.items():
                 data[k] = v.ravel()
 
         if len(retfields) == 1:
@@ -1390,36 +1208,34 @@ class MongoDatabase(MongoClient):
         else:
             return data
 
-
-    def get_configuration(self, i, property_ids=None, attach_properties=False):
+    def get_configuration(self, i, property_hashes=None, attach_properties=False):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
         return self.get_configurations(
-            [i], property_ids=property_ids, attach_properties=attach_properties
+            [i], property_hashes=property_hashes, attach_properties=attach_properties
         )[0]
 
-
     def get_configurations(
-        self, configuration_ids,
-        property_ids=None,
-        attach_properties=False,
-        attach_settings=False,
-        generator=False,
-        verbose=False
-        ):
+            self, configuration_hashes,
+            property_hashes=None,
+            attach_properties=False,
+            attach_settings=False,
+            generator=False,
+            verbose=False
+    ):
         """
         A generator that returns in-memory Configuration objects one at a time
         by loading the atomic numbers, positions, cells, and PBCs.
 
         Args:
 
-            configuration_ids (list or 'all'):
-                A list of string IDs specifying which Configurations to return.
+            configuration_hashes (list or 'all'):
+                A list of string hashes specifying which Configurations to return.
                 If 'all', returns all of the configurations in the database.
 
-            property_ids (list, default=None):
-                A list of Property IDs. Used for limiting searches when
+            property_hashes (list, default=None):
+                A list of Property hashes. Used for limiting searches when
                 :code:`attach_properties==True`.  If None,
                 :code:`attach_properties` will attach all linked Properties.
                 Note that this only attaches one property per Configuration, so
@@ -1428,7 +1244,7 @@ class MongoDatabase(MongoClient):
 
             attach_properties (bool, default=False):
                 If True, attaches all the data of any linked properties from
-                :code:`property_ids`. The property data will either be added to
+                :code:`property_hashes`. The property data will either be added to
                 the :code:`arrays` dictionary on a Configuration (if it can be
                 converted to a matrix where the first dimension is the same
                 as the number of atoms in the Configuration) or the :code:`info`
@@ -1462,13 +1278,13 @@ class MongoDatabase(MongoClient):
         if attach_settings:
             raise NotImplementedError
 
-        if configuration_ids == 'all':
-            query = {}
+        if configuration_hashes == 'all':
+            query = {'hash': {'$exists': True}}
         else:
-            if isinstance(configuration_ids, str):
-                configuration_ids = [configuration_ids]
+            if isinstance(configuration_hashes, str):
+                configuration_hashes = [configuration_hashes]
 
-            query = {'_id': {'$in': configuration_ids}}
+            query = {'hash': {'$in': configuration_hashes}}
 
         if generator:
             raise NotImplementedError
@@ -1481,81 +1297,71 @@ class MongoDatabase(MongoClient):
         else:
             return list(self._get_configurations(
                 query=query,
-                property_ids=property_ids,
+                property_hashes=property_hashes,
                 attach_properties=attach_properties,
                 attach_settings=attach_settings,
                 verbose=verbose
             ))
 
-
     def _get_configurations(
-        self,
-        query,
-        property_ids,
-        attach_properties,
-        attach_settings,
-        verbose=False
-        ):
+            self,
+            query,
+            property_hashes,
+            attach_properties,
+            attach_settings,
+            verbose=False
+    ):
+
         if not attach_properties:
             for co_doc in tqdm(
-                self.configurations.find(
-                    query,
-                    {
-                        'atomic_numbers', 'positions', 'cell', 'pbc', 'names',
-                        'labels'
-                    }
-                ),
-                desc='Getting configurations',
-                disable=not verbose
-                ):
-                c = Configuration(
-                    symbols=co_doc['atomic_numbers'],
-                    positions=co_doc['positions'],
-                    cell=co_doc['cell'],
-                    pbc=co_doc['pbc'],
-                )
+                    self.configurations.find(
+                        query,
+                        {
+                            *self.configuration_type.unique_identifier_kw,
+                            'names',
+                            'hash',
+                        }
+                    ),
+                    desc='Getting configurations',
+                    disable=not verbose
+            ):
+                c = self.configuration_type(**{k: v for k, v in co_doc.items()
+                                               if k in self.configuration_type.unique_identifier_kw})
 
-                c.info['_id'] = co_doc['_id']
+                c.info['hash'] = co_doc['hash']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
-                c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
 
                 yield c
         else:
             config_dict = {}
             for co_doc in tqdm(
-                self.configurations.find(query),
-                desc='Getting configurations',
-                disable=not verbose
-                ):
+                    self.configurations.find(query),
+                    desc='Getting configurations',
+                    disable=not verbose
+            ):
+                c = self.configuration_type(**{k: v for k, v in co_doc.items()
+                                               if k in self.configuration_type.unique_identifier_kw})
 
-                c = Configuration(
-                    symbols=co_doc['atomic_numbers'],
-                    positions=co_doc['positions'],
-                    cell=co_doc['cell'],
-                    pbc=co_doc['pbc'],
-                )
-
-                c.info['_id'] = co_doc['_id']
+                c.info['hash'] = co_doc['hash']
                 c.info[ATOMS_NAME_FIELD] = co_doc['names']
-                c.info[ATOMS_LABELS_FIELD] = co_doc['labels']
 
-                config_dict[co_doc['_id']] = c
+                config_dict[co_doc['hash']] = c
 
-            all_attached_prs = set([_['_id'] for _ in self.properties.find(
-                {'relationships.configurations': query['_id']},
-                {'_id'}
+            all_attached_prs = set([_['hash'] for _ in self.property_instances.find(
+                {'relationships.configurations': query['hash']},
+                {'hash'}
             )])
 
-            if property_ids is not None:
-                property_ids = list(all_attached_prs.union(set(property_ids)))
+            if property_hashes is not None:
+                property_hashes = list(all_attached_prs.union(set(property_hashes)))
             else:
-                property_ids = all_attached_prs
+                property_hashes = list(all_attached_prs)
 
             for pr_doc in tqdm(
-                    self.properties.find( {'_id': {'$in': property_ids}}),
+                    self.property_instances.find({'hash': {'$in': property_hashes}}),
                     desc='Attaching properties',
                     disable=not verbose
-                ):
+            ):
 
                 for co_id in pr_doc['relationships']['configurations']:
                     if co_id not in config_dict: continue
@@ -1669,7 +1475,6 @@ class MongoDatabase(MongoClient):
 
             #     yield c
 
-
     def concatenate_configurations(self):
         """
         Concatenates the atomic_numbers, positions, cells, and pbcs groups in
@@ -1677,84 +1482,135 @@ class MongoDatabase(MongoClient):
         """
         self.database.concatenate_configurations()
 
-
-    def insert_configuration_set(self, ids, description='', verbose=False):
+    def insert_configuration_set(self, hashes, name, description='', ordered=False, overloaded_cs_id=None,
+                                 verbose=False):
         """
         Inserts the configuration set of IDs to the database.
 
         Args:
 
-            ids (list or str):
-                The IDs of the configurations to include in the configuartion
+            hashes (list or str):
+                The hashes of the configurations to include in the configuration
                 set.
-
+            name (str):
+                Name of CS---used in forming extended-id
+            ordered (bool):
+                Flag specifying if COs in CS should be considered ordered.
+            overloaded_cs_id (str):
+                Used to overload naming convention when updating versions
             description (str, optional):
                 A human-readable description of the configuration set.
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
         """
 
-        if isinstance(ids, str):
-            ids = [ids]
+        if isinstance(hashes, str):
+            hashes = [hashes]
 
-        ids = list(set(ids))
+        hashes = list(set(hashes))
 
+        # TODO: Look at below
         cs_hash = sha512()
         cs_hash.update(description.encode('utf-8'))
-        for i in sorted(ids):
+        for i in sorted(hashes):
             cs_hash.update(str(i).encode('utf-8'))
 
-        cs_hash = int(str(int(cs_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
-        cs_id = ID_FORMAT_STRING.format('CS', cs_hash, 0)
+        cs_hash = int(cs_hash.hexdigest(), 16)
 
         # Check for duplicates
-        if self.configuration_sets.count_documents({'_id': cs_id}):
-            return cs_id
+        try:
+            return self.configuration_sets.find_one({'hash': str(cs_hash)})[SHORT_ID_STRING_NAME]
+        except:
+            pass
 
+        if overloaded_cs_id is None:
+            cs_id = ID_FORMAT_STRING.format('CS', generate_string(), 0)
+        else:
+            cs_id = overloaded_cs_id
         # Make sure all of the configurations exist
-        if self.configurations.count_documents({'_id': {'$in': ids}}) != len(ids):
-            raise MissingEntryError(
-                "Not all of the IDs provided to insert_configuration_set exist"\
-                " in the database."
-            )
+        #if self.configurations.count_documents({'hash': {'$in': hashes}}) != len(hashes):
+        #    raise MissingEntryError(
+        #        "Not all of the COs provided to insert_configuration_set exist" \
+        #        " in the database."
+        #    )
 
-        aggregated_info = self.aggregate_configuration_info(ids, verbose=verbose)
+        aggregated_info = self.configuration_type.aggregate_configuration_summaries(
+            self,
+            hashes,
+            verbose=True
+        )
 
         self.configuration_sets.update_one(
-            {'_id': cs_id},
+            {'hash': str(cs_hash)},
             {
-                '$addToSet': {
-                    'relationships.configurations': {'$each': ids}
-                },
                 '$setOnInsert': {
-                    '_id': cs_id,
+                    SHORT_ID_STRING_NAME: cs_id,
+                    'name': name,
+                    EXTENDED_ID_STRING_NAME: f'{name}__{cs_id}',
                     'description': description,
+                    'hash': str(cs_hash),
+                    'ordered': ordered
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
                     'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                 },
             },
-            upsert=True
+            upsert=True,
+            hint='hash',
         )
 
         # Add the backwards relationships CO->CS
         config_docs = []
-        for cid in ids:
+        for c_hash in hashes:
             config_docs.append(UpdateOne(
-                {'_id': cid},
+                {'hash': c_hash},
                 {
                     '$addToSet': {
                         'relationships.configuration_sets': cs_id
                     }
-                }
+                },
+                hint='hash',
             ))
 
         self.configurations.bulk_write(config_docs)
 
         return cs_id
 
+    def query_and_insert_configuration_set(self, co_hashes, query, name, description='', ordered=False, overloaded_cs_id=None):
+        """
+        Finds COs and inserts their grouping as a configuration into the database.
+
+        Args:
+
+            co_hashes (list or str):
+                The hashes of the configurations over which to query
+            query (dict):
+                PyMongo query to filter COs---Will usually be over name field
+            name (str):
+                Name of CS---used in forming extended-id
+            ordered (bool):
+                Flag specifying if COs in CS should be considered ordered.
+            overloaded_cs_id (str):
+                Used to overload naming convention when updating versions
+            description (str, optional):
+                A human-readable description of the configuration set.
+        """
+
+        filtered_cos = list(self.query_in_batches(
+                                            'configurations',
+                                            'hash',
+                                            co_hashes,
+                                            query,
+                                            return_key='hash',
+                                            projection={"hash": 1, "_id": 0}
+                                            ))
+        print(f'Inserting configuration set', f'({name}):'.rjust(22), f'{len(filtered_cos)}'.rjust(7))
+        return self.insert_configuration_set(
+            filtered_cos,
+            description=description,
+            name=name,
+            ordered=ordered,
+            overloaded_cs_id=overloaded_cs_id
+        )
 
     def get_configuration_set(self, cs_id, resync=False):
         """
@@ -1776,22 +1632,22 @@ class MongoDatabase(MongoClient):
                 'configuration_set': the configuration set object
         """
 
-
         if resync:
             self.resync_configuration_set(cs_id)
 
-        cs_doc = self.configuration_sets.find_one({'_id': cs_id})
+        cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: cs_id})
 
         return {
             'last_modified': cs_doc['last_modified'],
             'configuration_set': ConfigurationSet(
                 configuration_ids=cs_doc['relationships']['configurations'],
+                name=cs_doc['name'],
                 description=cs_doc['description'],
                 aggregated_info=cs_doc['aggregated_info']
             )
         }
 
-
+    # TODO look at this function to change updating to involve hash
     def resync_configuration_set(self, cs_id, verbose=False):
         """
         Re-synchronizes the configuration set by re-aggregating the information
@@ -1811,19 +1667,70 @@ class MongoDatabase(MongoClient):
 
         """
 
-        cs_doc = self.configuration_sets.find_one({'_id': cs_id})
+        cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: cs_id})
 
-        aggregated_info = self.aggregate_configuration_info(
-            cs_doc['relationships']['configurations'], verbose=verbose
+        aggregated_info = self.configuration_type.aggregate_configuration_summaries(
+            self,
+            cs_doc['relationships']['configurations'],
+            verbose=verbose,
         )
 
         self.configuration_sets.update_one(
-            {'_id': cs_id},
+            {SHORT_ID_STRING_NAME: cs_id},
             {'$set': {'aggregated_info': aggregated_info}},
             upsert=True,
+            hint=SHORT_ID_STRING_NAME,
         )
 
+    # TODO: need to make sure can't make duplicate CS just with different versions
+    # TODO: Could do this by creating ConfigurationSets for all versioned CS and use a defined equality with hashing
+    def update_configuration_set(self, cs_id, add_ids=None, remove_ids=None):
 
+        if add_ids is None and remove_ids is None:
+            raise RuntimeError('Please input configuration IDs to add or remove from the configuration set.')
+
+        # increment version number
+        current_hash, current_version = cs_id.split('_')[1:]
+        cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: {'$eq': cs_id}})
+        family_ids = cs_doc[SHORT_ID_STRING_NAME]
+        # Remove first -1
+        version = int(family_ids.split('_')[-1]) + 1
+        new_cs_id = 'CS_' + current_hash + '_' + str(version)
+        # Get configuration ids from current version and append and/or remove
+        #ids = cs_doc['relationships']['configurations']
+        #ids = [i.split('_')[-1] for i in ids]
+        co_docs = list(self.configurations.find({'relationships.configuration_sets':cs_id},{'hash': 1, '_id': 0}))
+        ids = [i["hash"] for i in co_docs]
+        init_len = len(ids)
+
+        if add_ids is not None:
+            if isinstance(add_ids, str):
+                add_ids = [add_ids]
+            ids.extend(add_ids)
+            ids = list(set(ids))
+            if len(ids) == init_len:
+                raise RuntimeError('All configurations to be added are already present in CS.')
+            init_len = len(ids)
+
+        if remove_ids is not None:
+            if isinstance(remove_ids, str):
+                remove_ids = [remove_ids]
+            remove_ids = list(set(remove_ids))
+            for r in remove_ids:
+                try:
+                    ids.remove(r)
+                except:
+                    raise UserWarning(f'A configuration with the ID {r} was not'
+                                      f'in the original CS, so it could not be removed.')
+            if len(ids) == init_len:
+                raise RuntimeError('All configurations to be removed are not present in CS.')
+
+        # insert new version of CS
+        self.insert_configuration_set(ids, name=cs_doc['name'], description=cs_doc['description'],
+                                      overloaded_cs_id=new_cs_id)
+        return new_cs_id
+
+    # TODO: May need to recompute hash-But when is resyncing necessary?
     def resync_dataset(self, ds_id, verbose=False):
         """
         Re-synchronizes the dataset by aggregating all necessary data from
@@ -1843,145 +1750,37 @@ class MongoDatabase(MongoClient):
             None; updates the dataset document in-place
         """
 
-        ds_doc = self.datasets.find_one({'_id': ds_id})
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         cs_ids = ds_doc['relationships']['configuration_sets']
-        pr_ids = ds_doc['relationships']['properties']
+        pr_ids = ds_doc['relationships']['property_instances']
 
         for csid in cs_ids:
             self.resync_configuration_set(csid, verbose=verbose)
 
         aggregated_info = {}
-        for k,v in self.aggregate_configuration_set_info(cs_ids).items():
-            if k == 'labels':
-                k = 'configuration_labels'
-            elif k == 'labels_counts':
-                k = 'configuration_labels_counts'
 
-            aggregated_info[k] = v
+        # Aggregate over DOs
+        #for k, v in self.aggregate_configuration_set_info(cs_ids).items():
+        #    aggregated_info[k] = v
 
-        for k,v in self.aggregate_property_info(pr_ids, verbose=verbose).items():
+        for k, v in self.aggregate_data_object_info(pr_ids, verbose=verbose).items():
             if k in {
-                'labels', 'labels_counts',
-                'types',  'types_counts',
+                'types', 'types_counts',
                 'fields', 'fields_counts'
-                }:
+            }:
                 k = 'property_' + k
 
             aggregated_info[k] = v
 
         self.datasets.update_one(
-            {'_id': ds_id},
+            {SHORT_ID_STRING_NAME: ds_id},
             {'$set': {'aggregated_info': aggregated_info}},
-            upsert=True
+            upsert=True,
+            hint=SHORT_ID_STRING_NAME,
         )
 
-
-    def aggregate_configuration_info(self, ids, verbose=False):
-        """
-        Gathers the following information from a collection of configurations:
-
-        * :code:`nconfigurations`: the total number of configurations
-        * :code:`nsites`: the total number of sites
-        * :code:`nelements`: the total number of unique element types
-        * :code:`elements`: the element types
-        * :code:`individual_elements_ratios`: a set of elements ratios generated
-          by looping over each configuration, extracting its concentration of
-          each element, and adding the tuple of concentrations to the set
-        * :code:`total_elements_ratios`: the ratio of the total count of atoms
-            of each element type over :code:`nsites`
-        * :code:`labels`: the union of all configuration labels
-        * :code:`labels_counts`: the total count of each label
-        * :code:`chemical_formula_reduced`: the set of all reduced chemical
-            formulae
-        * :code:`chemical_formula_anonymous`: the set of all anonymous chemical
-            formulae
-        * :code:`chemical_formula_hill`: the set of all hill chemical formulae
-        * :code:`nperiodic_dimensions`: the set of all numbers of periodic
-            dimensions
-        * :code:`dimension_types`: the set of all periodic boundary choices
-
-        Returns:
-
-            aggregated_info (dict):
-                All of the aggregated info
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
-        """
-
-        aggregated_info = {
-            'nconfigurations': len(ids),
-            'nsites': 0,
-            'nelements': 0,
-            'chemical_systems': set(),
-            'elements': [],
-            'individual_elements_ratios': {},
-            'total_elements_ratios': {},
-            'labels': [],
-            'labels_counts': [],
-            'chemical_formula_reduced': set(),
-            'chemical_formula_anonymous': set(),
-            'chemical_formula_hill': set(),
-            'nperiodic_dimensions': set(),
-            'dimension_types': set(),
-        }
-
-        for doc in tqdm(
-            self.configurations.find({'_id': {'$in': ids}}),
-            desc='Aggregating configuration info',
-            disable=not verbose,
-            total=len(ids),
-            ):
-            aggregated_info['nsites'] += doc['nsites']
-
-            aggregated_info['chemical_systems'].add(''.join(doc['elements']))
-
-            for e, er in zip(doc['elements'], doc['elements_ratios']):
-                if e not in aggregated_info['elements']:
-                    aggregated_info['nelements'] += 1
-                    aggregated_info['elements'].append(e)
-                    aggregated_info['total_elements_ratios'][e] = er*doc['nsites']
-                    aggregated_info['individual_elements_ratios'][e] = set(
-                        [np.round_(er, decimals=2)]
-                    )
-                else:
-                    aggregated_info['total_elements_ratios'][e] += er*doc['nsites']
-                    aggregated_info['individual_elements_ratios'][e].add(
-                        np.round_(er, decimals=2)
-                    )
-
-            for l in doc['labels']:
-                if l not in aggregated_info['labels']:
-                    aggregated_info['labels'].append(l)
-                    aggregated_info['labels_counts'].append(1)
-                else:
-                    idx = aggregated_info['labels'].index(l)
-                    aggregated_info['labels_counts'][idx] += 1
-
-            aggregated_info['chemical_formula_reduced'].add(doc['chemical_formula_reduced'])
-            aggregated_info['chemical_formula_anonymous'].add(doc['chemical_formula_anonymous'])
-            aggregated_info['chemical_formula_hill'].add(doc['chemical_formula_hill'])
-
-            aggregated_info['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
-            aggregated_info['dimension_types'].add(tuple(doc['dimension_types']))
-
-        for e in aggregated_info['elements']:
-            aggregated_info['total_elements_ratios'][e] /= aggregated_info['nsites']
-            aggregated_info['individual_elements_ratios'][e] = list(aggregated_info['individual_elements_ratios'][e])
-
-        aggregated_info['chemical_systems'] = list(aggregated_info['chemical_systems'])
-
-        aggregated_info['chemical_formula_reduced'] = list(aggregated_info['chemical_formula_reduced'])
-        aggregated_info['chemical_formula_anonymous'] = list(aggregated_info['chemical_formula_anonymous'])
-        aggregated_info['chemical_formula_hill'] = list(aggregated_info['chemical_formula_hill'])
-        aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
-        aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
-
-        return aggregated_info
-
-
-    def aggregate_property_info(self, pr_ids, verbose=False):
+    def aggregate_property_info(self, pr_hashes, verbose=False):
         """
         Aggregates the following information from a list of properties:
 
@@ -2003,30 +1802,29 @@ class MongoDatabase(MongoClient):
                 All of the aggregated info
         """
 
-        if isinstance(pr_ids, str):
-            pr_ids = [pr_ids]
+        if isinstance(pr_hashes, str):
+            pr_hashes = [pr_hashes]
 
         aggregated_info = {
             'types': [],
             'types_counts': [],
             'fields': [],
             'fields_counts': [],
-            'methods': [],
-            'methods_counts': [],
-            'labels': [],
-            'labels_counts': []
+            # 'methods': [],
+            # 'methods_counts': [],
         }
 
         ignore_keys = {
             'property-id', 'property-title', 'property-description', '_id',
+            SHORT_ID_STRING_NAME, 'property-name', 'hash'
         }
 
         for doc in tqdm(
-            self.properties.find({'_id': {'$in': pr_ids}}),
-            desc='Aggregating property info',
-            disable=not verbose,
-            total=len(pr_ids)
-            ):
+                self.property_instances.find({'hash': {'$in': pr_hashes}}),
+                desc='Aggregating property info',
+                disable=not verbose,
+                total=len(pr_hashes)
+        ):
             if doc['type'] not in aggregated_info['types']:
                 aggregated_info['types'].append(doc['type'])
                 aggregated_info['types_counts'].append(1)
@@ -2046,26 +1844,100 @@ class MongoDatabase(MongoClient):
                     idx = aggregated_info['fields'].index(l)
                     aggregated_info['fields_counts'][idx] += 1
 
-            for l in doc['labels']:
-                if l not in aggregated_info['labels']:
-                    aggregated_info['labels'].append(l)
-                    aggregated_info['labels_counts'].append(1)
-                else:
-                    idx = aggregated_info['labels'].index(l)
-                    aggregated_info['labels_counts'][idx] += 1
-
-
-            for l in doc['methods']:
-                if l not in aggregated_info['methods']:
-                    aggregated_info['methods'].append(l)
-                    aggregated_info['methods_counts'].append(1)
-                else:
-                    idx = aggregated_info['methods'].index(l)
-                    aggregated_info['methods_counts'][idx] += 1
+            # for l in doc['methods']:
+            #    if l not in aggregated_info['methods']:
+            #        aggregated_info['methods'].append(l)
+            #        aggregated_info['methods_counts'].append(1)
+            #    else:
+            #        idx = aggregated_info['methods'].index(l)
+            #        aggregated_info['methods_counts'][idx] += 1
 
         return aggregated_info
 
+    def aggregate_data_object_info(self, pr_hashes, verbose=False):
+        """
+        Aggregates the following information from a list of data_objects:
 
+            * types
+            * types_counts
+
+        Args:
+
+            pr_ids (list or str):
+                The IDs of the configurations to aggregate information from
+
+            verbose (bool, default=False):
+                If True, prints a progress bar
+
+        Returns:
+
+            aggregated_info (dict):
+                All of the aggregated info
+        """
+
+        if isinstance(pr_hashes, str):
+            pr_hashes = [pr_hashes]
+
+        aggregated_info = {
+            'property_types': [],
+            'property_types_counts': [],
+            # 'fields': [],
+            # 'fields_counts': [],
+            # 'methods': [],
+            # 'methods_counts': [],
+        }
+
+        ignore_keys = {
+            'property-id', 'property-title', 'property-description', '_id',
+            SHORT_ID_STRING_NAME, 'property-name', 'hash'
+        }
+
+        for doc in tqdm(
+                #self.data_objects.find({'hash': {'$in': pr_hashes}}),
+                self.query_in_batches(query_key='hash',query_list=pr_hashes,collection_name='data_objects'),
+                desc='Aggregating data_object info',
+                disable=not verbose,
+                total=len(pr_hashes)
+        ):
+            for i in range(len(doc['property_types'])):
+                if doc['property_types'][i] not in aggregated_info['property_types']:
+                    aggregated_info['property_types'].append(doc['property_types'][i])
+                    aggregated_info['property_types_counts'].append(1)
+                else:
+                    idx = aggregated_info['property_types'].index(doc['property_types'][i])
+                    aggregated_info['property_types_counts'][idx] += 1
+        do_ids = ['DO_%s' %i for i in pr_hashes]
+        co_ids = list(self.query_in_batches(collection_name='configurations', query_key='relationships.data_objects',
+                                       query_list=do_ids, return_key='hash', projection= {'hash':1}))
+        ag_2 = self.configuration_type.aggregate_configuration_summaries(self, co_ids,
+                                                                         verbose=verbose)
+        aggregated_info.update(ag_2)
+
+        return aggregated_info
+
+    '''
+            for l in doc[doc['property_types']]:
+                if l in ignore_keys: continue
+
+                l = '.'.join([doc['property_types'], l])
+
+                if l not in aggregated_info['fields']:
+                    aggregated_info['fields'].append(l)
+                    aggregated_info['fields_counts'].append(1)
+                else:
+                    idx = aggregated_info['fields'].index(l)
+                    aggregated_info['fields_counts'][idx] += 1
+    '''
+
+    # for l in doc['methods']:
+    #    if l not in aggregated_info['methods']:
+    #        aggregated_info['methods'].append(l)
+    #        aggregated_info['methods_counts'].append(1)
+    #    else:
+    #        idx = aggregated_info['methods'].index(l)
+    #        aggregated_info['methods_counts'][idx] += 1
+
+    # TODO: Make Configuration "type" agnostic (only need to change docstring)
     def aggregate_configuration_set_info(self, cs_ids, resync=False, verbose=False):
         """
         Aggregates the following information from a list of configuration sets:
@@ -2077,8 +1949,6 @@ class MongoDatabase(MongoClient):
             * elements
             * individual_elements_ratios
             * total_elements_ratios
-            * labels
-            * labels_counts
             * chemical_formula_reduced
             * chemical_formula_anonymous
             * chemical_formula_hill
@@ -2112,30 +1982,30 @@ class MongoDatabase(MongoClient):
 
         co_ids = list(set(itertools.chain.from_iterable(
             cs_doc['relationships']['configurations'] for cs_doc in
-            self.configuration_sets.find({'_id': {'$in': cs_ids}})
+            self.configuration_sets.find({SHORT_ID_STRING_NAME: {'$in': cs_ids}})
         )))
 
-        return self.aggregate_configuration_info(co_ids, verbose=verbose)
-
+        return self.configuration_type.aggregate_configuration_summaries(self, [i.replace('CO_', '') for i in co_ids],
+                                                                         verbose=verbose)
 
     def insert_dataset(
-        self, cs_ids, pr_ids, name,
-        authors=None,
-        links=None,
-        description='',
-        resync=False,
-        verbose=False,
-        ):
+            self, do_hashes, name,
+            authors=None,
+            cs_ids=None,
+            links=None,
+            description='',
+            data_license='CC0',
+            resync=False,
+            verbose=False,
+            overloaded_ds_id=None,
+    ):
         """
         Inserts a dataset into the database.
 
         Args:
 
-            cs_ids (list or str):
-                The IDs of the configuration sets to link to the dataset.
-
-            pr_ids (list or str):
-                The IDs of the properties to link to the dataset
+            do_hashes (list or str):
+                The hashes of the data objects to link to the dataset
 
             name (str):
                 The name of the dataset
@@ -2143,6 +2013,10 @@ class MongoDatabase(MongoClient):
             authors (list or str or None):
                 The names of the authors of the dataset. If None, then no
                 authors are added.
+
+
+            cs_ids (list or str, default=None):
+                The IDs of the configuration sets to link to the dataset.
 
             links (list or str or None):
                 External links (e.g., journal articles, Git repositories, ...)
@@ -2152,6 +2026,9 @@ class MongoDatabase(MongoClient):
             description (str or None):
                 A human-readable description of the dataset. If None, then not
                 description is added.
+
+            data_license (str):
+                License associated with the Dataset's data
 
             resync (bool):
                 If True, re-synchronizes the configuration sets and properties
@@ -2169,125 +2046,118 @@ class MongoDatabase(MongoClient):
         if isinstance(cs_ids, str):
             cs_ids = [cs_ids]
 
-        if isinstance(pr_ids, str):
-            pr_ids = [pr_ids]
+        if isinstance(do_hashes, str):
+            do_hashes = [do_hashes]
 
         # Remove possible duplicates
-        cs_ids = list(set(cs_ids))
-        pr_ids = list(set(pr_ids))
+        if cs_ids is not None:
+            cs_ids = list(set(cs_ids))
+        do_hashes = list(set(do_hashes))
 
-        # Make sure to only include PRs with COs contained by the given CSs
-        all_co_ids = []
-        for cs_doc in self.configuration_sets.find({'_id': {'$in': cs_ids}}):
-            all_co_ids += cs_doc['relationships']['configurations']
-
-        all_co_ids = list(set(all_co_ids))
-
-        clean_pr_ids = [
-            _['_id'] for _ in self.properties.find(
-                {
-                    '_id': {'$in': pr_ids},
-                    'relationships.configurations': {'$in': all_co_ids},
-                },
-                {'_id'}
-            )
-        ]
-
-        if len(pr_ids) != len(clean_pr_ids):
-            warnings.warn(
-                "{} PR IDs passed to insert_dataset, but only {} point to COs "\
-                "contained by the given CSs".format(
-                    len(pr_ids), len(clean_pr_ids)
-                )
-            )
 
         if isinstance(authors, str):
             authors = [authors]
+
+        for auth in authors:
+            if not ''.join(auth.split(' ')[-1].replace('-', '')).isalpha():
+                raise RuntimeError(
+                    "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(auth)
+                )
 
         if isinstance(links, str):
             links = [links]
 
         ds_hash = sha512()
-        for ci in sorted(cs_ids):
-            ds_hash.update(str(ci).encode('utf-8'))
-        for pi in sorted(clean_pr_ids):
+        if cs_ids is not None:
+            for ci in sorted(cs_ids):
+                ds_hash.update(str(ci).encode('utf-8'))
+        for pi in sorted(do_hashes):
             ds_hash.update(str(pi).encode('utf-8'))
 
-        ds_hash = int(str(int(ds_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
-        ds_id = ID_FORMAT_STRING.format('DS', ds_hash, 0)
-
+        ds_hash = int(ds_hash.hexdigest(), 16)
         # Check for duplicates
-        if self.datasets.count_documents({'_id': ds_id}):
-            if resync:
-                self.resync_dataset(ds_id)
+        try:
+            return self.datasets.find_one({'hash': str(ds_hash)})[SHORT_ID_STRING_NAME]
+        except:
+            pass
 
-            return ds_id
+        if overloaded_ds_id is None:
+            ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
+        else:
+            ds_id = overloaded_ds_id
 
         aggregated_info = {}
-        for k,v in self.aggregate_configuration_set_info(
-            cs_ids, verbose=verbose).items():
-            if k == 'labels':
-                k = 'configuration_labels'
-            elif k == 'labels_counts':
-                k = 'configuration_labels_counts'
 
+        # Aggregate over DOs instead
+        #for k, v in self.aggregate_configuration_set_info(
+        #        cs_ids, verbose=verbose).items():
+        #    aggregated_info[k] = v
+
+        for k, v in self.aggregate_data_object_info(
+                do_hashes, verbose=verbose).items():
             aggregated_info[k] = v
 
-        for k,v in self.aggregate_property_info(
-            clean_pr_ids, verbose=verbose).items():
-            if k in {
-                'labels', 'labels_counts',
-                'types',  'types_counts',
-                'fields', 'fields_counts'
-                }:
-                k = 'property_' + k
+        id_prefix = '_'.join([
+            name,
+            ''.join([
+                unidecode(auth.split()[-1]) for auth in authors
+            ]),
+        ])
 
-            aggregated_info[k] = v
+        if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
+            id_prefix = id_prefix[:MAX_STRING_LENGTH - len(ds_id) - 2]
+            warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
+        extended_id = f'{id_prefix}__{ds_id}'
+
+        # TODO: get_dataset should be able to use extended-id; authors can't symbols
 
         self.datasets.update_one(
-            {'_id': ds_id},
+            {'hash': str(ds_hash)},
             {
-                '$addToSet': {
-                    'relationships.configuration_sets': {'$each': cs_ids},
-                    'relationships.properties': {'$each': clean_pr_ids},
-                },
                 '$setOnInsert': {
-                    '_id': ds_id,
+                    SHORT_ID_STRING_NAME: ds_id,
+                    EXTENDED_ID_STRING_NAME: extended_id,
                     'name': name,
                     'authors': authors,
                     'links': links,
                     'description': description,
+                    'hash': str(ds_hash),
+                    'license': data_license,
                 },
                 '$set': {
                     'aggregated_info': aggregated_info,
                     'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                 },
             },
-            upsert=True
+            upsert=True,
+            hint='hash',
         )
 
         # Add the backwards relationships CS->DS
-        config_set_docs = []
-        for csid in cs_ids:
-            config_set_docs.append(UpdateOne(
-                {'_id': csid},
-                {'$addToSet': {'relationships.datasets': ds_id}}
-            ))
+        if cs_ids is not None:
+            config_set_docs = []
+            for csid in cs_ids:
+                config_set_docs.append(UpdateOne(
+                    {SHORT_ID_STRING_NAME: csid},
+                    {'$addToSet': {'relationships.datasets': ds_id}},
+                    hint=SHORT_ID_STRING_NAME,
+                ))
 
-        self.configuration_sets.bulk_write(config_set_docs)
+            self.configuration_sets.bulk_write(config_set_docs)
 
-        # Add the backwards relationships PR->DS
+        # Add the backwards relationships PR->DS and origin using aggregation pipeline for logic
         property_docs = []
-        for pid in tqdm(clean_pr_ids, desc='Updating PR->DS relationships'):
+        for pid in tqdm(do_hashes, desc='Updating DO->DS relationships'):
             property_docs.append(UpdateOne(
-                {'_id': pid},
-                {'$addToSet': {'relationships.datasets': ds_id}}
+                {'hash': pid},
+                [{'$set': {'relationships.origin': {'$ifNull': ['$relationships.origin', ds_id]}
+                    , 'relationships.datasets': {
+                        '$setUnion': [{'$ifNull': ['$relationships.datasets', []]}, [ds_id]]}}}],
+                hint='hash',
             ))
-
-        self.properties.bulk_write(property_docs)
+        self.data_objects.bulk_write(property_docs)
 
         return ds_id
-
 
     def get_dataset(self, ds_id, resync=False, verbose=False):
         """
@@ -2296,7 +2166,7 @@ class MongoDatabase(MongoClient):
         Args:
 
             ds_ids (str):
-                The ID of the dataset to return
+                Either the 'short-id' or 'extended-id' of a dataset
 
             resync (bool):
                 If True, re-aggregates the configuration set and property
@@ -2313,27 +2183,113 @@ class MongoDatabase(MongoClient):
                 'dataset': the dataset object
         """
 
+        if len(ds_id) > 19:
+            # Then this must be an extended ID
+            ds_id = ds_id.split('__')[-1]
 
         if resync:
             self.resync_dataset(ds_id, verbose=verbose)
 
-        ds_doc = self.datasets.find_one({'_id': ds_id})
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         return {
-            '_id': ds_id,
+            SHORT_ID_STRING_NAME: ds_id,
             'last_modified': ds_doc['last_modified'],
             'dataset': Dataset(
                 configuration_set_ids=ds_doc['relationships']['configuration_sets'],
-                property_ids=ds_doc['relationships']['properties'],
+                property_ids=ds_doc['relationships']['data_objects'],
                 name=ds_doc['name'],
                 authors=ds_doc['authors'],
                 links=ds_doc['links'],
                 description=ds_doc['description'],
+                data_license=ds_doc['license'],
                 aggregated_info=ds_doc['aggregated_info']
             )
         }
 
+    # TODO: Handle properties somewhere->should we allow for only properties to be update?
+    # TODO: Allow for metadata updating
+    def update_dataset(self, ds_id, add_cs_ids=None, remove_cs_ids=None, add_do_ids=None, remove_do_ids=None):
 
+        if add_cs_ids is None and remove_cs_ids is None:
+            raise RuntimeError('Please input configuration set IDs/properties to add or remove from the dataset.')
+
+        # increment version number
+        current_hash, current_version = ds_id.split('_')[1:]
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: {'$eq': ds_id}})
+        family_ids = ds_doc[SHORT_ID_STRING_NAME]
+        version = int(family_ids.split('_')[-1]) + 1
+        new_ds_id = 'DS_' + current_hash + '_' + str(version)
+
+        # Get configuration set ids from current version and append and/or remove
+        cs_docs = list(self.configuration_sets.find({'relationships.datasets':ds_id}, {'colabfit-id': 1}))
+        do_docs = list(self.data_objects.find({'relationships.datasets': ds_id}, {'hash': 1}))
+        cs_ids = [i['colabfit-id'] for i in cs_docs]
+        do_ids = [i['hash'] for i in do_docs]
+        init_len = len(cs_ids)
+
+        if add_cs_ids is not None:
+            if isinstance(add_cs_ids, str):
+                add_cs_ids = [add_cs_ids]
+            cs_ids.extend(add_cs_ids)
+            cs_ids = list(set(cs_ids))
+            if len(cs_ids) == init_len:
+                raise RuntimeError('All configuration sets to be added are already present in DS.')
+            init_len = len(cs_ids)
+
+            # Remove old version of CS if new version is in added
+            for id in add_cs_ids:
+                current_hash, version = id.split('_')[1:]
+                if int(version) > 0:
+                    try:
+                        old_version = self.configuration_sets.find_one(
+                            {SHORT_ID_STRING_NAME: {'$regex': f'CS_{current_hash}_.*'}}
+                        )
+                        cs_ids.remove(old_version)
+                    except:
+                        pass
+
+        if remove_cs_ids is not None:
+            if isinstance(remove_cs_ids, str):
+                remove_cs_ids = [remove_cs_ids]
+            remove_cs_ids = list(set(remove_cs_ids))
+            for r in remove_cs_ids:
+                try:
+                    cs_ids.remove(r)
+                except:
+                    raise UserWarning(f'A configuration set with the ID {r} was not'
+                                      f'in the original DS, so it could not be removed.')
+            if len(cs_ids) == init_len:
+                raise RuntimeError('All configuration sets to be removed are not present in DS.')
+
+        init_len_do = len(do_ids)
+
+        if add_do_ids is not None:
+            if isinstance(do_ids, str):
+                add_do_ids = [add_do_ids]
+            do_ids.extend(add_do_ids)
+            do_ids = list(set(do_ids))
+            if len(do_ids) == init_len_do:
+                raise RuntimeError('All data objects to be added are already present in DS.')
+        init_len_do = len(do_ids)
+
+        if remove_do_ids is not None:
+            if isinstance(remove_do_ids, str):
+                remove_do_ids = [remove_do_ids]
+            remove_do_ids = list(set(remove_do_ids))
+            for r in remove_do_ids:
+                try:
+                    do_ids.remove(r)
+                except:
+                    raise UserWarning(f'A data object with the ID {r} was not'
+                                      f'in the original DS, so it could not be removed.')
+            if len(do_ids) == init_len_do:
+                raise RuntimeError('All data objects to be removed are not present in DS.')
+        # insert new version of DS
+
+        self.insert_dataset(do_ids, name=ds_doc['name'], cs_ids=cs_ids, authors=ds_doc['authors'],
+                            links=ds_doc['links'], description=ds_doc['description'], overloaded_ds_id=new_ds_id)
+        return (new_ds_id)
 
     def aggregate_dataset_info(self, ds_ids):
         """
@@ -2346,88 +2302,17 @@ class MongoDatabase(MongoClient):
         """
         pass
 
-
-    def apply_labels(
-        self, dataset_id, collection_name, query, labels, verbose=False
-        ):
-        """
-        Applies the given labels to all objects in the specified collection that
-        match the query and are linked to the given dataset.
-
-        Args:
-
-            dataset_id (str):
-                The ID of the dataset. Used as a safety measure to only update
-                entries for the given dataset.
-
-            collection_name (str):
-                One of 'configurations' or 'properties'.
-
-            query (dict):
-                A Mongo-style query for filtering the collection. For
-                example: :code:`query = {'nsites': {'$lt': 100}}`.
-
-            labels (set or str):
-                A set of labels to apply to the matching entries.
-
-            verbose (bool):
-                If True, prints progress bar.
-
-        Pseudocode:
-            * Get the IDs of the configurations that match the query
-            * Use updateMany to update the MongoDB
-            * Iterate over the HDF5 entries.
-        """
-
-        dataset = self.get_dataset(dataset_id)['dataset']
-
-        if collection_name == 'configurations':
-            collection = self.configurations
-
-            cs_ids = dataset.configuration_set_ids
-
-            all_co_ids = list(set(itertools.chain.from_iterable(
-                cs_doc['relationships']['configurations'] for cs_doc in
-                self.configuration_sets.find({'_id': {'$in': cs_ids}})
-            )))
-
-            query['_id'] = {'$in': all_co_ids}
-        elif collection_name == 'properties':
-            collection = self.properties
-
-            query['_id'] = {'$in': dataset.property_ids}
-        else:
-            raise RuntimeError(
-                "collection_name must be 'configurations' or 'properties'"
-            )
-
-        if isinstance(labels, str):
-            labels = {labels}
-
-        for doc in tqdm(
-            collection.find(query, {'_id': 1}),
-            desc='Applying configuration labels',
-            disable=not verbose
-            ):
-            doc_id = doc['_id']
-
-            collection.update_one(
-                {'_id': doc_id},
-                {'$addToSet': {'labels': {'$each': list(labels)}}}
-            )
-
-
     def plot_histograms(
-        self,
-        fields=None,
-        query=None,
-        ids=None,
-        verbose=False,
-        nbins=100,
-        xscale='linear',
-        yscale='linear',
-        method='matplotlib'
-        ):
+            self,
+            fields=None,
+            query=None,
+            ids=None,
+            verbose=False,
+            nbins=100,
+            xscale='linear',
+            yscale='linear',
+            method='matplotlib'
+    ):
         """
         Generates histograms of the given fields.
 
@@ -2468,25 +2353,26 @@ class MongoDatabase(MongoClient):
 
         nfields = len(fields)
 
-        nrows = max(1, int(np.ceil(nfields/3)))
-        if (nrows > 1) or (nfields%3 == 0):
+        nrows = max(1, int(np.ceil(nfields / 3)))
+        if (nrows > 1) or (nfields % 3 == 0):
             ncols = 3
         else:
-            ncols = nfields%3
+            ncols = nfields % 3
 
         if method == 'plotly':
             fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
         elif method == 'matplotlib':
-            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(4*ncols, 2*nrows))
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(4 * ncols, 2 * nrows))
             axes = np.atleast_2d(axes)
         else:
             raise RuntimeError('Unsupported plotting method')
 
         for i, prop in enumerate(fields):
             data = self.get_data(
-                'properties', prop,
+                _PROPS_COLLECTION,
+                prop,
                 query=query,
-                ids=ids,
+                hashes=ids,
                 verbose=verbose,
                 ravel=True
             )
@@ -2494,13 +2380,12 @@ class MongoDatabase(MongoClient):
             c = i % 3
             r = i // 3
 
-
             if nrows > 1:
 
                 if method == 'plotly':
                     fig.add_trace(
                         go.Histogram(x=data, nbinsx=nbins, name=prop),
-                        row=r+1, col=c+1,
+                        row=r + 1, col=c + 1,
                     )
                 else:
                     _ = axes[r][c].hist(data, bins=nbins)
@@ -2511,7 +2396,7 @@ class MongoDatabase(MongoClient):
                 if method == 'plotly':
                     fig.add_trace(
                         go.Histogram(x=data, nbinsx=nbins, name=prop),
-                        row=1, col=c+1,
+                        row=1, col=c + 1,
                     )
                 else:
                     _ = axes[0][c].hist(data, bins=nbins)
@@ -2537,14 +2422,13 @@ class MongoDatabase(MongoClient):
 
         return fig
 
-
     def get_statistics(
-        self,
-        fields,
-        query=None,
-        ids=None,
-        verbose=False,
-        ):
+            self,
+            fields,
+            query=None,
+            ids=None,
+            verbose=False,
+    ):
         """
         Queries the database and returns the fields specified by `keys` as a
         list or an array of values. Returns the results in memory.
@@ -2555,7 +2439,7 @@ class MongoDatabase(MongoClient):
 
             data = database.get_data(
                 collection_name='properties',
-                query={'_id': {'$in': <list_of_property_IDs>}},
+                query={SHORT_ID_STRING_NAME: {'$in': <list_of_property_IDs>}},
                 fields=['property_name_1.energy', 'property_name_1.forces'],
                 cache=True
             )
@@ -2603,9 +2487,8 @@ class MongoDatabase(MongoClient):
         retdict = {}
 
         for field in fields:
-
             data = self.get_data(
-                'properties', field, query=query, ids=ids,
+                'properties', field, query=query, hashes=ids,
                 ravel=True, verbose=verbose
             )
 
@@ -2621,7 +2504,6 @@ class MongoDatabase(MongoClient):
             return retdict[fields[0]]
         else:
             return retdict
-
 
     def filter_on_configurations(self, ds_id, query, verbose=False):
         """
@@ -2639,7 +2521,7 @@ class MongoDatabase(MongoClient):
 
             query (dict):
                 A Mongo query that will return the desired objects. Note that
-                the key-value pair :code:`{'_id': {'$in': ...}}` will be
+                the key-value pair :code:`{SHORT_ID_STRING_NAME: {'$in': ...}}` will be
                 included automatically to filter on only the objects that are
                 already linked to the given dataset.
 
@@ -2656,55 +2538,55 @@ class MongoDatabase(MongoClient):
                 A list of property IDs that satisfy the filter
         """
 
-        ds_doc = self.datasets.find_one({'_id': ds_id})
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         configuration_sets = []
         property_ids = []
 
         # Loop over configuration sets
         cursor = self.configuration_sets.find({
-            '_id': {'$in': ds_doc['relationships']['configuration_sets']}
-            }
+            SHORT_ID_STRING_NAME: {'$in': ds_doc['relationships']['configuration_sets']}
+        }
         )
 
         for cs_doc in tqdm(
-            cursor,
-            desc='Filtering on configuration sets',
-            disable=not verbose
-            ):
+                cursor,
+                desc='Filtering on configuration sets',
+                disable=not verbose
+        ):
+            query[SHORT_ID_STRING_NAME] = {'$in': cs_doc['relationships']['configurations']}
 
-            query['_id'] = {'$in': cs_doc['relationships']['configurations']}
-
-            co_ids = self.get_data('configurations', fields='_id', query=query)
+            co_hashes = self.get_data('configurations', fields='hash', query=query)
 
             # Build the filtered configuration sets
             configuration_sets.append(
                 ConfigurationSet(
-                    configuration_ids=co_ids,
+                    configuration_ids=co_hashes,
                     description=cs_doc['description'],
-                    aggregated_info=self.aggregate_configuration_info(
-                        co_ids,
-                        verbose=verbose
+                    aggregated_info=self.configuration_type.aggregate_configuration_summaries(
+                        self,
+                        co_hashes,
+                        verbose=verbose,
                     )
                 )
             )
 
         # Now get the corresponding properties
-        property_ids = [_['_id'] for _ in self.properties.filter(
+        # TODO: Eric->Check correctness here
+        property_hashes = [_['hash'] for _ in self.property_instances.filter(
             {
-            '_id': {'$in': list(itertools.chain.from_iterable(
-                cs.configuration_ids for cs in configuration_sets
-            ))}
+                'hash': {'$in': list(itertools.chain.from_iterable(
+                    cs.configuration_ids for cs in configuration_sets
+                ))}
             },
-            {'_id': 1}
+            {'hash': 1}
         )]
 
-        return configuration_sets, property_ids
-
+        return configuration_sets, property_hashes
 
     def filter_on_properties(
-        self, ds_id, filter_fxn=None, query=None, fields=None, verbose=False
-        ):
+            self, ds_id, filter_fxn=None, query=None, fields=None, verbose=False
+    ):
         """
         Searches the properties of a given dataset, and returns configuration
         sets and properties that have been filtered based on the given
@@ -2764,13 +2646,13 @@ class MongoDatabase(MongoClient):
             else:
                 filter_fxn = lambda x: True
 
-        ds_doc = self.datasets.find_one({'_id': ds_id})
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         configuration_sets = []
-        property_ids = []
+        property_hashes = []
 
         # Filter the properties
-        retfields = {'_id': 1, 'relationships.configurations': 1}
+        retfields = {'hash': 1, 'relationships.configurations': 1}
         if fields is not None:
             if isinstance(fields, str):
                 fields = [fields]
@@ -2781,46 +2663,45 @@ class MongoDatabase(MongoClient):
         if query is None:
             query = {}
 
-        query['_id'] = {'$in': ds_doc['relationships']['properties']}
+        query['hash'] = {'$in': ds_doc['relationships']['property_instances']}
 
-        cursor = self.properties.find(query, retfields)
+        cursor = self.property_instances.find(query, retfields)
 
-        all_co_ids = []
+        all_co_hashes = []
         for pr_doc in tqdm(
-            cursor,
-            desc='Filtering on properties',
-            disable=not verbose,
-            ):
+                cursor,
+                desc='Filtering on properties',
+                disable=not verbose,
+        ):
             if filter_fxn(pr_doc):
-                property_ids.append(pr_doc['_id'])
-                all_co_ids.append(pr_doc['relationships']['configurations'])
+                property_hashes.append(pr_doc['hash'])
+                all_co_hashes.append(pr_doc['relationships']['configurations'])
 
-        all_co_ids = list(set(itertools.chain.from_iterable(all_co_ids)))
+        all_co_hashes = list(set(itertools.chain.from_iterable(all_co_hashes)))
 
         # Then filter the configuration sets
         for cs_doc in self.configuration_sets.find({
-            '_id': {'$in': ds_doc['relationships']['configuration_sets']}
-            }):
-
-            co_ids =list(
+            SHORT_ID_STRING_NAME: {'$in': ds_doc['relationships']['configuration_sets']}
+        }):
+            co_hashes = list(
                 set(cs_doc['relationships']['configurations']).intersection(
-                    all_co_ids
+                    all_co_hashes
                 )
             )
 
             configuration_sets.append(
                 ConfigurationSet(
-                    configuration_ids=co_ids,
+                    configuration_ids=co_hashes,
                     description=cs_doc['description'],
-                    aggregated_info=self.aggregate_configuration_info(
-                        co_ids,
+                    aggregated_info=self.configuration_type.aggregate_configuration_summaries(
+                        self,
+                        co_hashes,
                         verbose=verbose
                     )
                 )
             )
 
-        return configuration_sets, property_ids
-
+        return configuration_sets, property_hashes
 
     # def apply_transformation(
     #     self,
@@ -2952,7 +2833,7 @@ class MongoDatabase(MongoClient):
 
     #     return res
 
-
+    '''
     def dataset_from_markdown(
         self,
         html_file_path,
@@ -3103,17 +2984,18 @@ class MongoDatabase(MongoClient):
         header = config_sets[0]
         for row in config_sets[1:]:
             query = literal_eval(row[header.index('Query')])
-            query['_id'] = {'$in': all_co_ids}
+            query['hash'] = {'$in': all_co_ids}
 
             co_ids = self.get_data(
                 'configurations',
-                fields='_id',
+                fields='hash',
                 query=query,
                 ravel=True
             ).tolist()
-
+            # TODO: Eric ->add name below
             cs_id = self.insert_configuration_set(
                 co_ids,
+                name='From-Markdown',
                 description=row[header.index('Description')],
                 verbose=True
             )
@@ -3123,7 +3005,7 @@ class MongoDatabase(MongoClient):
         # Define the Dataset
         ds_id = self.insert_dataset(
             cs_ids=cs_ids,
-            pr_ids=all_pr_ids,
+            pr_hashes=all_pr_ids,
             name='Mo_PRM2019',
             authors=parser.data['Authors'],
             links=parser.data['Links'],
@@ -3136,7 +3018,7 @@ class MongoDatabase(MongoClient):
         header = labels[0]
         for row in labels[1:]:
             query = literal_eval(row[header.index('Query')])
-            query['_id'] = {'$in': all_co_ids}
+            query['hash'] = {'$in': all_co_ids}
 
             self.apply_labels(
                 dataset_id=ds_id,
@@ -3150,7 +3032,9 @@ class MongoDatabase(MongoClient):
 
         return self.get_dataset(ds_id, resync=True, verbose=verbose)
 
+    '''
 
+    '''
     def dataset_to_markdown(
         self,
         ds_id,
@@ -3273,8 +3157,8 @@ class MongoDatabase(MongoClient):
             definition_files[pname] = def_fpath
 
         property_map = {}
-        for pr_doc in self.properties.find(
-            {'_id': {'$in': dataset.property_ids}}
+        for pr_doc in self.property_instances.find(
+            {'hash': {'$in': dataset.property_ids}}
             ):
             if pr_doc['type'] not in property_map:
                 property_map[pr_doc['type']] = {
@@ -3299,7 +3183,7 @@ class MongoDatabase(MongoClient):
 
         property_settings = list(
             self.property_settings.find(
-                {'relationships.properties': {'$in': dataset.property_ids}}
+                {'relationships.property_instances': {'$in': dataset.property_ids}}
             )
         )
 
@@ -3317,7 +3201,7 @@ class MongoDatabase(MongoClient):
             ))
 
 
-        for pr_doc in self.properties.aggregate([
+        for pr_doc in self.property_instances.aggregate([
                 {'$match': {'$in': dataset.property_ids}},
                 {'$lookup': {
                     'from': 'property_settings',
@@ -3465,7 +3349,7 @@ class MongoDatabase(MongoClient):
             data_file_name = os.path.join(base_folder, data_file_name)
 
             images = self.get_configurations(
-                ids=list(set(itertools.chain.from_iterable(
+                configuration_hashes=list(set(itertools.chain.from_iterable(
                     cs.configuration_ids for cs in configuration_sets.values()
                 ))),
                 attach_settings=True,
@@ -3478,21 +3362,297 @@ class MongoDatabase(MongoClient):
                 images=images,
                 format=data_format,
             )
+    '''
+
+    '''
+    def export_dataset(self, ds_id, output_folder, fmt, mode, verbose=False):
+        """
+        Exports the dataset whose :code:`SHORT_ID_STRING_NAME` matches :code:`ds_id` to
+        the given format.
+
+        Args:
+
+            ds_id (str):
+                An ID matching the form DS_XXXXXXXXXXXX_XXX
+
+            output_folder (str):
+                The path to a folder in which to save the dataset. Database
+                contents will be save under
+                :code:`<output_folder>/database.<fmt>`, and all other files
+                (property settings files, property definitions, etc.) will be
+                saved as :code:`<output_folder>/<file_name>`.
+
+            fmt (str):
+                The format to which to export the data. Supported formats:
+                ['hdf5'].
+
+            mode (str):
+                'r', 'w', or 'a'
+
+            verbose (bool, default=True):
+                If True, prints progress bar
+        """
+
+        # Check if folders exist
+        path = os.path.join(output_folder)
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        path = os.path.join(output_folder, 'property_definitions')
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        path = os.path.join(output_folder, 'property_settings_files')
+        if not os.path.isdir(path):
+            os.mkdir(path)
+
+        supported_formats = ['hdf5']
+        if fmt not in supported_formats:
+            raise RuntimeError(
+                f"The only supported formats are {supported_formats}"
+            )
+
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
+
+        configuration_ids = []
+
+        for cs_id in ds_doc['relationships']['configuration_sets']:
+            configuration_ids += self.get_configuration_set(
+                cs_id
+            )['configuration_set'].configuration_ids
+
+        property_ids = ds_doc['relationships']['property_instances']
+
+        # Write the property definitions to files
+        prop_definitions = {}
+        for pd_name in ds_doc['aggregated_info']['property_types']:
+            pd_doc = self.get_property_definition(pd_name)['definition']
+
+            pd_path = os.path.join(
+                output_folder, 'property_definitions', f'{pd_name}.json'
+            )
+
+            prop_definitions[pd_name] = pd_doc
+
+            with open(pd_path, 'w') as pd_file:
+                json.dump(pd_doc, pd_file, indent=4)
+
+        if fmt == 'hdf5':
+
+            hdf5_path = os.path.join(output_folder, f'{ds_id}.hdf5')
+            with h5py.File(hdf5_path, mode) as outfile:
+                # Build all groups
+
+                pi_coll_group = outfile.create_group(_PROPS_COLLECTION)
+                ps_coll_group = outfile.create_group(_PROPSETTINGS_COLLECTION)
+                co_coll_group = outfile.create_group(_CONFIGS_COLLECTION)
+                cs_coll_group = outfile.create_group(_CONFIGSETS_COLLECTION)
+
+                # Write dataset info
+                outfile.attrs['description'] = ds_doc['description']
+
+                outfile.attrs.create(
+                    'authors',
+                    np.array(ds_doc['authors'], dtype=STRING_DTYPE_SPECIFIER)
+                )
+
+                outfile.attrs.create(
+                    'links',
+                    np.array(ds_doc['links'], dtype=STRING_DTYPE_SPECIFIER)
+                )
+
+                # TODO: decide if you want to export aggregated info too
+                # info_group = outfile.create_group('aggregated_info')
+
+                # for k,v in ds_doc['aggregated_info'].items():
+                #     info_group.create_dataset(k, data=v)
+
+                # Write the configurations
+                for co_doc in self.configurations.find(
+                        {'hash': {'$in': configuration_ids}}
+                    ):
+
+                    co_group = co_coll_group.create_group(co_doc['hash'])
+
+                    co_group.create_dataset(
+                        'names',
+                        data=np.array(co_doc['names'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    co_group.create_dataset(
+                        'labels',
+                        data=np.array(co_doc['labels'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    co_group.create_dataset(
+                        'relationships.property_instances',
+                        data=np.array(co_doc['relationships']['property_instances'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    co_group.create_dataset(
+                        'relationships.configuration_sets',
+                        data=np.array(co_doc['relationships']['configuration_sets'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    for key in self.configuration_type.unique_identifier_kw:
+                        co_group.create_dataset(
+                            key,
+                            dtype=self.configuration_type.unique_identifier_kw_types[key],
+                            data=co_doc[key]
+                        )
+
+                # Write property instances
+                ps_ids = []
+                for pi_doc in self.property_instances.find(
+                        {'hash': {'$in': property_ids}}
+                    ):
+                    pi_group = pi_coll_group.create_group(pi_doc['hash'])
+
+                    pi_group.create_dataset(
+                        'type',
+                        data=np.array(pi_doc['type'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'methods',
+                        data=np.array(pi_doc['methods'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'labels',
+                        data=np.array(pi_doc['labels'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'relationships.configurations',
+                        data=np.array(pi_doc['relationships']['configurations'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    pi_group.create_dataset(
+                        'relationships.property_settings',
+                        data=np.array(pi_doc['relationships']['property_settings'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+
+                    ps_ids += pi_doc['relationships']['property_settings']
+
+                    data_group = pi_group.create_group(pi_doc['type'])
+
+                    for key, value in pi_doc[pi_doc['type']].items():
+                        dtype = prop_definitions[pi_doc['type']][key]['type']
+                        if dtype == 'string':
+                            dtype = STRING_DTYPE_SPECIFIER
+
+                        data_group.create_dataset(
+                            key,
+                            dtype=dtype,
+                            data=value['source-value'],
+                        )
+
+                # Write property settings
+                ps_ids = list(set(ps_ids))
+                for ps_doc in self.property_settings.find(
+                    {'hash': {'$in': ps_ids}}
+                    ):
+
+                    ps_group = ps_coll_group.create_group(ps_doc['hash'])
+
+                    ps_group.attrs['description'] = ps_doc['description']
+                    ps_group.attrs['method'] = ps_doc['method']
+                    ps_group.attrs.create(
+                        'labels',
+                        np.array(ps_doc['labels'], dtype=STRING_DTYPE_SPECIFIER)
+                    )
+
+                    for fname, fcontents in ps_doc['files']:
+                        with open(
+                                os.path.join(
+                                    output_folder, 'property_settings_files', fname
+                                ),
+                                'w'
+                            ) as fpointer:
+
+                            fpointer.write(fcontents)
+
+                # Write configuration sets
+                for cs_doc in self.configuration_sets.find(
+                        {SHORT_ID_STRING_NAME: {
+                                '$in':
+                                ds_doc['relationships']['configuration_sets']
+                            }
+                        },
+                    ):
+
+                    cs_group = cs_coll_group.create_group(cs_doc[SHORT_ID_STRING_NAME])
+
+                    cs_group.attrs['description'] = cs_doc['description']
+                    cs_group.create_dataset(
+                        'relationships.configurations',
+                        data=np.array(cs_doc['relationships']['configurations'],
+                        dtype=STRING_DTYPE_SPECIFIER),
+                    )
+    '''
+
+    def export_ds_to_xyz(self, ds_id, nprocs=1):
+        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: {'$eq': ds_id}})
+        cas = ds_doc['relationships']['data_objects']
+        cos = list(
+            self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',
+                                                                                        1))
+        pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort(
+            'relationships.data_objects', 1))
+        p = multiprocessing.Pool(nprocs)
+        results = []
+        # results.append(result for result in tqdm(p.imap_unordered(partial(build_do,client_name=self.database_name),cas)))
+        for result in tqdm(p.imap_unordered(partial(build_do, client_name=self.database_name), cas), total=len(cas)):
+            results.append(result)
+        p.close()
+        p.join()
+        ase_write('%s.xyz' % ds_doc['extended-id'], results, tolerant=True)
 
 
+def build_do(ca, client_name):
+    client = MongoDatabase(client_name)
+    co = client.configurations.find_one({'relationships.data_objects': {'$in': [ca]}})
+    pis = list(client.property_instances.find({'relationships.data_objects': {'$in': [ca]}}))
+    a = Atoms(numbers=co['atomic_numbers'], positions=co['positions'], cell=co['cell'], pbc=co['pbc'])
+    a.info['do-colabfit-id'] = co['relationships']['data_objects']
+    for i, pi in enumerate(pis):
+        # print ('pi_type',pi['type'])
+        for k, v in pi.items():
+            if isinstance(v, dict):
+                for k2, v2 in v.items():
+                    if isinstance(v2, dict):
+                        if 'source-value' in pi[k][k2]:
+                            # hardcode whether property goes in info or arrays for now
+                            if k2 == 'forces':
+                                a.arrays['forces'] = np.array(pi[k][k2]['source-value'])
+                            else:
+                                if k2 == 'stress':  # Needed so that ASE formats properly
+                                    a.info['stress'] = np.array(pi[k][k2]['source-value'])
+                                else:
+                                    a.info['%s.%s' % (k, k2)] = pi[k][k2]['source-value']
+    return a
+
+
+# TODO: Change labels_field to metadata_fields
 def load_data(
-    file_path,
-    file_format,
-    name_field,
-    elements,
-    default_name='',
-    labels_field=None,
-    reader=None,
-    glob_string=None,
-    generator=True,
-    verbose=False,
-    **kwargs,
-    ):
+        file_path,
+        file_format,
+        name_field,
+        elements,
+        default_name='',
+        labels_field=None,
+        reader=None,
+        glob_string=None,
+        generator=True,
+        verbose=False,
+        **kwargs,
+):
     """
     Loads a list of Configuration objects.
 
@@ -3512,7 +3672,8 @@ def load_data(
             `file_format == 'folder'`, `name_field` will be set to 'name'.
 
         elements (list):
-            A list of strings of element types
+            A list of strings of allowed element types. If None, all element
+            types are allowed.
 
         default_name (list):
             Default name to be used if `name_field==None`.
@@ -3528,8 +3689,7 @@ def load_data(
 
         glob_string (str):
             A string to use with `Path(file_path).rglob(glob_string)` to
-            generate a list of files to be passed to `self.reader`. Only used
-            for `file_format == 'folder'`.
+            generate a list of files to be passed to `self.reader`.
 
         generator (bool, default=True):
             If True, returns a generator of Configurations. If False, returns a
@@ -3542,6 +3702,10 @@ def load_data(
     `converter.load(..., **kwargs)`
     """
 
+    if elements is None:
+        elements = [e.symbol for e in periodictable.elements]
+        elements.remove('n')
+
     if file_format == 'folder':
         if reader is None:
             raise RuntimeError(
@@ -3552,7 +3716,6 @@ def load_data(
             raise RuntimeError(
                 "Must provide `glob_string` when `file_format=='folder'`"
             )
-
 
         converter = FolderConverter(reader)
 
@@ -3579,24 +3742,95 @@ def load_data(
             elements=elements,
             default_name=default_name,
             labels_field=labels_field,
+            glob_string=glob_string,
             verbose=verbose,
         )
     else:
         raise RuntimeError(
-            "Invalid `file_format`. Must be one of "\
-                "['xyz', 'extxyz', 'cfg', 'folder']"
+            "Invalid `file_format`. Must be one of " \
+            "['xyz', 'extxyz', 'cfg', 'folder']"
         )
 
     return results if generator else list(results)
 
+
+# Moved out of static method to avoid changing insert_data* methods
+# Could consider changing in the future
+def _build_c_update_doc(configuration):
+    processed_fields = configuration.configuration_summary()
+    c_hash = str(hash(configuration))
+    c_update_doc = {
+        '$setOnInsert': {
+            'hash': c_hash,
+            SHORT_ID_STRING_NAME: 'CO_' + c_hash
+        },
+        '$set': {
+            'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        },
+        '$addToSet': {
+            'names': {
+                '$each': list(configuration.info[ATOMS_NAME_FIELD])
+            },
+
+        }
+    }
+    c_update_doc['$setOnInsert'].update({k: v.tolist() for k, v in configuration.unique_identifiers.items()})
+    c_update_doc['$setOnInsert'].update({k: v for k, v in processed_fields.items()})
+    return c_update_doc, c_hash
+
+
+def _build_md_insert_doc(metadata):
+    md_set_on_insert = {
+        'hash': str(metadata._hash),
+        SHORT_ID_STRING_NAME: 'MD_' + str(metadata._hash)
+    }
+
+    for gf, gf_dict in metadata.metadata.items():
+        if isinstance(gf_dict['source-value'], (int, float, str)):
+            # Add directly
+            md_set_on_insert[gf] = {
+                'source-value': gf_dict['source-value']
+            }
+        else:
+            # Then it's array-like and should be converted to a list
+            md_set_on_insert[gf] = {
+                'source-value': np.atleast_1d(
+                    gf_dict['source-value']
+                ).tolist()
+            }
+
+        if 'source-unit' in gf_dict:
+            md_set_on_insert[gf]['source-unit'] = gf_dict['source-unit']
+    return md_set_on_insert
+
+
+def _build_ca_insert_doc(calculation):
+    ca_set_on_insert = {
+        'hash': str(calculation._hash),
+        SHORT_ID_STRING_NAME: 'DO_' + str(calculation._hash),
+        #'relationships.configurations': 'CO_' + calculation.configuration,
+        # '$addToSet': {'relationships.property_instances':  {'$each': calculation.properties}},
+        # 'ncounts': 0,
+
+    }
+    return ca_set_on_insert
+
+
+def generate_string():
+    return get_random_string(12, allowed_chars=string.ascii_lowercase + '1234567890')
+
+
 class ConcatenationException(Exception):
     pass
+
 
 class InvalidGroupError(Exception):
     pass
 
+
 class MissingEntryError(Exception):
     pass
+
 
 class DuplicateDefinitionError(Exception):
     pass

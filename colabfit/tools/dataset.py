@@ -1,7 +1,5 @@
-import os
 from hashlib import sha512
 
-from colabfit import HASH_LENGTH, HASH_SHIFT, ATOMS_NAME_FIELD
 
 class Dataset:
     """
@@ -57,27 +55,38 @@ class Dataset:
                     methods_counts
                     property_labels
                     property_labels_counts
+
+        data_license (str):
+            License associated with the Dataset's data
     """
 
     def __init__(
-        self,
-        configuration_set_ids,
-        property_ids,
-        name,
-        authors,
-        links,
-        description,
-        aggregated_info,
-        ):
+            self,
+            configuration_set_ids,
+            property_ids,
+            name,
+            authors,
+            links,
+            description,
+            aggregated_info,
+            data_license='CC-BY-ND-4.0'
+    ):
 
-        self.configuration_set_ids  = configuration_set_ids
-        self.property_ids           = property_ids
-        self.name                   = name
-        self.authors                = authors
-        self.links                  = links
-        self.description            = description
-        self.aggregated_info        = aggregated_info
+        for auth in authors:
+            if not ''.join(auth.split(' ')[-1].replace('-', '')).isalpha():
+                raise RuntimeError(
+                    "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(auth)
+                )
 
+        self.configuration_set_ids = configuration_set_ids
+        self.property_ids = property_ids
+        self.name = name
+        self.authors = authors
+        self.links = links
+        self.description = description
+        self.aggregated_info = aggregated_info
+        self.data_license = data_license
+        self._hash = hash(self)
 
     def __hash__(self):
         """Hashes the dataset using its configuration set and property IDs"""
@@ -89,8 +98,7 @@ class Dataset:
         for i in sorted(self.property_ids):
             ds_hash.update(str(i).encode('utf-8'))
 
-        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
-
+        return int(ds_hash.hexdigest(), 16)
 
     def __str__(self):
         return "Dataset(description='{}', nconfiguration_sets={}, nproperties={})".format(

@@ -16,17 +16,14 @@ from kim_property import (
 
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
-
 from colabfit import (
-    HASH_LENGTH, HASH_SHIFT,
-    DEFAULT_PROPERTY_NAME, STRING_DTYPE_SPECIFIER, UNITS,
+    STRING_DTYPE_SPECIFIER, UNITS,
     OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
 )
 
 # These are fields that are related to the geometry of the atomic structure
 # or the OpenKIM Property Definition and shouldn't be used for equality checks
 _ignored_fields = [
-    'property-id',
     'property-title',
     'property-description',
     'instance-id',
@@ -41,18 +38,23 @@ _ignored_fields = [
 class PropertyParsingError(Exception):
     pass
 
+
 class MissingPropertyFieldWarning(Warning):
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
 
+
 class InvalidPropertyDefinition(Exception):
     pass
 
+
+# TODO:Remove Configuration and add Property Setting
 class Property(dict):
     """
     A Property is used to store the results of some kind of calculation or
-    experiment, and should be mapped to an `OpenKIM Property Definition <https://openkim.org/doc/schema/properties-framework/>`_. Best
+    experiment, and should be mapped to an `OpenKIM Property Definition
+    <https://openkim.org/doc/schema/properties-framework/>`_. Best
     practice is for the Property to also point to one or more
     PropertySettings objects that fully define the conditions under which the
     Property was obtained.
@@ -64,11 +66,13 @@ class Property(dict):
 
         instance (dict):
             A dictionary defining an OpenKIM Property Instance.
-            For more details, see the `OpenKIM Property Framework <https://openkim.org/doc/schema/properties-framework/>`_
+            For more details, see the `OpenKIM Property Framework
+            <https://openkim.org/doc/schema/properties-framework/>`_
             documentation. In most cases, this dictionary should not be manually
             constructed by the user. Instead, a Property Definition and a
             Configuration should be passed to the :meth:`from_definition`
             function.
+
 
         property_map (dict):
             key = a string that can be used as a key like :code:`self.instance[key]`
@@ -85,28 +89,20 @@ class Property(dict):
                 and anything preceded by a '*'. It will be divided by anything
                 preceded by a '/'.
 
-        configuration_ids (list):
-            A list of IDs of Configuration objects.
 
-        settings (PropertySettings):
-            A :class:`~colabfit.tools.property_settings.PropertySettings` object
-            defining the conditions under which the propoerty was obtained. This
-            is allowed to be None, but it is highly recommended that it be
-            provided.
+
+
     """
 
     _observers = []
 
     def __init__(
-        self,
-        definition,
-        instance,
-        configuration_ids,
-        property_map=None,
-        settings=None,
-        instance_id=1,
-        convert_units=False
-        ):
+            self,
+            definition,
+            instance,
+            property_map=None,
+            convert_units=False
+    ):
         """
         Args:
 
@@ -116,18 +112,8 @@ class Property(dict):
             instance (dict):
                 A dictionary defining an OpenKIM Property Instance
 
-            configuration_ids (list):
-                A list of IDs of ColabFit Configuration objects
-
-            settings (PropertySettings):
-                A `colabfit.property.PropertySettings` objects specifying how to
-                compute the property.
-
             property_map (dict):
                 A property map as described in the Property attributes section.
-
-            instance_id (int):
-                A positive non-zero integer
 
             convert_units (bool):
                 If True, converts units to those expected by ColabFit. Default
@@ -135,8 +121,6 @@ class Property(dict):
         """
 
         global KIM_PROPERTIES
-
-        load_from_existing = False
 
         if isinstance(definition, dict):
             dummy_dict = deepcopy(definition)
@@ -174,8 +158,7 @@ class Property(dict):
                     definition_name = 'tag:@,0000-00-00:property/' + definition
         else:
             raise InvalidPropertyDefinition(
-                "Property definition must either be a dictionary or a path to "\
-                "an EDN file"
+                "Property definition must either be a dictionary or a path to an EDN file"
             )
 
         self.definition = definition
@@ -210,11 +193,18 @@ class Property(dict):
         self.instance = instance
         self.instance['property-id'] = definition_name
 
+        # Hack to avoid the fact that "property-name" has to be a dictionary
+        # in order for OpenKIM's check_property_definition to work
+        tmp = self.definition['property-name']
+        del self.definition['property-name']
+
         check_instance_optional_key_marked_required_are_present(
             self.instance,
             self.definition,
             # KIM_PROPERTIES[self.instance['property-id']]
         )
+
+        self.definition['property-name'] = tmp
 
         if load_from_existing:
             check_property_instances(
@@ -250,24 +240,11 @@ class Property(dict):
         if convert_units:
             self.convert_units()
 
-        if len(configuration_ids) < 1:
-            raise RuntimeError(
-                "`Property.configuration_ids` must contain at least 1 entry"
-            )
-
-        self.configuration_ids = configuration_ids
-
-        # Add settings
-        if settings is not None:
-            self.settings = settings
-        else:
-            self.settings = []
-
+        self._hash = hash(self)
 
     @property
     def instance(self):
         return self._instance
-
 
     @instance.setter
     def instance(self, edn):
@@ -275,27 +252,25 @@ class Property(dict):
 
         fields = []
         for key in self._instance:
-            if key in _ignored_fields: continue
+            if key in _ignored_fields:
+                continue
 
             # fields.append(EDN_KEY_MAP.get(key, key))
             fields.append(key)
 
         self._property_fields = fields
 
-
     @property
     def property_fields(self):
         return self._property_fields
 
-
     @classmethod
     def from_definition(
-        cls, definition, configuration, property_map,
-        settings=None, instance_id=1, convert_units=False
+            cls, definition, configuration, property_map, convert_units=False
     ):
 
         """
-        A function for constructing a Property given a configuration, a property
+        A function for constructing a Property given a property setting hash, a property
         definition, and a property map.
 
 
@@ -304,8 +279,8 @@ class Property(dict):
             definition (dict):
                 A valid KIM Property Definition
 
-            configuration (Configuration):
-                A Configuration objects from which to extract the property data
+            configuration (AtomicConfiguration):
+                An AtomicConfiguration object from which to extract the property data
 
             property_map (dict):
                 A property map as described in the Property attributes section.
@@ -317,6 +292,8 @@ class Property(dict):
         load_from_existing = False
 
         if isinstance(definition, dict):
+
+            # TODO: this is probably slowing things down a bit
             dummy_dict = deepcopy(definition)
 
             # Spoof if necessary
@@ -352,29 +329,37 @@ class Property(dict):
                     definition_name = 'tag:@,0000-00-00:property/' + definition
         else:
             raise InvalidPropertyDefinition(
-                "Property definition must either be a dictionary or a path to "\
-                "an EDN file"
+                "Property definition must either be a dictionary or a path to an EDN file"
             )
 
         if load_from_existing:
             instance = kim_edn.loads(kim_property_create(
-                instance_id=instance_id,
+                instance_id=1,
                 property_name=definition_name,
             ))[0]
         else:
             with tempfile.NamedTemporaryFile('w') as tmp:
+                # Hack to avoid the fact that "property-name" has to be a dictionary
+                # in order for OpenKIM's check_property_definition to work
+
+                if 'property-name' in dummy_dict:
+                    del dummy_dict['property-name']
+
                 tmp.write(json.dumps(dummy_dict))
                 tmp.flush()
 
                 instance = kim_edn.loads(kim_property_create(
-                    instance_id=instance_id,
+                    instance_id=1,
                     property_name=tmp.name,
                 ))[0]
 
         update_edn_with_conf(instance, configuration)
 
         for key, val in property_map.items():
-            if val['field'] in configuration.info:
+            if 'value' in val:
+                # Default value provided
+                data = val['value']
+            elif val['field'] in configuration.info:
                 data = configuration.info[val['field']]
             elif val['field'] in configuration.arrays:
                 data = configuration.arrays[val['field']]
@@ -403,13 +388,10 @@ class Property(dict):
 
         return cls(
             definition=definition,
-            configuration_ids=[str(hash(configuration))],
             property_map=property_map,
-            settings=settings,
             instance=instance,
             convert_units=convert_units,
         )
-
 
     # @classmethod
     # def Default(
@@ -511,7 +493,6 @@ class Property(dict):
     #         convert_units=convert_units,
     #     )
 
-
     def convert_units(self):
         """
         For each key in :attr:`self.property_map`, convert :attr:`self.edn[key]`
@@ -527,21 +508,21 @@ class Property(dict):
                 sp.split('/') for sp in units.split('*')
             ]))
 
-            if edn_key not in self.instance: continue
+            if edn_key not in self.instance:
+                continue
 
             val = np.array(self.instance[edn_key]['source-value'], dtype=np.float64)
 
             val *= float(UNITS[split_units[0]])
 
             for u in split_units[1:]:
-                if units[units.find(u)-1] == '*':
+                if units[units.find(u) - 1] == '*':
                     val *= UNITS[u]
-                elif units[units.find(u)-1] == '/':
+                elif units[units.find(u) - 1] == '/':
                     val /= UNITS[u]
                 else:
                     raise RuntimeError(
-                        "There may be something wrong with the units: "\
-                            "{}".format(u)
+                        "There may be something wrong with the units: {}".format(u)
                     )
 
             self.instance[edn_key] = {
@@ -551,22 +532,16 @@ class Property(dict):
 
             self.property_map[key]['units'] = self.instance[edn_key]['source-unit']
 
-
     def __hash__(self):
         """
-        Hashes the Property by hashing its EDN. Note that the property hash also
-        depends upon the hashes of the linked configurations; this is to handle
-        the case where two properties happen to be the same even though their
-        underlying configurations are different.
+        Hashes the Property by hashing its EDN.
         """
-
         _hash = sha512()
-
         for key, val in self.instance.items():
-            if key in _ignored_fields: continue
-
+            if key in _ignored_fields:
+                continue
             try:
-                hashval =  np.round_(
+                hashval = np.round_(
                     np.array(val['source-value']), decimals=12
                 ).data.tobytes()
             except:
@@ -575,20 +550,19 @@ class Property(dict):
                         val['source-value'], dtype=STRING_DTYPE_SPECIFIER
                     ).data.tobytes()
                 except:
-                    raise PropertyHashError(
-                        "Could not hash key {}: {}".format(key, val)
-                    )
+                    try:
+                        hashval = np.array(val, dtype=STRING_DTYPE_SPECIFIER).data.tobytes()
+                    except:
+                        raise PropertyHashError(
+                            "Could not hash key {}: {}".format(key, val)
+                        )
 
             _hash.update(hashval)
-
+            # What if values are identical but are added in different units? Should these hash to unique PIs?
             if 'source-unit' in val:
                 _hash.update(str(val['source-unit']).encode('utf-8'))
 
-        for cid in self.configuration_ids:
-            _hash.update(cid.encode('utf-8'))
-
-        return int(str(int(_hash.hexdigest(), 16)-HASH_SHIFT)[:HASH_LENGTH])
-
+        return int(_hash.hexdigest(), 16)
 
     def __eq__(self, other):
         """
@@ -623,7 +597,6 @@ class Property(dict):
                 f"Field '{k}' not found in Property.edn. Returning None"
             )
 
-
     def __getitem__(self, k):
         """Overloaded :meth:`dict.__getitem__` for getting the values of :attr:`self.edn`"""
         edn_key = EDN_KEY_MAP.get(k, k)
@@ -638,7 +611,6 @@ class Property(dict):
             )
 
             return None
-
 
     def get_data(self, k):
         """
@@ -661,12 +633,10 @@ class Property(dict):
         else:
             return np.nan
 
-
     def __delitem__(self, k):
         edn_key = EDN_KEY_MAP.get(k, k)
 
         del self.instance[edn_key]
-
 
     def __str__(self):
         return "Property(instance_id={}, name='{}')".format(
@@ -675,13 +645,12 @@ class Property(dict):
             self.name
         )
 
-
     def __repr__(self):
         return str(self)
 
 
+# Eric->Do we need to do this?
 def update_edn_with_conf(edn, conf):
-
     edn['species'] = {
         'source-value': conf.get_chemical_symbols()
     }
