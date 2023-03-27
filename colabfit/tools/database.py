@@ -1047,15 +1047,19 @@ class MongoDatabase(MongoClient):
         for i in range(nbatches):
             if i+1 < nbatches:
                 if other_query is not None:
+                    q = {query_key: {'$in': query_list[i*batch_size:(i+1)*batch_size]}}
+                    q.update(other_query)
                     cursor = collection.find(
-                        {query_key: {'$in': query_list[i*batch_size:(i+1)*batch_size]}}.update(other_query), **kwargs)
+                        q, **kwargs)
                 else:
                     cursor = collection.find(
                         {query_key: {'$in': query_list[i * batch_size:(i + 1) * batch_size]}}, **kwargs)
             else:
                 if other_query is not None:
+                    q = {query_key: {'$in': query_list[i * batch_size:]}}
+                    q.update(other_query)
                     cursor = collection.find(
-                        {query_key: {'$in': query_list[i * batch_size:]}}.update(other_query), **kwargs)
+                        q, **kwargs)
                 else:
                     cursor = collection.find(
                         {query_key: {'$in': query_list[i * batch_size:]}}, **kwargs)
@@ -1594,12 +1598,11 @@ class MongoDatabase(MongoClient):
             description (str, optional):
                 A human-readable description of the configuration set.
         """
-
         filtered_cos = list(self.query_in_batches(
                                             'configurations',
                                             'hash',
                                             co_hashes,
-                                            query,
+                                            other_query=query,
                                             return_key='hash',
                                             projection={"hash": 1, "_id": 0}
                                             ))
