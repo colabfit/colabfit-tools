@@ -814,21 +814,21 @@ class MongoDatabase(MongoClient):
         if config_docs:
             res = coll_configurations.bulk_write(config_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
+            if nmatch and verbose:
                 warnings.warn(
                     '{} duplicate configurations detected'.format(nmatch)
                 )
         if property_docs:
             res = coll_properties.bulk_write(property_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
+            if nmatch and verbose:
                 warnings.warn(
                     '{} duplicate properties detected'.format(nmatch)
                )
         if calc_docs:
             res = coll_data_objects.bulk_write(calc_docs, ordered=False)
             nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
+            if nmatch and verbose:
                 warnings.warn(
                     '{} duplicate data objects detected'.format(nmatch)
                 )
@@ -845,7 +845,7 @@ class MongoDatabase(MongoClient):
                 ordered=False
             )
             nmatch = res.bulk_api_result['nMatched']
-            if nmatch:
+            if nmatch and verbose:
                 warnings.warn(
                     '{} duplicate metadata objects detected'.format(nmatch)
                 )
@@ -853,7 +853,7 @@ class MongoDatabase(MongoClient):
         client.close()
         return insertions
 
-    def insert_property_definition(self, definition):
+    def insert_property_definition(self, definition, verbose=False):
         """
         Inserts a new property definition into the database. Checks that
         definition is valid, then builds all necessary groups in
@@ -895,7 +895,7 @@ class MongoDatabase(MongoClient):
 
         if self.property_definitions.count_documents(
                 {'definition.property-name': definition['property-name']}
-        ):
+        ) and verbose:
             warnings.warn(
                 "Property definition with name '{}' already exists. " \
                 "Using existing definition.".format(
