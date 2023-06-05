@@ -404,7 +404,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             aggs = pool.map(partial(agg,db=db),chunked_hashes)
         for a in aggs:
             aggregated_info['nsites'] += a['nsites']
-            aggregated_info['chemical_systems'].update(a['chemical_systems']))
+            aggregated_info['chemical_systems'].update(a['chemical_systems'])
             print (a['individual_elements_ratios'])
             for e, er in zip(a['elements'], a['individual_elements_ratios']):
                 if e not in aggregated_info['elements']:
