@@ -404,7 +404,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             ]
         s = time.time()
         with Pool(k) as pool:
-            aggs = pool.map(partial(agg,db=db),chunked_hashes)
+            aggs = pool.map(partial(agg,db=db.database_name,uri=db.uri),chunked_hashes)
         for a in aggs:
             aggregated_info['nsites'] += a['nsites']
             aggregated_info['chemical_systems'].update(a['chemical_systems'])
@@ -541,9 +541,9 @@ def pre_hash_formatting(k, v, ordering):
             return v
     else:
         return v
-def agg (hashes,db):
+def agg (hashes,db,uri):
     from colabfit.tools.database import MongoDatabase
-    client = MongoDatabase(db.database_name, uri=db.uri)
+    client = MongoDatabase(db, uri=uri)
     proxy = {
             'nsites': 0,
             'chemical_systems': set(),
