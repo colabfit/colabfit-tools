@@ -408,7 +408,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         for a in aggs:
             aggregated_info['nsites'] += a['nsites']
             aggregated_info['chemical_systems'].update(a['chemical_systems'])
-            print (a['individual_elements_ratios'])
+            
             for e, er in zip(a['elements'], a['individual_elements_ratios']):
                 if e not in aggregated_info['elements']:
                     aggregated_info['elements'].append(e)
