@@ -5,6 +5,7 @@ from string import ascii_lowercase, ascii_uppercase
 from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 import time
+from functools import partial
 from multiprocessing import Pool
 from colabfit import (
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
