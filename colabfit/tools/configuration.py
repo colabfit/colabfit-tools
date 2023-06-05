@@ -392,23 +392,22 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             'nperiodic_dimensions': set(),
             'dimension_types': set(),
         }
+        
         n = len(hashes)
-        k = 16
-
+        k = db.nprocs
         chunked_hashes = [
                 hashes[i * (n // k) + min(i, n % k):(i + 1) * (n // k) + min(i + 1, n % k)]
                 for i in range(k)
             ]
         s = time.time()
-        with Pool(16) as pool:
+        with Pool(k) as pool:
             aggs = pool.map(partial(agg,db=db),chunked_hashes)
         for a in aggs:
             aggregated_info['nsites'] += a['nsites']
-            aggregated_info['chemical_systems'].add(''.join(a['elements']))
+            aggregated_info['chemical_systems'].update(a['chemical_systems']))
             print (a['individual_elements_ratios'])
             for e, er in zip(a['elements'], a['individual_elements_ratios']):
                 if e not in aggregated_info['elements']:
-                    #proxy['nelements'] += 1
                     aggregated_info['elements'].append(e)
                     aggregated_info['total_elements_ratios'][e] = a['total_elements_ratios'][e] 
                     aggregated_info['individual_elements_ratios'][e] = a['individual_elements_ratios'][e]
@@ -541,7 +540,7 @@ def pre_hash_formatting(k, v, ordering):
         return v
 def agg (hashes,db):
     from colabfit.tools.database import MongoDatabase
-    client = MongoDatabase(db)
+    client = MongoDatabase(db.database_name, uri=db.uri)
     proxy = {
             'nsites': 0,
             'chemical_systems': set(),
