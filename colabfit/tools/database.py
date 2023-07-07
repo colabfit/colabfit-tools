@@ -295,8 +295,14 @@ class MongoDatabase(MongoClient):
         self.configurations.create_index(
             keys='relationships.data_objects', name='co_relationships.data_objects'
         )
+        self.configurations.create_index(
+            keys='relationships.datasets', name='co_relationships.datasets'
+        )
         self.property_instances.create_index(
             keys='relationships.data_objects', name='pi_relationships.data_objects'
+        )
+        self.property_instances.create_index(
+            keys='relationships.datasets', name='pi_relationships.datasets'
         )
         self.data_objects.create_index(
             keys='relationships.datasets', name='do_relationships.datasets'
