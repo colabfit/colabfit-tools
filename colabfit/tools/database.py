@@ -401,9 +401,10 @@ class MongoDatabase(MongoClient):
 
         ds_ids = [i['colabfit-id'] for i in self.datasets.find({}, {'colabfit-id': 1})]
         missing_ids = set()
-        for i in self.configurations.find({'relationships.dataset': {'$nin': ds_ids}}, {'relationships': 1}):
+        for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}}, {'relationships': 1}):
             for j in i['relationships']:
-                missing_ids.add(j['dataset'])
+                if j['dataset'] not in ds_ids:
+                    missing_ids.add(j['dataset'])
         if len(list(missing_ids)) > 1:
             raise Exception("DS ID could not be inferred from existing data")
         elif len(list(missing_ids)) ==1:
@@ -1552,9 +1553,11 @@ class MongoDatabase(MongoClient):
             # Assume that resulting ID is one to use
             ds_ids = [i['colabfit-id'] for i in self.datasets.find({},{'colabfit-id':1})]
             missing_ids = set()
-            for i in self.configurations.find({'relationships.dataset': {'$nin':ds_ids}},{'relationships':1}):
+            for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}},
+                                              {'relationships': 1}):
                 for j in i['relationships']:
-                    missing_ids.add(j['dataset'])
+                    if j['dataset'] not in ds_ids:
+                        missing_ids.add(j['dataset'])
             if len(missing_ids) != 1:
                 raise Exception("DS ID could not be inferred from existing data")
             else:
@@ -2110,9 +2113,11 @@ class MongoDatabase(MongoClient):
             # Assume that resulting ID is one to use
             ds_ids = [i['colabfit-id'] for i in self.datasets.find({},{'colabfit-id':1})]
             missing_ids = set()
-            for i in self.configurations.find({'relationships.dataset': {'$nin':ds_ids}},{'relationships':1}):
+            for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}},
+                                              {'relationships': 1}):
                 for j in i['relationships']:
-                    missing_ids.add(j['dataset'])
+                    if j['dataset'] not in ds_ids:
+                        missing_ids.add(j['dataset'])
             if len(missing_ids) != 1:
                 raise Exception("DS ID could not be inferred from existing data")
             else:
@@ -2781,6 +2786,35 @@ class MongoDatabase(MongoClient):
             )
 
         return configuration_sets, property_hashes
+
+    def remove_abandoned_data(self):
+        ds_ids = [i['colabfit-id'] for i in self.datasets.find({}, {'colabfit-id': 1})]
+        missing_ids = set()
+        for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}}, {'relationships': 1}):
+            for j in i['relationships']:
+                if j['dataset'] not in ds_ids:
+                    missing_ids.add(j['dataset'])
+        missing_ids = list(missing_ids)
+        if len(missing_ids)==0:
+            raise Exception('Could not find abandoned data')
+        else:
+            for kind in [self.configurations, self.property_instances, self.data_objects, self.configuration_sets]:
+                # delete documents that contain only one relationship
+                # pull relationships
+                # delete anything with empty relationship field
+                kind.update_many(
+                    {
+                        'relationships.dataset': {'$in': missing_ids},
+                    },
+                    {'$pull':{'relationships':{'dataset':{'$in': missing_ids}}}},
+                    #array_filters=[{'element.dataset':{'$in': missing_ids}}]
+                )
+                kind.delete_many(
+                    {
+                        'relationships': {'$size': 0}
+                })
+
+
 
     # def apply_transformation(
     #     self,
