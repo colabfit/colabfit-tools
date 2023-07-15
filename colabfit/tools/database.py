@@ -287,28 +287,28 @@ class MongoDatabase(MongoClient):
             keys='relationships.metadata', name='pi_relationships.metadata'
         )
         self.configuration_sets.create_index(
-            keys='relationships.datasets', name='cs_relationships.datasets'
+            keys='relationships.dataset', name='cs_relationships.dataset'
         )
         self.configurations.create_index(
             keys='relationships.metadata', name='co_relationships.metadata'
         )
         self.configurations.create_index(
-            keys='relationships.data_objects', name='co_relationships.data_objects'
+            keys='relationships.data_object', name='co_relationships.data_object'
         )
         self.configurations.create_index(
-            keys='relationships.datasets', name='co_relationships.datasets'
+            keys='relationships.dataset', name='co_relationships.dataset'
         )
         self.property_instances.create_index(
-            keys='relationships.data_objects', name='pi_relationships.data_objects'
+            keys='relationships.data_object', name='pi_relationships.data_object'
         )
         self.property_instances.create_index(
-            keys='relationships.datasets', name='pi_relationships.datasets'
+            keys='relationships.dataset', name='pi_relationships.dataset'
         )
         self.data_objects.create_index(
-            keys='relationships.datasets', name='do_relationships.datasets'
+            keys='relationships.dataset', name='do_relationships.dataset'
         )
         self.configurations.create_index(
-            keys='relationships.configuration_sets', name='co_relationships.configuration_sets'
+            keys='relationships.configuration_set', name='co_relationships.configuration_set'
         )
         self.nprocs = nprocs
 
@@ -2788,7 +2788,7 @@ class MongoDatabase(MongoClient):
         return configuration_sets, property_hashes
 
     def remove_abandoned_data(self):
-        ds_ids = [i['colabfit-id'] for i in self.datasets.find({}, {'colabfit-id': 1})]
+        ds_ids = [i['colabfit-id'] for i in self.datasets.find({}, {'colabfit-id': 1},hint='colabfit-id')]
         missing_ids = set()
         for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}}, {'relationships': 1}):
             for j in i['relationships']:
@@ -2798,21 +2798,21 @@ class MongoDatabase(MongoClient):
         if len(missing_ids)==0:
             raise Exception('Could not find abandoned data')
         else:
-            for kind in [self.configurations, self.property_instances, self.data_objects, self.configuration_sets]:
-                # delete documents that contain only one relationship
+            for kind, index in [(self.configurations, 'co_relationships.dataset'),
+                                (self.property_instances, 'pi_relationships.dataset'),
+                                (self.data_objects, 'do_relationships.dataset'),
+                                (self.configuration_sets, 'cs_relationships.dataset')]:
                 # pull relationships
-                # delete anything with empty relationship field
                 kind.update_many(
                     {
                         'relationships.dataset': {'$in': missing_ids},
                     },
                     {'$pull':{'relationships':{'dataset':{'$in': missing_ids}}}},
-                    #array_filters=[{'element.dataset':{'$in': missing_ids}}]
-                )
-                kind.delete_many(
-                    {
-                        'relationships': {'$size': 0}
-                })
+                hint=index)
+                #kind.delete_many(
+                #    {
+                #        'relationships': {'$size': 0}
+                #})
 
 
 
