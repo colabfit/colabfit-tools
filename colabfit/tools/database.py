@@ -1968,7 +1968,7 @@ class MongoDatabase(MongoClient):
                     idx = aggregated_info['property_types'].index(doc['property_types'][i])
                     aggregated_info['property_types_counts'][idx] += 1
         do_ids = ['DO_%s' %i for i in pr_hashes]
-        co_ids = list(self.query_in_batches(collection_name='configurations', query_key='relationships.data_objects',
+        co_ids = list(self.query_in_batches(collection_name='configurations', query_key='relationships.data_object',
                                        query_list=do_ids, return_key='hash', projection= {'hash':1}))
         ag_2 = self.configuration_type.aggregate_configuration_summaries(self, co_ids,
                                                                          verbose=verbose)
