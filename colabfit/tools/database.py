@@ -3932,7 +3932,9 @@ def _build_ca_insert_doc(calculation):
 def generate_string():
     return get_random_string(12, allowed_chars=string.ascii_lowercase + '1234567890')
 
-
+def generate_ds_id():
+    ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
+    return ds_id
 class ConcatenationException(Exception):
     pass
 
