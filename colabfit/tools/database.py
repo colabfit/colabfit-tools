@@ -320,6 +320,7 @@ class MongoDatabase(MongoClient):
             co_md_map=None,
             transform=None,
             verbose=True,
+            ds_id=None,
             generator=None,
     ):
         """
@@ -398,21 +399,21 @@ class MongoDatabase(MongoClient):
 
         """
         # Generate DS ID here so relationships can be grouped
-
-        ds_ids = [i['colabfit-id'] for i in self.datasets.find({}, {'colabfit-id': 1})]
-        missing_ids = set()
-        for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}}, {'relationships': 1}):
-            for j in i['relationships']:
-                if j['dataset'] not in ds_ids:
-                    missing_ids.add(j['dataset'])
-        if len(list(missing_ids)) > 1:
-            raise Exception("DS ID could not be inferred from existing data")
-        elif len(list(missing_ids)) ==1:
-            print ('Using existing DS ID', list(missing_ids)[0])
-            ds_id= list(missing_ids)[0]
-        else:
-            ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
-            print('Generated new DS ID:', ds_id)
+        if ds_id is None:
+            ds_ids = [i['colabfit-id'] for i in self.datasets.find({}, {'colabfit-id': 1})]
+            missing_ids = set()
+            for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}}, {'relationships': 1}):
+                for j in i['relationships']:
+                    if j['dataset'] not in ds_ids:
+                        missing_ids.add(j['dataset'])
+            if len(list(missing_ids)) > 1:
+                raise Exception("DS ID could not be inferred from existing data")
+            elif len(list(missing_ids)) ==1:
+                print ('Using existing DS ID', list(missing_ids)[0])
+                ds_id= list(missing_ids)[0]
+            else:
+                ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
+                print('Generated new DS ID:', ds_id)
         if self.uri is not None:
             mongo_login = self.uri
         else:
