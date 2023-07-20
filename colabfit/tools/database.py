@@ -561,8 +561,8 @@ class MongoDatabase(MongoClient):
         property_docs = []
         calc_docs = []
         meta_docs = []
-        co_relationships_dict = {}
-        pi_relationships_dict = {}
+#        co_relationships_dict = {}
+#        pi_relationships_dict = {}
         meta_update_dict = {}
         # Add all of the configurations into the Mongo server
         ai = 1
@@ -571,6 +571,8 @@ class MongoDatabase(MongoClient):
                 desc='Preparing to add configurations to Database',
                 disable=not verbose,
         ):
+            co_relationships_dict = {}
+            pi_relationships_dict = {}
             property_docs_do = []
             calc_lists = {}
             calc_lists['PI'] = []
@@ -833,6 +835,7 @@ class MongoDatabase(MongoClient):
                         upsert=True,
                         hint='hash',
                     ))
+            print (c_hash,ca_hash,co_relationships_dict)
             c_update_doc['$push'] = {'relationships': co_relationships_dict}
             config_docs.append(
                 UpdateOne(
@@ -842,7 +845,7 @@ class MongoDatabase(MongoClient):
                     hint='hash',
                 )
             )
-
+            print (config_docs[0])
             insertions.append((c_hash, ca_hash))
             # TODO: Fix this as it duplicates things when no property is present
             # if not p_hash:
