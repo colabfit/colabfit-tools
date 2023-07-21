@@ -835,7 +835,7 @@ class MongoDatabase(MongoClient):
                         upsert=True,
                         hint='hash',
                     ))
-            print (c_hash,ca_hash,co_relationships_dict)
+
             c_update_doc['$push'] = {'relationships': co_relationships_dict}
             config_docs.append(
                 UpdateOne(
@@ -845,7 +845,7 @@ class MongoDatabase(MongoClient):
                     hint='hash',
                 )
             )
-            print (config_docs[0])
+
             insertions.append((c_hash, ca_hash))
             # TODO: Fix this as it duplicates things when no property is present
             # if not p_hash:
