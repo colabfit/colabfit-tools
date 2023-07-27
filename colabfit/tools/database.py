@@ -572,7 +572,7 @@ class MongoDatabase(MongoClient):
                 disable=not verbose,
         ):
             co_relationships_dict = {}
-            pi_relationships_dict = {}
+            pi_relationships_list = []
             property_docs_do = []
             calc_lists = {}
             calc_lists['PI'] = []
@@ -610,6 +610,7 @@ class MongoDatabase(MongoClient):
             new_p_hashes = []
             for pname, pmap_list in property_map.items():
                 for pmap_i, pmap in enumerate(pmap_list):
+                    pi_relationships_dict = {}
                     pmap_copy = dict(pmap)
                     if '_metadata' in pmap_copy:
                         del pmap_copy['_metadata']
@@ -756,9 +757,8 @@ class MongoDatabase(MongoClient):
                         if 'source-unit' in prop[k]:
                             setOnInsert[k]['source-unit'] = prop[k]['source-unit']
                         # TODO: Look at: can probably safely move out one level
-                        # TODO: Modify relationships
-                        pi_relationships_dict['metadata'] = 'MD_' + metadata_hashes[0]
-                        p_update_doc = {
+                    pi_relationships_dict['metadata'] = 'MD_' + str(pi_md._hash)
+                    p_update_doc = {
                             #'$addToSet': {
                                 # PR -> PSO pointer
                                 # OLD
@@ -767,19 +767,19 @@ class MongoDatabase(MongoClient):
                             #    },
                             #    'relationships.data_objects': {},
                             #},
-                            '$setOnInsert': {
+                        '$setOnInsert': {
                                 'hash': p_hash,
                                 SHORT_ID_STRING_NAME: 'PI_' + p_hash,
                                 'type': pname,
                                 pname: setOnInsert
-                            },
-                            '$set': {
+                        },
+                        '$set': {
                                 'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                            }
                         }
+                    }
 
                     property_docs_do.append(p_update_doc)
-
+                    pi_relationships_list.append(pi_relationships_dict)
                     # c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
                     #    'PI_'+p_hash
                     # ) #can probably safely remove since linked to DO
@@ -822,13 +822,15 @@ class MongoDatabase(MongoClient):
                     hint='hash',
                 )
             )
-            pi_relationships_dict['data_object'] = "DO_%s" %ca_hash
+            #pi_relationships_dict['data_object'] = "DO_%s" %ca_hash
             co_relationships_dict['data_object'] = "DO_%s" %ca_hash
-            pi_relationships_dict['dataset'] = ds_id
+            #pi_relationships_dict['dataset'] = ds_id
             co_relationships_dict['dataset'] = ds_id
 
-            for pi_doc in property_docs_do:
-                pi_doc['$push'] = {'relationships': pi_relationships_dict}
+            for pi_doc_i, pi_doc in enumerate(property_docs_do):
+                pi_relationships_list[pi_doc_i]['data_object'] = "DO_%s" % ca_hash
+                pi_relationships_list[pi_doc_i]['dataset'] = ds_id
+                pi_doc['$push'] = {'relationships': pi_relationships_list[pi_doc_i]}
                 property_docs.append(UpdateOne(
                         {'hash': pi_doc['$setOnInsert']['hash']},
                         pi_doc,
