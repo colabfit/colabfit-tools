@@ -3723,7 +3723,7 @@ class MongoDatabase(MongoClient):
         cas = [i['colabfit-id'] for i in cas_q]
         #cos = list(
         #    self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',
-                                                                                        1))
+        #                                                                                1))
         #pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort(
         #    'relationships.data_objects', 1))
         p = multiprocessing.Pool(nprocs)
