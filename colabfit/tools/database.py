@@ -3718,12 +3718,14 @@ class MongoDatabase(MongoClient):
 
     def export_ds_to_xyz(self, ds_id, nprocs=1):
         ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: {'$eq': ds_id}})
-        cas = ds_doc['relationships']['data_objects']
-        cos = list(
-            self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',
+        #Old cas = ds_doc['relationships']['data_objects']
+        cas_q = self.data_objects.find({'relationships.dataset':ds_id},{'colabfit-id':1})
+        cas = [i['colabfit-id'] for i in cas_q]
+        #cos = list(
+        #    self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',
                                                                                         1))
-        pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort(
-            'relationships.data_objects', 1))
+        #pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort(
+        #    'relationships.data_objects', 1))
         p = multiprocessing.Pool(nprocs)
         results = []
         # results.append(result for result in tqdm(p.imap_unordered(partial(build_do,client_name=self.database_name),cas)))
@@ -3736,10 +3738,10 @@ class MongoDatabase(MongoClient):
 
 def build_do(ca, client_name):
     client = MongoDatabase(client_name)
-    co = client.configurations.find_one({'relationships.data_objects': {'$in': [ca]}})
-    pis = list(client.property_instances.find({'relationships.data_objects': {'$in': [ca]}}))
+    co = client.configurations.find_one({'relationships.data_object': {'$in': [ca]}})
+    pis = list(client.property_instances.find({'relationships.data_object': {'$in': [ca]}}))
     a = Atoms(numbers=co['atomic_numbers'], positions=co['positions'], cell=co['cell'], pbc=co['pbc'])
-    a.info['do-colabfit-id'] = co['relationships']['data_objects']
+    a.info['do-colabfit-id'] = co['relationships']['data_object']
     for i, pi in enumerate(pis):
         # print ('pi_type',pi['type'])
         for k, v in pi.items():
