@@ -3733,7 +3733,7 @@ class MongoDatabase(MongoClient):
             results.append(result)
         p.close()
         p.join()
-        ase_write('%s.xyz' % ds_doc['extended-id'], results, tolerant=True)
+        ase_write('%s.xyz' % ds_doc['extended-id'], results)
 
 
 def build_do(ca, client_name, client_uri):
@@ -3741,7 +3741,7 @@ def build_do(ca, client_name, client_uri):
     co = client.configurations.find_one({'relationships.data_object': {'$in': [ca]}})
     pis = list(client.property_instances.find({'relationships.data_object': {'$in': [ca]}}))
     a = Atoms(numbers=co['atomic_numbers'], positions=co['positions'], cell=co['cell'], pbc=co['pbc'])
-    a.info['do-colabfit-id'] = co['relationships']['data_object']
+    a.info['do-colabfit-id'] = co['relationships'][0]['data_object']
     for i, pi in enumerate(pis):
         # print ('pi_type',pi['type'])
         for k, v in pi.items():
