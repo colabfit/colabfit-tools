@@ -3729,15 +3729,15 @@ class MongoDatabase(MongoClient):
         p = multiprocessing.Pool(nprocs)
         results = []
         # results.append(result for result in tqdm(p.imap_unordered(partial(build_do,client_name=self.database_name),cas)))
-        for result in tqdm(p.imap_unordered(partial(build_do, client_name=self.database_name), cas), total=len(cas)):
+        for result in tqdm(p.imap_unordered(partial(build_do, client_name=self.database_name, client_uri=self.uri), cas), total=len(cas)):
             results.append(result)
         p.close()
         p.join()
         ase_write('%s.xyz' % ds_doc['extended-id'], results, tolerant=True)
 
 
-def build_do(ca, client_name):
-    client = MongoDatabase(client_name)
+def build_do(ca, client_name, client_uri):
+    client = MongoDatabase(client_name, uri=client_uri)
     co = client.configurations.find_one({'relationships.data_object': {'$in': [ca]}})
     pis = list(client.property_instances.find({'relationships.data_object': {'$in': [ca]}}))
     a = Atoms(numbers=co['atomic_numbers'], positions=co['positions'], cell=co['cell'], pbc=co['pbc'])
