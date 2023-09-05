@@ -802,12 +802,12 @@ class MongoDatabase(MongoClient):
             ca_insert_doc['chemical_formula_hill'] = calc_lists['CO_hill']
             ca_update_doc = {  # update document
                 '$setOnInsert': ca_insert_doc,
-                '$addToSet': {'property_types': {'$each': calc_lists['PI_type']}},
+                '$addToSet': {'property_types': {'$each': calc_lists['PI_type']}, 'relationships': {'dataset': ds_id}},
                # '$inc': {
                #     'ncounts': 1
                # },
 
-                '$addToSet': {'relationships': {'dataset': ds_id}},
+                #'$addToSet': {'relationships': {'dataset': ds_id}},
 
                 '$set': {
                     'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -838,7 +838,7 @@ class MongoDatabase(MongoClient):
                         hint='hash',
                     ))
 
-            c_update_doc['$addToSet']['relationships'] = co_relationships_dict
+            c_update_doc['$']['relationships'] = co_relationships_dict
             config_docs.append(
                 UpdateOne(
                     {'hash': c_hash},
