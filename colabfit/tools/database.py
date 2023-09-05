@@ -838,7 +838,7 @@ class MongoDatabase(MongoClient):
                         hint='hash',
                     ))
 
-            c_update_doc['$']['relationships'] = co_relationships_dict
+            c_update_doc['$addToSet']['relationships'] = co_relationships_dict
             config_docs.append(
                 UpdateOne(
                     {'hash': c_hash},
