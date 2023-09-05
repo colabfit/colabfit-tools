@@ -830,7 +830,7 @@ class MongoDatabase(MongoClient):
             for pi_doc_i, pi_doc in enumerate(property_docs_do):
                 pi_relationships_list[pi_doc_i]['data_object'] = "DO_%s" % ca_hash
                 pi_relationships_list[pi_doc_i]['dataset'] = ds_id
-                pi_doc['$addToSet'] = {'relationships': pi_relationships_list[pi_doc_i]}
+                pi_doc['$addToSet']['relationships'] = pi_relationships_list[pi_doc_i]
                 property_docs.append(UpdateOne(
                         {'hash': pi_doc['$setOnInsert']['hash']},
                         pi_doc,
@@ -838,7 +838,7 @@ class MongoDatabase(MongoClient):
                         hint='hash',
                     ))
 
-            c_update_doc['$addToSet'] = {'relationships': co_relationships_dict}
+            c_update_doc['$addToSet']['relationships'] = co_relationships_dict
             config_docs.append(
                 UpdateOne(
                     {'hash': c_hash},
