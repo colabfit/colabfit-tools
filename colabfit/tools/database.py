@@ -1632,7 +1632,8 @@ class MongoDatabase(MongoClient):
             config_docs.append(UpdateOne(
                 {'hash': c_hash},
                 {'$set': {"relationships.$[elem].configuration_set":cs_id}},
-                array_filters= [{"elem.dataset":ds_id}],
+                array_filters= [{"elem.dataset":ds_id,"elem.configuration_set":{'$exists':False}}], #If correct dataset and cs relationship isn't already present
+                #Avoids overwriting other relationships
 
                 hint='hash',
             ))
