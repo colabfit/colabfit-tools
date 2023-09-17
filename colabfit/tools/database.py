@@ -2301,9 +2301,9 @@ class MongoDatabase(MongoClient):
     # TODO: Handle properties somewhere->should we allow for only properties to be update?
     # TODO: Allow for metadata updating
     def update_dataset(self, ds_id, add_cs_ids=None, remove_cs_ids=None, add_do_ids=None, remove_do_ids=None):
-
-        if add_cs_ids is None and remove_cs_ids is None:
-            raise RuntimeError('Please input configuration set IDs/properties to add or remove from the dataset.')
+        # Remove since we shouldn't require CS stuf here
+        #if add_cs_ids is None and remove_cs_ids is None:
+        #    raise RuntimeError('Please input configuration set IDs/properties to add or remove from the dataset.')
 
         # increment version number
         current_hash, current_version = ds_id.split('_')[1:]
