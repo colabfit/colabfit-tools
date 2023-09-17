@@ -2354,16 +2354,7 @@ class MongoDatabase(MongoClient):
                 raise RuntimeError('All configuration sets to be removed are not present in DS.')
 
         init_len_do = len(do_ids)
-
-        if add_do_ids is not None:
-            if isinstance(do_ids, str):
-                add_do_ids = [add_do_ids]
-            do_ids.extend(add_do_ids)
-            do_ids = list(set(do_ids))
-            if len(do_ids) == init_len_do:
-                raise RuntimeError('All data objects to be added are already present in DS.')
-        init_len_do = len(do_ids)
-
+        
         if remove_do_ids is not None:
             if isinstance(remove_do_ids, str):
                 remove_do_ids = [remove_do_ids]
@@ -2376,6 +2367,25 @@ class MongoDatabase(MongoClient):
                                       f'in the original DS, so it could not be removed.')
             if len(do_ids) == init_len_do:
                 raise RuntimeError('All data objects to be removed are not present in DS.')
+        
+        init_len_do = len(do_ids)
+
+        #TODO *****
+        #Add new DS relationship to old COs and DOs
+        #co_updates = []
+        #do_updates = []
+        self.data_objects.update_many(
+            {'hash': {'$in': do_ids}},
+            {'$addToSet': {'relationships': {'dataset':new_ds_id}}})
+
+        if add_do_ids is not None:
+            if isinstance(do_ids, str):
+                add_do_ids = [add_do_ids]
+            do_ids.extend(add_do_ids)
+            do_ids = list(set(do_ids))
+            if len(do_ids) == init_len_do:
+                raise RuntimeError('All data objects to be added are already present in DS.')
+
         # insert new version of DS
 
         self.insert_dataset(do_ids, name=ds_doc['name'], cs_ids=cs_ids, authors=ds_doc['authors'],
