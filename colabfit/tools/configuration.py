@@ -4,6 +4,9 @@ from ase import Atoms
 from string import ascii_lowercase, ascii_uppercase
 from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
+import time
+from functools import partial
+from multiprocessing import Pool
 from colabfit import (
     ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
 )
@@ -392,38 +395,40 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             'nperiodic_dimensions': set(),
             'dimension_types': set(),
         }
-
-        for doc in tqdm(
-                #db.configurations.find({'hash': {'$in': hashes}}),
-                db.query_in_batches(query_key='hash', query_list=hashes, collection_name='configurations'),
-                desc='Aggregating configuration info',
-                disable=not verbose,
-                total=len(hashes),
-        ):
-            aggregated_info['nsites'] += doc['nsites']
-
-            aggregated_info['chemical_systems'].add(''.join(doc['elements']))
-
-            for e, er in zip(doc['elements'], doc['elements_ratios']):
+        
+        n = len(hashes)
+        k = db.nprocs
+        chunked_hashes = [
+                hashes[i * (n // k) + min(i, n % k):(i + 1) * (n // k) + min(i + 1, n % k)]
+                for i in range(k)
+            ]
+        s = time.time()
+        with Pool(k) as pool:
+            aggs = pool.map(partial(agg,db=db.database_name,uri=db.uri),chunked_hashes)
+        for a in aggs:
+            aggregated_info['nsites'] += a['nsites']
+            aggregated_info['chemical_systems'].update(a['chemical_systems'])
+            
+            for e, er in zip(a['elements'], a['individual_elements_ratios']):
                 if e not in aggregated_info['elements']:
-                    aggregated_info['nelements'] += 1
                     aggregated_info['elements'].append(e)
-                    aggregated_info['total_elements_ratios'][e] = er * doc['nsites']
-                    aggregated_info['individual_elements_ratios'][e] = {np.round_(er, decimals=2)}
+                    aggregated_info['total_elements_ratios'][e] = a['total_elements_ratios'][e] 
+                    aggregated_info['individual_elements_ratios'][e] = a['individual_elements_ratios'][e]
                 else:
-                    aggregated_info['total_elements_ratios'][e] += er * doc['nsites']
-                    aggregated_info['individual_elements_ratios'][e].add(
-                        np.round_(er, decimals=2)
-                    )
+                    aggregated_info['total_elements_ratios'][e] += a['total_elements_ratios'][e]
+                    aggregated_info['individual_elements_ratios'][e].update(
+                        a['individual_elements_ratios'][e])
+                    
 
-            aggregated_info['chemical_formula_reduced'].add(doc['chemical_formula_reduced'])
-            aggregated_info['chemical_formula_anonymous'].add(doc['chemical_formula_anonymous'])
-            aggregated_info['chemical_formula_hill'].add(doc['chemical_formula_hill'])
+            aggregated_info['chemical_formula_reduced'].update(a['chemical_formula_reduced'])
+            aggregated_info['chemical_formula_anonymous'].update(a['chemical_formula_anonymous'])
+            aggregated_info['chemical_formula_hill'].update(a['chemical_formula_hill'])
 
-            aggregated_info['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
-            aggregated_info['dimension_types'].add(tuple(doc['dimension_types']))
+            aggregated_info['nperiodic_dimensions'].update(a['nperiodic_dimensions'])
+            aggregated_info['dimension_types'].update(a['dimension_types'])
 
         for e in aggregated_info['elements']:
+            aggregated_info['nelements']+=1
             aggregated_info['total_elements_ratios'][e] /= aggregated_info['nsites']
             aggregated_info['individual_elements_ratios'][e] = list(aggregated_info['individual_elements_ratios'][e])
 
@@ -433,7 +438,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         aggregated_info['chemical_formula_hill'] = list(aggregated_info['chemical_formula_hill'])
         aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
         aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
-
+        print ('Configuration aggregation time:',time.time()-s)
         return aggregated_info
 
     def __str__(self):
@@ -536,3 +541,43 @@ def pre_hash_formatting(k, v, ordering):
             return v
     else:
         return v
+def agg (hashes,db,uri):
+    from colabfit.tools.database import MongoDatabase
+    client = MongoDatabase(db, uri=uri)
+    proxy = {
+            'nsites': 0,
+            'chemical_systems': set(),
+            'elements': [],
+            'individual_elements_ratios': {},
+            'total_elements_ratios': {},
+            'chemical_formula_reduced': set(),
+            'chemical_formula_anonymous': set(),
+            'chemical_formula_hill': set(),
+            'nperiodic_dimensions': set(),
+            'dimension_types': set(),
+        }
+
+    docs = client.query_in_batches(query_key='hash', query_list=hashes, collection_name='configurations')
+    while True:
+        for doc in docs:
+            proxy['nsites'] += doc['nsites']
+            proxy['chemical_systems'].add(''.join(doc['elements']))
+
+            for e, er in zip(doc['elements'], doc['elements_ratios']):
+                if e not in proxy['elements']:
+                    proxy['elements'].append(e)
+                    proxy['total_elements_ratios'][e] = er * doc['nsites']
+                    proxy['individual_elements_ratios'][e] = {np.round_(er, decimals=2)}
+                else:
+                    proxy['total_elements_ratios'][e] += er * doc['nsites']
+                    proxy['individual_elements_ratios'][e].add(
+                        np.round_(er, decimals=2)
+                    )
+
+            proxy['chemical_formula_reduced'].add(doc['chemical_formula_reduced'])
+            proxy['chemical_formula_anonymous'].add(doc['chemical_formula_anonymous'])
+            proxy['chemical_formula_hill'].add(doc['chemical_formula_hill'])
+
+            proxy['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
+            proxy['dimension_types'].add(tuple(doc['dimension_types']))
+        return proxy

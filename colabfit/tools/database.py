@@ -287,22 +287,28 @@ class MongoDatabase(MongoClient):
             keys='relationships.metadata', name='pi_relationships.metadata'
         )
         self.configuration_sets.create_index(
-            keys='relationships.datasets', name='cs_relationships.datasets'
+            keys='relationships.dataset', name='cs_relationships.dataset'
         )
         self.configurations.create_index(
             keys='relationships.metadata', name='co_relationships.metadata'
         )
         self.configurations.create_index(
-            keys='relationships.data_objects', name='co_relationships.data_objects'
-        )
-        self.property_instances.create_index(
-            keys='relationships.data_objects', name='pi_relationships.data_objects'
-        )
-        self.data_objects.create_index(
-            keys='relationships.datasets', name='do_relationships.datasets'
+            keys='relationships.data_object', name='co_relationships.data_object'
         )
         self.configurations.create_index(
-            keys='relationships.configuration_sets', name='co_relationships.configuration_sets'
+            keys='relationships.dataset', name='co_relationships.dataset'
+        )
+        self.property_instances.create_index(
+            keys='relationships.data_object', name='pi_relationships.data_object'
+        )
+        self.property_instances.create_index(
+            keys='relationships.dataset', name='pi_relationships.dataset'
+        )
+        self.data_objects.create_index(
+            keys='relationships.dataset', name='do_relationships.dataset'
+        )
+        self.configurations.create_index(
+            keys='relationships.configuration_set', name='co_relationships.configuration_set'
         )
         self.nprocs = nprocs
 
@@ -314,6 +320,7 @@ class MongoDatabase(MongoClient):
             co_md_map=None,
             transform=None,
             verbose=True,
+            ds_id=None,
             generator=None,
     ):
         """
@@ -391,7 +398,22 @@ class MongoDatabase(MongoClient):
                 If no properties were inserted, then property_id will be None.
 
         """
-
+        # Generate DS ID here so relationships can be grouped
+        if ds_id is None:
+            ds_ids = [i['colabfit-id'] for i in self.datasets.find({}, {'colabfit-id': 1})]
+            missing_ids = set()
+            for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}}, {'relationships': 1}):
+                for j in i['relationships']:
+                    if j['dataset'] not in ds_ids:
+                        missing_ids.add(j['dataset'])
+            if len(list(missing_ids)) > 1:
+                raise Exception("DS ID could not be inferred from existing data")
+            elif len(list(missing_ids)) ==1:
+                print ('Using existing DS ID', list(missing_ids)[0])
+                ds_id= list(missing_ids)[0]
+            else:
+                ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
+                print('Generated new DS ID:', ds_id)
         if self.uri is not None:
             mongo_login = self.uri
         else:
@@ -467,6 +489,7 @@ class MongoDatabase(MongoClient):
                 self._insert_data,
                 mongo_login=mongo_login,
                 database_name=self.database_name,
+                ds_id=ds_id,
                 property_map=property_map,
                 co_md_map=co_md_map,
                 transform=transform,
@@ -481,7 +504,7 @@ class MongoDatabase(MongoClient):
 
     @staticmethod
     def _insert_data(
-            configurations, database_name, mongo_login, co_md_map=None,
+            configurations, database_name, mongo_login, ds_id, co_md_map=None,
             property_map=None, transform=None,
             verbose=False
     ):
@@ -538,6 +561,8 @@ class MongoDatabase(MongoClient):
         property_docs = []
         calc_docs = []
         meta_docs = []
+#        co_relationships_dict = {}
+#        pi_relationships_dict = {}
         meta_update_dict = {}
         # Add all of the configurations into the Mongo server
         ai = 1
@@ -546,6 +571,8 @@ class MongoDatabase(MongoClient):
                 desc='Preparing to add configurations to Database',
                 disable=not verbose,
         ):
+            co_relationships_dict = {}
+            pi_relationships_list = []
             property_docs_do = []
             calc_lists = {}
             calc_lists['PI'] = []
@@ -554,7 +581,8 @@ class MongoDatabase(MongoClient):
                 transform(atoms)
 
             c_update_doc, c_hash = _build_c_update_doc(atoms)
-            c_update_doc['$addToSet']['relationships.data_objects']={}
+            # TODO: Don't know if I need here or later->check
+            #c_update_doc['$setOnInsert']['relationships'] = []
             calc_lists['CO'] = c_hash
             calc_lists['CO_hill'] = atoms.configuration_summary()['chemical_formula_hill']
             if co_md_map:
@@ -573,13 +601,16 @@ class MongoDatabase(MongoClient):
                     upsert=True,
                     hint='hash',
                 ))
-                c_update_doc['$addToSet']['relationships.metadata'] = {'$each': ['MD_%s' % str(co_md._hash)]}
+                co_relationships_dict['metadata'] = 'MD_%s' % str(co_md._hash)
+                # OLD
+                #c_update_doc['$addToSet']['relationships.metadata'] = {'$each': ['MD_%s' % str(co_md._hash)]}
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
             p_hash = None
 
             new_p_hashes = []
             for pname, pmap_list in property_map.items():
                 for pmap_i, pmap in enumerate(pmap_list):
+                    pi_relationships_dict = {}
                     pmap_copy = dict(pmap)
                     if '_metadata' in pmap_copy:
                         del pmap_copy['_metadata']
@@ -726,27 +757,29 @@ class MongoDatabase(MongoClient):
                         if 'source-unit' in prop[k]:
                             setOnInsert[k]['source-unit'] = prop[k]['source-unit']
                         # TODO: Look at: can probably safely move out one level
-                        p_update_doc = {
-                            '$addToSet': {
+                    pi_relationships_dict['metadata'] = 'MD_' + str(pi_md._hash)
+                    p_update_doc = {
+                            #'$addToSet': {
                                 # PR -> PSO pointer
-                                'relationships.metadata': {
-                                    '$each': ['MD_' + i for i in metadata_hashes]
-                                },
-                                'relationships.data_objects': {},
-                            },
-                            '$setOnInsert': {
+                                # OLD
+                            #    'relationships.metadata': {
+                            #        '$each': ['MD_' + i for i in metadata_hashes]
+                            #    },
+                            #    'relationships.data_objects': {},
+                            #},
+                        '$setOnInsert': {
                                 'hash': p_hash,
                                 SHORT_ID_STRING_NAME: 'PI_' + p_hash,
                                 'type': pname,
                                 pname: setOnInsert
-                            },
-                            '$set': {
+                        },
+                        '$set': {
                                 'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-                            }
                         }
+                    }
 
                     property_docs_do.append(p_update_doc)
-
+                    pi_relationships_list.append(pi_relationships_dict)
                     # c_update_doc['$addToSet']['relationships.property_instances']['$each'].append(
                     #    'PI_'+p_hash
                     # ) #can probably safely remove since linked to DO
@@ -769,13 +802,16 @@ class MongoDatabase(MongoClient):
             ca_insert_doc['chemical_formula_hill'] = calc_lists['CO_hill']
             ca_update_doc = {  # update document
                 '$setOnInsert': ca_insert_doc,
-                '$addToSet': {'property_types': {'$each': calc_lists['PI_type']}},
-                '$inc': {
-                    'ncounts': 1
-                },
+                '$addToSet': {'property_types': {'$each': calc_lists['PI_type']}, 'relationships': {'dataset': ds_id}},
+               # '$inc': {
+               #     'ncounts': 1
+               # },
+
+                #'$addToSet': {'relationships': {'dataset': ds_id}},
 
                 '$set': {
                     'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+
                 },
             }
             calc_docs.append(
@@ -786,15 +822,23 @@ class MongoDatabase(MongoClient):
                     hint='hash',
                 )
             )
-            for pi_doc in property_docs_do:
-                pi_doc['$addToSet'] ['relationships.data_objects']={'$each': ["DO_%s" %ca_hash]}
+            #pi_relationships_dict['data_object'] = "DO_%s" %ca_hash
+            co_relationships_dict['data_object'] = "DO_%s" %ca_hash
+            #pi_relationships_dict['dataset'] = ds_id
+            co_relationships_dict['dataset'] = ds_id
+
+            for pi_doc_i, pi_doc in enumerate(property_docs_do):
+                pi_relationships_list[pi_doc_i]['data_object'] = "DO_%s" % ca_hash
+                pi_relationships_list[pi_doc_i]['dataset'] = ds_id
+                pi_doc['$addToSet'] = {'relationships': pi_relationships_list[pi_doc_i]}
                 property_docs.append(UpdateOne(
                         {'hash': pi_doc['$setOnInsert']['hash']},
                         pi_doc,
                         upsert=True,
                         hint='hash',
                     ))
-            c_update_doc['$addToSet']['relationships.data_objects'] = {'$each': ["DO_%s" %ca_hash]}
+
+            c_update_doc['$addToSet']['relationships'] = co_relationships_dict
             config_docs.append(
                 UpdateOne(
                     {'hash': c_hash},
@@ -1487,6 +1531,7 @@ class MongoDatabase(MongoClient):
         self.database.concatenate_configurations()
 
     def insert_configuration_set(self, hashes, name, description='', ordered=False, overloaded_cs_id=None,
+                                 ds_id=None,
                                  verbose=False):
         """
         Inserts the configuration set of IDs to the database.
@@ -1505,7 +1550,25 @@ class MongoDatabase(MongoClient):
             description (str, optional):
                 A human-readable description of the configuration set.
         """
+        # TODO: Same DS ID approach. Then search for CO/DS relationship pair and insert CS relationship into it
+        if ds_id is None:
+            # Hack so we don't need to modify existing ingestion scripts
+            # Best practice to provide a unique ID for new ingestion scripts
 
+            # Find DS ID that is referenced by CO/PI but is not present in database
+            # Assume that resulting ID is one to use
+            ds_ids = [i['colabfit-id'] for i in self.datasets.find({},{'colabfit-id':1})]
+            missing_ids = set()
+            for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}},
+                                              {'relationships': 1}):
+                for j in i['relationships']:
+                    if j['dataset'] not in ds_ids:
+                        missing_ids.add(j['dataset'])
+            if len(missing_ids) != 1:
+                raise Exception("DS ID could not be inferred from existing data")
+            else:
+                ds_id = list(missing_ids)[0]
+        print ('DS',ds_id)
         if isinstance(hashes, str):
             hashes = [hashes]
 
@@ -1557,6 +1620,7 @@ class MongoDatabase(MongoClient):
                     'aggregated_info': aggregated_info,
                     'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
                 },
+                '$addToSet': {'relationships': {'dataset': ds_id}},
             },
             upsert=True,
             hint='hash',
@@ -1567,11 +1631,10 @@ class MongoDatabase(MongoClient):
         for c_hash in hashes:
             config_docs.append(UpdateOne(
                 {'hash': c_hash},
-                {
-                    '$addToSet': {
-                        'relationships.configuration_sets': cs_id
-                    }
-                },
+                {'$set': {"relationships.$[elem].configuration_set":cs_id}},
+                array_filters= [{"elem.dataset":ds_id,"elem.configuration_set":{'$exists':False}}], #If correct dataset and cs relationship isn't already present
+                #Avoids overwriting other relationships
+
                 hint='hash',
             ))
 
@@ -1579,7 +1642,8 @@ class MongoDatabase(MongoClient):
 
         return cs_id
 
-    def query_and_insert_configuration_set(self, co_hashes, query, name, description='', ordered=False, overloaded_cs_id=None):
+    def query_and_insert_configuration_set(self, co_hashes, query, name, description='',
+                                           ordered=False, ds_id=None, overloaded_cs_id=None):
         """
         Finds COs and inserts their grouping as a configuration into the database.
 
@@ -1611,6 +1675,7 @@ class MongoDatabase(MongoClient):
             filtered_cos,
             description=description,
             name=name,
+            ds_id=ds_id,
             ordered=ordered,
             overloaded_cs_id=overloaded_cs_id
         )
@@ -1910,7 +1975,7 @@ class MongoDatabase(MongoClient):
                     idx = aggregated_info['property_types'].index(doc['property_types'][i])
                     aggregated_info['property_types_counts'][idx] += 1
         do_ids = ['DO_%s' %i for i in pr_hashes]
-        co_ids = list(self.query_in_batches(collection_name='configurations', query_key='relationships.data_objects',
+        co_ids = list(self.query_in_batches(collection_name='configurations', query_key='relationships.data_object',
                                        query_list=do_ids, return_key='hash', projection= {'hash':1}))
         ag_2 = self.configuration_type.aggregate_configuration_summaries(self, co_ids,
                                                                          verbose=verbose)
@@ -1993,6 +2058,7 @@ class MongoDatabase(MongoClient):
 
     def insert_dataset(
             self, do_hashes, name,
+            ds_id=None,
             authors=None,
             cs_ids=None,
             links=None,
@@ -2046,6 +2112,26 @@ class MongoDatabase(MongoClient):
                 The ID of the inserted dataset
         """
 
+        if ds_id is None:
+            # Hack so we don't need to modify existing ingestion scripts
+            # Best practice to provide a unique ID for new ingestion scripts
+
+            # Find DS ID that is referenced by CO/PI but is not present in database
+            # Assume that resulting ID is one to use
+            ds_ids = [i['colabfit-id'] for i in self.datasets.find({},{'colabfit-id':1})]
+            missing_ids = set()
+            for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}},
+                                              {'relationships': 1}):
+                for j in i['relationships']:
+                    if j['dataset'] not in ds_ids:
+                        missing_ids.add(j['dataset'])
+            if len(missing_ids) != 1:
+                raise Exception("DS ID could not be inferred from existing data")
+            else:
+                ds_id = list(missing_ids)[0]
+
+
+
         if isinstance(cs_ids, str):
             cs_ids = [cs_ids]
 
@@ -2084,9 +2170,9 @@ class MongoDatabase(MongoClient):
         except:
             pass
 
-        if overloaded_ds_id is None:
-            ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
-        else:
+        if overloaded_ds_id is not None:
+            # Old
+            #ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
             ds_id = overloaded_ds_id
 
         aggregated_info = {}
@@ -2136,6 +2222,8 @@ class MongoDatabase(MongoClient):
             hint='hash',
         )
 
+        # Don't need below anymore since it's assumed that relationship already exists
+        '''
         # Add the backwards relationships CS->DS
         if cs_ids is not None:
             config_set_docs = []
@@ -2159,7 +2247,7 @@ class MongoDatabase(MongoClient):
                 hint='hash',
             ))
         self.data_objects.bulk_write(property_docs)
-
+        '''
         return ds_id
 
     def get_dataset(self, ds_id, resync=False, verbose=False):
@@ -2213,9 +2301,9 @@ class MongoDatabase(MongoClient):
     # TODO: Handle properties somewhere->should we allow for only properties to be update?
     # TODO: Allow for metadata updating
     def update_dataset(self, ds_id, add_cs_ids=None, remove_cs_ids=None, add_do_ids=None, remove_do_ids=None):
-
-        if add_cs_ids is None and remove_cs_ids is None:
-            raise RuntimeError('Please input configuration set IDs/properties to add or remove from the dataset.')
+        # Remove since we shouldn't require CS stuf here
+        #if add_cs_ids is None and remove_cs_ids is None:
+        #    raise RuntimeError('Please input configuration set IDs/properties to add or remove from the dataset.')
 
         # increment version number
         current_hash, current_version = ds_id.split('_')[1:]
@@ -2225,8 +2313,8 @@ class MongoDatabase(MongoClient):
         new_ds_id = 'DS_' + current_hash + '_' + str(version)
 
         # Get configuration set ids from current version and append and/or remove
-        cs_docs = list(self.configuration_sets.find({'relationships.datasets':ds_id}, {'colabfit-id': 1}))
-        do_docs = list(self.data_objects.find({'relationships.datasets': ds_id}, {'hash': 1}))
+        cs_docs = list(self.configuration_sets.find({'relationships.dataset':ds_id}, {'colabfit-id': 1}))
+        do_docs = list(self.data_objects.find({'relationships.dataset': ds_id}, {'hash': 1}))
         cs_ids = [i['colabfit-id'] for i in cs_docs]
         do_ids = [i['hash'] for i in do_docs]
         init_len = len(cs_ids)
@@ -2266,16 +2354,7 @@ class MongoDatabase(MongoClient):
                 raise RuntimeError('All configuration sets to be removed are not present in DS.')
 
         init_len_do = len(do_ids)
-
-        if add_do_ids is not None:
-            if isinstance(do_ids, str):
-                add_do_ids = [add_do_ids]
-            do_ids.extend(add_do_ids)
-            do_ids = list(set(do_ids))
-            if len(do_ids) == init_len_do:
-                raise RuntimeError('All data objects to be added are already present in DS.')
-        init_len_do = len(do_ids)
-
+        
         if remove_do_ids is not None:
             if isinstance(remove_do_ids, str):
                 remove_do_ids = [remove_do_ids]
@@ -2288,6 +2367,25 @@ class MongoDatabase(MongoClient):
                                       f'in the original DS, so it could not be removed.')
             if len(do_ids) == init_len_do:
                 raise RuntimeError('All data objects to be removed are not present in DS.')
+        
+        init_len_do = len(do_ids)
+
+        #TODO *****
+        #Add new DS relationship to old COs and DOs
+        #co_updates = []
+        #do_updates = []
+        self.data_objects.update_many(
+            {'hash': {'$in': do_ids}},
+            {'$addToSet': {'relationships': {'dataset':new_ds_id}}})
+
+        if add_do_ids is not None:
+            if isinstance(do_ids, str):
+                add_do_ids = [add_do_ids]
+            do_ids.extend(add_do_ids)
+            do_ids = list(set(do_ids))
+            if len(do_ids) == init_len_do:
+                raise RuntimeError('All data objects to be added are already present in DS.')
+
         # insert new version of DS
 
         self.insert_dataset(do_ids, name=ds_doc['name'], cs_ids=cs_ids, authors=ds_doc['authors'],
@@ -2705,6 +2803,35 @@ class MongoDatabase(MongoClient):
             )
 
         return configuration_sets, property_hashes
+
+    def remove_abandoned_data(self):
+        ds_ids = [i['colabfit-id'] for i in self.datasets.find({}, {'colabfit-id': 1},hint='colabfit-id')]
+        missing_ids = set()
+        for i in self.configurations.find({'relationships.$[elem].dataset': {'$nin': ds_ids}}, {'relationships': 1}):
+            for j in i['relationships']:
+                if j['dataset'] not in ds_ids:
+                    missing_ids.add(j['dataset'])
+        missing_ids = list(missing_ids)
+        if len(missing_ids)==0:
+            raise Exception('Could not find abandoned data')
+        else:
+            for kind, index in [(self.configurations, 'co_relationships.dataset'),
+                                (self.property_instances, 'pi_relationships.dataset'),
+                                (self.data_objects, 'do_relationships.dataset'),
+                                (self.configuration_sets, 'cs_relationships.dataset')]:
+                # pull relationships
+                kind.update_many(
+                    {
+                        'relationships.dataset': {'$in': missing_ids},
+                    },
+                    {'$pull':{'relationships':{'dataset':{'$in': missing_ids}}}},
+                hint=index)
+                #kind.delete_many(
+                #    {
+                #        'relationships': {'$size': 0}
+                #})
+
+
 
     # def apply_transformation(
     #     self,
@@ -3602,28 +3729,30 @@ class MongoDatabase(MongoClient):
 
     def export_ds_to_xyz(self, ds_id, nprocs=1):
         ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: {'$eq': ds_id}})
-        cas = ds_doc['relationships']['data_objects']
-        cos = list(
-            self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',
-                                                                                        1))
-        pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort(
-            'relationships.data_objects', 1))
+        #Old cas = ds_doc['relationships']['data_objects']
+        cas_q = self.data_objects.find({'relationships.dataset':ds_id},{'colabfit-id':1})
+        cas = [i['colabfit-id'] for i in cas_q]
+        #cos = list(
+        #    self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',
+        #                                                                                1))
+        #pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort(
+        #    'relationships.data_objects', 1))
         p = multiprocessing.Pool(nprocs)
         results = []
         # results.append(result for result in tqdm(p.imap_unordered(partial(build_do,client_name=self.database_name),cas)))
-        for result in tqdm(p.imap_unordered(partial(build_do, client_name=self.database_name), cas), total=len(cas)):
+        for result in tqdm(p.imap_unordered(partial(build_do, client_name=self.database_name, client_uri=self.uri), cas), total=len(cas)):
             results.append(result)
         p.close()
         p.join()
-        ase_write('%s.xyz' % ds_doc['extended-id'], results, tolerant=True)
+        ase_write('%s.xyz' % ds_doc['extended-id'], results)
 
 
-def build_do(ca, client_name):
-    client = MongoDatabase(client_name)
-    co = client.configurations.find_one({'relationships.data_objects': {'$in': [ca]}})
-    pis = list(client.property_instances.find({'relationships.data_objects': {'$in': [ca]}}))
+def build_do(ca, client_name, client_uri):
+    client = MongoDatabase(client_name, uri=client_uri)
+    co = client.configurations.find_one({'relationships.data_object': {'$in': [ca]}})
+    pis = list(client.property_instances.find({'relationships.data_object': {'$in': [ca]}}))
     a = Atoms(numbers=co['atomic_numbers'], positions=co['positions'], cell=co['cell'], pbc=co['pbc'])
-    a.info['do-colabfit-id'] = co['relationships']['data_objects']
+    a.info['do-colabfit-id'] = co['relationships'][0]['data_object']
     for i, pi in enumerate(pis):
         # print ('pi_type',pi['type'])
         for k, v in pi.items():
@@ -3822,7 +3951,9 @@ def _build_ca_insert_doc(calculation):
 def generate_string():
     return get_random_string(12, allowed_chars=string.ascii_lowercase + '1234567890')
 
-
+def generate_ds_id():
+    ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
+    return ds_id
 class ConcatenationException(Exception):
     pass
 
