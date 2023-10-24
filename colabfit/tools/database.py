@@ -28,7 +28,7 @@ from colabfit import (
     _CONFIGS_COLLECTION, _PROPS_COLLECTION, _METADATA_COLLECTION, _DATAOBJECT_COLLECTION,
     _CONFIGSETS_COLLECTION, _PROPDEFS_COLLECTION, _DATASETS_COLLECTION,
     ATOMS_NAME_FIELD, MAX_STRING_LENGTH,
-    SHORT_ID_STRING_NAME, EXTENDED_ID_STRING_NAME
+    SHORT_ID_STRING_NAME, EXTENDED_ID_STRING_NAME,_AGGREGATED_INFO_COLLECTION
 )
 from colabfit.tools.configuration import BaseConfiguration, AtomicConfiguration
 from colabfit.tools.property import Property
@@ -240,6 +240,7 @@ class MongoDatabase(MongoClient):
         self.metadata = self[database_name][_METADATA_COLLECTION]
         self.configuration_sets = self[database_name][_CONFIGSETS_COLLECTION]
         self.datasets = self[database_name][_DATASETS_COLLECTION]
+        self.aggregated_info = self[database_name][_AGGREGATED_INFO_COLLECTION]
 
         self.property_definitions.create_index(
             keys='definition.property-name', name='definition.property-name',
@@ -310,6 +311,23 @@ class MongoDatabase(MongoClient):
         self.configurations.create_index(
             keys='relationships.configuration_set', name='co_relationships.configuration_set'
         )
+
+        self.aggregated_info.create_index(
+                keys='type', name='type'
+        )        
+        self.aggregated_info.create_index(
+                keys='formula', name='formula`'
+        )
+        self.aggregated_info.create_index(
+                keys='relationships.dataset', name='ai_relationships.dataset'
+                )
+        self.aggregated_info.create_index(
+                keys='relationships.configuration_set', name='ai_relationships.configuration_set'
+                )
+
+
+
+
         self.nprocs = nprocs
 
 
@@ -1604,6 +1622,8 @@ class MongoDatabase(MongoClient):
             hashes,
             verbose=True
         )
+        #Insert necessary aggregated info into its collection
+        self.insert_aggregated_info(aggregated_info,'configuration_set',cs_id)
 
         self.configuration_sets.update_one(
             {'hash': str(cs_hash)},
@@ -2185,6 +2205,9 @@ class MongoDatabase(MongoClient):
         for k, v in self.aggregate_data_object_info(
                 do_hashes, verbose=verbose).items():
             aggregated_info[k] = v
+
+        #Insert necessary aggregated info into its collection
+        self.insert_aggregated_info(aggregated_info,'dataset',ds_id)
 
         id_prefix = '_'.join([
             name,
@@ -2830,6 +2853,28 @@ class MongoDatabase(MongoClient):
                 #    {
                 #        'relationships': {'$size': 0}
                 #})
+
+    def insert_aggregated_info(self,aggregated_info,relationship_collection,relationship_id,batch_size=100000):
+        for k in ['chemical_systems','chemical_formula_reduced','chemical_formula_anonymous','chemical_formula_hill']:
+            nbatches = ceil(len(aggregated_info[k])/batch_size)
+            update_list = []
+            for i in range(nbatches):
+                for j in aggregated_info[k][i*batch_size:(i+1)*batch_size]:
+                    update_list.append(UpdateOne({'type': k, 'formula': j},
+                        {'$setOnInsert': {
+                            'type': k,
+                            'formula': j
+                            },
+                        '$set': {
+                            'last_modified': datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+                            },
+                        '$addToSet': {'relationships': {relationship_collection: relationship_id}},
+                        },
+                        upsert=True))
+                self.aggregated_info.bulk_write(update_list)
+
+
+
 
 
 

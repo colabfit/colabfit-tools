@@ -20,6 +20,7 @@ _DATAOBJECT_COLLECTION = 'data_objects'
 _METADATA_COLLECTION = 'metadata'
 _CONFIGSETS_COLLECTION = 'configuration_sets'
 _DATASETS_COLLECTION = 'datasets'
+_AGGREGATED_INFO_COLLECTION = 'aggregated_info'
 
 SHORT_ID_STRING_NAME = 'colabfit-id'
 EXTENDED_ID_STRING_NAME = 'extended-id'
