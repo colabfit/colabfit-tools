@@ -1624,6 +1624,8 @@ class MongoDatabase(MongoClient):
         )
         #Insert necessary aggregated info into its collection
         self.insert_aggregated_info(aggregated_info,'configuration_set',cs_id)
+        for item in ['individual_elements_ratios','chemical_systems','chemical_formula_anonymous','chemical_formula_hill','chemical_formula_reduced']:
+            aggregated_info.pop(item)
 
         self.configuration_sets.update_one(
             {'hash': str(cs_hash)},
@@ -2208,6 +2210,8 @@ class MongoDatabase(MongoClient):
 
         #Insert necessary aggregated info into its collection
         self.insert_aggregated_info(aggregated_info,'dataset',ds_id)
+        for item in ['individual_elements_ratios','chemical_systems','chemical_formula_anonymous','chemical_formula_hill','chemical_formula_reduced']:
+            aggregated_info.pop(item)
 
         id_prefix = '_'.join([
             name,
