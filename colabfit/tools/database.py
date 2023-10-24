@@ -820,7 +820,8 @@ class MongoDatabase(MongoClient):
             ca_insert_doc['chemical_formula_hill'] = calc_lists['CO_hill']
             ca_update_doc = {  # update document
                 '$setOnInsert': ca_insert_doc,
-                '$addToSet': {'property_types': {'$each': calc_lists['PI_type']}, 'relationships': {'dataset': ds_id}},
+                #Set MD relationships here
+                '$addToSet': {'property_types': {'$each': calc_lists['PI_type']}, 'relationships': {'dataset': ds_id, 'configuration':'CO_'+calc_lists['CO'],'property_instance':['PI_'+j for j in calc_lists['PI']],'metadata':list(set([j['metadata'] for j in pi_relationships_list]))}},
                # '$inc': {
                #     'ncounts': 1
                # },
@@ -841,12 +842,11 @@ class MongoDatabase(MongoClient):
                 )
             )
             #pi_relationships_dict['data_object'] = "DO_%s" %ca_hash
-            co_relationships_dict['data_object'] = "DO_%s" %ca_hash
+            #co_relationships_dict['data_object'] = "DO_%s" %ca_hash
             #pi_relationships_dict['dataset'] = ds_id
             co_relationships_dict['dataset'] = ds_id
-
             for pi_doc_i, pi_doc in enumerate(property_docs_do):
-                pi_relationships_list[pi_doc_i]['data_object'] = "DO_%s" % ca_hash
+                #pi_relationships_list[pi_doc_i]['data_object'] = "DO_%s" % ca_hash
                 pi_relationships_list[pi_doc_i]['dataset'] = ds_id
                 pi_doc['$addToSet'] = {'relationships': pi_relationships_list[pi_doc_i]}
                 property_docs.append(UpdateOne(
