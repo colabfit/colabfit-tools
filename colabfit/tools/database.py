@@ -848,7 +848,7 @@ class MongoDatabase(MongoClient):
             for pi_doc_i, pi_doc in enumerate(property_docs_do):
                 #pi_relationships_list[pi_doc_i]['data_object'] = "DO_%s" % ca_hash
                 pi_relationships_list[pi_doc_i]['dataset'] = ds_id
-                pi_doc['$addToSet'] = {'relationships': pi_relationships_list[pi_doc_i]}
+                pi_doc['$addToSet'] = {'relationships': pi_relationships_list[pi_doc_i].pop('dataset')}
                 property_docs.append(UpdateOne(
                         {'hash': pi_doc['$setOnInsert']['hash']},
                         pi_doc,
@@ -1982,6 +1982,8 @@ class MongoDatabase(MongoClient):
             SHORT_ID_STRING_NAME, 'property-name', 'hash'
         }
 
+        co_ids=[]
+
         for doc in tqdm(
                 #self.data_objects.find({'hash': {'$in': pr_hashes}}),
                 self.query_in_batches(query_key='hash',query_list=pr_hashes,collection_name='data_objects'),
@@ -1996,13 +1998,14 @@ class MongoDatabase(MongoClient):
                 else:
                     idx = aggregated_info['property_types'].index(doc['property_types'][i])
                     aggregated_info['property_types_counts'][idx] += 1
-        do_ids = ['DO_%s' %i for i in pr_hashes]
-        co_ids = list(self.query_in_batches(collection_name='configurations', query_key='relationships.data_object',
-                                       query_list=do_ids, return_key='hash', projection= {'hash':1}))
+        #do_ids = ['DO_%s' %i for i in pr_hashes]
+            co_ids.append(doc['relationships'][0]['configuration'].replace('CO_','')) 
+        #co_ids = list(self.query_in_batches(collection_name='configurations', query_key='relationships.data_object',
+        #                               query_list=do_ids, return_key='hash', projection= {'hash':1}))
         ag_2 = self.configuration_type.aggregate_configuration_summaries(self, co_ids,
                                                                          verbose=verbose)
         aggregated_info.update(ag_2)
-
+        print (aggregated_info)
         return aggregated_info
 
     '''
