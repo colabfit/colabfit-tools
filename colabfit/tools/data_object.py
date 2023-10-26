@@ -21,9 +21,9 @@ class DataObject:
 
     def __hash__(self):
         do_hash = sha512()
-        do_hash.update(self.configuration.encode('utf-8'))
+        do_hash.update(self.configuration.encode("utf-8"))
         for i in sorted(self.properties):
-            do_hash.update(str(i).encode('utf-8'))
+            do_hash.update(str(i).encode("utf-8"))
 
         return int(do_hash.hexdigest(), 16)
 
