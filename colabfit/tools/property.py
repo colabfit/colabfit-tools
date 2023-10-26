@@ -11,27 +11,24 @@ import kim_edn
 from kim_property.instance import check_property_instances
 from kim_property import (
     kim_property_create,
-    check_instance_optional_key_marked_required_are_present
+    check_instance_optional_key_marked_required_are_present,
 )
 
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
-from colabfit import (
-    STRING_DTYPE_SPECIFIER, UNITS,
-    OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
-)
+from colabfit import STRING_DTYPE_SPECIFIER, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
 
 # These are fields that are related to the geometry of the atomic structure
 # or the OpenKIM Property Definition and shouldn't be used for equality checks
 _ignored_fields = [
-    'property-title',
-    'property-description',
-    'instance-id',
-    'species',
-    'unrelaxed-configuration-positions',
-    'unrelaxed-periodic-cell-vector-1',
-    'unrelaxed-periodic-cell-vector-2',
-    'unrelaxed-periodic-cell-vector-3',
+    "property-title",
+    "property-description",
+    "instance-id",
+    "species",
+    "unrelaxed-configuration-positions",
+    "unrelaxed-periodic-cell-vector-1",
+    "unrelaxed-periodic-cell-vector-2",
+    "unrelaxed-periodic-cell-vector-3",
 ]
 
 
@@ -96,13 +93,7 @@ class Property(dict):
 
     _observers = []
 
-    def __init__(
-            self,
-            definition,
-            instance,
-            property_map=None,
-            convert_units=False
-    ):
+    def __init__(self, definition, instance, property_map=None, convert_units=False):
         """
         Args:
 
@@ -126,27 +117,31 @@ class Property(dict):
             dummy_dict = deepcopy(definition)
 
             # Spoof if necessary
-            if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
+            if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
                 # Invalid ID. Try spoofing it
-                dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
-                dummy_dict['property-id'] += definition['property-id']
+                dummy_dict["property-id"] = "tag:@,0000-00-00:property/"
+                dummy_dict["property-id"] += definition["property-id"]
                 # warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
 
-            load_from_existing = dummy_dict['property-id'] in KIM_PROPERTIES
-            definition_name = dummy_dict['property-id']
+            load_from_existing = dummy_dict["property-id"] in KIM_PROPERTIES
+            definition_name = dummy_dict["property-id"]
 
         elif isinstance(definition, str):
             if os.path.isfile(definition):
                 dummy_dict = kim_edn.load(definition)
 
                 # Check if you need to spoof the property ID to trick OpenKIM
-                if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
+                if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
                     # Invalid ID. Try spoofing it
-                    dummy_dict['property-id'] = 'tag:@,0000-00-00:property/' + dummy_dict['property-id']
-                    warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+                    dummy_dict["property-id"] = (
+                        "tag:@,0000-00-00:property/" + dummy_dict["property-id"]
+                    )
+                    warnings.warn(
+                        f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}"
+                    )
 
-                load_from_existing = dummy_dict['property-id'] in KIM_PROPERTIES
-                definition_name = dummy_dict['property-id']
+                load_from_existing = dummy_dict["property-id"] in KIM_PROPERTIES
+                definition_name = dummy_dict["property-id"]
 
             else:
                 # Then this has to be an existing (or added) KIM Property Definition
@@ -155,48 +150,22 @@ class Property(dict):
                 # It may have been added previously, but spoofed
                 if VALID_KIM_ID.match(definition) is None:
                     # Invalid ID. Try spoofing it
-                    definition_name = 'tag:@,0000-00-00:property/' + definition
+                    definition_name = "tag:@,0000-00-00:property/" + definition
         else:
             raise InvalidPropertyDefinition(
                 "Property definition must either be a dictionary or a path to an EDN file"
             )
 
         self.definition = definition
-        self.name = self.definition['property-id']
-
-        # if load_from_existing:
-        #     instance = kim_edn.loads(kim_property_create(
-        #         instance_id=instance_id,
-        #         property_name=definition,
-        #     ))[0]
-        # else:
-        #     with tempfile.NamedTemporaryFile('w') as tmp:
-        #         tmp.write(json.dumps(dummy_dict))
-        #         tmp.flush()
-
-        #         instance = kim_edn.loads(kim_property_create(
-        #             instance_id=instance_id,
-        #             property_name=tmp.name,
-        #         ))[0]
-
-        # if instance is None:
-        #     self.instance = kim_edn.loads(kim_property_create(
-        #         instance_id=instance_id,
-        #         property_name=self.name
-        #     ))[0]
-        # else:
-        #     # if name != PROPERTY_ID_TO_PROPERTY_NAME[edn['property-id']]:
-        #     #     raise RuntimeError(
-        #     #         "`name` does not match `edn['property_name']`"
-        #     #     )
+        self.name = self.definition["property-id"]
 
         self.instance = instance
-        self.instance['property-id'] = definition_name
+        self.instance["property-id"] = definition_name
 
         # Hack to avoid the fact that "property-name" has to be a dictionary
         # in order for OpenKIM's check_property_definition to work
-        tmp = self.definition['property-name']
-        del self.definition['property-name']
+        tmp = self.definition["property-name"]
+        del self.definition["property-name"]
 
         check_instance_optional_key_marked_required_are_present(
             self.instance,
@@ -204,22 +173,16 @@ class Property(dict):
             # KIM_PROPERTIES[self.instance['property-id']]
         )
 
-        self.definition['property-name'] = tmp
+        self.definition["property-name"] = tmp
 
         if load_from_existing:
-            check_property_instances(
-                self.instance,
-                fp_path=KIM_PROPERTIES
-            )
+            check_property_instances(self.instance, fp_path=KIM_PROPERTIES)
         else:
-            with tempfile.NamedTemporaryFile('w') as tmp:
+            with tempfile.NamedTemporaryFile("w") as tmp:
                 tmp.write(json.dumps(dummy_dict))
                 tmp.flush()
 
-                check_property_instances(
-                    self.instance,
-                    fp=tmp.name
-                )
+                check_property_instances(self.instance, fp=tmp.name)
 
         if property_map is not None:
             self.property_map = dict(property_map)
@@ -266,9 +229,8 @@ class Property(dict):
 
     @classmethod
     def from_definition(
-            cls, definition, configuration, property_map, convert_units=False
+        cls, definition, configuration, property_map, convert_units=False
     ):
-
         """
         A function for constructing a Property given a property setting hash, a property
         definition, and a property map.
@@ -292,32 +254,34 @@ class Property(dict):
         load_from_existing = False
 
         if isinstance(definition, dict):
-
             # TODO: this is probably slowing things down a bit
             dummy_dict = deepcopy(definition)
 
             # Spoof if necessary
-            if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
+            if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
                 # Invalid ID. Try spoofing it
-                dummy_dict['property-id'] = 'tag:@,0000-00-00:property/'
-                dummy_dict['property-id'] += definition['property-id']
-                # warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+                dummy_dict["property-id"] = "tag:@,0000-00-00:property/"
+                dummy_dict["property-id"] += definition["property-id"]
 
-            load_from_existing = dummy_dict['property-id'] in KIM_PROPERTIES
-            definition_name = dummy_dict['property-id']
+            load_from_existing = dummy_dict["property-id"] in KIM_PROPERTIES
+            definition_name = dummy_dict["property-id"]
 
         elif isinstance(definition, str):
             if os.path.isfile(definition):
                 dummy_dict = kim_edn.load(definition)
 
                 # Check if you need to spoof the property ID to trick OpenKIM
-                if VALID_KIM_ID.match(dummy_dict['property-id']) is None:
+                if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
                     # Invalid ID. Try spoofing it
-                    dummy_dict['property-id'] = 'tag:@,0000-00-00:property/' + dummy_dict['property-id']
-                    warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
+                    dummy_dict["property-id"] = (
+                        "tag:@,0000-00-00:property/" + dummy_dict["property-id"]
+                    )
+                    warnings.warn(
+                        f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}"
+                    )
 
-                load_from_existing = dummy_dict['property-id'] in KIM_PROPERTIES
-                definition_name = dummy_dict['property-id']
+                load_from_existing = dummy_dict["property-id"] in KIM_PROPERTIES
+                definition_name = dummy_dict["property-id"]
 
             else:
                 # Then this has to be an existing (or added) KIM Property Definition
@@ -326,49 +290,50 @@ class Property(dict):
                 # It may have been added previously, but spoofed
                 if VALID_KIM_ID.match(definition) is None:
                     # Invalid ID. Try spoofing it
-                    definition_name = 'tag:@,0000-00-00:property/' + definition
+                    definition_name = "tag:@,0000-00-00:property/" + definition
         else:
             raise InvalidPropertyDefinition(
                 "Property definition must either be a dictionary or a path to an EDN file"
             )
 
         if load_from_existing:
-            instance = kim_edn.loads(kim_property_create(
-                instance_id=1,
-                property_name=definition_name,
-            ))[0]
+            instance = kim_edn.loads(
+                kim_property_create(
+                    instance_id=1,
+                    property_name=definition_name,
+                )
+            )[0]
         else:
-            with tempfile.NamedTemporaryFile('w') as tmp:
+            with tempfile.NamedTemporaryFile("w") as tmp:
                 # Hack to avoid the fact that "property-name" has to be a dictionary
                 # in order for OpenKIM's check_property_definition to work
 
-                if 'property-name' in dummy_dict:
-                    del dummy_dict['property-name']
+                if "property-name" in dummy_dict:
+                    del dummy_dict["property-name"]
 
                 tmp.write(json.dumps(dummy_dict))
                 tmp.flush()
 
-                instance = kim_edn.loads(kim_property_create(
-                    instance_id=1,
-                    property_name=tmp.name,
-                ))[0]
+                instance = kim_edn.loads(
+                    kim_property_create(
+                        instance_id=1,
+                        property_name=tmp.name,
+                    )
+                )[0]
 
         update_edn_with_conf(instance, configuration)
 
         for key, val in property_map.items():
-            if 'value' in val:
+            if "value" in val:
                 # Default value provided
-                data = val['value']
-            elif val['field'] in configuration.info:
-                data = configuration.info[val['field']]
-            elif val['field'] in configuration.arrays:
-                data = configuration.arrays[val['field']]
+                data = val["value"]
+            elif val["field"] in configuration.info:
+                data = configuration.info[val["field"]]
+            elif val["field"] in configuration.arrays:
+                data = configuration.arrays[val["field"]]
             else:
                 # Key not found on configurations. Will be checked later
                 continue
-                # raise MissingPropertyFieldWarning(
-                #     f"Key '{key}' not found during Property.from_defintion()"
-                # )
 
             if isinstance(data, (np.ndarray, list)):
                 data = np.atleast_1d(data).tolist()
@@ -380,11 +345,11 @@ class Property(dict):
                 data = float(data)
 
             instance[key] = {
-                'source-value': data,
+                "source-value": data,
             }
 
-            if (val['units'] != 'None') and (val['units'] is not None):
-                instance[key]['source-unit'] = val['units']
+            if (val["units"] != "None") and (val["units"] is not None):
+                instance[key]["source-unit"] = val["units"]
 
         return cls(
             definition=definition,
@@ -392,106 +357,6 @@ class Property(dict):
             instance=instance,
             convert_units=convert_units,
         )
-
-    # @classmethod
-    # def Default(
-    #     cls, conf, property_map, settings=None, instance_id=1,
-    #     convert_units=False
-    #     ):
-    #     f"""
-    #     Constructs a default property for storing common properties like energy,
-    #     force, stress, ...
-
-    #     Uses {DEFAULT_PROPERTY_NAME} as the Property Definition.
-
-    #     Assumes that the properties, if provided, are stored in the following
-    #     ways:
-    #         energy: `conf.info[property_map['energy']]`
-    #         forces: `conf.arrays[property_map['forces']]`
-    #         stress: `conf.info[property_map['stress']]`
-    #         ...
-
-    #     Note that some fields have been given pseudonyms:
-
-    #     (key=pseudonym, value=original name)
-    #     {EDN_KEY_MAP}
-    #     """
-
-    #     edn = kim_edn.loads(kim_property_create(
-    #         instance_id=instance_id, property_name=DEFAULT_PROPERTY_NAME
-    #     ))[0]
-
-    #     update_edn_with_conf(edn, conf)
-
-    #     for key, val in property_map.items():
-    #         if (val['field'] not in conf.info) and (val['field'] not in conf.arrays):
-    #             field_not_found_message = 'Key "{}" not found in atoms.info '\
-    #                 'or atoms.arrays'.format(key)
-
-    #             warnings.warn(
-    #                 field_not_found_message,
-    #                 category=MissingPropertyFieldWarning
-    #             )
-
-    #             continue
-
-    #         # TODO: WHY is this code here??
-    #         if val['field'] in conf.info:
-    #             data = conf.info[val['field']]
-
-    #             conf.info[val['field']] = data
-    #         elif val['field'] in conf.arrays:
-    #             data = conf.arrays[val['field']]
-
-    #             conf.arrays[val['field']] = data
-    #         else:
-    #             # Key not found on configurations. Don't throw error.
-    #             pass
-
-    #         data = np.atleast_1d(data)
-    #         if data.size == 1:
-    #             data = float(data)
-    #         else:
-    #             data = data.tolist()
-
-    #         edn_key = EDN_KEY_MAP.get(key, key)
-
-    #         if edn_key == 'unrelaxed-potential-energy':
-    #             edn[edn_key] = {
-    #                 'source-value': data,
-    #                 'source-unit': val['units'],
-    #             }
-    #         if edn_key == 'unrelaxed-potential-forces':
-    #             edn[edn_key] = {
-    #                 'source-value': data,
-    #                 'source-unit': val['units']
-    #             }
-    #         if edn_key == 'unrelaxed-cauchy-stress':
-    #             data = np.array(data)
-    #             if np.prod(data.shape) == 9:
-    #                 data = data.reshape((3, 3))
-    #                 data = np.array([
-    #                     data[0, 0],
-    #                     data[1, 1],
-    #                     data[2, 2],
-    #                     data[1, 2],
-    #                     data[0, 2],
-    #                     data[0, 1],
-    #                 ]).tolist()
-
-    #             edn[edn_key] = {
-    #                 'source-value': data,
-    #                 'source-unit': val['units']
-    #             }
-
-    #     return cls(
-    #         name=DEFAULT_PROPERTY_NAME,
-    #         configurations=[str(hash(conf))],
-    #         property_map=property_map,
-    #         settings=settings,
-    #         edn=edn,
-    #         convert_units=convert_units,
-    #     )
 
     def convert_units(self):
         """
@@ -502,23 +367,25 @@ class Property(dict):
         for key, val in self.property_map.items():
             edn_key = EDN_KEY_MAP.get(key, key)
 
-            units = val['units']
+            units = val["units"]
 
-            split_units = list(itertools.chain.from_iterable([
-                sp.split('/') for sp in units.split('*')
-            ]))
+            split_units = list(
+                itertools.chain.from_iterable(
+                    [sp.split("/") for sp in units.split("*")]
+                )
+            )
 
             if edn_key not in self.instance:
                 continue
 
-            val = np.array(self.instance[edn_key]['source-value'], dtype=np.float64)
+            val = np.array(self.instance[edn_key]["source-value"], dtype=np.float64)
 
             val *= float(UNITS[split_units[0]])
 
             for u in split_units[1:]:
-                if units[units.find(u) - 1] == '*':
+                if units[units.find(u) - 1] == "*":
                     val *= UNITS[u]
-                elif units[units.find(u) - 1] == '/':
+                elif units[units.find(u) - 1] == "/":
                     val /= UNITS[u]
                 else:
                     raise RuntimeError(
@@ -526,11 +393,11 @@ class Property(dict):
                     )
 
             self.instance[edn_key] = {
-                'source-value': val.tolist(),
-                'source-unit': OPENKIM_PROPERTY_UNITS[key]
+                "source-value": val.tolist(),
+                "source-unit": OPENKIM_PROPERTY_UNITS[key],
             }
 
-            self.property_map[key]['units'] = self.instance[edn_key]['source-unit']
+            self.property_map[key]["units"] = self.instance[edn_key]["source-unit"]
 
     def __hash__(self):
         """
@@ -542,16 +409,18 @@ class Property(dict):
                 continue
             try:
                 hashval = np.round_(
-                    np.array(val['source-value']), decimals=12
+                    np.array(val["source-value"]), decimals=12
                 ).data.tobytes()
             except:
                 try:
                     hashval = np.array(
-                        val['source-value'], dtype=STRING_DTYPE_SPECIFIER
+                        val["source-value"], dtype=STRING_DTYPE_SPECIFIER
                     ).data.tobytes()
                 except:
                     try:
-                        hashval = np.array(val, dtype=STRING_DTYPE_SPECIFIER).data.tobytes()
+                        hashval = np.array(
+                            val, dtype=STRING_DTYPE_SPECIFIER
+                        ).data.tobytes()
                     except:
                         raise PropertyHashError(
                             "Could not hash key {}: {}".format(key, val)
@@ -559,8 +428,8 @@ class Property(dict):
 
             _hash.update(hashval)
             # What if values are identical but are added in different units? Should these hash to unique PIs?
-            if 'source-unit' in val:
-                _hash.update(str(val['source-unit']).encode('utf-8'))
+            if "source-unit" in val:
+                _hash.update(str(val["source-unit"]).encode("utf-8"))
 
         return int(_hash.hexdigest(), 16)
 
@@ -593,9 +462,7 @@ class Property(dict):
         elif edn_key in self.instance:
             self.instance[edn_key] = v
         else:
-            KeyError(
-                f"Field '{k}' not found in Property.edn. Returning None"
-            )
+            KeyError(f"Field '{k}' not found in Property.edn. Returning None")
 
     def __getitem__(self, k):
         """Overloaded :meth:`dict.__getitem__` for getting the values of :attr:`self.edn`"""
@@ -606,9 +473,7 @@ class Property(dict):
         elif edn_key in self.instance:
             return self.instance[edn_key]
         else:
-            warnings.warn(
-                f"Field '{k}' not found in Property.edn. Returning None"
-            )
+            warnings.warn(f"Field '{k}' not found in Property.edn. Returning None")
 
             return None
 
@@ -627,9 +492,9 @@ class Property(dict):
         edn_key = EDN_KEY_MAP.get(k, k)
 
         if k in self.instance:
-            return np.atleast_1d(self[k]['source-value'])
+            return np.atleast_1d(self[k]["source-value"])
         elif edn_key in self.instance:
-            return np.atleast_1d(self[edn_key]['source-value'])
+            return np.atleast_1d(self[edn_key]["source-value"])
         else:
             return np.nan
 
@@ -640,9 +505,7 @@ class Property(dict):
 
     def __str__(self):
         return "Property(instance_id={}, name='{}')".format(
-            self.instance['instance-id'],
-            # PROPERTY_ID_TO_PROPERTY_NAME[self.edn['property-id']]
-            self.name
+            self.instance["instance-id"], self.name
         )
 
     def __repr__(self):
@@ -651,30 +514,28 @@ class Property(dict):
 
 # Eric->Do we need to do this?
 def update_edn_with_conf(edn, conf):
-    edn['species'] = {
-        'source-value': conf.get_chemical_symbols()
-    }
+    edn["species"] = {"source-value": conf.get_chemical_symbols()}
 
     lattice = np.array(conf.get_cell()).tolist()
 
-    edn['unrelaxed-periodic-cell-vector-1'] = {
-        'source-value': lattice[0],
-        'source-unit': 'angstrom'
+    edn["unrelaxed-periodic-cell-vector-1"] = {
+        "source-value": lattice[0],
+        "source-unit": "angstrom",
     }
 
-    edn['unrelaxed-periodic-cell-vector-2'] = {
-        'source-value': lattice[1],
-        'source-unit': 'angstrom'
+    edn["unrelaxed-periodic-cell-vector-2"] = {
+        "source-value": lattice[1],
+        "source-unit": "angstrom",
     }
 
-    edn['unrelaxed-periodic-cell-vector-3'] = {
-        'source-value': lattice[2],
-        'source-unit': 'angstrom'
+    edn["unrelaxed-periodic-cell-vector-3"] = {
+        "source-value": lattice[2],
+        "source-unit": "angstrom",
     }
 
-    edn['unrelaxed-configuration-positions'] = {
-        'source-value': conf.positions.tolist(),
-        'source-unit': 'angstrom'
+    edn["unrelaxed-configuration-positions"] = {
+        "source-value": conf.positions.tolist(),
+        "source-unit": "angstrom",
     }
 
 

@@ -8,47 +8,48 @@ import time
 from functools import partial
 from multiprocessing import Pool
 from colabfit import (
-    ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD,
+    ATOMS_NAME_FIELD,
+    ATOMS_LABELS_FIELD,
 )
 
 
 class BaseConfiguration:
     """Abstract parent class for all Configurations.
 
-       This class should never be directly instantiated-all other Configuration classes
-       must subclass this along with any other useful classes.
+    This class should never be directly instantiated-all other Configuration classes
+    must subclass this along with any other useful classes.
 
-       Configuration classes must pass all necessary unique identifiers as individual keyword arguments
-       to their associated constructor. Unique identifiers are values that are needed to uniquely
-       identify one Configuration instance from another. These values will be used to produce
-       a unique hash for each Configuration instance and be added to the database with
-       their associated keyword. See :attr:`unique_identifer_kw`.
+    Configuration classes must pass all necessary unique identifiers as individual keyword arguments
+    to their associated constructor. Unique identifiers are values that are needed to uniquely
+    identify one Configuration instance from another. These values will be used to produce
+    a unique hash for each Configuration instance and be added to the database with
+    their associated keyword. See :attr:`unique_identifer_kw`.
 
-       All Configuration classes must define a :code:`self.configuration_summary` method. This is used
-       to extract any other useful information that will be included (in addition to all unique
-       identifiers) in the Configuration's entry in the Database.
+    All Configuration classes must define a :code:`self.configuration_summary` method. This is used
+    to extract any other useful information that will be included (in addition to all unique
+    identifiers) in the Configuration's entry in the Database.
 
-       All Configuration classes must also define a :code:`self.aggregate_configuration_summaries` method. This is used
-       to extract useful information from a collection of Configurations.
+    All Configuration classes must also define a :code:`self.aggregate_configuration_summaries` method. This is used
+    to extract useful information from a collection of Configurations.
 
-       See :meth:`~colabfit.tools.configuration.AtomicConfiguration` as an example.
+    See :meth:`~colabfit.tools.configuration.AtomicConfiguration` as an example.
 
-       Attributes:
+    Attributes:
 
-           info (dict):
-               Stores important metadata for a Configuration. At a minimum, it will include
-               keywords "_name" and "_labels".
-           _array_order (array):
-                Optional ordering of array unique identifiers so that trivial permutations do not hash
-                differently
-           unique_identifier_kw (list):
-               Class attribute that specifies the keywords to be used for all unique identifiers.
-               All Configuration classes should accept each keyword as an argument to their constructor.
-           unique_identifier_kw_types (dict):
-               Class attribute that specifies the data types of the unique
-               identifier keywords. key = identifier keyword; value = identifier
-               data type.
-       """
+        info (dict):
+            Stores important metadata for a Configuration. At a minimum, it will include
+            keywords "_name" and "_labels".
+        _array_order (array):
+             Optional ordering of array unique identifiers so that trivial permutations do not hash
+             differently
+        unique_identifier_kw (list):
+            Class attribute that specifies the keywords to be used for all unique identifiers.
+            All Configuration classes should accept each keyword as an argument to their constructor.
+        unique_identifier_kw_types (dict):
+            Class attribute that specifies the data types of the unique
+            identifier keywords. key = identifier keyword; value = identifier
+            data type.
+    """
 
     def __init__(self, names=None):
         """
@@ -67,11 +68,11 @@ class BaseConfiguration:
 
     @property
     def unique_identifiers(self):
-        raise NotImplementedError('All Configuration classes should implement this.')
+        raise NotImplementedError("All Configuration classes should implement this.")
 
     @unique_identifiers.setter
     def unique_identifiers(self, values):
-        raise NotImplementedError('All Configuration classes should implement this.')
+        raise NotImplementedError("All Configuration classes should implement this.")
 
     def configuration_summary(self):
         """Extracts useful information from a Configuration.
@@ -83,7 +84,7 @@ class BaseConfiguration:
         Returns:
             dict: Keys and their associated values that will be included under a Configuration's entry in the Database
         """
-        raise NotImplementedError('All Configuration classes should implement this.')
+        raise NotImplementedError("All Configuration classes should implement this.")
 
     @staticmethod
     def aggregate_configuration_summaries(db, hashes):
@@ -102,7 +103,7 @@ class BaseConfiguration:
         Returns:
             dict: Key-value pairs of information aggregated from multiple Configurations
         """
-        raise NotImplementedError('All Configuration classes should implement this.')
+        raise NotImplementedError("All Configuration classes should implement this.")
 
     def __hash__(self):
         """Generates a hash for :code:`self`.
@@ -114,7 +115,7 @@ class BaseConfiguration:
             int: Value of hash
         """
         if len(self.unique_identifiers) == 0:
-            raise Exception('Ensure unique identifiers are properly defined!')
+            raise Exception("Ensure unique identifiers are properly defined!")
         _hash = sha512()
         for k, v in self.unique_identifiers.items():
             _hash.update(bytes(pre_hash_formatting(k, v, self._array_order)))
@@ -140,12 +141,12 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
     """
 
-    unique_identifier_kw = ['atomic_numbers', 'positions', 'cell', 'pbc']
+    unique_identifier_kw = ["atomic_numbers", "positions", "cell", "pbc"]
     unique_identifier_kw_types = {
-        'atomic_numbers': int,
-        'positions': float,
-        'cell': float,
-        'pbc': bool,
+        "atomic_numbers": int,
+        "positions": float,
+        "cell": float,
+        "pbc": bool,
     }
 
     def __init__(self, names=None, **kwargs):
@@ -160,51 +161,22 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                 Other keyword arguments that can be passed to :meth:`ase.Atoms.__init__()`
         """
 
-        BaseConfiguration.__init__(
-            self,
-            names=names
-        )
+        BaseConfiguration.__init__(self, names=names)
 
-        kwargs['info'] = self.info
-        if 'atomic_numbers' in list(kwargs.keys()):
-            kwargs['numbers'] = kwargs['atomic_numbers']
-            kwargs.pop('atomic_numbers')
+        kwargs["info"] = self.info
+        if "atomic_numbers" in list(kwargs.keys()):
+            kwargs["numbers"] = kwargs["atomic_numbers"]
+            kwargs.pop("atomic_numbers")
 
         Atoms.__init__(self, **kwargs)
         self._array_order = np.lexsort(
-            (self.arrays['positions'][:, 2], self.arrays['positions'][:, 1], self.arrays['positions'][:, 0]))
+            (
+                self.arrays["positions"][:, 2],
+                self.arrays["positions"][:, 1],
+                self.arrays["positions"][:, 0],
+            )
+        )
         self._hash = hash(self)
-        # sort by x then y then z
-        '''
-        if ATOMS_NAME_FIELD in self.info:
-            v = self.info[ATOMS_NAME_FIELD]
-            if not isinstance(v, list):
-                v = set([str(v)])
-            else:
-                v = set(v)
-
-            self.info[ATOMS_NAME_FIELD] = v
-        else:
-            self.info[ATOMS_NAME_FIELD] = set()
-        # TODO fix how labels are utilized
-        if ATOMS_LABELS_FIELD not in self.info:
-            if labels is None:
-                labels = set()
-        else:
-            labels = set(self.info[ATOMS_LABELS_FIELD])
-
-        self.info[ATOMS_LABELS_FIELD] = set(labels)
-
-# TODO: Reimplement later
-
-        if ATOMS_CONSTRAINTS_FIELD not in self.info:
-            if constraints is None:
-                constraints = set()
-        else:
-            constraints = set(self.info[ATOMS_CONSTRAINTS_FIELD])
-
-        self.info[ATOMS_CONSTRAINTS_FIELD] = set(constraints)
-        '''
         # Check for name conflicts in info/arrays; would cause bug in parsing
         if set(self.info.keys()).intersection(set(self.arrays.keys())):
             raise RuntimeError(
@@ -214,10 +186,10 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     @property
     def unique_identifiers(self):
         return {
-            'atomic_numbers': self.get_atomic_numbers(),
-            'positions': self.get_positions(),
-            'cell': np.array(self.get_cell()),
-            'pbc': self.get_pbc().astype(int)
+            "atomic_numbers": self.get_atomic_numbers(),
+            "positions": self.get_positions(),
+            "cell": np.array(self.get_cell()),
+            "pbc": self.get_pbc().astype(int),
         }
 
     @unique_identifiers.setter
@@ -225,10 +197,10 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         if set(self.unique_identifier_kw) != set(list(d.keys())):
             raise RuntimeError("There is a mismatch between keywords!")
         # Make sure ASE values are in sync
-        self.arrays['numbers'] = d['atomic_numbers']
-        self.arrays['positions'] = d['positions']
-        self.cell = d['cell']
-        self.pbc = d['pbc']
+        self.arrays["numbers"] = d["atomic_numbers"]
+        self.arrays["positions"] = d["positions"]
+        self.cell = d["cell"]
+        self.pbc = d["pbc"]
 
     def configuration_summary(self):
         """Extracts useful metadata from a Configuration
@@ -254,9 +226,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         natoms = len(atomic_species)
         elements = sorted(list(set(atomic_species)))
         nelements = len(elements)
-        elements_ratios = [
-            atomic_species.count(el) / natoms for el in elements
-        ]
+        elements_ratios = [atomic_species.count(el) / natoms for el in elements]
 
         species_counts = [atomic_species.count(sp) for sp in elements]
 
@@ -271,16 +241,16 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         count_gcd = find_gcd(species_counts)
         species_proportions = [sc // count_gcd for sc in species_counts]
 
-        chemical_formula_reduced = ''
+        chemical_formula_reduced = ""
         for elem, elem_prop in zip(elements, species_proportions):
-            chemical_formula_reduced += '{}{}'.format(
-                elem, '' if elem_prop == 1 else str(elem_prop)
+            chemical_formula_reduced += "{}{}".format(
+                elem, "" if elem_prop == 1 else str(elem_prop)
             )
 
         # Replace elements with A, B, C, ...
         species_proportions = sorted(species_proportions, reverse=True)
 
-        chemical_formula_anonymous = ''
+        chemical_formula_anonymous = ""
         for spec_idx, spec_count in enumerate(species_proportions):
             # OPTIMADE uses A...Z, then Aa..Za, ..., up to Az...Zz
 
@@ -299,22 +269,24 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         species = []
         for el in elements:
             # https://github.com/Materials-Consortia/OPTIMADE/blob/develop/optimade.rst#7214species
-            species.append({
-                'name': el,
-                'chemical_symbols': [el],
-                'concentration': [1.0],
-            })
+            species.append(
+                {
+                    "name": el,
+                    "chemical_symbols": [el],
+                    "concentration": [1.0],
+                }
+            )
 
         return {
-            'nsites': natoms,
-            'elements': elements,
-            'nelements': nelements,
-            'elements_ratios': elements_ratios,
-            'chemical_formula_anonymous': chemical_formula_anonymous,
-            'chemical_formula_reduced': chemical_formula_reduced,
-            'chemical_formula_hill': self.get_chemical_formula(),
-            'dimension_types': self.get_pbc().astype(int).tolist(),
-            'nperiodic_dimensions': int(sum(self.get_pbc())),
+            "nsites": natoms,
+            "elements": elements,
+            "nelements": nelements,
+            "elements_ratios": elements_ratios,
+            "chemical_formula_anonymous": chemical_formula_anonymous,
+            "chemical_formula_reduced": chemical_formula_reduced,
+            "chemical_formula_hill": self.get_chemical_formula(),
+            "dimension_types": self.get_pbc().astype(int).tolist(),
+            "nperiodic_dimensions": int(sum(self.get_pbc())),
             # 'species': species,  # Is this ever used?
         }
 
@@ -382,63 +354,87 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             dict: Aggregated Configuration information
         """
         aggregated_info = {
-            'nconfigurations': len(hashes),
-            'nsites': 0,
-            'nelements': 0,
-            'chemical_systems': set(),
-            'elements': [],
-            'individual_elements_ratios': {},
-            'total_elements_ratios': {},
-            'chemical_formula_reduced': set(),
-            'chemical_formula_anonymous': set(),
-            'chemical_formula_hill': set(),
-            'nperiodic_dimensions': set(),
-            'dimension_types': set(),
+            "nconfigurations": len(hashes),
+            "nsites": 0,
+            "nelements": 0,
+            "chemical_systems": set(),
+            "elements": [],
+            "individual_elements_ratios": {},
+            "total_elements_ratios": {},
+            "chemical_formula_reduced": set(),
+            "chemical_formula_anonymous": set(),
+            "chemical_formula_hill": set(),
+            "nperiodic_dimensions": set(),
+            "dimension_types": set(),
         }
-        
+
         n = len(hashes)
         k = db.nprocs
         chunked_hashes = [
-                hashes[i * (n // k) + min(i, n % k):(i + 1) * (n // k) + min(i + 1, n % k)]
-                for i in range(k)
+            hashes[
+                i * (n // k) + min(i, n % k) : (i + 1) * (n // k) + min(i + 1, n % k)
             ]
+            for i in range(k)
+        ]
         s = time.time()
         with Pool(k) as pool:
-            aggs = pool.map(partial(agg,db=db.database_name,uri=db.uri),chunked_hashes)
+            aggs = pool.map(
+                partial(agg, db=db.database_name, uri=db.uri), chunked_hashes
+            )
         for a in aggs:
-            aggregated_info['nsites'] += a['nsites']
-            aggregated_info['chemical_systems'].update(a['chemical_systems'])
-            
-            for e, er in zip(a['elements'], a['individual_elements_ratios']):
-                if e not in aggregated_info['elements']:
-                    aggregated_info['elements'].append(e)
-                    aggregated_info['total_elements_ratios'][e] = a['total_elements_ratios'][e] 
-                    aggregated_info['individual_elements_ratios'][e] = a['individual_elements_ratios'][e]
+            aggregated_info["nsites"] += a["nsites"]
+            aggregated_info["chemical_systems"].update(a["chemical_systems"])
+
+            for e, er in zip(a["elements"], a["individual_elements_ratios"]):
+                if e not in aggregated_info["elements"]:
+                    aggregated_info["elements"].append(e)
+                    aggregated_info["total_elements_ratios"][e] = a[
+                        "total_elements_ratios"
+                    ][e]
+                    aggregated_info["individual_elements_ratios"][e] = a[
+                        "individual_elements_ratios"
+                    ][e]
                 else:
-                    aggregated_info['total_elements_ratios'][e] += a['total_elements_ratios'][e]
-                    aggregated_info['individual_elements_ratios'][e].update(
-                        a['individual_elements_ratios'][e])
-                    
+                    aggregated_info["total_elements_ratios"][e] += a[
+                        "total_elements_ratios"
+                    ][e]
+                    aggregated_info["individual_elements_ratios"][e].update(
+                        a["individual_elements_ratios"][e]
+                    )
 
-            aggregated_info['chemical_formula_reduced'].update(a['chemical_formula_reduced'])
-            aggregated_info['chemical_formula_anonymous'].update(a['chemical_formula_anonymous'])
-            aggregated_info['chemical_formula_hill'].update(a['chemical_formula_hill'])
+            aggregated_info["chemical_formula_reduced"].update(
+                a["chemical_formula_reduced"]
+            )
+            aggregated_info["chemical_formula_anonymous"].update(
+                a["chemical_formula_anonymous"]
+            )
+            aggregated_info["chemical_formula_hill"].update(a["chemical_formula_hill"])
 
-            aggregated_info['nperiodic_dimensions'].update(a['nperiodic_dimensions'])
-            aggregated_info['dimension_types'].update(a['dimension_types'])
+            aggregated_info["nperiodic_dimensions"].update(a["nperiodic_dimensions"])
+            aggregated_info["dimension_types"].update(a["dimension_types"])
 
-        for e in aggregated_info['elements']:
-            aggregated_info['nelements']+=1
-            aggregated_info['total_elements_ratios'][e] /= aggregated_info['nsites']
-            aggregated_info['individual_elements_ratios'][e] = list(aggregated_info['individual_elements_ratios'][e])
+        for e in aggregated_info["elements"]:
+            aggregated_info["nelements"] += 1
+            aggregated_info["total_elements_ratios"][e] /= aggregated_info["nsites"]
+            aggregated_info["individual_elements_ratios"][e] = list(
+                aggregated_info["individual_elements_ratios"][e]
+            )
 
-        aggregated_info['chemical_systems'] = list(aggregated_info['chemical_systems'])
-        aggregated_info['chemical_formula_reduced'] = list(aggregated_info['chemical_formula_reduced'])
-        aggregated_info['chemical_formula_anonymous'] = list(aggregated_info['chemical_formula_anonymous'])
-        aggregated_info['chemical_formula_hill'] = list(aggregated_info['chemical_formula_hill'])
-        aggregated_info['nperiodic_dimensions'] = list(aggregated_info['nperiodic_dimensions'])
-        aggregated_info['dimension_types'] = list(aggregated_info['dimension_types'])
-        print ('Configuration aggregation time:',time.time()-s)
+        aggregated_info["chemical_systems"] = list(aggregated_info["chemical_systems"])
+        aggregated_info["chemical_formula_reduced"] = list(
+            aggregated_info["chemical_formula_reduced"]
+        )
+        aggregated_info["chemical_formula_anonymous"] = list(
+            aggregated_info["chemical_formula_anonymous"]
+        )
+        aggregated_info["chemical_formula_hill"] = list(
+            aggregated_info["chemical_formula_hill"]
+        )
+        aggregated_info["nperiodic_dimensions"] = list(
+            aggregated_info["nperiodic_dimensions"]
+        )
+        aggregated_info["dimension_types"] = list(aggregated_info["dimension_types"])
+        print("Configuration aggregation time:", time.time() - s)
         return aggregated_info
 
     def __str__(self):
@@ -453,9 +449,13 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
     A BioSequenceConfiguration is an extension of a :class:`BaseConfiguration` and an :class:`Bio.SeqRecord object.`
     """
 
-    unique_identifier_kw = ['sequence']
+    unique_identifier_kw = ["sequence"]
 
-    def __init__(self, names=None, **kwargs, ):
+    def __init__(
+        self,
+        names=None,
+        **kwargs,
+    ):
         """
         Constructs a BioSequenceConfiguration. Calls :meth:`BaseConfiguration.__init__()`
         and :meth:`Bio.SeqRecord.__init__()`
@@ -471,15 +471,15 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
 
         BaseConfiguration.__init__(self, names=names)
 
-        if 'sequence' in list(kwargs.keys()):
-            kwargs['seq'] = kwargs['sequence']
-            kwargs.pop('sequence')
+        if "sequence" in list(kwargs.keys()):
+            kwargs["seq"] = kwargs["sequence"]
+            kwargs.pop("sequence")
 
         SeqRecord.__init__(self, **kwargs)
 
     @property
     def unique_identifiers(self):
-        return {'sequence': str(self.seq).encode('utf-8')}
+        return {"sequence": str(self.seq).encode("utf-8")}
 
     # TODO: create setter here
 
@@ -491,7 +491,7 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
         Returns:
             dict: Keys and their associated values that will be included under a Configuration's entry in the Database
         """
-        return {'seq_length': len(self.unique_identifiers['sequence'])}
+        return {"seq_length": len(self.unique_identifiers["sequence"])}
 
     @classmethod
     def from_seqrecord(cls, seqrec):
@@ -529,7 +529,7 @@ def pre_hash_formatting(k, v, ordering):
 
     """
     # hard code for positions and numbers for now
-    if k in ['atomic_numbers', 'positions']:
+    if k in ["atomic_numbers", "positions"]:
         v = v[ordering]
     # for now all AtomicConfiguration UIs are defined to be ndarrays
     if isinstance(v, np.ndarray):
@@ -541,43 +541,48 @@ def pre_hash_formatting(k, v, ordering):
             return v
     else:
         return v
-def agg (hashes,db,uri):
+
+
+def agg(hashes, db, uri):
     from colabfit.tools.database import MongoDatabase
+
     client = MongoDatabase(db, uri=uri)
     proxy = {
-            'nsites': 0,
-            'chemical_systems': set(),
-            'elements': [],
-            'individual_elements_ratios': {},
-            'total_elements_ratios': {},
-            'chemical_formula_reduced': set(),
-            'chemical_formula_anonymous': set(),
-            'chemical_formula_hill': set(),
-            'nperiodic_dimensions': set(),
-            'dimension_types': set(),
-        }
+        "nsites": 0,
+        "chemical_systems": set(),
+        "elements": [],
+        "individual_elements_ratios": {},
+        "total_elements_ratios": {},
+        "chemical_formula_reduced": set(),
+        "chemical_formula_anonymous": set(),
+        "chemical_formula_hill": set(),
+        "nperiodic_dimensions": set(),
+        "dimension_types": set(),
+    }
 
-    docs = client.query_in_batches(query_key='hash', query_list=hashes, collection_name='configurations')
+    docs = client.query_in_batches(
+        query_key="hash", query_list=hashes, collection_name="configurations"
+    )
     while True:
         for doc in docs:
-            proxy['nsites'] += doc['nsites']
-            proxy['chemical_systems'].add(''.join(doc['elements']))
+            proxy["nsites"] += doc["nsites"]
+            proxy["chemical_systems"].add("".join(doc["elements"]))
 
-            for e, er in zip(doc['elements'], doc['elements_ratios']):
-                if e not in proxy['elements']:
-                    proxy['elements'].append(e)
-                    proxy['total_elements_ratios'][e] = er * doc['nsites']
-                    proxy['individual_elements_ratios'][e] = {np.round_(er, decimals=2)}
+            for e, er in zip(doc["elements"], doc["elements_ratios"]):
+                if e not in proxy["elements"]:
+                    proxy["elements"].append(e)
+                    proxy["total_elements_ratios"][e] = er * doc["nsites"]
+                    proxy["individual_elements_ratios"][e] = {np.round_(er, decimals=2)}
                 else:
-                    proxy['total_elements_ratios'][e] += er * doc['nsites']
-                    proxy['individual_elements_ratios'][e].add(
+                    proxy["total_elements_ratios"][e] += er * doc["nsites"]
+                    proxy["individual_elements_ratios"][e].add(
                         np.round_(er, decimals=2)
                     )
 
-            proxy['chemical_formula_reduced'].add(doc['chemical_formula_reduced'])
-            proxy['chemical_formula_anonymous'].add(doc['chemical_formula_anonymous'])
-            proxy['chemical_formula_hill'].add(doc['chemical_formula_hill'])
+            proxy["chemical_formula_reduced"].add(doc["chemical_formula_reduced"])
+            proxy["chemical_formula_anonymous"].add(doc["chemical_formula_anonymous"])
+            proxy["chemical_formula_hill"].add(doc["chemical_formula_hill"])
 
-            proxy['nperiodic_dimensions'].add(doc['nperiodic_dimensions'])
-            proxy['dimension_types'].add(tuple(doc['dimension_types']))
+            proxy["nperiodic_dimensions"].add(doc["nperiodic_dimensions"])
+            proxy["dimension_types"].add(tuple(doc["dimension_types"]))
         return proxy

@@ -61,21 +61,22 @@ class Dataset:
     """
 
     def __init__(
-            self,
-            configuration_set_ids,
-            property_ids,
-            name,
-            authors,
-            links,
-            description,
-            aggregated_info,
-            data_license='CC-BY-ND-4.0'
+        self,
+        configuration_set_ids,
+        property_ids,
+        name,
+        authors,
+        links,
+        description,
+        aggregated_info,
+        data_license="CC-BY-ND-4.0",
     ):
-
         for auth in authors:
-            if not ''.join(auth.split(' ')[-1].replace('-', '')).isalpha():
+            if not "".join(auth.split(" ")[-1].replace("-", "")).isalpha():
                 raise RuntimeError(
-                    "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(auth)
+                    "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(
+                        auth
+                    )
                 )
 
         self.configuration_set_ids = configuration_set_ids
@@ -93,18 +94,20 @@ class Dataset:
         ds_hash = sha512()
 
         for i in sorted(self.configuration_set_ids):
-            ds_hash.update(str(i).encode('utf-8'))
+            ds_hash.update(str(i).encode("utf-8"))
 
         for i in sorted(self.property_ids):
-            ds_hash.update(str(i).encode('utf-8'))
+            ds_hash.update(str(i).encode("utf-8"))
 
         return int(ds_hash.hexdigest(), 16)
 
     def __str__(self):
-        return "Dataset(description='{}', nconfiguration_sets={}, nproperties={})".format(
-            self.description,
-            len(self.configuration_set_ids),
-            len(self.property_ids),
+        return (
+            "Dataset(description='{}', nconfiguration_sets={}, nproperties={})".format(
+                self.description,
+                len(self.configuration_set_ids),
+                len(self.property_ids),
+            )
         )
 
     def __repr__(self):
