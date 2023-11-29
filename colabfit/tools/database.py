@@ -337,7 +337,6 @@ class MongoDatabase(MongoClient):
         co_md_map=None,
         transform=None,
         verbose=True,
-        ds_id=None,
         generator=None,
     ):
         """
@@ -416,26 +415,26 @@ class MongoDatabase(MongoClient):
 
         """
         # Generate DS ID here so relationships can be grouped
-        if ds_id is None:
-            ds_ids = [
-                i["colabfit-id"] for i in self.datasets.find({}, {"colabfit-id": 1})
-            ]
-            missing_ids = set()
-            for i in self.configurations.find(
-                {"relationships.$[elem].dataset": {"$nin": ds_ids}},
-                {"relationships": 1},
-            ):
-                for j in i["relationships"]:
-                    if j["dataset"] not in ds_ids:
-                        missing_ids.add(j["dataset"])
-            if len(list(missing_ids)) > 1:
-                raise Exception("DS ID could not be inferred from existing data")
-            elif len(list(missing_ids)) == 1:
-                print("Using existing DS ID", list(missing_ids)[0])
-                ds_id = list(missing_ids)[0]
-            else:
-                ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
-                print("Generated new DS ID:", ds_id)
+        #if ds_id is None:
+        #    ds_ids = [
+        #        i["colabfit-id"] for i in self.datasets.find({}, {"colabfit-id": 1})
+        #    ]
+        #    missing_ids = set()
+        #    for i in self.configurations.find(
+        #        {"relationships.$[elem].dataset": {"$nin": ds_ids}},
+        #        {"relationships": 1},
+        #    ):
+        #        for j in i["relationships"]:
+        #            if j["dataset"] not in ds_ids:
+        #                missing_ids.add(j["dataset"])
+        #    if len(list(missing_ids)) > 1:
+        #        raise Exception("DS ID could not be inferred from existing data")
+        #    elif len(list(missing_ids)) == 1:
+        #        print("Using existing DS ID", list(missing_ids)[0])
+        #        ds_id = list(missing_ids)[0]
+        #    else:
+        #        ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
+        #        print("Generated new DS ID:", ds_id)
         if self.uri is not None:
             mongo_login = self.uri
         else:
@@ -525,7 +524,6 @@ class MongoDatabase(MongoClient):
                 self._insert_data,
                 mongo_login=mongo_login,
                 database_name=self.database_name,
-                ds_id=ds_id,
                 property_map=property_map,
                 co_md_map=co_md_map,
                 transform=transform,
@@ -541,7 +539,6 @@ class MongoDatabase(MongoClient):
         configurations,
         database_name,
         mongo_login,
-        ds_id,
         co_md_map=None,
         property_map=None,
         transform=None,
@@ -765,51 +762,49 @@ class MongoDatabase(MongoClient):
 
                     property_docs_do.append(p_update_doc)
                     pi_relationships_list.append(pi_relationships_dict)
-
-            calc = DataObject(calc_lists["CO"], calc_lists["PI"])
-            ca_hash = str(calc._hash)
-            ca_ids.add(ca_hash)
-            ca_insert_doc = _build_ca_insert_doc(calc)
-            ca_insert_doc["chemical_formula_hill"] = calc_lists["CO_hill"]
-            ca_update_doc = {  # update document
-                "$setOnInsert": ca_insert_doc,
-                # Set MD relationships here
-                "$addToSet": {
-                    "property_types": {"$each": calc_lists["PI_type"]},
-                    "relationships": {
-                        "dataset": ds_id,
-                        "configuration": "CO_" + calc_lists["CO"],
-                        "property_instance": ["PI_" + j for j in calc_lists["PI"]],
-                        "metadata": list(
-                            set([j["metadata"] for j in pi_relationships_list])
-                        ),
+            ca_hash = None
+            if calc_lists["PI"]:
+                calc = DataObject(calc_lists["CO"], calc_lists["PI"])
+                ca_hash = str(calc._hash)
+                ca_ids.add(ca_hash)
+                ca_insert_doc = _build_ca_insert_doc(calc)
+                ca_insert_doc["chemical_formula_hill"] = calc_lists["CO_hill"]
+                ca_update_doc = {  # update document
+                    "$setOnInsert": ca_insert_doc,
+                    # Set MD relationships here
+                    "$addToSet": {
+                        "property_types": {"$each": calc_lists["PI_type"]},
+                        "relationships": {
+                            "configuration": "CO_" + calc_lists["CO"],
+                            "property_instance": ["PI_" + j for j in calc_lists["PI"]],
+                            "metadata": list(
+                                set([j["metadata"] for j in pi_relationships_list])
+                            ),
+                        },
                     },
-                },
                 # '$inc': {
                 #     'ncounts': 1
                 # },
-                "$set": {
-                    "last_modified": datetime.datetime.now().strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    )
-                },
-            }
-            calc_docs.append(
-                UpdateOne(
-                    {"hash": ca_hash},
-                    ca_update_doc,
-                    upsert=True,
-                    hint="hash",
-                )
-            )
-            co_relationships_dict["dataset"] = ds_id
-            for pi_doc_i, pi_doc in enumerate(property_docs_do):
-                pi_relationships_list[pi_doc_i]["dataset"] = ds_id
-                pi_doc["$addToSet"] = {
-                    "relationships": {
-                        "dataset": pi_relationships_list[pi_doc_i].pop("dataset")
-                    }
+                    "$set": {
+                        "last_modified": datetime.datetime.now().strftime(
+                            "%Y-%m-%dT%H:%M:%SZ"
+                     )
+                    },
                 }
+                calc_docs.append(
+                    UpdateOne(
+                        {"hash": ca_hash},
+                        ca_update_doc,
+                        upsert=True,
+                        hint="hash",
+                    )
+                )
+            for pi_doc_i, pi_doc in enumerate(property_docs_do):
+                #pi_doc["$addToSet"] = {
+                #    "relationships": {
+                #        "dataset": pi_relationships_list[pi_doc_i].pop("dataset")
+                #    }
+                #}
                 property_docs.append(
                     UpdateOne(
                         {"hash": pi_doc["$setOnInsert"]["hash"]},
@@ -819,7 +814,7 @@ class MongoDatabase(MongoClient):
                     )
                 )
 
-            c_update_doc["$addToSet"]["relationships"] = co_relationships_dict
+            #c_update_doc["$addToSet"]["relationships"] = co_relationships_dict
             config_docs.append(
                 UpdateOne(
                     {"hash": c_hash},
@@ -1968,6 +1963,47 @@ class MongoDatabase(MongoClient):
         return self.configuration_type.aggregate_configuration_summaries(
             self, [i.replace("CO_", "") for i in co_ids], verbose=verbose
         )
+
+    def insert_from_nomad(self, files):
+        from nomad.client import parse, normalize_all
+        from ase import Atoms
+        if not isinstance(files, list):
+            files = [files]
+        atoms = []
+        for f in files:
+            archive = parse(f)
+            normalize_all(archive[0])
+            run = (archive[0].run)[0].m_to_dict()
+            #wf2 = archive[0].workflow2
+            results = archive[0].results.m_to_dict()
+            configuration = AtomicConfiguration.from_ase(Atoms(
+                symbols=run['system'][0]['atoms']['labels'],
+                positions=np.array(run['system'][0]['atoms']['positions']) * 1.0e10,
+                cell=np.array(run['system'][0]['atoms']['lattice_vectors']) * 1.0e10,
+                pbc=run['system'][0]['atoms']['periodic']))
+            configuration.info['symmetry'] = results['material']['symmetry']
+            configuration.info['from_nomad'] = {}
+            configuration.info['from_nomad']['method'] = run['method']
+            configuration.info['from_nomad']['program'] = run['program']
+            prop_metadata = {
+                    'from_nomad':{"field": "from_nomad"}
+                    }
+            try:
+                energy = run['calculation'][0]['energy']['total']['value']*6241509343260179456 #joule to ev
+                configuration.info['energy'] = energy
+            except:
+                print ('Warning: It does not appear energy is present in the file')
+            atoms.append(configuration)
+        property_map = {
+                "potential-energy": [
+                    {   
+                        "energy": {"field": "energy", "units": "eV"},
+                        "per-atom": {"value": False, "units": None},
+                        "_metadata": prop_metadata,
+                        }
+                    ],
+                }
+        self.insert_data(atoms,co_md_map={"symmetry":{"field":"symmetry"}},property_map=property_map,verbose=True)
 
     def insert_dataset(
         self,
