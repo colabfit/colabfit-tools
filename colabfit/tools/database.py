@@ -1969,6 +1969,48 @@ class MongoDatabase(MongoClient):
             self, [i.replace("CO_", "") for i in co_ids], verbose=verbose
         )
 
+    def insert_from_nomad(self, files):
+        from nomad.client import parse, normalize_all
+        from ase import Atoms
+        if not isinstance(files, list):
+            files = [files]
+        atoms = []
+        for f in files:
+            archive = parse(f)
+            normalize_all(archive[0])
+            run = (archive[0].run)[0].m_to_dict()
+            #wf2 = archive[0].workflow2
+            results = archive[0].results.m_to_dict()
+            configuration = AtomicConfiguration.from_ase(Atoms(
+                symbols=run['system'][0]['atoms']['labels'],
+                positions=np.array(run['system'][0]['atoms']['positions']) * 1.0e10,
+                cell=np.array(run['system'][0]['atoms']['lattice_vectors']) * 1.0e10,
+                pbc=run['system'][0]['atoms']['periodic']))
+            configuration.info['symmetry'] = results['material']['symmetry']
+            configuration.info['from_nomad'] = {}
+            configuration.info['from_nomad']['method'] = run['method']
+            configuration.info['from_nomad']['program'] = run['program']
+            prop_metadata = {
+                    'from_nomad':{"field": "from_nomad"}
+                    }
+            try:
+                energy = run['calculation'][0]['energy']['total']['value']*6241509343260179456 #joule to ev
+                configuration.info['energy'] = energy
+            except:
+                print ('Warning: It does not appear energy is present in the file')
+            atoms.append(configuration)
+        property_map = {
+                "potential-energy": [
+                    {   
+                        "energy": {"field": "energy", "units": "eV"},
+                        "per-atom": {"value": False, "units": None},
+                        "_metadata": prop_metadata,
+                        }
+                    ],
+                }
+        self.insert_data(atoms,co_md_map={"symmetry":{"field":"symmetry"}},property_map=property_map,verbose=True)
+
+
     def insert_dataset(
         self,
         do_hashes,
