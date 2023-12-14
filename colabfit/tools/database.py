@@ -3497,7 +3497,6 @@ class MongoDatabase(MongoClient):
         import yaml
         with open(yaml_file,'r') as file:
             options = yaml.safe_load(file)
-        print (options)
         #load
         configurations = load_data(
         options['data-load']['file-path'],
