@@ -3487,6 +3487,12 @@ class MongoDatabase(MongoClient):
         p.join()
         ase_write("%s.xyz" % ds_doc["extended-id"], results)
 
+    def dump_datasets(self):
+        q = ds_client.find({},{'name':1,'colabfit-id':1,'authors':1,'links':1,'aggregated_info.elements':1,'aggregated_info.property_types':1,'aggregated_info.nconfigurations':1, 'description':1})
+        for i in q:
+            format_print(i)
+    return q
+
 
     def easy_ingestion(self,
             yaml_file):
@@ -3536,6 +3542,7 @@ class MongoDatabase(MongoClient):
                 cs_ids.append(self.query_and_insert_configuration_set(
                     co_hashes=all_cos,
                     query=q,
+                    ds_id=gen_ds_id,
                     name=options['configuration-set']['name'][j],
                     description=options['configuration-set']['description'][j]
                     ))
@@ -3755,8 +3762,21 @@ def _build_ca_insert_doc(calculation):
     }
     return ca_set_on_insert
 
+def format_print(doc):
+    new_doc={}
+    doc.pop('_id')
+    new_doc['colabfit-id']=doc['colabfit-id']
+    new_doc['name']=doc['name']
+    new_doc['authors']=doc['authors']
+    new_doc['description']=doc['description']
+    new_doc['links']=doc['links']
+    new_doc['links'].append('https://materials.colabfit.org/id/%s'%doc['colabfit-id'])
+    new_doc['aggregated_info']=doc['aggregated_info']
+    pprint (new_doc,sort_dicts=False)
 
-def generate_string():
+
+
+def generate_strings():
     return get_random_string(12, allowed_chars=string.ascii_lowercase + "1234567890")
 
 
