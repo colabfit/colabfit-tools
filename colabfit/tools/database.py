@@ -1,4 +1,5 @@
 import json
+from pprint import pprint
 import datetime
 import warnings
 import itertools
@@ -3488,10 +3489,9 @@ class MongoDatabase(MongoClient):
         ase_write("%s.xyz" % ds_doc["extended-id"], results)
 
     def dump_datasets(self):
-        q = ds_client.find({},{'name':1,'colabfit-id':1,'authors':1,'links':1,'aggregated_info.elements':1,'aggregated_info.property_types':1,'aggregated_info.nconfigurations':1, 'description':1})
+        q = self.datasets.find({},{'name':1,'colabfit-id':1,'authors':1,'links':1,'aggregated_info.elements':1,'aggregated_info.property_types':1,'aggregated_info.nconfigurations':1, 'description':1})
         for i in q:
             format_print(i)
-    return q
 
 
     def easy_ingestion(self,
