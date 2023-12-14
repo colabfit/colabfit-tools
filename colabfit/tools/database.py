@@ -3520,11 +3520,13 @@ class MongoDatabase(MongoClient):
             for d in defs:
                 if k==d['property-name']:
                     self.insert_property_definition(d)
+        gen_ds_id = generate_ds_id()
         ids = self.insert_data(
                 configurations,
                 property_map=options['ingest-data']['property-map'],
                 co_md_map=options['ingest-data']['config-md-map'],
-                verbose=True
+                verbose=True,
+                ds_id=gen_ds_id
                 )
         all_cos, all_dos = list(zip(*ids))
         #if cs insert
@@ -3541,6 +3543,7 @@ class MongoDatabase(MongoClient):
         #ds insert
         ds_id=self.insert_dataset(
             do_hashes=all_dos,
+            ds_id=gen_ds_id,
             cs_ids=cs_ids,
             authors=options['dataset']['authors'],
             links=options['dataset']['links'],
