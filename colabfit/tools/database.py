@@ -713,6 +713,7 @@ class MongoDatabase(MongoClient):
                         )
 
                         metadata_hashes.append(str(pi_md._hash))
+                        pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
 
                     else:
                         prop = Property.from_definition(
@@ -748,7 +749,7 @@ class MongoDatabase(MongoClient):
                         if "source-unit" in prop[k]:
                             setOnInsert[k]["source-unit"] = prop[k]["source-unit"]
                         # TODO: Look at: can probably safely move out one level
-                    pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
+                    #pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
                     p_update_doc = {
                         "$setOnInsert": {
                             "hash": p_hash,
@@ -771,7 +772,12 @@ class MongoDatabase(MongoClient):
             ca_ids.add(ca_hash)
             ca_insert_doc = _build_ca_insert_doc(calc)
             ca_insert_doc["chemical_formula_hill"] = calc_lists["CO_hill"]
-            ca_update_doc = {  # update document
+            is_md=False
+            for j in pi_relationships_list:
+                if 'metadata' in j:
+                    is_md=True
+            if is_md:
+             ca_update_doc = {  # update document
                 "$setOnInsert": ca_insert_doc,
                 # Set MD relationships here
                 "$addToSet": {
@@ -784,16 +790,38 @@ class MongoDatabase(MongoClient):
                             set([j["metadata"] for j in pi_relationships_list])
                         ),
                     },
-                },
+                 },
                 # '$inc': {
                 #     'ncounts': 1
                 # },
-                "$set": {
+                 "$set": {
                     "last_modified": datetime.datetime.now().strftime(
                         "%Y-%m-%dT%H:%M:%SZ"
                     )
-                },
-            }
+                 },
+             }
+            else:
+             ca_update_doc = {  # update document
+                "$setOnInsert": ca_insert_doc,
+                # Set MD relationships here
+                "$addToSet": {
+                    "property_types": {"$each": calc_lists["PI_type"]},
+                    "relationships": {
+                        "dataset": ds_id,
+                        "configuration": "CO_" + calc_lists["CO"],
+                        "property_instance": ["PI_" + j for j in calc_lists["PI"]],
+                    },
+                 },
+                # '$inc': {
+                #     'ncounts': 1
+                # },
+                 "$set": {
+                    "last_modified": datetime.datetime.now().strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    )
+                 },
+             }
+
             calc_docs.append(
                 UpdateOne(
                     {"hash": ca_hash},
@@ -3460,6 +3488,68 @@ class MongoDatabase(MongoClient):
         ase_write("%s.xyz" % ds_doc["extended-id"], results)
 
 
+    def easy_ingestion(self,
+            yaml_file):
+        """
+        Function to load, ingest and create configuration sets and datasets.
+        Assume data is present in xyz file(s)
+        """
+        import yaml
+        with open(yaml_file,'r') as file:
+            options = yaml.safe_load(file)
+        print (options)
+        #load
+        configurations = load_data(
+        options['data-load']['file-path'],
+        'extxyz',
+        name_field=options['data-load']['name-field'],
+        elements=None,
+        default_name=options['data-load']['default-name'],
+        reader=None,
+        glob_string=options['data-load']['glob-string'],
+        generator=True,
+        verbose=True,
+        )
+        #insert
+        import colabfit.tools.property_definitions
+        if hasattr(colabfit.tools.property_definitions, '__all__'):
+            defs = [getattr(colabfit.tools.property_definitions, name) for name in colabfit.tools.property_definitions.__all__]
+        else:
+            defs = [getattr(colabfit.tools.property_definitions, name) for name in dir(colabfit.tools.property_definitions) if not name.startswith('_')]
+        for k,v in options['ingest-data']['property-map'].items():
+            for d in defs:
+                if k==d['property-name']:
+                    self.insert_property_definition(d)
+        ids = self.insert_data(
+                configurations,
+                property_map=options['ingest-data']['property-map'],
+                co_md_map=options['ingest-data']['config-md-map'],
+                verbose=True
+                )
+        all_cos, all_dos = list(zip(*ids))
+        #if cs insert
+        cs_ids=None
+        if options['configuration-set']['query']:
+            cs_ids = []
+            for j,q in enumerate(options['configuration-set']['query']):
+                cs_ids.append(self.query_and_insert_configuration_set(
+                    co_hashes=all_cos,
+                    query=q,
+                    name=options['configuration-set']['name'][j],
+                    description=options['configuration-set']['description'][j]
+                    ))
+        #ds insert
+        ds_id=self.insert_dataset(
+            do_hashes=all_dos,
+            cs_ids=cs_ids,
+            authors=options['dataset']['authors'],
+            links=options['dataset']['links'],
+            description=options['dataset']['description'],
+            name=options['dataset']['name'],
+            verbose=True
+            )
+        return ds_id
+
 def build_do(ca, client_name, client_uri):
     client = MongoDatabase(client_name, uri=client_uri)
     co = client.configurations.find_one({"relationships.data_object": {"$in": [ca]}})
@@ -3559,7 +3649,6 @@ def load_data(
     All other keyword arguments will be passed with
     `converter.load(..., **kwargs)`
     """
-
     if elements is None:
         elements = [e.symbol for e in periodictable.elements]
         elements.remove("n")
