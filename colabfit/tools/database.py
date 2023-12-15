@@ -3775,7 +3775,7 @@ def format_print(doc):
 
 
 
-def generate_strings():
+def generate_string():
     return get_random_string(12, allowed_chars=string.ascii_lowercase + "1234567890")
 
 
