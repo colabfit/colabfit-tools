@@ -2097,7 +2097,11 @@ class MongoDatabase(MongoClient):
             ds_id (str):
                 The ID of the inserted dataset
         """
-
+        if overloaded_ds_id is not None:
+            # Old
+            # ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
+            ds_id = overloaded_ds_id
+            
         if ds_id is None:
             # Hack so we don't need to modify existing ingestion scripts
             # Best practice to provide a unique ID for new ingestion scripts
@@ -2158,11 +2162,6 @@ class MongoDatabase(MongoClient):
             return self.datasets.find_one({"hash": str(ds_hash)})[SHORT_ID_STRING_NAME]
         except:
             pass
-
-        if overloaded_ds_id is not None:
-            # Old
-            # ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
-            ds_id = overloaded_ds_id
 
         aggregated_info = {}
 
