@@ -63,6 +63,8 @@ class Metadata:
                         _hash.update(np.array(i).data.tobytes())
             elif isinstance(v["source-value"], str):
                 _hash.update(v["source-value"].encode("utf-8"))
+            elif isinstance(v["source-value"], dict):
+                _hash.update(str(v["source-value"]).encode("utf-8"))
             else:
                 _hash.update(np.array(v["source-value"]).data.tobytes())
             if "source-units" in v:
