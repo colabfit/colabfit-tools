@@ -2353,10 +2353,10 @@ class MongoDatabase(MongoClient):
         # Add new DS relationship to old COs and DOs
         # co_updates = []
         # do_updates = []
-        self.data_objects.update_many(
-            {"hash": {"$in": do_ids}},
-            {"$addToSet": {"relationships": {"dataset": new_ds_id}}},
-        )
+        #self.data_objects.update_many(
+        #    {"hash": {"$in": do_ids}},
+        #    {"$addToSet": {"relationships": {"dataset": new_ds_id}}},
+        #)
 
         if add_do_ids is not None:
             if isinstance(do_ids, str):
