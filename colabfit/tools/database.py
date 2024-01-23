@@ -2062,28 +2062,28 @@ class MongoDatabase(MongoClient):
             ds_id (str):
                 The ID of the inserted dataset
         """
-
         if ds_id is None:
             # Hack so we don't need to modify existing ingestion scripts
             # Best practice to provide a unique ID for new ingestion scripts
 
             # Find DS ID that is referenced by CO/PI but is not present in database
             # Assume that resulting ID is one to use
-            ds_ids = [
-                i["colabfit-id"] for i in self.datasets.find({}, {"colabfit-id": 1})
-            ]
-            missing_ids = set()
-            for i in self.configurations.find(
-                {"relationships.$[elem].dataset": {"$nin": ds_ids}},
-                {"relationships": 1},
-            ):
-                for j in i["relationships"]:
-                    if j["dataset"] not in ds_ids:
-                        missing_ids.add(j["dataset"])
-            if len(missing_ids) != 1:
-                raise Exception("DS ID could not be inferred from existing data")
-            else:
-                ds_id = list(missing_ids)[0]
+            #ds_ids = [
+            #    i["colabfit-id"] for i in self.datasets.find({}, {"colabfit-id": 1})
+            #]
+            #missing_ids = set()
+            #for i in self.configurations.find(
+            #    {"relationships.$[elem].dataset": {"$nin": ds_ids}},
+            #    {"relationships": 1},
+            #):
+            #    for j in i["relationships"]:
+            #        if j["dataset"] not in ds_ids:
+            #            missing_ids.add(j["dataset"])
+            #if len(missing_ids) != 1:
+            #    raise Exception("DS ID could not be inferred from existing data")
+            #else:
+            #    ds_id = list(missing_ids)[0]
+            ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0) 
 
         if isinstance(cs_ids, str):
             cs_ids = [cs_ids]
@@ -2182,9 +2182,29 @@ class MongoDatabase(MongoClient):
             upsert=True,
             hint="hash",
         )
-
+	# update DO relationships to add DS to group
+	#bulk_write update DO
+	# or do in batches aggregation pipeline ->if relationship list doesn't have dataset key, add dataset key, if it does and is different ds_id pass
         # Don't need below anymore since it's assumed that relationship already exists
+        self.update_do_relationships(do_hashes, ds_id)
         return ds_id
+
+    def update_do_relationships(self, do_hashes, ds_id):
+        q = self.query_in_batches('data_objects','hash', do_hashes)
+        update_docs = []
+        for i in tqdm(q,desc="Updating DO relatiinships"):
+            add = 0
+            for j in i['relationships']:
+                if "dataset" not in j:
+                    j['dataset'] = ds_id
+                    add+=1
+                    break
+            if add == 0:
+                new = i['relationships'][0].copy()
+                new['dataset'] = ds_id
+                i['relationships'].append(new)
+            update_docs.append(UpdateOne({'hash':i['hash']},{'$set':{'relationships':i['relationships']}},hint='hash'))
+        res = self.data_objects.bulk_write(update_docs, ordered=False)
 
     def get_dataset(self, ds_id, resync=False, verbose=False):
         """
