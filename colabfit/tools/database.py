@@ -1,4 +1,5 @@
 import json
+import yaml
 import datetime
 import warnings
 import itertools
@@ -763,7 +764,9 @@ class MongoDatabase(MongoClient):
                     property_docs_do.append(p_update_doc)
                     pi_relationships_list.append(pi_relationships_dict)
             ca_hash = None
-            if calc_lists["PI"]:
+            #if calc_lists["PI"]:
+            if 1:
+                print (calc_lists["PI"])
                 calc = DataObject(calc_lists["CO"], calc_lists["PI"])
                 ca_hash = str(calc._hash)
                 ca_ids.add(ca_hash)
@@ -2192,7 +2195,10 @@ class MongoDatabase(MongoClient):
     def update_do_relationships(self, do_hashes, ds_id):
         q = self.query_in_batches('data_objects','hash', do_hashes)
         update_docs = []
-        for i in tqdm(q,desc="Updating DO relatiinships"):
+        update_co = []
+        update_pi = []
+        
+        for i in tqdm(q,desc="Updating DO relationships"):
             add = 0
             for j in i['relationships']:
                 if "dataset" not in j:
@@ -2204,7 +2210,18 @@ class MongoDatabase(MongoClient):
                 new['dataset'] = ds_id
                 i['relationships'].append(new)
             update_docs.append(UpdateOne({'hash':i['hash']},{'$set':{'relationships':i['relationships']}},hint='hash'))
-        res = self.data_objects.bulk_write(update_docs, ordered=False)
+            for j in i['relationships']:
+                print (j)
+                update_co.append(UpdateOne({'colabfit-id':j['configuration']},{'$set':{'relationships.dataset':ds_id}},hint='colabfit-id'))
+                for k in j['property_instance']:
+                   update_pi.append(UpdateOne({'colabfit-id':k},{'$set':{'relationships.dataset':ds_id}},hint='colabfit-id'))
+        if update_docs:      
+           res = self.data_objects.bulk_write(update_docs, ordered=False)
+        if update_co:
+           res = self.configurations.bulk_write(update_co, ordered=False)
+        if update_pi:
+           res = self.property_instances.bulk_write(update_pi, ordered=False)
+            
 
     def get_dataset(self, ds_id, resync=False, verbose=False):
         """
@@ -2844,6 +2861,39 @@ class MongoDatabase(MongoClient):
                 #    {
                 #        'relationships': {'$size': 0}
                 # })
+
+    def easy_ingestion(self,yml):
+        with open(yml, 'r') as file:
+            inp_dict = yaml.safe_load(file)
+        #load_data
+        configs = load_data(
+           inp_dict['data-load']['file-path'],
+           'xyz',
+           inp_dict['data-load']['name-field'],
+           default_name=inp_dict['data-load']['default-name'],
+           elements=None,
+           glob_string=inp_dict['data-load']['glob-string'],
+           generator=False,
+           verbose=True,
+        )
+        all_ids = self.insert_data(
+           configs,
+           inp_dict['ingest-data']['property-map'],
+           co_md_map=inp_dict['ingest-data']['config-md-map'],
+           transform=None,
+           verbose=True,
+        ) 
+        all_cos, all_dos = list(zip(*all_ids))
+        #insert configuration set
+        #insert dataset
+        ds_id = self.insert_dataset(
+            all_dos,
+            name=inp_dict['dataset']['name'],
+            authors=inp_dict['dataset']['authors'],
+            cs_ids=None,
+            links=inp_dict['dataset']['links'],
+            description=inp_dict['dataset']['description'],
+        )
 
     def insert_aggregated_info(
         self,
