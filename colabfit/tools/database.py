@@ -633,10 +633,11 @@ class MongoDatabase(MongoClient):
             ]
             if co_md_map:
                 co_md = Metadata.from_map(d=co_md_map, source=atoms)
-                co_md_json = json.dumps(co_md)
+
+                co_md_set_on_insert = _build_md_insert_doc(co_md)
+                co_md_json = json.dumps(co_md_set_on_insert)
                 if co_md_json not in meta_json:
                     meta_json.add(co_md_json)
-                    co_md_set_on_insert = _build_md_insert_doc(co_md)
                     co_md_update_doc = {  # update document
                         "$setOnInsert": co_md_set_on_insert,
                         "$set": {
