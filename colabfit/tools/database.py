@@ -9,6 +9,7 @@ import numpy as np
 from tqdm import tqdm
 import multiprocessing
 from copy import deepcopy
+from deepdiff import DeepDiff
 from hashlib import sha512
 from functools import partial
 from pymongo import MongoClient, UpdateOne
@@ -608,9 +609,7 @@ class MongoDatabase(MongoClient):
         property_docs = []
         calc_docs = []
         meta_docs = []
-        #        co_relationships_dict = {}
-        #        pi_relationships_dict = {}
-        meta_update_dict = {}
+        meta_json = set()
         # Add all of the configurations into the Mongo server
         ai = 1
         for atoms in tqdm(
@@ -634,6 +633,7 @@ class MongoDatabase(MongoClient):
             ]
             if co_md_map:
                 co_md = Metadata.from_map(d=co_md_map, source=atoms)
+                print(co_md)
                 co_md_set_on_insert = _build_md_insert_doc(co_md)
                 co_md_update_doc = {  # update document
                     "$setOnInsert": co_md_set_on_insert,
@@ -1582,7 +1582,7 @@ class MongoDatabase(MongoClient):
             )
         )
         print(
-            f"Inserting configuration set",
+            "Inserting configuration set",
             f"({name}):".rjust(22),
             f"{len(filtered_cos)}".rjust(7),
         )
@@ -1666,7 +1666,8 @@ class MongoDatabase(MongoClient):
         )
 
     # TODO: need to make sure can't make duplicate CS just with different versions
-    # TODO: Could do this by creating ConfigurationSets for all versioned CS and use a defined equality with hashing
+    # TODO: Could do this by creating ConfigurationSets for all versioned CS and
+    # TODO: use a defined equality with hashing
     def update_configuration_set(self, cs_id, add_ids=None, remove_ids=None):
         if add_ids is None and remove_ids is None:
             raise RuntimeError(
@@ -1875,15 +1876,15 @@ class MongoDatabase(MongoClient):
             # 'methods_counts': [],
         }
 
-        ignore_keys = {
-            "property-id",
-            "property-title",
-            "property-description",
-            "_id",
-            SHORT_ID_STRING_NAME,
-            "property-name",
-            "hash",
-        }
+        # ignore_keys = {
+        #     "property-id",
+        #     "property-title",
+        #     "property-description",
+        #     "_id",
+        #     SHORT_ID_STRING_NAME,
+        #     "property-name",
+        #     "hash",
+        # }
 
         co_ids = []
 
@@ -2582,7 +2583,7 @@ class MongoDatabase(MongoClient):
         ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         configuration_sets = []
-        property_ids = []
+        # property_ids = []
 
         # Loop over configuration sets
         cursor = self.configuration_sets.find(
