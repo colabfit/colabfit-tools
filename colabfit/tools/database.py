@@ -607,7 +607,7 @@ class MongoDatabase(MongoClient):
         # ca_ids = set()
         config_docs = []
         property_docs = []
-        calc_docs = []
+        do_docs = []
         meta_docs = []
         co_md_json_doc = dict()
         pi_md_json_doc = dict()
@@ -707,6 +707,7 @@ class MongoDatabase(MongoClient):
                         pi_md_set_on_insert = _build_md_insert_doc(pi_md)
                         pi_md_json = json.dumps(pi_md_set_on_insert)
                         if pi_md_json not in pi_md_json_doc:
+                            print("adding pi_md to pi_md_json_doc")
 
                             pi_md_json_doc[pi_md_json] = pi_md_hash
 
@@ -766,7 +767,7 @@ class MongoDatabase(MongoClient):
                         if "source-unit" in prop[k]:
                             setOnInsert[k]["source-unit"] = prop[k]["source-unit"]
                         # TODO: Look at: can probably safely move out one level
-                    pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
+                    pi_relationships_dict["metadata"] = "MD_" + pi_md_hash
                     pi_update_doc = {
                         "$setOnInsert": {
                             "hash": pi_hash,
@@ -814,7 +815,7 @@ class MongoDatabase(MongoClient):
                     )
                 },
             }
-            calc_docs.append(
+            do_docs.append(
                 UpdateOne(
                     {"hash": do_hash},
                     ca_update_doc,
@@ -862,8 +863,8 @@ class MongoDatabase(MongoClient):
             nmatch = res.bulk_api_result["nMatched"]
             if nmatch:
                 warnings.warn("{} duplicate properties detected".format(nmatch))
-        if calc_docs:
-            res = coll_data_objects.bulk_write(calc_docs, ordered=False)
+        if do_docs:
+            res = coll_data_objects.bulk_write(do_docs, ordered=False)
             nmatch = res.bulk_api_result["nMatched"]
             if nmatch:
                 warnings.warn("{} duplicate data objects detected".format(nmatch))
