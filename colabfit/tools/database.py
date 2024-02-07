@@ -2271,6 +2271,9 @@ class MongoDatabase(MongoClient):
             ),
         }
 
+    def delete_dataset(self, ds_id,)
+	self.datasets.delete_one({'colabfit-id':ds_id})
+    	
     # TODO: Handle properties somewhere->should we allow for only properties to be update?
     # TODO: Allow for metadata updating
     def update_dataset(
