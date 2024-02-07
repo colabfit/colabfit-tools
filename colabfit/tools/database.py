@@ -729,6 +729,8 @@ class MongoDatabase(MongoClient):
                             )
 
                             metadata_hashes.append(pi_md_hash)
+                        else:
+                            print("pi-md already in pi_md_json_doc")
 
                     else:
                         prop = Property.from_definition(
