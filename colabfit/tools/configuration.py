@@ -534,7 +534,8 @@ def pre_hash_formatting(k, v, ordering):
     # for now all AtomicConfiguration UIs are defined to be ndarrays
     if isinstance(v, np.ndarray):
         if v.dtype in [np.half, np.single, np.double, np.longdouble]:
-            return np.round_(v.astype(np.float64), decimals=16)
+            # Reduce precision here so configurations read into/out of different packages will still align
+            return np.round_(v.astype(np.float64), decimals=4)
         elif v.dtype in [np.int8, np.int16, np.int32, np.int64]:
             return v.astype(np.int64)
         else:
