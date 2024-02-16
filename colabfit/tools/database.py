@@ -2211,7 +2211,6 @@ class MongoDatabase(MongoClient):
                 i['relationships'].append(new)
             update_docs.append(UpdateOne({'hash':i['hash']},{'$set':{'relationships':i['relationships']}},hint='hash'))
             for j in i['relationships']:
-                print (j)
                 update_co.append(UpdateOne({'colabfit-id':j['configuration']},{'$set':{'relationships.dataset':ds_id}},hint='colabfit-id'))
                 for k in j['property_instance']:
                    update_pi.append(UpdateOne({'colabfit-id':k},{'$set':{'relationships.dataset':ds_id}},hint='colabfit-id'))
