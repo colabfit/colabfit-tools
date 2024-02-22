@@ -2299,10 +2299,13 @@ class MongoDatabase(MongoClient):
             )
         )
         do_docs = list(
-            self.data_objects.find({"relationships.dataset": ds_id}, {"hash": 1})
+            self.data_objects.find({"relationships.dataset": ds_id}, {"hash": 1, 'relationships.configuration':1})
         )
         cs_ids = [i["colabfit-id"] for i in cs_docs]
         do_ids = [i["hash"] for i in do_docs]
+        do_cos = {}
+        for i in do_docs:
+           do_cos[i['hash']]=[j['configuration'] for j in i['relationships']]
         init_len = len(cs_ids)
 
         if add_cs_ids is not None:
@@ -2375,16 +2378,26 @@ class MongoDatabase(MongoClient):
         #    {"$addToSet": {"relationships": {"dataset": new_ds_id}}},
         #)
 
+
+        # check dos to see if they contain a do that has same co as one to be added, if so remove from list
+        if isinstance(add_do_ids, str) or isinstance(add_do_ids,tuple):
+           add_do_ids = list(add_do_ids)
+           
+        new_do_cos = {}          
+        for i in add_do_ids:
+           new_do_co = self.data_objects.find_one({'hash':i})['relationships'][0]['configuration']
+           for k,v in do_cos.items():
+              if new_do_co in v:
+                  do_ids.remove(k)
+
+
         if add_do_ids is not None:
-            if isinstance(do_ids, str):
-                add_do_ids = [add_do_ids]
             do_ids.extend(add_do_ids)
             do_ids = list(set(do_ids))
-            if len(do_ids) == init_len_do:
-                raise RuntimeError(
-                    "All data objects to be added are already present in DS."
-                )
-
+#            if len(do_ids) == init_len_do:
+#                raise RuntimeError(
+#                    "All data objects to be added are already present in DS."
+#                )
         # insert new version of DS
 
         self.insert_dataset(
