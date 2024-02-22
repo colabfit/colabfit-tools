@@ -9,7 +9,6 @@ import numpy as np
 from tqdm import tqdm
 import multiprocessing
 from copy import deepcopy
-from deepdiff import DeepDiff
 from hashlib import sha512
 from functools import partial
 from pymongo import MongoClient, UpdateOne
