@@ -531,9 +531,8 @@ class MongoDatabase(MongoClient):
                 verbose=verbose,
             )
 
-            pool = multiprocessing.Pool(self.nprocs)
-
-            return list(itertools.chain.from_iterable(pool.map(pfunc, split_configs)))
+            with multiprocessing.get_context('fork').Pool(self.nprocs) as pool:
+                return list(itertools.chain.from_iterable(pool.map(pfunc, split_configs)))
 
     @staticmethod
     def _insert_data(
@@ -766,7 +765,6 @@ class MongoDatabase(MongoClient):
             ca_hash = None
             #if calc_lists["PI"]:
             if 1:
-                print (calc_lists["PI"])
                 calc = DataObject(calc_lists["CO"], calc_lists["PI"])
                 ca_hash = str(calc._hash)
                 ca_ids.add(ca_hash)
@@ -2211,7 +2209,6 @@ class MongoDatabase(MongoClient):
                 i['relationships'].append(new)
             update_docs.append(UpdateOne({'hash':i['hash']},{'$set':{'relationships':i['relationships']}},hint='hash'))
             for j in i['relationships']:
-                print (j)
                 update_co.append(UpdateOne({'colabfit-id':j['configuration']},{'$set':{'relationships.dataset':ds_id}},hint='colabfit-id'))
                 for k in j['property_instance']:
                    update_pi.append(UpdateOne({'colabfit-id':k},{'$set':{'relationships.dataset':ds_id}},hint='colabfit-id'))

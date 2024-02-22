@@ -6,7 +6,7 @@ from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 import time
 from functools import partial
-from multiprocessing import Pool
+import  multiprocessing 
 from colabfit import (
     ATOMS_NAME_FIELD,
     ATOMS_LABELS_FIELD,
@@ -377,7 +377,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             for i in range(k)
         ]
         s = time.time()
-        with Pool(k) as pool:
+        with  multiprocessing.get_context('fork').Pool(k) as pool:
             aggs = pool.map(
                 partial(agg, db=db.database_name, uri=db.uri), chunked_hashes
             )
