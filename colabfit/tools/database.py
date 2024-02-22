@@ -290,9 +290,9 @@ class MongoDatabase(MongoClient):
         self.data_objects.create_index(
             keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
         )
-        self.property_instances.create_index(
-            keys="relationships.metadata", name="pi_relationships.metadata"
-        )
+        # self.property_instances.create_index(
+        #     keys="relationships.metadata", name="pi_relationships.metadata"
+        # )
         self.configuration_sets.create_index(
             keys="relationships.dataset", name="cs_relationships.dataset"
         )
@@ -305,9 +305,9 @@ class MongoDatabase(MongoClient):
         self.configurations.create_index(
             keys="relationships.dataset", name="co_relationships.dataset"
         )
-        self.property_instances.create_index(
-            keys="relationships.data_object", name="pi_relationships.data_object"
-        )
+        # self.property_instances.create_index(
+        #     keys="relationships.data_object", name="pi_relationships.data_object"
+        # )
         self.property_instances.create_index(
             keys="relationships.dataset", name="pi_relationships.dataset"
         )
