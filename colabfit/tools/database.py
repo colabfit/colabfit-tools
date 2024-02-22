@@ -184,7 +184,7 @@ class MongoDatabase(MongoClient):
         configuration_type=AtomicConfiguration,
         nprocs=1,
         uri=None,
-        drop_database=False,
+        # drop_database=False,
         user=None,
         pwrd=None,
         port=27017,
@@ -247,8 +247,8 @@ class MongoDatabase(MongoClient):
 
         self.database_name = database_name
 
-        if drop_database:
-            self.drop_database(database_name)
+        # if drop_database:
+        #     self.drop_database(database_name)
 
         self.configurations = self[database_name][_CONFIGS_COLLECTION]
         self.property_instances = self[database_name][_PROPS_COLLECTION]
@@ -299,9 +299,9 @@ class MongoDatabase(MongoClient):
         self.configurations.create_index(
             keys="relationships.metadata", name="co_relationships.metadata"
         )
-        self.configurations.create_index(
-            keys="relationships.data_object", name="co_relationships.data_object"
-        )
+        # self.configurations.create_index(
+        #     keys="relationships.data_object", name="co_relationships.data_object"
+        # )
         self.configurations.create_index(
             keys="relationships.dataset", name="co_relationships.dataset"
         )
