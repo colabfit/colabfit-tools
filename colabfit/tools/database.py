@@ -183,7 +183,7 @@ class MongoDatabase(MongoClient):
         configuration_type=AtomicConfiguration,
         nprocs=1,
         uri=None,
-        drop_database=False,
+        # drop_database=False,
         user=None,
         pwrd=None,
         port=27017,
@@ -246,8 +246,8 @@ class MongoDatabase(MongoClient):
 
         self.database_name = database_name
 
-        if drop_database:
-            self.drop_database(database_name)
+        # if drop_database:
+        #     self.drop_database(database_name)
 
         self.configurations = self[database_name][_CONFIGS_COLLECTION]
         self.property_instances = self[database_name][_PROPS_COLLECTION]
@@ -257,76 +257,79 @@ class MongoDatabase(MongoClient):
         self.configuration_sets = self[database_name][_CONFIGSETS_COLLECTION]
         self.datasets = self[database_name][_DATASETS_COLLECTION]
         self.aggregated_info = self[database_name][_AGGREGATED_INFO_COLLECTION]
+        if database_name not in self.list_database_names():
+            print(f"Database {database_name} does not yet exist. Creating indices...")
+            self.property_definitions.create_index(
+                keys="definition.property-name",
+                name="definition.property-name",
+                unique=True,
+            )
 
-        self.property_definitions.create_index(
-            keys="definition.property-name",
-            name="definition.property-name",
-            unique=True,
-        )
+            self.configuration_sets.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.datasets.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
 
-        self.configuration_sets.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.datasets.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
+            self.configurations.create_index(keys="hash", name="hash", unique=True)
+            self.property_instances.create_index(keys="hash", name="hash", unique=True)
+            self.metadata.create_index(keys="hash", name="hash", unique=True)
+            self.data_objects.create_index(keys="hash", name="hash", unique=True)
+            self.configuration_sets.create_index(keys="hash", name="hash", unique=True)
+            self.datasets.create_index(keys="hash", name="hash", unique=True)
+            self.configurations.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.property_instances.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.metadata.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.data_objects.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            # self.property_instances.create_index(
+            #     keys="relationships.metadata", name="pi_relationships.metadata"
+            # )
+            self.configuration_sets.create_index(
+                keys="relationships.dataset", name="cs_relationships.dataset"
+            )
+            self.configurations.create_index(
+                keys="relationships.metadata", name="co_relationships.metadata"
+            )
+            # self.configurations.create_index(
+            #     keys="relationships.data_object", name="co_relationships.data_object"
+            # )
+            self.configurations.create_index(
+                keys="relationships.dataset", name="co_relationships.dataset"
+            )
+            # self.property_instances.create_index(
+            #     keys="relationships.data_object", name="pi_relationships.data_object"
+            # )
+            self.property_instances.create_index(
+                keys="relationships.dataset", name="pi_relationships.dataset"
+            )
+            self.data_objects.create_index(
+                keys="relationships.dataset", name="do_relationships.dataset"
+            )
+            self.configurations.create_index(
+                keys="relationships.configuration_set",
+                name="co_relationships.configuration_set",
+            )
 
-        self.configurations.create_index(keys="hash", name="hash", unique=True)
-        self.property_instances.create_index(keys="hash", name="hash", unique=True)
-        self.metadata.create_index(keys="hash", name="hash", unique=True)
-        self.data_objects.create_index(keys="hash", name="hash", unique=True)
-        self.configuration_sets.create_index(keys="hash", name="hash", unique=True)
-        self.datasets.create_index(keys="hash", name="hash", unique=True)
-        self.configurations.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.property_instances.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.metadata.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.data_objects.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.property_instances.create_index(
-            keys="relationships.metadata", name="pi_relationships.metadata"
-        )
-        self.configuration_sets.create_index(
-            keys="relationships.dataset", name="cs_relationships.dataset"
-        )
-        self.configurations.create_index(
-            keys="relationships.metadata", name="co_relationships.metadata"
-        )
-        self.configurations.create_index(
-            keys="relationships.data_object", name="co_relationships.data_object"
-        )
-        self.configurations.create_index(
-            keys="relationships.dataset", name="co_relationships.dataset"
-        )
-        self.property_instances.create_index(
-            keys="relationships.data_object", name="pi_relationships.data_object"
-        )
-        self.property_instances.create_index(
-            keys="relationships.dataset", name="pi_relationships.dataset"
-        )
-        self.data_objects.create_index(
-            keys="relationships.dataset", name="do_relationships.dataset"
-        )
-        self.configurations.create_index(
-            keys="relationships.configuration_set",
-            name="co_relationships.configuration_set",
-        )
-
-        self.aggregated_info.create_index(keys="type", name="type")
-        self.aggregated_info.create_index(keys="formula", name="formula`")
-        self.aggregated_info.create_index(
-            keys="relationships.dataset", name="ai_relationships.dataset"
-        )
-        self.aggregated_info.create_index(
-            keys="relationships.configuration_set",
-            name="ai_relationships.configuration_set",
-        )
+            self.aggregated_info.create_index(keys="type", name="type")
+            self.aggregated_info.create_index(keys="formula", name="formula`")
+            self.aggregated_info.create_index(
+                keys="relationships.dataset", name="ai_relationships.dataset"
+            )
+            self.aggregated_info.create_index(
+                keys="relationships.configuration_set",
+                name="ai_relationships.configuration_set",
+            )
+        else:
+            print(f"Found database {database_name}.")
 
         self.nprocs = nprocs
 
@@ -653,6 +656,7 @@ class MongoDatabase(MongoClient):
                     )
                 )
                 co_relationships_dict["metadata"] = "MD_%s" % str(co_md._hash)
+
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
             p_hash = None
 
@@ -693,7 +697,6 @@ class MongoDatabase(MongoClient):
                         p_hash = str(hash(prop))
 
                         new_p_hashes.append(p_hash)
-
                         pi_md_update_doc = {  # update document
                             "$setOnInsert": pi_md_set_on_insert,
                             "$set": {
@@ -880,14 +883,26 @@ class MongoDatabase(MongoClient):
                 'property-id': 'default',
                 'property-title': 'A default property used for testing',
                 'property-description': 'A description of the property',
-                'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
-                'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
-                'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
-                'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
-                'nd-diff-shape': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
-                'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
-                'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
-                'nd-diff-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
+                'energy': {'type': 'float', 'has-unit': True,
+                           'extent': [], 'required': True, 'description': 'empty'},
+                'stress': {'type': 'float', 'has-unit': True,
+                           'extent': [6], 'required': True, 'description': 'empty'},
+                'name': {'type': 'string', 'has-unit': False,
+                           'extent': [], 'required': True, 'description': 'empty'},
+                'nd-same-shape': {'type': 'float', 'has-unit': True,
+                           'extent': [2,3,5], 'required': True, 'description': 'empty'},
+                'nd-diff-shape': {'type': 'float', 'has-unit': True,
+                           'extent': [":", ":", ":"],
+                           'required': True, 'description': 'empty'},
+                'forces': {'type': 'float', 'has-unit': True,
+                           'extent': [":", 3],
+                           'required': True, 'description': 'empty'},
+                'nd-same-shape-arr': {'type': 'float', 'has-unit': True,
+                           'extent': [':', 2, 3],
+                           'required': True, 'description': 'empty'},
+                'nd-diff-shape-arr': {'type': 'float', 'has-unit': True,
+                           'extent': [':', ':', ':'],
+                           'required': True, 'description': 'empty'},
             }
 
         """
@@ -1194,7 +1209,8 @@ class MongoDatabase(MongoClient):
 
         for k, v in data.items():
             # data[k] = np.array(data[k])
-            # TODO: Standardize=> Currently, output is array if numpy operations are used, otherwise it's list
+            # TODO: Standardize=> Currently, output is array if numpy operations are
+            # TODO: used, otherwise it's list
             if concatenate or ravel:
                 try:
                     data[k] = np.concatenate(v)
@@ -1262,8 +1278,8 @@ class MongoDatabase(MongoClient):
                 don't have values for all of their fields.
 
             attach_settings (bool, default=False):
-                NOT supported yet. If True, attaches all of the fields of the property settings
-                that are linked to the attached property instances. If
+                NOT supported yet. If True, attaches all of the fields of the property
+                settings that are linked to the attached property instances. If
                 :code:`attach_settings=True`, must also have
                 :code:`attach_properties=True`.
 
@@ -1435,7 +1451,8 @@ class MongoDatabase(MongoClient):
             description (str, optional):
                 A human-readable description of the configuration set.
         """
-        # TODO: Same DS ID approach. Then search for CO/DS relationship pair and insert CS relationship into it
+        # TODO: Same DS ID approach. Then search for CO/DS
+        # TODO:  relationship pair and insert CS relationship into it
         if ds_id is None:
             # Hack so we don't need to modify existing ingestion scripts
             # Best practice to provide a unique ID for new ingestion scripts
@@ -1472,6 +1489,7 @@ class MongoDatabase(MongoClient):
         cs_hash = int(cs_hash.hexdigest(), 16)
 
         # Check for duplicates
+
         try:
             return self.configuration_sets.find_one({"hash": str(cs_hash)})[
                 SHORT_ID_STRING_NAME
@@ -1582,7 +1600,7 @@ class MongoDatabase(MongoClient):
             )
         )
         print(
-            f"Inserting configuration set",
+            "Inserting configuration set",
             f"({name}):".rjust(22),
             f"{len(filtered_cos)}".rjust(7),
         )
@@ -1666,7 +1684,8 @@ class MongoDatabase(MongoClient):
         )
 
     # TODO: need to make sure can't make duplicate CS just with different versions
-    # TODO: Could do this by creating ConfigurationSets for all versioned CS and use a defined equality with hashing
+    # TODO: Could do this by creating ConfigurationSets for all versioned CS and
+    # TODO: use a defined equality with hashing
     def update_configuration_set(self, cs_id, add_ids=None, remove_ids=None):
         if add_ids is None and remove_ids is None:
             raise RuntimeError(
