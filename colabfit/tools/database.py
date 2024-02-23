@@ -257,76 +257,79 @@ class MongoDatabase(MongoClient):
         self.configuration_sets = self[database_name][_CONFIGSETS_COLLECTION]
         self.datasets = self[database_name][_DATASETS_COLLECTION]
         self.aggregated_info = self[database_name][_AGGREGATED_INFO_COLLECTION]
+        if database_name not in self.list_database_names():
+            print(f"Database {database_name} does not yet exist. Creating indices...")
+            self.property_definitions.create_index(
+                keys="definition.property-name",
+                name="definition.property-name",
+                unique=True,
+            )
 
-        self.property_definitions.create_index(
-            keys="definition.property-name",
-            name="definition.property-name",
-            unique=True,
-        )
+            self.configuration_sets.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.datasets.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
 
-        self.configuration_sets.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.datasets.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
+            self.configurations.create_index(keys="hash", name="hash", unique=True)
+            self.property_instances.create_index(keys="hash", name="hash", unique=True)
+            self.metadata.create_index(keys="hash", name="hash", unique=True)
+            self.data_objects.create_index(keys="hash", name="hash", unique=True)
+            self.configuration_sets.create_index(keys="hash", name="hash", unique=True)
+            self.datasets.create_index(keys="hash", name="hash", unique=True)
+            self.configurations.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.property_instances.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.metadata.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.data_objects.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            # self.property_instances.create_index(
+            #     keys="relationships.metadata", name="pi_relationships.metadata"
+            # )
+            self.configuration_sets.create_index(
+                keys="relationships.dataset", name="cs_relationships.dataset"
+            )
+            self.configurations.create_index(
+                keys="relationships.metadata", name="co_relationships.metadata"
+            )
+            # self.configurations.create_index(
+            #     keys="relationships.data_object", name="co_relationships.data_object"
+            # )
+            self.configurations.create_index(
+                keys="relationships.dataset", name="co_relationships.dataset"
+            )
+            # self.property_instances.create_index(
+            #     keys="relationships.data_object", name="pi_relationships.data_object"
+            # )
+            self.property_instances.create_index(
+                keys="relationships.dataset", name="pi_relationships.dataset"
+            )
+            self.data_objects.create_index(
+                keys="relationships.dataset", name="do_relationships.dataset"
+            )
+            self.configurations.create_index(
+                keys="relationships.configuration_set",
+                name="co_relationships.configuration_set",
+            )
 
-        self.configurations.create_index(keys="hash", name="hash", unique=True)
-        self.property_instances.create_index(keys="hash", name="hash", unique=True)
-        self.metadata.create_index(keys="hash", name="hash", unique=True)
-        self.data_objects.create_index(keys="hash", name="hash", unique=True)
-        self.configuration_sets.create_index(keys="hash", name="hash", unique=True)
-        self.datasets.create_index(keys="hash", name="hash", unique=True)
-        self.configurations.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.property_instances.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.metadata.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.data_objects.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        # self.property_instances.create_index(
-        #     keys="relationships.metadata", name="pi_relationships.metadata"
-        # )
-        self.configuration_sets.create_index(
-            keys="relationships.dataset", name="cs_relationships.dataset"
-        )
-        self.configurations.create_index(
-            keys="relationships.metadata", name="co_relationships.metadata"
-        )
-        # self.configurations.create_index(
-        #     keys="relationships.data_object", name="co_relationships.data_object"
-        # )
-        self.configurations.create_index(
-            keys="relationships.dataset", name="co_relationships.dataset"
-        )
-        # self.property_instances.create_index(
-        #     keys="relationships.data_object", name="pi_relationships.data_object"
-        # )
-        self.property_instances.create_index(
-            keys="relationships.dataset", name="pi_relationships.dataset"
-        )
-        self.data_objects.create_index(
-            keys="relationships.dataset", name="do_relationships.dataset"
-        )
-        self.configurations.create_index(
-            keys="relationships.configuration_set",
-            name="co_relationships.configuration_set",
-        )
-
-        self.aggregated_info.create_index(keys="type", name="type")
-        self.aggregated_info.create_index(keys="formula", name="formula`")
-        self.aggregated_info.create_index(
-            keys="relationships.dataset", name="ai_relationships.dataset"
-        )
-        self.aggregated_info.create_index(
-            keys="relationships.configuration_set",
-            name="ai_relationships.configuration_set",
-        )
+            self.aggregated_info.create_index(keys="type", name="type")
+            self.aggregated_info.create_index(keys="formula", name="formula`")
+            self.aggregated_info.create_index(
+                keys="relationships.dataset", name="ai_relationships.dataset"
+            )
+            self.aggregated_info.create_index(
+                keys="relationships.configuration_set",
+                name="ai_relationships.configuration_set",
+            )
+        else:
+            print(f"Found database {database_name}.")
 
         self.nprocs = nprocs
 
@@ -706,7 +709,6 @@ class MongoDatabase(MongoClient):
                         pi_md_set_on_insert = _build_md_insert_doc(pi_md)
                         pi_md_json = json.dumps(pi_md_set_on_insert)
                         if pi_md_json not in pi_md_json_doc:
-                            print("adding pi_md to pi_md_json_doc")
 
                             pi_md_json_doc[pi_md_json] = pi_md_hash
 
