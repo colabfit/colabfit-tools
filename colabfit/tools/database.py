@@ -606,13 +606,14 @@ class MongoDatabase(MongoClient):
         }
 
         insertions = []
-        # ca_ids = set()
+        ca_ids = set()
         config_docs = []
         property_docs = []
-        do_docs = []
+        calc_docs = []
         meta_docs = []
-        co_md_json_doc = dict()
-        pi_md_json_doc = dict()
+        #        co_relationships_dict = {}
+        #        pi_relationships_dict = {}
+        meta_update_dict = {}
         # Add all of the configurations into the Mongo server
         ai = 1
         for atoms in tqdm(
@@ -624,52 +625,42 @@ class MongoDatabase(MongoClient):
             pi_relationships_list = []
             property_docs_do = []
             calc_lists = {}
-            calc_lists["pi_hashes"] = []
+            calc_lists["PI"] = []
             calc_lists["PI_type"] = []
             if transform:
                 transform(atoms)
 
-            co_update_doc, co_hash = _build_co_update_doc(atoms)
-            calc_lists["co_hash"] = co_hash
-            calc_lists["hill_form"] = atoms.configuration_summary()[
+            c_update_doc, c_hash = _build_c_update_doc(atoms)
+            calc_lists["CO"] = c_hash
+            calc_lists["CO_hill"] = atoms.configuration_summary()[
                 "chemical_formula_hill"
             ]
             if co_md_map:
                 co_md = Metadata.from_map(d=co_md_map, source=atoms)
-                co_md_hash = str(co_md._hash)
                 co_md_set_on_insert = _build_md_insert_doc(co_md)
-
-                # check if metadata already exists
-                # if not, add json-str: update-doc to co_md_json_doc dict
-                #    and add UpdateOne to meta_docs list
-                co_md_json = json.dumps(co_md_set_on_insert)
-                if co_md_json not in co_md_json_doc:
-                    co_md_update_doc = {  # update document
-                        "$setOnInsert": co_md_set_on_insert,
-                        "$set": {
-                            "last_modified": datetime.datetime.now().strftime(
-                                "%Y-%m-%dT%H:%M:%SZ"
-                            )
-                        },
-                    }
-                    co_md_json_doc[co_md_json] = co_md_update_doc
-                    meta_docs.append(
-                        UpdateOne(
-                            {"hash": co_md_hash},
-                            co_md_update_doc,
-                            upsert=True,
-                            hint="hash",
+                co_md_update_doc = {  # update document
+                    "$setOnInsert": co_md_set_on_insert,
+                    "$set": {
+                        "last_modified": datetime.datetime.now().strftime(
+                            "%Y-%m-%dT%H:%M:%SZ"
                         )
+                    },
+                }
+
+                meta_docs.append(
+                    UpdateOne(
+                        {"hash": str(co_md._hash)},
+                        co_md_update_doc,
+                        upsert=True,
+                        hint="hash",
                     )
-                else:
-                    # The co_md already exists, so we don't need to add it again
-                    pass
+                )
+                co_relationships_dict["metadata"] = "MD_%s" % str(co_md._hash)
 
-                co_relationships_dict["metadata"] = "MD_%s" % co_md_hash
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
-            pi_hash = None
+            p_hash = None
 
-            new_pi_hashes = []
+            new_p_hashes = []
             for pname, pmap_list in property_map.items():
                 for pmap_i, pmap in enumerate(pmap_list):
                     pi_relationships_dict = {}
@@ -695,45 +686,36 @@ class MongoDatabase(MongoClient):
                     metadata_hashes = []
                     # Attach property metadata, if any were given
                     if "_metadata" in pmap:
+                        pi_md = Metadata.from_map(d=pmap["_metadata"], source=atoms)
 
+                        pi_md_set_on_insert = _build_md_insert_doc(pi_md)
                         prop = Property.from_definition(
                             definition=property_definitions[pname],
                             configuration=atoms,
                             property_map=pmap_copy,
                         )
-                        pi_hash = str(hash(prop))
-                        new_pi_hashes.append(pi_hash)
+                        p_hash = str(hash(prop))
 
-                        pi_md = Metadata.from_map(d=pmap["_metadata"], source=atoms)
-                        pi_md_hash = str(pi_md._hash)
-                        pi_md_set_on_insert = _build_md_insert_doc(pi_md)
-                        pi_md_json = json.dumps(pi_md_set_on_insert)
-                        if pi_md_json not in pi_md_json_doc:
-
-                            pi_md_json_doc[pi_md_json] = pi_md_hash
-
-                            pi_md_update_doc = {  # update document
-                                "$setOnInsert": pi_md_set_on_insert,
-                                "$set": {
-                                    "last_modified": datetime.datetime.now().strftime(
-                                        "%Y-%m-%dT%H:%M:%SZ"
-                                    )
-                                },
-                            }
-
-                            meta_docs.append(
-                                UpdateOne(
-                                    {"hash": pi_md_hash},
-                                    pi_md_update_doc,
-                                    upsert=True,
-                                    hint="hash",
+                        new_p_hashes.append(p_hash)
+                        pi_md_update_doc = {  # update document
+                            "$setOnInsert": pi_md_set_on_insert,
+                            "$set": {
+                                "last_modified": datetime.datetime.now().strftime(
+                                    "%Y-%m-%dT%H:%M:%SZ"
                                 )
-                            )
+                            },
+                        }
 
-                            metadata_hashes.append(pi_md_hash)
-                        else:
-                            # print("pi-md already in pi_md_json_doc")
-                            pass
+                        meta_docs.append(
+                            UpdateOne(
+                                {"hash": str(pi_md._hash)},
+                                pi_md_update_doc,
+                                upsert=True,
+                                hint="hash",
+                            )
+                        )
+
+                        metadata_hashes.append(str(pi_md._hash))
 
                     else:
                         prop = Property.from_definition(
@@ -741,10 +723,10 @@ class MongoDatabase(MongoClient):
                             configuration=atoms,
                             property_map=pmap_copy,
                         )
-                        pi_hash = str(hash(prop))
+                        p_hash = str(hash(prop))
 
-                        new_pi_hashes.append(pi_hash)
-                    calc_lists["pi_hashes"].append(pi_hash)
+                        new_p_hashes.append(p_hash)
+                    calc_lists["PI"].append(p_hash)
                     calc_lists["PI_type"].append(pname)
                     # Prepare the property instance EDN document
                     setOnInsert = {}
@@ -769,11 +751,11 @@ class MongoDatabase(MongoClient):
                         if "source-unit" in prop[k]:
                             setOnInsert[k]["source-unit"] = prop[k]["source-unit"]
                         # TODO: Look at: can probably safely move out one level
-                    pi_relationships_dict["metadata"] = "MD_" + pi_md_hash
-                    pi_update_doc = {
+                    pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
+                    p_update_doc = {
                         "$setOnInsert": {
-                            "hash": pi_hash,
-                            SHORT_ID_STRING_NAME: "PI_" + pi_hash,
+                            "hash": p_hash,
+                            SHORT_ID_STRING_NAME: "PI_" + p_hash,
                             "type": pname,
                             pname: setOnInsert,
                         },
@@ -784,25 +766,23 @@ class MongoDatabase(MongoClient):
                         },
                     }
 
-                    property_docs_do.append(pi_update_doc)
+                    property_docs_do.append(p_update_doc)
                     pi_relationships_list.append(pi_relationships_dict)
 
-            data_object = DataObject(calc_lists["co_hash"], calc_lists["pi_hashes"])
-            do_hash = str(data_object._hash)
-            # ca_ids.add(do_hash)
-            do_insert_doc = _build_do_insert_doc(data_object)
-            do_insert_doc["chemical_formula_hill"] = calc_lists["hill_form"]
+            calc = DataObject(calc_lists["CO"], calc_lists["PI"])
+            ca_hash = str(calc._hash)
+            ca_ids.add(ca_hash)
+            ca_insert_doc = _build_ca_insert_doc(calc)
+            ca_insert_doc["chemical_formula_hill"] = calc_lists["CO_hill"]
             ca_update_doc = {  # update document
-                "$setOnInsert": do_insert_doc,
+                "$setOnInsert": ca_insert_doc,
                 # Set MD relationships here
                 "$addToSet": {
                     "property_types": {"$each": calc_lists["PI_type"]},
                     "relationships": {
                         "dataset": ds_id,
-                        "configuration": "CO_" + calc_lists["co_hash"],
-                        "property_instance": [
-                            "PI_" + j for j in calc_lists["pi_hashes"]
-                        ],
+                        "configuration": "CO_" + calc_lists["CO"],
+                        "property_instance": ["PI_" + j for j in calc_lists["PI"]],
                         "metadata": list(
                             set([j["metadata"] for j in pi_relationships_list])
                         ),
@@ -817,9 +797,9 @@ class MongoDatabase(MongoClient):
                     )
                 },
             }
-            do_docs.append(
+            calc_docs.append(
                 UpdateOne(
-                    {"hash": do_hash},
+                    {"hash": ca_hash},
                     ca_update_doc,
                     upsert=True,
                     hint="hash",
@@ -842,17 +822,17 @@ class MongoDatabase(MongoClient):
                     )
                 )
 
-            co_update_doc["$addToSet"]["relationships"] = co_relationships_dict
+            c_update_doc["$addToSet"]["relationships"] = co_relationships_dict
             config_docs.append(
                 UpdateOne(
-                    {"hash": co_hash},
-                    co_update_doc,
+                    {"hash": c_hash},
+                    c_update_doc,
                     upsert=True,
                     hint="hash",
                 )
             )
 
-            insertions.append((co_hash, do_hash))
+            insertions.append((c_hash, ca_hash))
 
             ai += 1
         if config_docs:
@@ -865,8 +845,8 @@ class MongoDatabase(MongoClient):
             nmatch = res.bulk_api_result["nMatched"]
             if nmatch:
                 warnings.warn("{} duplicate properties detected".format(nmatch))
-        if do_docs:
-            res = coll_data_objects.bulk_write(do_docs, ordered=False)
+        if calc_docs:
+            res = coll_data_objects.bulk_write(calc_docs, ordered=False)
             nmatch = res.bulk_api_result["nMatched"]
             if nmatch:
                 warnings.warn("{} duplicate data objects detected".format(nmatch))
@@ -1234,7 +1214,7 @@ class MongoDatabase(MongoClient):
             if concatenate or ravel:
                 try:
                     data[k] = np.concatenate(v)
-                except ValueError:
+                except:
                     data[k] = np.array(v)
 
             if vstack:
@@ -1510,11 +1490,14 @@ class MongoDatabase(MongoClient):
 
         # Check for duplicates
 
-        config_set = self.configuration_sets.find_one({"hash": str(cs_hash)})
-        if config_set is not None:
-            return config_set[SHORT_ID_STRING_NAME]
+        try:
+            return self.configuration_sets.find_one({"hash": str(cs_hash)})[
+                SHORT_ID_STRING_NAME
+            ]
+        except:
+            pass
 
-        elif overloaded_cs_id is None:
+        if overloaded_cs_id is None:
             cs_id = ID_FORMAT_STRING.format("CS", generate_string(), 0)
         else:
             cs_id = overloaded_cs_id
@@ -1558,10 +1541,10 @@ class MongoDatabase(MongoClient):
 
         # Add the backwards relationships CO->CS
         config_docs = []
-        for co_hash in hashes:
+        for c_hash in hashes:
             config_docs.append(
                 UpdateOne(
-                    {"hash": co_hash},
+                    {"hash": c_hash},
                     {"$set": {"relationships.$[elem].configuration_set": cs_id}},
                     array_filters=[
                         {
@@ -1911,15 +1894,15 @@ class MongoDatabase(MongoClient):
             # 'methods_counts': [],
         }
 
-        # ignore_keys = {
-        #     "property-id",
-        #     "property-title",
-        #     "property-description",
-        #     "_id",
-        #     SHORT_ID_STRING_NAME,
-        #     "property-name",
-        #     "hash",
-        # }
+        ignore_keys = {
+            "property-id",
+            "property-title",
+            "property-description",
+            "_id",
+            SHORT_ID_STRING_NAME,
+            "property-name",
+            "hash",
+        }
 
         co_ids = []
 
@@ -2618,7 +2601,7 @@ class MongoDatabase(MongoClient):
         ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
 
         configuration_sets = []
-        # property_ids = []
+        property_ids = []
 
         # Loop over configuration sets
         cursor = self.configuration_sets.find(
@@ -3428,25 +3411,25 @@ class MongoDatabase(MongoClient):
 
     def export_ds_to_xyz(self, ds_id, nprocs=1):
         ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: {"$eq": ds_id}})
-        # Old data_objs = ds_doc['relationships']['data_objects']
-        do_query = self.data_objects.find(
+        # Old cas = ds_doc['relationships']['data_objects']
+        cas_q = self.data_objects.find(
             {"relationships.dataset": ds_id}, {"colabfit-id": 1}
         )
-        data_objs = [do["colabfit-id"] for do in do_query]
+        cas = [i["colabfit-id"] for i in cas_q]
         # cos = list(
-        #    self.configurations.find({'relationships.data_objects': {'$in': data_objs}}).sort('relationships.data_objects',
+        #    self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',
         #                                                                                1))
-        # pis = list(self.property_instances.find({'relationships.data_objects': {'$in': data_objs}}).sort(
+        # pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort(
         #    'relationships.data_objects', 1))
         p = multiprocessing.Pool(nprocs)
         results = []
-        # results.append(result for result in tqdm(p.imap_unordered(partial(build_do,client_name=self.database_name),data_objs)))
+        # results.append(result for result in tqdm(p.imap_unordered(partial(build_do,client_name=self.database_name),cas)))
         for result in tqdm(
             p.imap_unordered(
                 partial(build_do, client_name=self.database_name, client_uri=self.uri),
-                data_objs,
+                cas,
             ),
-            total=len(data_objs),
+            total=len(cas),
         ):
             results.append(result)
         p.close()
@@ -3608,11 +3591,11 @@ def load_data(
 
 # Moved out of static method to avoid changing insert_data* methods
 # Could consider changing in the future
-def _build_co_update_doc(configuration):
+def _build_c_update_doc(configuration):
     processed_fields = configuration.configuration_summary()
-    co_hash = str(hash(configuration))
-    co_update_doc = {
-        "$setOnInsert": {"hash": co_hash, SHORT_ID_STRING_NAME: "CO_" + co_hash},
+    c_hash = str(hash(configuration))
+    c_update_doc = {
+        "$setOnInsert": {"hash": c_hash, SHORT_ID_STRING_NAME: "CO_" + c_hash},
         "$set": {
             "last_modified": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
         },
@@ -3620,11 +3603,11 @@ def _build_co_update_doc(configuration):
             "names": {"$each": list(configuration.info[ATOMS_NAME_FIELD])},
         },
     }
-    co_update_doc["$setOnInsert"].update(
+    c_update_doc["$setOnInsert"].update(
         {k: v.tolist() for k, v in configuration.unique_identifiers.items()}
     )
-    co_update_doc["$setOnInsert"].update({k: v for k, v in processed_fields.items()})
-    return co_update_doc, co_hash
+    c_update_doc["$setOnInsert"].update({k: v for k, v in processed_fields.items()})
+    return c_update_doc, c_hash
 
 
 def _build_md_insert_doc(metadata):
@@ -3648,10 +3631,13 @@ def _build_md_insert_doc(metadata):
     return md_set_on_insert
 
 
-def _build_do_insert_doc(calculation):
+def _build_ca_insert_doc(calculation):
     ca_set_on_insert = {
         "hash": str(calculation._hash),
         SHORT_ID_STRING_NAME: "DO_" + str(calculation._hash),
+        #'relationships.configurations': 'CO_' + calculation.configuration,
+        # '$addToSet': {'relationships.property_instances':  {'$each': calculation.properties}},
+        # 'ncounts': 0,
     }
     return ca_set_on_insert
 
