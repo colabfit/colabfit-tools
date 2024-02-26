@@ -3,6 +3,7 @@ import datetime
 import warnings
 import itertools
 import string
+from collections import defaultdict
 from math import ceil
 
 import numpy as np
@@ -328,7 +329,9 @@ class MongoDatabase(MongoClient):
                 name="ai_relationships.configuration_set",
             )
         else:
-            print(f"Found database {database_name}.")
+            # May implement with verbose arg to disable
+            # print(f"Found database {database_name}.")
+            pass
 
         self.nprocs = nprocs
 
@@ -1517,7 +1520,7 @@ class MongoDatabase(MongoClient):
             cs_id = overloaded_cs_id
 
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
-            self, query={"relationships.dataset": ds_id}, verbose=True
+            self, co_hashes=hashes, verbose=True
         )
         # Insert necessary aggregated info into its collection
         self.insert_aggregated_info(aggregated_info, "configuration_set", cs_id)
@@ -1681,11 +1684,19 @@ class MongoDatabase(MongoClient):
 
         """
 
-        cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: cs_id})
+        # cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: cs_id})
+        co_hashes = next(
+            self.configurations.aggregate(
+                [
+                    {"$match": {"relationships.configuration_set": cs_id}},
+                    {"$project": {"hash": 1, "_id": 0}},
+                ]
+            )
+        )
 
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
-            co_hashes=cs_doc["relationships"]["configurations"],
+            co_hashes=co_hashes,
             verbose=verbose,
         )
 
@@ -1789,9 +1800,7 @@ class MongoDatabase(MongoClient):
 
         aggregated_info = {}
 
-        for k, v in self.aggregate_data_object_info(
-            pr_ids, ds_id, verbose=verbose
-        ).items():
+        for k, v in self.aggregate_data_object_info(pr_ids, verbose=verbose).items():
             if k in {"types", "types_counts", "fields", "fields_counts"}:
                 k = "property_" + k
 
@@ -1876,7 +1885,7 @@ class MongoDatabase(MongoClient):
 
         return aggregated_info
 
-    def aggregate_data_object_info(self, do_hashes, ds_id, verbose=False):
+    def aggregate_data_object_info(self, do_hashes, verbose=False):
         """
         Aggregates the following information from a list of data_objects:
 
@@ -1885,8 +1894,8 @@ class MongoDatabase(MongoClient):
 
         Args:
 
-            pr_ids (list or str):
-                The IDs of the configurations to aggregate information from
+            do_hashes (list or str):
+                The hashes of the data_objects to aggregate information from
 
             verbose (bool, default=False):
                 If True, prints a progress bar
@@ -1898,49 +1907,61 @@ class MongoDatabase(MongoClient):
         """
         if isinstance(do_hashes, str):
             do_hashes = [do_hashes]
-
-        pipeline = [
-            {"$match": {"hash": {"$in": do_hashes}}},
-            {
-                "$facet": {
-                    "typesCount": [
-                        {"$unwind": "$property_types"},
-                        {"$group": {"_id": "$property_types", "count": {"$sum": 1}}},
-                    ],
-                    "configuration_ids": [
-                        {
-                            "$group": {
-                                "_id": None,
-                                "configuration_ids": {
-                                    "$addToSet": "$relationships.configuration"
-                                },
-                            }
-                        },
-                        {"$project": {"_id": 0, "configuration_ids": 1}},
-                    ],
-                }
-            },
+        do_hash_batch_size = 10000
+        do_hash_batches = [
+            do_hashes[i : i + do_hash_batch_size]
+            for i in range(0, len(do_hashes), do_hash_batch_size)
         ]
+        property_types = defaultdict(int)
+        co_ids = list()
+        for do_hash_batch in tqdm(
+            do_hash_batches, desc="Aggregating data object info", disable=not verbose
+        ):
 
-        results = self.data_objects.aggregate(pipeline)
-        results = next(results)
-        p_types = [x["_id"] for x in results["typesCount"]]
-        p_counts = [x["count"] for x in results["typesCount"]]
-        co_ids = itertools.chain.from_iterable(
-            results["configuration_ids"][0]["configuration_ids"]
-        )
+            pipeline = [
+                {"$match": {"hash": {"$in": do_hash_batch}}},
+                {
+                    "$facet": {
+                        "typesCount": [
+                            {"$unwind": "$property_types"},
+                            {
+                                "$group": {
+                                    "_id": "$property_types",
+                                    "count": {"$sum": 1},
+                                }
+                            },
+                        ],
+                        "configuration_ids": [
+                            {
+                                "$group": {
+                                    "_id": None,
+                                    "configuration_ids": {
+                                        "$addToSet": "$relationships.configuration"
+                                    },
+                                }
+                            },
+                            {"$project": {"_id": 0, "configuration_ids": 1}},
+                        ],
+                    }
+                },
+            ]
+
+            results = self.data_objects.aggregate(pipeline)
+            results = next(results)
+            co_ids.extend(results["configuration_ids"][0]["configuration_ids"])
+            for x in results["typesCount"]:
+                property_types[x["_id"]] += x["count"]
+
+        co_ids = itertools.chain.from_iterable(co_ids)
         co_hashes = [x.replace("CO_", "") for x in co_ids]
 
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
-            # either co_hashes or ds_id may be used here
-            # query = {"hash": {"$in": co_hashes}
-            query={"relationships.dataset": ds_id},
+            co_hashes=co_hashes,
             verbose=verbose,
         )
-        aggregated_info["property_types"] = p_types
-        aggregated_info["property_types_counts"] = p_counts
-        aggregated_info["nconfigurations"] = len(co_hashes)
+        aggregated_info["property_types"] = list(property_types.keys())
+        aggregated_info["property_types_counts"] = list(property_types.values())
         return aggregated_info
 
     # TODO: Make Configuration "type" agnostic (only need to change docstring)
@@ -1999,7 +2020,7 @@ class MongoDatabase(MongoClient):
 
         return self.configuration_type.aggregate_configuration_summaries(
             self,
-            query={"hash": {"$in": [i.replace("CO_", "") for i in co_ids]}},
+            co_hashes=[i.replace("CO_", "") for i in co_ids],
             verbose=verbose,
         )
 
@@ -2127,15 +2148,10 @@ class MongoDatabase(MongoClient):
             # ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
             ds_id = overloaded_ds_id
 
-        aggregated_info = {}
-        aggregated_info1 = self.aggregate_data_object_info(
+        aggregated_info = self.aggregate_data_object_info(
             do_hashes=do_hashes,
-            ds_id=ds_id,
             verbose=verbose,
         )
-        for k, v in aggregated_info1.items():
-            aggregated_info[k] = v
-        print(aggregated_info == aggregated_info1)
 
         # Insert necessary aggregated info into its collection
         self.insert_aggregated_info(aggregated_info, "dataset", ds_id)
@@ -2647,7 +2663,7 @@ class MongoDatabase(MongoClient):
                     description=cs_doc["description"],
                     aggregated_info=self.configuration_type.aggregate_configuration_summaries(
                         self,
-                        query={"hash": {"$in": co_hashes}},
+                        co_hashes=co_hashes,
                         verbose=verbose,
                     ),
                 )
@@ -2785,7 +2801,7 @@ class MongoDatabase(MongoClient):
                     configuration_ids=co_hashes,
                     description=cs_doc["description"],
                     aggregated_info=self.configuration_type.aggregate_configuration_summaries(
-                        self, query={"hash": {"$in": co_hashes}}, verbose=verbose
+                        self, co_hashes=co_hashes, verbose=verbose
                     ),
                 )
             )
@@ -2842,7 +2858,7 @@ class MongoDatabase(MongoClient):
         ]:
             nbatches = ceil(len(aggregated_info[k]) / batch_size)
             update_list = []
-            for i in range(nbatches):
+            for i in tqdm(range(nbatches), desc=f"Inserting {k}", total=nbatches):
                 for j in aggregated_info[k][i * batch_size : (i + 1) * batch_size]:
                     update_list.append(
                         UpdateOne(
