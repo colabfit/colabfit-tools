@@ -9,7 +9,6 @@ import numpy as np
 from tqdm import tqdm
 import multiprocessing
 from copy import deepcopy
-from deepdiff import DeepDiff
 from hashlib import sha512
 from functools import partial
 from pymongo import MongoClient, UpdateOne
@@ -112,7 +111,6 @@ class MongoDatabase(MongoClient):
                 nelements
                 chemical_systems
                 elements
-                individual_elements_ratios
                 total_elements_ratios
                 chemical_formula_reduced
                 chemical_formula_anonymous
@@ -135,7 +133,6 @@ class MongoDatabase(MongoClient):
                 nelements
                 chemical_systems
                 elements
-                individual_elements_ratios
                 total_elements_ratios
                 chemical_formula_reduced
                 chemical_formula_anonymous
@@ -259,75 +256,79 @@ class MongoDatabase(MongoClient):
         self.datasets = self[database_name][_DATASETS_COLLECTION]
         self.aggregated_info = self[database_name][_AGGREGATED_INFO_COLLECTION]
 
-        self.property_definitions.create_index(
-            keys="definition.property-name",
-            name="definition.property-name",
-            unique=True,
-        )
+        if database_name not in self.list_database_names():
+            print(f"Database {database_name} does not yet exist. Creating indices...")
+            self.property_definitions.create_index(
+                keys="definition.property-name",
+                name="definition.property-name",
+                unique=True,
+            )
 
-        self.configuration_sets.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.datasets.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
+            self.configuration_sets.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.datasets.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
 
-        self.configurations.create_index(keys="hash", name="hash", unique=True)
-        self.property_instances.create_index(keys="hash", name="hash", unique=True)
-        self.metadata.create_index(keys="hash", name="hash", unique=True)
-        self.data_objects.create_index(keys="hash", name="hash", unique=True)
-        self.configuration_sets.create_index(keys="hash", name="hash", unique=True)
-        self.datasets.create_index(keys="hash", name="hash", unique=True)
-        self.configurations.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.property_instances.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.metadata.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.data_objects.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.property_instances.create_index(
-            keys="relationships.metadata", name="pi_relationships.metadata"
-        )
-        self.configuration_sets.create_index(
-            keys="relationships.dataset", name="cs_relationships.dataset"
-        )
-        self.configurations.create_index(
-            keys="relationships.metadata", name="co_relationships.metadata"
-        )
-        self.configurations.create_index(
-            keys="relationships.data_object", name="co_relationships.data_object"
-        )
-        self.configurations.create_index(
-            keys="relationships.dataset", name="co_relationships.dataset"
-        )
-        self.property_instances.create_index(
-            keys="relationships.data_object", name="pi_relationships.data_object"
-        )
-        self.property_instances.create_index(
-            keys="relationships.dataset", name="pi_relationships.dataset"
-        )
-        self.data_objects.create_index(
-            keys="relationships.dataset", name="do_relationships.dataset"
-        )
-        self.configurations.create_index(
-            keys="relationships.configuration_set",
-            name="co_relationships.configuration_set",
-        )
+            self.configurations.create_index(keys="hash", name="hash", unique=True)
+            self.property_instances.create_index(keys="hash", name="hash", unique=True)
+            self.metadata.create_index(keys="hash", name="hash", unique=True)
+            self.data_objects.create_index(keys="hash", name="hash", unique=True)
+            self.configuration_sets.create_index(keys="hash", name="hash", unique=True)
+            self.datasets.create_index(keys="hash", name="hash", unique=True)
+            self.configurations.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.property_instances.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.metadata.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            self.data_objects.create_index(
+                keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
+            )
+            # self.property_instances.create_index(
+            #     keys="relationships.metadata", name="pi_relationships.metadata"
+            # )
+            self.configuration_sets.create_index(
+                keys="relationships.dataset", name="cs_relationships.dataset"
+            )
+            self.configurations.create_index(
+                keys="relationships.metadata", name="co_relationships.metadata"
+            )
+            # self.configurations.create_index(
+            #     keys="relationships.data_object", name="co_relationships.data_object"
+            # )
+            self.configurations.create_index(
+                keys="relationships.dataset", name="co_relationships.dataset"
+            )
+            # self.property_instances.create_index(
+            #     keys="relationships.data_object", name="pi_relationships.data_object"
+            # )
+            self.property_instances.create_index(
+                keys="relationships.dataset", name="pi_relationships.dataset"
+            )
+            self.data_objects.create_index(
+                keys="relationships.dataset", name="do_relationships.dataset"
+            )
+            self.configurations.create_index(
+                keys="relationships.configuration_set",
+                name="co_relationships.configuration_set",
+            )
 
-        self.aggregated_info.create_index(keys="type", name="type")
-        self.aggregated_info.create_index(keys="formula", name="formula`")
-        self.aggregated_info.create_index(
-            keys="relationships.dataset", name="ai_relationships.dataset"
-        )
-        self.aggregated_info.create_index(
-            keys="relationships.configuration_set",
-            name="ai_relationships.configuration_set",
-        )
+            self.aggregated_info.create_index(keys="type", name="type")
+            self.aggregated_info.create_index(keys="formula", name="formula`")
+            self.aggregated_info.create_index(
+                keys="relationships.dataset", name="ai_relationships.dataset"
+            )
+            self.aggregated_info.create_index(
+                keys="relationships.configuration_set",
+                name="ai_relationships.configuration_set",
+            )
+        else:
+            print(f"Found database {database_name}.")
 
         self.nprocs = nprocs
 
@@ -707,8 +708,6 @@ class MongoDatabase(MongoClient):
                         pi_md_set_on_insert = _build_md_insert_doc(pi_md)
                         pi_md_json = json.dumps(pi_md_set_on_insert)
                         if pi_md_json not in pi_md_json_doc:
-                            print("adding pi_md to pi_md_json_doc")
-
                             pi_md_json_doc[pi_md_json] = pi_md_hash
 
                             pi_md_update_doc = {  # update document
@@ -731,7 +730,6 @@ class MongoDatabase(MongoClient):
 
                             metadata_hashes.append(pi_md_hash)
                         else:
-                            # print("pi-md already in pi_md_json_doc")
                             pass
 
                     else:
@@ -1519,12 +1517,11 @@ class MongoDatabase(MongoClient):
             cs_id = overloaded_cs_id
 
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
-            self, hashes, verbose=True
+            self, query={"relationships.dataset": ds_id}, verbose=True
         )
         # Insert necessary aggregated info into its collection
         self.insert_aggregated_info(aggregated_info, "configuration_set", cs_id)
         for item in [
-            "individual_elements_ratios",
             "chemical_systems",
             "chemical_formula_anonymous",
             "chemical_formula_hill",
@@ -1688,7 +1685,7 @@ class MongoDatabase(MongoClient):
 
         aggregated_info = self.configuration_type.aggregate_configuration_summaries(
             self,
-            cs_doc["relationships"]["configurations"],
+            co_hashes=cs_doc["relationships"]["configurations"],
             verbose=verbose,
         )
 
@@ -1792,7 +1789,9 @@ class MongoDatabase(MongoClient):
 
         aggregated_info = {}
 
-        for k, v in self.aggregate_data_object_info(pr_ids, verbose=verbose).items():
+        for k, v in self.aggregate_data_object_info(
+            pr_ids, ds_id, verbose=verbose
+        ).items():
             if k in {"types", "types_counts", "fields", "fields_counts"}:
                 k = "property_" + k
 
@@ -1877,7 +1876,7 @@ class MongoDatabase(MongoClient):
 
         return aggregated_info
 
-    def aggregate_data_object_info(self, pr_hashes, verbose=False):
+    def aggregate_data_object_info(self, do_hashes, ds_id, verbose=False):
         """
         Aggregates the following information from a list of data_objects:
 
@@ -1897,53 +1896,51 @@ class MongoDatabase(MongoClient):
             aggregated_info (dict):
                 All of the aggregated info
         """
+        if isinstance(do_hashes, str):
+            do_hashes = [do_hashes]
 
-        if isinstance(pr_hashes, str):
-            pr_hashes = [pr_hashes]
+        pipeline = [
+            {"$match": {"hash": {"$in": do_hashes}}},
+            {
+                "$facet": {
+                    "typesCount": [
+                        {"$unwind": "$property_types"},
+                        {"$group": {"_id": "$property_types", "count": {"$sum": 1}}},
+                    ],
+                    "configuration_ids": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "configuration_ids": {
+                                    "$addToSet": "$relationships.configuration"
+                                },
+                            }
+                        },
+                        {"$project": {"_id": 0, "configuration_ids": 1}},
+                    ],
+                }
+            },
+        ]
 
-        aggregated_info = {
-            "property_types": [],
-            "property_types_counts": [],
-            # 'fields': [],
-            # 'fields_counts': [],
-            # 'methods': [],
-            # 'methods_counts': [],
-        }
-
-        # ignore_keys = {
-        #     "property-id",
-        #     "property-title",
-        #     "property-description",
-        #     "_id",
-        #     SHORT_ID_STRING_NAME,
-        #     "property-name",
-        #     "hash",
-        # }
-
-        co_ids = []
-
-        for doc in tqdm(
-            self.query_in_batches(
-                query_key="hash", query_list=pr_hashes, collection_name="data_objects"
-            ),
-            desc="Aggregating data_object info",
-            disable=not verbose,
-            total=len(pr_hashes),
-        ):
-            for i in range(len(doc["property_types"])):
-                if doc["property_types"][i] not in aggregated_info["property_types"]:
-                    aggregated_info["property_types"].append(doc["property_types"][i])
-                    aggregated_info["property_types_counts"].append(1)
-                else:
-                    idx = aggregated_info["property_types"].index(
-                        doc["property_types"][i]
-                    )
-                    aggregated_info["property_types_counts"][idx] += 1
-            co_ids.append(doc["relationships"][0]["configuration"].replace("CO_", ""))
-        ag_2 = self.configuration_type.aggregate_configuration_summaries(
-            self, co_ids, verbose=verbose
+        results = self.data_objects.aggregate(pipeline)
+        results = next(results)
+        p_types = [x["_id"] for x in results["typesCount"]]
+        p_counts = [x["count"] for x in results["typesCount"]]
+        co_ids = itertools.chain.from_iterable(
+            results["configuration_ids"][0]["configuration_ids"]
         )
-        aggregated_info.update(ag_2)
+        co_hashes = [x.replace("CO_", "") for x in co_ids]
+
+        aggregated_info = self.configuration_type.aggregate_configuration_summaries(
+            self,
+            # either co_hashes or ds_id may be used here
+            # query = {"hash": {"$in": co_hashes}
+            query={"relationships.dataset": ds_id},
+            verbose=verbose,
+        )
+        aggregated_info["property_types"] = p_types
+        aggregated_info["property_types_counts"] = p_counts
+        aggregated_info["nconfigurations"] = len(co_hashes)
         return aggregated_info
 
     # TODO: Make Configuration "type" agnostic (only need to change docstring)
@@ -1956,7 +1953,6 @@ class MongoDatabase(MongoClient):
             * chemical_systems
             * nelements
             * elements
-            * individual_elements_ratios
             * total_elements_ratios
             * chemical_formula_reduced
             * chemical_formula_anonymous
@@ -1994,14 +1990,17 @@ class MongoDatabase(MongoClient):
                 itertools.chain.from_iterable(
                     cs_doc["relationships"]["configurations"]
                     for cs_doc in self.configuration_sets.find(
-                        {SHORT_ID_STRING_NAME: {"$in": cs_ids}}
+                        {SHORT_ID_STRING_NAME: {"$in": cs_ids}},
+                        {"relationships.configurations": 1},
                     )
                 )
             )
         )
 
         return self.configuration_type.aggregate_configuration_summaries(
-            self, [i.replace("CO_", "") for i in co_ids], verbose=verbose
+            self,
+            query={"hash": {"$in": [i.replace("CO_", "") for i in co_ids]}},
+            verbose=verbose,
         )
 
     def insert_dataset(
@@ -2129,14 +2128,18 @@ class MongoDatabase(MongoClient):
             ds_id = overloaded_ds_id
 
         aggregated_info = {}
-
-        for k, v in self.aggregate_data_object_info(do_hashes, verbose=verbose).items():
+        aggregated_info1 = self.aggregate_data_object_info(
+            do_hashes=do_hashes,
+            ds_id=ds_id,
+            verbose=verbose,
+        )
+        for k, v in aggregated_info1.items():
             aggregated_info[k] = v
+        print(aggregated_info == aggregated_info1)
 
         # Insert necessary aggregated info into its collection
         self.insert_aggregated_info(aggregated_info, "dataset", ds_id)
         for item in [
-            "individual_elements_ratios",
             "chemical_systems",
             "chemical_formula_anonymous",
             "chemical_formula_hill",
@@ -2644,7 +2647,7 @@ class MongoDatabase(MongoClient):
                     description=cs_doc["description"],
                     aggregated_info=self.configuration_type.aggregate_configuration_summaries(
                         self,
-                        co_hashes,
+                        query={"hash": {"$in": co_hashes}},
                         verbose=verbose,
                     ),
                 )
@@ -2782,7 +2785,7 @@ class MongoDatabase(MongoClient):
                     configuration_ids=co_hashes,
                     description=cs_doc["description"],
                     aggregated_info=self.configuration_type.aggregate_configuration_summaries(
-                        self, co_hashes, verbose=verbose
+                        self, query={"hash": {"$in": co_hashes}}, verbose=verbose
                     ),
                 )
             )

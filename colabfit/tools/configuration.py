@@ -1,16 +1,14 @@
-import numpy as np
-from hashlib import sha512
-from ase import Atoms
-from string import ascii_lowercase, ascii_uppercase
-from Bio.SeqRecord import SeqRecord
-from tqdm import tqdm
+import re
 import time
-from functools import partial
-from multiprocessing import Pool
-from colabfit import (
-    ATOMS_NAME_FIELD,
-    ATOMS_LABELS_FIELD,
-)
+from collections import defaultdict
+from hashlib import sha512
+from string import ascii_lowercase, ascii_uppercase
+
+import numpy as np
+from ase import Atoms
+from Bio.SeqRecord import SeqRecord
+
+from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
 
 
 class BaseConfiguration:
@@ -231,8 +229,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         species_counts = [atomic_species.count(sp) for sp in elements]
 
         # Build per-element proportions
-        from math import gcd
         from functools import reduce
+        from math import gcd
 
         def find_gcd(_list):
             x = reduce(gcd, _list)
@@ -320,121 +318,178 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         return conf
 
     @staticmethod
-    def aggregate_configuration_summaries(db, hashes, verbose=False):
+    def aggregate_configuration_summaries(db, query, verbose=False):
         """
-          Gathers the following information from a collection of Configurations:
+        Gathers the following information from a collection of Configurations:
 
         * :code:`nconfigurations`: the total number of configurations
         * :code:`nsites`: the total number of atoms
         * :code:`nelements`: the total number of unique element types
         * :code:`elements`: the element types
-        * :code:`individual_elements_ratios`: a set of elements ratios generated
-          by looping over each configuration, extracting its concentration of
-          each element, and adding the tuple of concentrations to the set
+        # * :code:`individual_elements_ratios`: a set of elements ratios generated
+        #   by looping over each configuration, extracting its concentration of
+        #   each element, and adding the tuple of concentrations to the set
         * :code:`total_elements_ratios`: the ratio of the total count of atoms
-          of each element type over :code:`nsites`
+        of each element type over :code:`nsites`
         * :code:`chemical_formula_reduced`: the set of all reduced chemical
-          formulae
+        formulae
         * :code:`chemical_formula_anonymous`: the set of all anonymous chemical
-          formulae
+        formulae
         * :code:`chemical_formula_hill`: the set of all hill chemical formulae
         * :code:`nperiodic_dimensions`: the set of all numbers of periodic
-          dimensions
+        dimensions
         * :code:`dimension_types`: the set of all periodic boundary choices
 
         Args:
             db (:code:`MongoDatabase` object):
-                Database client in which to search for hashes
-            hashes (list):
-                hashes of Configurations of interest
+                Database client in which to search for dataset-ID
+            ds_id (str):
+                colabfit-id of the dataset over which to aggregate configurations. /
+                Do not use both ds_id and co_hashes
+            co_hashes (list of str):
+                List of hashes of configurations to aggregate. /
+                Do not use both ds_id and co_hashes
             verbose (bool, default=False):
                 If True, prints a progress bar
 
         Returns:
             dict: Aggregated Configuration information
         """
-        aggregated_info = {
-            "nconfigurations": len(hashes),
-            "nsites": 0,
-            "nelements": 0,
-            "chemical_systems": set(),
-            "elements": [],
-            "individual_elements_ratios": {},
-            "total_elements_ratios": {},
-            "chemical_formula_reduced": set(),
-            "chemical_formula_anonymous": set(),
-            "chemical_formula_hill": set(),
-            "nperiodic_dimensions": set(),
-            "dimension_types": set(),
+        pipeline = [
+            {"$match": query},
+            {
+                "$facet": {
+                    "total_configurations": [
+                        {"$group": {"_id": None, "total_configurations": {"$sum": 1}}},
+                        {"$project": {"_id": 0, "total_configurations": 1}},
+                    ],
+                    "nsites_total": [
+                        {"$group": {"_id": None, "nsites_total": {"$sum": "$nsites"}}},
+                        {"$project": {"_id": 0, "nsites_total": 1}},
+                    ],
+                    "chemical_formula_hill_counts": [
+                        {
+                            "$group": {
+                                "_id": "$chemical_formula_hill",
+                                "count": {"$sum": 1},
+                            }
+                        },
+                    ],
+                    "chemical_formula_anonymous": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "chemical_formula_anonymous": {
+                                    "$addToSet": "$chemical_formula_anonymous"
+                                },
+                            }
+                        },
+                        {"$project": {"_id": 0, "chemical_formula_anonymous": 1}},
+                    ],
+                    "chemical_formula_reduced": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "chemical_formula_reduced": {
+                                    "$addToSet": "$chemical_formula_reduced"
+                                },
+                            }
+                        },
+                        {"$project": {"_id": 0, "chemical_formula_reduced": 1}},
+                    ],
+                    "chemical_systems": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "chemical_systems": {"$addToSet": "$elements"},
+                            }
+                        },
+                        {"$project": {"_id": 0, "chemical_systems": 1}},
+                    ],
+                    "set_elements": [
+                        {"$unwind": "$elements"},
+                        {
+                            "$group": {
+                                "_id": None,
+                                "elements": {"$addToSet": "$elements"},
+                            }
+                        },
+                        {"$project": {"_id": 0, "elements": 1}},
+                    ],
+                    "nperiodic_dimensions": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "nperiodic_dimensions": {
+                                    "$addToSet": "$nperiodic_dimensions"
+                                },
+                            }
+                        },
+                        {"$project": {"_id": 0, "nperiodic_dimensions": 1}},
+                    ],
+                    "dimension_types": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "dimension_types": {"$addToSet": "$dimension_types"},
+                            }
+                        },
+                        {"$project": {"_id": 0, "dimension_types": 1}},
+                    ],
+                }
+            },
+        ]
+        results = next(db.configurations.aggregate(pipeline))
+        chemical_systems = [
+            "".join(sorted(x))
+            for x in results["chemical_systems"][0]["chemical_systems"]
+        ]
+        nconfigurations = results["total_configurations"][0]["total_configurations"]
+        nsites = results["nsites_total"][0]["nsites_total"]
+        elements = sorted(results["set_elements"][0]["elements"])
+        chemical_formula_hill_counts = results["chemical_formula_hill_counts"]
+        chemical_formula_hill = [x["_id"] for x in chemical_formula_hill_counts]
+        chemical_formula_anonymous = results["chemical_formula_anonymous"][0][
+            "chemical_formula_anonymous"
+        ]
+        chemical_formula_reduced = results["chemical_formula_reduced"][0][
+            "chemical_formula_reduced"
+        ]
+        nperiodic_dimensions = results["nperiodic_dimensions"][0][
+            "nperiodic_dimensions"
+        ]
+        dimension_types = results["dimension_types"][0]["dimension_types"]
+
+        elem_match = re.compile(r"(?P<elem>[A-Z][a-z]?)(?P<num>\d*)")
+        elem_count = defaultdict(int)
+        for doc in chemical_formula_hill_counts:
+            formula = doc["_id"]
+            count = doc["count"]
+            elems = elem_match.findall(formula)
+            for elem, e_count in elems:
+                elem_count[elem] += (int(e_count) * count) if e_count else count
+        total_elems = sum(elem_count.values())
+        elem_ratios = {
+            k: elem_count[k] / total_elems for k in sorted(list(elem_count.keys()))
         }
 
-        n = len(hashes)
-        k = db.nprocs
-        chunked_hashes = [
-            hashes[
-                i * (n // k) + min(i, n % k) : (i + 1) * (n // k) + min(i + 1, n % k)
-            ]
-            for i in range(k)
-        ]
         s = time.time()
-        with Pool(k) as pool:
-            aggs = pool.map(
-                partial(agg, db=db.database_name, uri=db.uri), chunked_hashes
-            )
-        for a in aggs:
-            aggregated_info["nsites"] += a["nsites"]
-            aggregated_info["chemical_systems"].update(a["chemical_systems"])
 
-            for e, er in zip(a["elements"], a["individual_elements_ratios"]):
-                if e not in aggregated_info["elements"]:
-                    aggregated_info["elements"].append(e)
-                    aggregated_info["total_elements_ratios"][e] = a[
-                        "total_elements_ratios"
-                    ][e]
-                    aggregated_info["individual_elements_ratios"][e] = a[
-                        "individual_elements_ratios"
-                    ][e]
-                else:
-                    aggregated_info["total_elements_ratios"][e] += a[
-                        "total_elements_ratios"
-                    ][e]
-                    aggregated_info["individual_elements_ratios"][e].update(
-                        a["individual_elements_ratios"][e]
-                    )
-
-            aggregated_info["chemical_formula_reduced"].update(
-                a["chemical_formula_reduced"]
-            )
-            aggregated_info["chemical_formula_anonymous"].update(
-                a["chemical_formula_anonymous"]
-            )
-            aggregated_info["chemical_formula_hill"].update(a["chemical_formula_hill"])
-
-            aggregated_info["nperiodic_dimensions"].update(a["nperiodic_dimensions"])
-            aggregated_info["dimension_types"].update(a["dimension_types"])
-
-        for e in aggregated_info["elements"]:
-            aggregated_info["nelements"] += 1
-            aggregated_info["total_elements_ratios"][e] /= aggregated_info["nsites"]
-            aggregated_info["individual_elements_ratios"][e] = list(
-                aggregated_info["individual_elements_ratios"][e]
-            )
-
-        aggregated_info["chemical_systems"] = list(aggregated_info["chemical_systems"])
-        aggregated_info["chemical_formula_reduced"] = list(
-            aggregated_info["chemical_formula_reduced"]
-        )
-        aggregated_info["chemical_formula_anonymous"] = list(
-            aggregated_info["chemical_formula_anonymous"]
-        )
-        aggregated_info["chemical_formula_hill"] = list(
-            aggregated_info["chemical_formula_hill"]
-        )
-        aggregated_info["nperiodic_dimensions"] = list(
-            aggregated_info["nperiodic_dimensions"]
-        )
-        aggregated_info["dimension_types"] = list(aggregated_info["dimension_types"])
+        aggregated_info = {
+            "nconfigurations": nconfigurations,
+            "nsites": nsites,
+            "nelements": len(elements),
+            "chemical_systems": chemical_systems,
+            "elements": elements,
+            "total_elements_ratios": elem_ratios,
+            "chemical_formula_reduced": chemical_formula_reduced,
+            "chemical_formula_anonymous": chemical_formula_anonymous,
+            "chemical_formula_hill": chemical_formula_hill,
+            "nperiodic_dimensions": nperiodic_dimensions,
+            "dimension_types": dimension_types,
+        }
         print("Configuration aggregation time:", time.time() - s)
+
         return aggregated_info
 
     def __str__(self):
@@ -543,46 +598,46 @@ def pre_hash_formatting(k, v, ordering):
         return v
 
 
-def agg(hashes, db, uri):
-    from colabfit.tools.database import MongoDatabase
+# def agg(hashes, db, uri):
+#     from colabfit.tools.database import MongoDatabase
 
-    client = MongoDatabase(db, uri=uri)
-    proxy = {
-        "nsites": 0,
-        "chemical_systems": set(),
-        "elements": [],
-        "individual_elements_ratios": {},
-        "total_elements_ratios": {},
-        "chemical_formula_reduced": set(),
-        "chemical_formula_anonymous": set(),
-        "chemical_formula_hill": set(),
-        "nperiodic_dimensions": set(),
-        "dimension_types": set(),
-    }
+#     client = MongoDatabase(db, uri=uri)
+#     proxy = {
+#         "nsites": 0,
+#         "chemical_systems": set(),
+#         "elements": [],
+#         "individual_elements_ratios": {},
+#         "total_elements_ratios": {},
+#         "chemical_formula_reduced": set(),
+#         "chemical_formula_anonymous": set(),
+#         "chemical_formula_hill": set(),
+#         "nperiodic_dimensions": set(),
+#         "dimension_types": set(),
+#     }
 
-    docs = client.query_in_batches(
-        query_key="hash", query_list=hashes, collection_name="configurations"
-    )
-    while True:
-        for doc in docs:
-            proxy["nsites"] += doc["nsites"]
-            proxy["chemical_systems"].add("".join(doc["elements"]))
+#     docs = client.query_in_batches(
+#         query_key="hash", query_list=hashes, collection_name="configurations"
+#     )
+#     while True:
+#         for doc in docs:
+#             proxy["nsites"] += doc["nsites"]
+#             proxy["chemical_systems"].add("".join(doc["elements"]))
 
-            for e, er in zip(doc["elements"], doc["elements_ratios"]):
-                if e not in proxy["elements"]:
-                    proxy["elements"].append(e)
-                    proxy["total_elements_ratios"][e] = er * doc["nsites"]
-                    proxy["individual_elements_ratios"][e] = {np.round_(er, decimals=2)}
-                else:
-                    proxy["total_elements_ratios"][e] += er * doc["nsites"]
-                    proxy["individual_elements_ratios"][e].add(
-                        np.round_(er, decimals=2)
-                    )
+#             for e, er in zip(doc["elements"], doc["elements_ratios"]):
+#                 if e not in proxy["elements"]:
+#                     proxy["elements"].append(e)
+#                     proxy["total_elements_ratios"][e] = er * doc["nsites"]
+#                     proxy["individual_elements_ratios"][e] = {np.round_(er, decimals=2)}
+#                 else:
+#                     proxy["total_elements_ratios"][e] += er * doc["nsites"]
+#                     proxy["individual_elements_ratios"][e].add(
+#                         np.round_(er, decimals=2)
+#                     )
 
-            proxy["chemical_formula_reduced"].add(doc["chemical_formula_reduced"])
-            proxy["chemical_formula_anonymous"].add(doc["chemical_formula_anonymous"])
-            proxy["chemical_formula_hill"].add(doc["chemical_formula_hill"])
+#             proxy["chemical_formula_reduced"].add(doc["chemical_formula_reduced"])
+#             proxy["chemical_formula_anonymous"].add(doc["chemical_formula_anonymous"])
+#             proxy["chemical_formula_hill"].add(doc["chemical_formula_hill"])
 
-            proxy["nperiodic_dimensions"].add(doc["nperiodic_dimensions"])
-            proxy["dimension_types"].add(tuple(doc["dimension_types"]))
-        return proxy
+#             proxy["nperiodic_dimensions"].add(doc["nperiodic_dimensions"])
+#             proxy["dimension_types"].add(tuple(doc["dimension_types"]))
+#         return proxy
