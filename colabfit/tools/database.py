@@ -12,7 +12,7 @@ import multiprocessing
 from copy import deepcopy
 from hashlib import sha512
 from functools import partial
-from pymongo import MongoClient, UpdateOne
+from pymongo import MongoClient, UpdateOne, UpdateMany
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
@@ -1452,7 +1452,7 @@ class MongoDatabase(MongoClient):
         ordered=False,
         overloaded_cs_id=None,
         ds_id=None,
-        verbose=False,
+        verbose=True,
     ):
         """
         Inserts the configuration set of IDs to the database.
@@ -1557,10 +1557,15 @@ class MongoDatabase(MongoClient):
 
         # Add the backwards relationships CO->CS
         config_docs = []
-        for co_hash in hashes:
+        co_hash_batch_size = 10000
+        co_hash_batches = [
+            hashes[i : i + co_hash_batch_size]
+            for i in range(0, len(hashes), co_hash_batch_size)
+        ]
+        for co_hash_batch in co_hash_batches:
             config_docs.append(
-                UpdateOne(
-                    {"hash": co_hash},
+                UpdateMany(
+                    {"hash": {"$in": co_hash_batch}},
                     {"$set": {"relationships.$[elem].configuration_set": cs_id}},
                     array_filters=[
                         {
@@ -1572,8 +1577,28 @@ class MongoDatabase(MongoClient):
                     hint="hash",
                 )
             )
+        # for co_hash in hashes:
+        # config_docs.append(
+        #     UpdateOne(
+        #         {"hash": co_hash},
+        #         {"$set": {"relationships.$[elem].configuration_set": cs_id}},
+        #         array_filters=[
+        #             {
+        #                 "elem.dataset": ds_id,
+        #                 "elem.configuration_set": {"$exists": False},
+        #             }
+        #         ],
+        #         hint="hash",
+        #     )
+        # )
+        co_rel_time = time.time()
+        if verbose:
+            print(f"Inserting {len(hashes)} configuration set relationships...")
 
         self.configurations.bulk_write(config_docs)
+        co_rel_end = time.time() - co_rel_time
+        if verbose:
+            print(f"Finished in {co_rel_end:.2f} seconds")
 
         return cs_id
 
@@ -2857,8 +2882,9 @@ class MongoDatabase(MongoClient):
             "chemical_formula_hill",
         ]:
             nbatches = ceil(len(aggregated_info[k]) / batch_size)
-            update_list = []
+
             for i in tqdm(range(nbatches), desc=f"Inserting {k}", total=nbatches):
+                update_list = []
                 for j in aggregated_info[k][i * batch_size : (i + 1) * batch_size]:
                     update_list.append(
                         UpdateOne(

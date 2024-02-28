@@ -364,7 +364,9 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         partial_agg = partial(agg, db_name=db.database_name, uri=db.uri)
         batch_results = []
         for batch in tqdm(
-            hash_batches, desc="Aggregating configuration info", disable=not verbose
+            hash_batches,
+            desc="Aggregating configuration formula info",
+            disable=not verbose,
         ):
             batch_results.append(partial_agg(co_hashes=batch))
         chemical_systems = set()
@@ -382,9 +384,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                 formula = doc["_id"]
                 count = doc["count"]
                 chemical_formula_hill_counts[formula] += count
-        query = {"hash": {"$in": co_hashes}}
-        pipeline = [
-            {"$match": query},
+
+        totals_pipeline_contents = [
             {
                 "$facet": {
                     "total_configurations": [
@@ -426,16 +427,30 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                         {"$project": {"_id": 0, "dimension_types": 1}},
                     ],
                 }
-            },
+            }
         ]
-        results = next(db.configurations.aggregate(pipeline))
-        nconfigurations = results["total_configurations"][0]["total_configurations"]
-        nsites = results["nsites_total"][0]["nsites_total"]
-        elements = sorted(list(results["set_elements"][0]["elements"]))
-        nperiodic_dimensions = results["nperiodic_dimensions"][0][
-            "nperiodic_dimensions"
-        ]
-        dimension_types = results["dimension_types"][0]["dimension_types"]
+        nconfigurations = 0
+        nsites = 0
+        elements = set()
+        nperiodic_dimensions = set()
+        dimension_types = set()
+        for co_hash_batch in tqdm(
+            hash_batches,
+            desc="Aggregating configuration totals info",
+            disable=not verbose,
+        ):
+            query = {"hash": {"$in": co_hash_batch}}
+            pipeline = [{"$match": query}, *totals_pipeline_contents]
+            res = next(db.configurations.aggregate(pipeline))
+            nconfigurations += res["total_configurations"][0]["total_configurations"]
+            nsites += res["nsites_total"][0]["nsites_total"]
+            elements.update(res["set_elements"][0]["elements"])
+            nperiodic_dimensions.update(
+                res["nperiodic_dimensions"][0]["nperiodic_dimensions"]
+            )
+            dimension_types.update(
+                tuple(res["dimension_types"][0]["dimension_types"][0])
+            )
 
         elem_match = re.compile(r"(?P<elem>[A-Z][a-z]?)(?P<num>\d*)")
         elem_count = defaultdict(int)
@@ -453,13 +468,13 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             "nsites": nsites,
             "nelements": len(elements),
             "chemical_systems": list(chemical_systems),
-            "elements": elements,
+            "elements": list(elements),
             "total_elements_ratios": total_elements_ratios,
             "chemical_formula_reduced": list(chemical_formula_reduced),
             "chemical_formula_anonymous": list(chemical_formula_anonymous),
             "chemical_formula_hill": list(chemical_formula_hill),
-            "nperiodic_dimensions": nperiodic_dimensions,
-            "dimension_types": dimension_types,
+            "nperiodic_dimensions": list(nperiodic_dimensions),
+            "dimension_types": list(dimension_types),
         }
         print("Configuration aggregation time:", time.time() - s)
 
