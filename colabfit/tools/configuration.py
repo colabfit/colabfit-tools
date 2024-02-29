@@ -446,10 +446,10 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             nsites += res["nsites_total"][0]["nsites_total"]
             elements.update(res["set_elements"][0]["elements"])
             nperiodic_dimensions.update(
-                res["nperiodic_dimensions"][0]["nperiodic_dimensions"]
+                set(res["nperiodic_dimensions"][0]["nperiodic_dimensions"])
             )
             dimension_types.update(
-                tuple(res["dimension_types"][0]["dimension_types"][0])
+                set([tuple(x) for x in res["dimension_types"][0]["dimension_types"]])
             )
 
         elem_match = re.compile(r"(?P<elem>[A-Z][a-z]?)(?P<num>\d*)")

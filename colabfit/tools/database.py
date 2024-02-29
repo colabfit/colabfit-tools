@@ -1577,20 +1577,7 @@ class MongoDatabase(MongoClient):
                     hint="hash",
                 )
             )
-        # for co_hash in hashes:
-        # config_docs.append(
-        #     UpdateOne(
-        #         {"hash": co_hash},
-        #         {"$set": {"relationships.$[elem].configuration_set": cs_id}},
-        #         array_filters=[
-        #             {
-        #                 "elem.dataset": ds_id,
-        #                 "elem.configuration_set": {"$exists": False},
-        #             }
-        #         ],
-        #         hint="hash",
-        #     )
-        # )
+
         co_rel_time = time.time()
         if verbose:
             print(f"Inserting {len(hashes)} configuration set relationships...")
