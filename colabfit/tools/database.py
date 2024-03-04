@@ -649,9 +649,9 @@ class MongoDatabase(MongoClient):
                     co_md_update_doc = {  # update document
                         "$setOnInsert": co_md_set_on_insert,
                         "$set": {
-                            "last_modified": datetime.datetime.now().strftime(
-                                "%Y-%m-%dT%H:%M:%SZ"
-                            )
+                            "last_modified": datetime.datetime.now(
+                                tz=datetime.timezone.utc
+                            ).strftime("%Y-%m-%dT%H:%M:%SZ")
                         },
                     }
                     co_md_json_doc[co_md_json] = co_md_update_doc
@@ -716,9 +716,9 @@ class MongoDatabase(MongoClient):
                             pi_md_update_doc = {  # update document
                                 "$setOnInsert": pi_md_set_on_insert,
                                 "$set": {
-                                    "last_modified": datetime.datetime.now().strftime(
-                                        "%Y-%m-%dT%H:%M:%SZ"
-                                    )
+                                    "last_modified": datetime.datetime.now(
+                                        tz=datetime.timezone.utc
+                                    ).strftime("%Y-%m-%dT%H:%M:%SZ")
                                 },
                             }
 
@@ -778,9 +778,9 @@ class MongoDatabase(MongoClient):
                             pname: setOnInsert,
                         },
                         "$set": {
-                            "last_modified": datetime.datetime.now().strftime(
-                                "%Y-%m-%dT%H:%M:%SZ"
-                            )
+                            "last_modified": datetime.datetime.now(
+                                tz=datetime.timezone.utc
+                            ).strftime("%Y-%m-%dT%H:%M:%SZ")
                         },
                     }
 
@@ -812,9 +812,9 @@ class MongoDatabase(MongoClient):
                 #     'ncounts': 1
                 # },
                 "$set": {
-                    "last_modified": datetime.datetime.now().strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    )
+                    "last_modified": datetime.datetime.now(
+                        tz=datetime.timezone.utc
+                    ).strftime("%Y-%m-%dT%H:%M:%SZ")
                 },
             }
             do_docs.append(
@@ -1545,9 +1545,9 @@ class MongoDatabase(MongoClient):
                 },
                 "$set": {
                     "aggregated_info": aggregated_info,
-                    "last_modified": datetime.datetime.now().strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    ),
+                    "last_modified": datetime.datetime.now(
+                        tz=datetime.timezone.utc
+                    ).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 },
                 "$addToSet": {"relationships": {"dataset": ds_id}},
             },
@@ -2204,9 +2204,9 @@ class MongoDatabase(MongoClient):
                 },
                 "$set": {
                     "aggregated_info": aggregated_info,
-                    "last_modified": datetime.datetime.now().strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    ),
+                    "last_modified": datetime.datetime.now(
+                        tz=datetime.timezone.utc
+                    ).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 },
             },
             upsert=True,
@@ -2879,9 +2879,9 @@ class MongoDatabase(MongoClient):
                             {
                                 "$setOnInsert": {"type": k, "formula": j},
                                 "$set": {
-                                    "last_modified": datetime.datetime.now().strftime(
-                                        "%Y-%m-%dT%H:%M:%SZ"
-                                    )
+                                    "last_modified": datetime.datetime.now(
+                                        tz=datetime.timezone.utc
+                                    ).strftime("%Y-%m-%dT%H:%M:%SZ")
                                 },
                                 "$addToSet": {
                                     "relationships": {
@@ -3645,7 +3645,9 @@ def _build_co_update_doc(configuration):
     co_update_doc = {
         "$setOnInsert": {"hash": co_hash, SHORT_ID_STRING_NAME: "CO_" + co_hash},
         "$set": {
-            "last_modified": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+            "last_modified": datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
         },
         "$addToSet": {
             "names": {"$each": list(configuration.info[ATOMS_NAME_FIELD])},
