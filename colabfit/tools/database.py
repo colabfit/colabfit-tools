@@ -671,7 +671,7 @@ class MongoDatabase(MongoClient):
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
             pi_hash = None
 
-            new_pi_hashes = []
+            # new_pi_hashes = []
             for pname, pmap_list in property_map.items():
                 for pmap_i, pmap in enumerate(pmap_list):
                     pi_relationships_dict = {}
@@ -694,7 +694,7 @@ class MongoDatabase(MongoClient):
                     if not available:
                         continue
 
-                    metadata_hashes = []
+                    # metadata_hashes = []
                     # Attach property metadata, if any were given
                     if "_metadata" in pmap:
 
@@ -704,7 +704,7 @@ class MongoDatabase(MongoClient):
                             property_map=pmap_copy,
                         )
                         pi_hash = str(hash(prop))
-                        new_pi_hashes.append(pi_hash)
+                        # new_pi_hashes.append(pi_hash)
 
                         pi_md = Metadata.from_map(d=pmap["_metadata"], source=atoms)
                         pi_md_hash = str(pi_md._hash)
@@ -731,7 +731,7 @@ class MongoDatabase(MongoClient):
                                 )
                             )
 
-                            metadata_hashes.append(pi_md_hash)
+                            # metadata_hashes.append(pi_md_hash)
                         else:
                             pass
 
@@ -743,7 +743,7 @@ class MongoDatabase(MongoClient):
                         )
                         pi_hash = str(hash(prop))
 
-                        new_pi_hashes.append(pi_hash)
+                        # new_pi_hashes.append(pi_hash)
                     calc_lists["pi_hashes"].append(pi_hash)
                     calc_lists["PI_type"].append(pname)
                     # Prepare the property instance EDN document
@@ -1926,6 +1926,7 @@ class MongoDatabase(MongoClient):
         ]
         property_types = defaultdict(int)
         co_ids = list()
+        ndata_object = 0
         for do_hash_batch in tqdm(
             do_hash_batches, desc="Aggregating data object info", disable=not verbose
         ):
@@ -1942,6 +1943,15 @@ class MongoDatabase(MongoClient):
                                     "count": {"$sum": 1},
                                 }
                             },
+                        ],
+                        "ndata_object ": [
+                            {
+                                "$group": {
+                                    "_id": None,
+                                    "ndata_object ": {"$sum": 1},
+                                }
+                            },
+                            {"$project": {"_id": 0, "ndata_object ": 1}},
                         ],
                         "configuration_ids": [
                             {
@@ -1961,6 +1971,7 @@ class MongoDatabase(MongoClient):
             results = self.data_objects.aggregate(pipeline)
             results = next(results)
             co_ids.extend(results["configuration_ids"][0]["configuration_ids"])
+            ndata_object += results["ndata_object "][0]["ndata_object "]
             for x in results["typesCount"]:
                 property_types[x["_id"]] += x["count"]
 
@@ -1974,6 +1985,7 @@ class MongoDatabase(MongoClient):
         )
         aggregated_info["property_types"] = list(property_types.keys())
         aggregated_info["property_types_counts"] = list(property_types.values())
+        aggregated_info["ndata_object "] = ndata_object
         return aggregated_info
 
     # TODO: Make Configuration "type" agnostic (only need to change docstring)
