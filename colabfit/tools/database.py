@@ -2122,16 +2122,16 @@ class MongoDatabase(MongoClient):
         ds_hash = int(ds_hash_r.hexdigest(), 16)
         # Check for duplicates
         try:
-	    old_ds = self.datasets.find_one({"hash": str(ds_hash)})[SHORT_ID_STRING_NAME]
-	    if fork:
-	        pass
-	    else:
+            old_ds = self.datasets.find_one({"hash": str(ds_hash)})[SHORT_ID_STRING_NAME]
+            if fork:
+                pass
+            else:
                 return old_ds
         except:
             pass
         if fork:
-		ds_hash_r.update(str(fork).encode("utf-8"))
-		ds_hash = int(ds_hash_r.hexdigest(), 16)
+                ds_hash_r.update(str(ds_id).encode("utf-8"))
+                ds_hash = int(ds_hash_r.hexdigest(), 16)
         if overloaded_ds_id is not None:
             # Old
             # ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
@@ -2167,7 +2167,7 @@ class MongoDatabase(MongoClient):
 
         # TODO: get_dataset should be able to use extended-id; authors can't symbols
 
-	soi = {
+        soi = {
                     SHORT_ID_STRING_NAME: ds_id,
                     EXTENDED_ID_STRING_NAME: extended_id,
                     "name": name,
@@ -2177,12 +2177,12 @@ class MongoDatabase(MongoClient):
                     "hash": str(ds_hash),
                     "license": data_license,
                 }
-	if fork:
-		soi['forked_from']= old_ds
+        if fork:
+            soi['forked_from']= old_ds
         self.datasets.update_one(
             {"hash": str(ds_hash)},
             {
-                "$setOnInsert": soi
+                "$setOnInsert": soi,
                 "$set": {
                     "aggregated_info": aggregated_info,
                     "last_modified": datetime.datetime.now().strftime(
