@@ -2019,6 +2019,7 @@ class MongoDatabase(MongoClient):
         resync=False,
         verbose=False,
         overloaded_ds_id=None,
+	fork=False,
     ):
         """
         Inserts a dataset into the database.
@@ -2111,20 +2112,26 @@ class MongoDatabase(MongoClient):
         if isinstance(links, str):
             links = [links]
 
-        ds_hash = sha512()
+        ds_hash_r = sha512()
         if cs_ids is not None:
             for ci in sorted(cs_ids):
-                ds_hash.update(str(ci).encode("utf-8"))
+                ds_hash_r.update(str(ci).encode("utf-8"))
         for pi in sorted(do_hashes):
-            ds_hash.update(str(pi).encode("utf-8"))
-
-        ds_hash = int(ds_hash.hexdigest(), 16)
+            ds_hash_r.update(str(pi).encode("utf-8"))
+		
+        ds_hash = int(ds_hash_r.hexdigest(), 16)
         # Check for duplicates
         try:
-            return self.datasets.find_one({"hash": str(ds_hash)})[SHORT_ID_STRING_NAME]
+	    old_ds = self.datasets.find_one({"hash": str(ds_hash)})[SHORT_ID_STRING_NAME]
+	    if fork:
+	        pass
+	    else:
+                return old_ds
         except:
             pass
-
+        if fork:
+		ds_hash_r.update(str(fork).encode("utf-8"))
+		ds_hash = int(ds_hash_r.hexdigest(), 16)
         if overloaded_ds_id is not None:
             # Old
             # ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
@@ -2160,10 +2167,7 @@ class MongoDatabase(MongoClient):
 
         # TODO: get_dataset should be able to use extended-id; authors can't symbols
 
-        self.datasets.update_one(
-            {"hash": str(ds_hash)},
-            {
-                "$setOnInsert": {
+	soi = {
                     SHORT_ID_STRING_NAME: ds_id,
                     EXTENDED_ID_STRING_NAME: extended_id,
                     "name": name,
@@ -2172,7 +2176,13 @@ class MongoDatabase(MongoClient):
                     "description": description,
                     "hash": str(ds_hash),
                     "license": data_license,
-                },
+                }
+	if fork:
+		soi['forked_from']= old_ds
+        self.datasets.update_one(
+            {"hash": str(ds_hash)},
+            {
+                "$setOnInsert": soi
                 "$set": {
                     "aggregated_info": aggregated_info,
                     "last_modified": datetime.datetime.now().strftime(
