@@ -1589,7 +1589,7 @@ class OldClass:
 
         # Add the backwards relationships CO->CS
         config_docs = []
-        co_hash_batch_size = 10000
+        co_hash_batch_size = 50000
         co_hash_batches = [
             hashes[i : i + co_hash_batch_size]
             for i in range(0, len(hashes), co_hash_batch_size)
@@ -1951,7 +1951,7 @@ class OldClass:
         """
         if isinstance(do_hashes, str):
             do_hashes = [do_hashes]
-        do_hash_batch_size = 10000
+        do_hash_batch_size = 50000
         do_hash_batches = [
             do_hashes[i : i + do_hash_batch_size]
             for i in range(0, len(do_hashes), do_hash_batch_size)
