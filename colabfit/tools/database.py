@@ -744,7 +744,7 @@ class MongoDatabase(MongoClient):
                             # Then it's array-like and should be converted to a list
                             # This is where properties could get big->Add option to point to file
                             print (np.size(prop[k]["source-value"]))
-                            if np.size(prop[k]["source-value"]) > MAX_CONFIGURATION_SIZE / 3 :
+                            if np.size(prop[k]["source-value"]) > MAX_CONFIGURATION_SIZE * 3 :
                                 setOnInsert[k] = {
                                     "source-value": {'external-file': external_file}
                                 }
