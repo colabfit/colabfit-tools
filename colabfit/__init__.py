@@ -32,6 +32,8 @@ ATOMS_CONSTRAINTS_FIELD = '_constraints'
 
 DEFAULT_PROPERTY_NAME = 'configuration-nonorthogonal-periodic-3d-cell-fixed-particles-fixed'
 
+MAX_CONFIGURATION_SIZE = 100
+
 from ase.units import create_units
 
 UNITS = create_units('2014')

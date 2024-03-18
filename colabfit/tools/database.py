@@ -5,7 +5,8 @@ import warnings
 import itertools
 import string
 from math import ceil
-
+import lmdb
+import pickle
 import numpy as np
 from tqdm import tqdm
 import multiprocessing
@@ -26,6 +27,7 @@ from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from django.utils.crypto import get_random_string
 from colabfit import (
     ID_FORMAT_STRING,
+    MAX_CONFIGURATION_SIZE,
     _CONFIGS_COLLECTION,
     _PROPS_COLLECTION,
     _METADATA_COLLECTION,
@@ -185,6 +187,7 @@ class MongoDatabase(MongoClient):
         nprocs=1,
         uri=None,
         drop_database=False,
+        external_file=None,
         user=None,
         pwrd=None,
         port=27017,
@@ -232,7 +235,7 @@ class MongoDatabase(MongoClient):
         self.user = user
         self.pwrd = pwrd
         self.port = port
-
+        self.external_file = external_file
         if self.uri is not None:
             super().__init__(self.uri, *args, **kwargs)
         else:
@@ -527,6 +530,7 @@ class MongoDatabase(MongoClient):
                 database_name=self.database_name,
                 property_map=property_map,
                 co_md_map=co_md_map,
+                external_file=self.external_file,
                 transform=transform,
                 verbose=verbose,
             )
@@ -541,6 +545,7 @@ class MongoDatabase(MongoClient):
         mongo_login,
         co_md_map=None,
         property_map=None,
+        external_file=None,
         transform=None,
         verbose=False,
     ):
@@ -624,7 +629,8 @@ class MongoDatabase(MongoClient):
             if transform:
                 transform(atoms)
 
-            c_update_doc, c_hash = _build_c_update_doc(atoms)
+            c_update_doc, c_hash, write_to_file= _build_c_update_doc(atoms, external_file)
+                   
             calc_lists["CO"] = c_hash
             calc_lists["CO_hill"] = atoms.configuration_summary()[
                 "chemical_formula_hill"
@@ -736,11 +742,27 @@ class MongoDatabase(MongoClient):
                             setOnInsert[k] = {"source-value": prop[k]["source-value"]}
                         else:
                             # Then it's array-like and should be converted to a list
-                            setOnInsert[k] = {
-                                "source-value": np.atleast_1d(
-                                    prop[k]["source-value"]
-                                ).tolist()
-                            }
+                            # This is where properties could get big->Add option to point to file
+                            print (np.size(prop[k]["source-value"]))
+                            if np.size(prop[k]["source-value"]) > MAX_CONFIGURATION_SIZE / 3 :
+                                setOnInsert[k] = {
+                                    "source-value": {'external-file': external_file}
+                                }
+                            lmdb_env = lmdb.open(
+                                external_file, 
+                                map_size = 1099511627776 * 2,
+                                subdir = False,     
+                                meminit = False,
+                                max_dbs = 10, 
+                                )
+                            with lmdb_env.begin(write=True) as txn:
+                                txn.put(('PI_' + p_hash).encode("ascii"), value=pickle.dumps(v,protocol=-1))
+                            else: 
+                                setOnInsert[k] = {
+                                    "source-value": np.atleast_1d(
+                                        prop[k]["source-value"]
+                                    ).tolist()
+                                }
 
                         if "source-unit" in prop[k]:
                             setOnInsert[k]["source-unit"] = prop[k]["source-unit"]
@@ -800,6 +822,20 @@ class MongoDatabase(MongoClient):
                         hint="hash",
                     )
                 )
+             
+            if write_to_file:
+                print ('Large Configuration Detected...Saving to File')
+                # TODO: Use LMDB
+                lmdb_env = lmdb.open(
+                    external_file, 
+                    map_size = 1099511627776 * 2,
+                    subdir = False,
+                    meminit = False,
+                    max_dbs = 10,
+                    )
+                with lmdb_env.begin(write=True) as txn:
+                    txn.put(('DO_' + ca_hash).encode("ascii"), value=pickle.dumps(atoms.todict(),protocol=-1))
+
             for pi_doc_i, pi_doc in enumerate(property_docs_do):
                 #pi_doc["$addToSet"] = {
                 #    "relationships": {
@@ -3701,7 +3737,8 @@ def load_data(
 
 # Moved out of static method to avoid changing insert_data* methods
 # Could consider changing in the future
-def _build_c_update_doc(configuration):
+def _build_c_update_doc(configuration, external_file=None):
+    write_to_file = 0
     processed_fields = configuration.configuration_summary()
     c_hash = str(hash(configuration))
     c_update_doc = {
@@ -3713,11 +3750,25 @@ def _build_c_update_doc(configuration):
             "names": {"$each": list(configuration.info[ATOMS_NAME_FIELD])},
         },
     }
-    c_update_doc["$setOnInsert"].update(
-        {k: v.tolist() for k, v in configuration.unique_identifiers.items()}
-    )
+    # Make sure to check for positions array size here and if big give pointer to file
+    for k,v in configuration.unique_identifiers.items():
+        if k == "positions":
+            if v.shape[0] > MAX_CONFIGURATION_SIZE:
+                c_update_doc["$setOnInsert"].update({k: {'external-file': external_file}})
+                print ('Large Configuration Detected...Saving to File')
+                lmdb_env = lmdb.open(
+                    external_file, 
+                    map_size = 1099511627776 * 2,
+                    subdir = False,
+                    meminit = False,
+                    max_dbs = 10,
+                    ) 
+                with lmdb_env.begin(write=True) as txn:
+                    txn.put(('CO_' + c_hash).encode("ascii"), value=pickle.dumps(v,protocol=-1))
+        else:
+            c_update_doc["$setOnInsert"].update({k: v.tolist()})
     c_update_doc["$setOnInsert"].update({k: v for k, v in processed_fields.items()})
-    return c_update_doc, c_hash
+    return c_update_doc, c_hash, write_to_file
 
 
 def _build_md_insert_doc(metadata):
