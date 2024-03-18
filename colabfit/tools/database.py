@@ -756,7 +756,7 @@ class MongoDatabase(MongoClient):
                                     max_dbs = 10, 
                                     )
                                 with lmdb_env.begin(write=True) as txn:
-                                    txn.put(('PI_' + p_hash).encode("ascii"), value=pickle.dumps(v,protocol=-1))
+                                    txn.put(('PI_' + p_hash).encode("ascii"), value=pickle.dumps(np.atleast_1d(prop[k]["source-value"]).tolist(),protocol=-1))
                             else: 
                                 setOnInsert[k] = {
                                     "source-value": np.atleast_1d(
