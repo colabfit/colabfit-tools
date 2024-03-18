@@ -748,15 +748,15 @@ class MongoDatabase(MongoClient):
                                 setOnInsert[k] = {
                                     "source-value": {'external-file': external_file}
                                 }
-                            lmdb_env = lmdb.open(
-                                external_file, 
-                                map_size = 1099511627776 * 2,
-                                subdir = False,     
-                                meminit = False,
-                                max_dbs = 10, 
-                                )
-                            with lmdb_env.begin(write=True) as txn:
-                                txn.put(('PI_' + p_hash).encode("ascii"), value=pickle.dumps(v,protocol=-1))
+                                lmdb_env = lmdb.open(
+                                    external_file, 
+                                    map_size = 1099511627776 * 2,
+                                    subdir = False,     
+                                    meminit = False,
+                                    max_dbs = 10, 
+                                    )
+                                with lmdb_env.begin(write=True) as txn:
+                                    txn.put(('PI_' + p_hash).encode("ascii"), value=pickle.dumps(v,protocol=-1))
                             else: 
                                 setOnInsert[k] = {
                                     "source-value": np.atleast_1d(
