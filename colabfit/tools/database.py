@@ -1233,6 +1233,18 @@ class MongoDatabase(MongoClient):
         else:
             return data
 
+    def get_metadata_from_do_doc(self, do_doc):
+        metadata = {}
+        IGNORE_KEYS = ["hash", "last_modified", "_id"]
+        # TODO: take in dataset id to ensure metadata is what is desired
+        metadata_ids = [i for i in do_doc["relationships"][0]["metadata"]]
+        mds = self.metadata.find({"colabfit-id": {"$in": metadata_ids}})
+        for md in mds:
+          for k,v in md.items():
+              if k not in IGNORE_KEYS:
+                  metadata.update({k:v})
+        return metadata
+
     def get_cleaned_property_instances(
         self,
         property_ids,
