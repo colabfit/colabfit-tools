@@ -1256,7 +1256,7 @@ class MongoDatabase(MongoClient):
                    external_file = pi_v['external-file']
                    print ('Loading Property from %s' %external_file)
                    lmdb_env = lmdb.open(
-                       self.external_file,
+                       external_file,
                        map_size = 1099511627776 * 2,
                        subdir = False,
                        meminit = False,
@@ -1275,7 +1275,7 @@ class MongoDatabase(MongoClient):
             external_file = co_doc['positions']['external-file']
             print ('Loading Positions from %s' %external_file)
             lmdb_env = lmdb.open(
-                self.external_file,
+                external_file,
                 map_size = 1099511627776 * 2,
                 subdir = False,
                 meminit = False,
