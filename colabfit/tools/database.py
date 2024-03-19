@@ -1233,6 +1233,60 @@ class MongoDatabase(MongoClient):
         else:
             return data
 
+    def get_cleaned_property_instances(
+        self,
+        property_ids,
+    ):
+        """
+
+        Args:
+            property_ids: colabfit IDs of the property instances
+
+        """
+        if isinstance(property_ids,str):
+            property_ids = [property_ids]
+        pi_docs = self.property_instances.find({"colabfit-id": {"$in": property_ids}})
+        l = []
+        for pi_doc in pi_docs:
+            property_type = pi_doc['type']
+            property_name = property_type.split('-')[-1]
+            pi_v = pi_doc[property_type][property_name]["source-value"]
+            if isinstance(pi_v,dict):
+               if 'external-file' in pi_v:
+                   external_file = pi_v['external-file']
+                   print ('Loading Property from %s' %external_file)
+                   lmdb_env = lmdb.open(
+                       self.external_file,
+                       map_size = 1099511627776 * 2,
+                       subdir = False,
+                       meminit = False,
+                       max_dbs = 10,
+                       )
+                   with lmdb_env.begin() as txn:
+                       pi_f = pickle.loads(txn.get((pi_doc['colabfit-id']).encode("ascii")))[property_name]
+                   pi_doc[property_type][property_name]["source-value"] = pi_f
+            l.append(pi_doc) 
+        return l
+
+    def get_cleaned_configuration(self,configuration_id):
+        co_doc = self.configurations.find_one({"colabfit-id":configuration_id})
+
+        if isinstance(co_doc['positions'],dict):
+            external_file = co_doc['positions']['external-file']
+            print ('Loading Positions from %s' %external_file)
+            lmdb_env = lmdb.open(
+                self.external_file,
+                map_size = 1099511627776 * 2,
+                subdir = False,
+                meminit = False,
+                max_dbs = 10,
+                )
+            with lmdb_env.begin() as txn:
+                pos = pickle.loads(txn.get((co_doc['colabfit-id']).encode("ascii")))['positions']
+                co_doc['positions'] = pos
+        return co_doc        
+
+
     def get_configuration(self, i, property_hashes=None, attach_properties=False):
         """
         Returns a single configuration by calling :meth:`get_configurations`
