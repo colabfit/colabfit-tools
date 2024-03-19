@@ -756,7 +756,7 @@ class MongoDatabase(MongoClient):
                                     max_dbs = 10, 
                                     )
                                 with lmdb_env.begin(write=True) as txn:
-                                    txn.put(('PI_' + p_hash).encode("ascii"), value=pickle.dumps(np.atleast_1d(prop[k]["source-value"]).tolist(),protocol=-1))
+                                    txn.put(('PI_' + p_hash).encode("ascii"), value=pickle.dumps({k:np.atleast_1d(prop[k]["source-value"]).tolist()},protocol=-1))
                             else: 
                                 setOnInsert[k] = {
                                     "source-value": np.atleast_1d(
@@ -823,18 +823,6 @@ class MongoDatabase(MongoClient):
                     )
                 )
              
-            if write_to_file:
-                print ('Large Configuration Detected...Saving to File')
-                # TODO: Use LMDB
-                lmdb_env = lmdb.open(
-                    external_file, 
-                    map_size = 1099511627776 * 2,
-                    subdir = False,
-                    meminit = False,
-                    max_dbs = 10,
-                    )
-                with lmdb_env.begin(write=True) as txn:
-                    txn.put(('DO_' + ca_hash).encode("ascii"), value=pickle.dumps(atoms.todict(),protocol=-1))
 
             for pi_doc_i, pi_doc in enumerate(property_docs_do):
                 #pi_doc["$addToSet"] = {
@@ -1249,9 +1237,10 @@ class MongoDatabase(MongoClient):
         """
         Returns a single configuration by calling :meth:`get_configurations`
         """
-        return self.get_configurations(
+        co = self.get_configurations(
             [i], property_hashes=property_hashes, attach_properties=attach_properties
         )[0]
+        return co
 
     def get_configurations(
         self,
@@ -1348,11 +1337,29 @@ class MongoDatabase(MongoClient):
                         *self.configuration_type.unique_identifier_kw,
                         "names",
                         "hash",
+                        "colabfit-id",
                     },
                 ),
                 desc="Getting configurations",
                 disable=not verbose,
             ):
+                # Modified to account for large configurations
+               
+                if isinstance(co_doc['positions'],dict):
+                    external_file = co_doc['positions']['external-file']
+                    print ('Loading Positions from %s' %external_file)
+                    lmdb_env = lmdb.open(
+                    self.external_file,
+                    map_size = 1099511627776 * 2,
+                    subdir = False,
+                    meminit = False,
+                    max_dbs = 10,
+                    )
+                    with lmdb_env.begin() as txn:
+                        pos = pickle.loads(txn.get((co_doc['colabfit-id']).encode("ascii")))
+                        pos = pos['positions']
+                    co_doc['positions'] = pos
+
                 c = self.configuration_type(
                     **{
                         k: v
@@ -1372,6 +1379,7 @@ class MongoDatabase(MongoClient):
                 desc="Getting configurations",
                 disable=not verbose,
             ):
+                
                 c = self.configuration_type(
                     **{
                         k: v
@@ -1379,6 +1387,7 @@ class MongoDatabase(MongoClient):
                         if k in self.configuration_type.unique_identifier_kw
                     }
                 )
+                
 
                 c.info["hash"] = co_doc["hash"]
                 c.info[ATOMS_NAME_FIELD] = co_doc["names"]
@@ -3764,7 +3773,7 @@ def _build_c_update_doc(configuration, external_file=None):
                     max_dbs = 10,
                     ) 
                 with lmdb_env.begin(write=True) as txn:
-                    txn.put(('CO_' + c_hash).encode("ascii"), value=pickle.dumps(v,protocol=-1))
+                    txn.put(('CO_' + c_hash).encode("ascii"), value=pickle.dumps({'positions':v},protocol=-1))
         else:
             c_update_doc["$setOnInsert"].update({k: v.tolist()})
     c_update_doc["$setOnInsert"].update({k: v for k, v in processed_fields.items()})
