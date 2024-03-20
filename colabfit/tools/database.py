@@ -28,6 +28,7 @@ from django.utils.crypto import get_random_string
 from colabfit import (
     ID_FORMAT_STRING,
     MAX_CONFIGURATION_SIZE,
+    LARGE_CONFIGURATION_SIZE,
     _CONFIGS_COLLECTION,
     _PROPS_COLLECTION,
     _METADATA_COLLECTION,
@@ -620,6 +621,9 @@ class MongoDatabase(MongoClient):
             desc="Preparing to add configurations to Database",
             disable=not verbose,
         ):
+            if len(atoms.get_atomic_numbers()) > MAX_CONFIGURATION_SIZE:
+                print ("Configuration size exceeds maximum. Skipping this configuration.")
+                continue
             co_relationships_dict = {}
             pi_relationships_list = []
             property_docs_do = []
@@ -743,8 +747,7 @@ class MongoDatabase(MongoClient):
                         else:
                             # Then it's array-like and should be converted to a list
                             # This is where properties could get big->Add option to point to file
-                            print (np.size(prop[k]["source-value"]))
-                            if np.size(prop[k]["source-value"]) > MAX_CONFIGURATION_SIZE * 3 :
+                            if np.size(prop[k]["source-value"]) > LARGE_CONFIGURATION_SIZE * 3 :
                                 setOnInsert[k] = {
                                     "source-value": {'external-file': external_file}
                                 }
@@ -3828,7 +3831,7 @@ def _build_c_update_doc(configuration, external_file=None):
     # Make sure to check for positions array size here and if big give pointer to file
     for k,v in configuration.unique_identifiers.items():
         if k == "positions":
-            if v.shape[0] > MAX_CONFIGURATION_SIZE:
+            if v.shape[0] > LARGE_CONFIGURATION_SIZE:
                 c_update_doc["$setOnInsert"].update({k: {'external-file': external_file}})
                 print ('Large Configuration Detected...Saving to File')
                 lmdb_env = lmdb.open(
