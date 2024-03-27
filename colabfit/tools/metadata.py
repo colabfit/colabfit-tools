@@ -16,7 +16,7 @@ class Metadata:
 
     def __init__(self, metadata=None):
         self.metadata = metadata
-        self._hash = hash(self)
+        # self._hash = hash(self)
 
     @classmethod
     def from_map(cls, d, source):
@@ -47,29 +47,29 @@ class Metadata:
                 gathered_fields[md_field] = {"source-value": v}
         return cls(metadata=gathered_fields)
 
-    def __hash__(self):
-        """
-        Hashes Metadata information
-        """
-        _hash = sha512()
-        od = OrderedDict(sorted(self.metadata.items()))
-        for k, v in od.items():
-            _hash.update(k.encode("utf-8"))
-            if isinstance(v["source-value"], (list, set, tuple)):
-                for i in v["source-value"]:
-                    if isinstance(i, str):
-                        _hash.update(i.encode("utf-8"))
-                    else:
-                        _hash.update(np.array(i).data.tobytes())
-            elif isinstance(v["source-value"], str):
-                _hash.update(v["source-value"].encode("utf-8"))
-            elif isinstance(v["source-value"], dict):
-                _hash.update(str(v["source-value"]).encode("utf-8"))
-            else:
-                _hash.update(np.array(v["source-value"]).data.tobytes())
-            if "source-units" in v:
-                _hash.update(v["source-unit"].encode("utf-8"))
-        return int(_hash.hexdigest(), 16)
+    # def __hash__(self):
+    #     """
+    #     Hashes Metadata information
+    #     """
+    #     _hash = sha512()
+    #     od = OrderedDict(sorted(self.metadata.items()))
+    #     for k, v in od.items():
+    #         _hash.update(k.encode("utf-8"))
+    #         if isinstance(v["source-value"], (list, set, tuple)):
+    #             for i in v["source-value"]:
+    #                 if isinstance(i, str):
+    #                     _hash.update(i.encode("utf-8"))
+    #                 else:
+    #                     _hash.update(np.array(i).data.tobytes())
+    #         elif isinstance(v["source-value"], str):
+    #             _hash.update(v["source-value"].encode("utf-8"))
+    #         elif isinstance(v["source-value"], dict):
+    #             _hash.update(str(v["source-value"]).encode("utf-8"))
+    #         else:
+    #             _hash.update(np.array(v["source-value"]).data.tobytes())
+    #         if "source-units" in v:
+    #             _hash.update(v["source-unit"].encode("utf-8"))
+    #     return int(_hash.hexdigest(), 16)
 
     def __str__(self):
         return str(self.metadata)

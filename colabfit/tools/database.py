@@ -12,7 +12,8 @@ import multiprocessing
 from copy import deepcopy
 from hashlib import sha512
 from functools import partial
-from pymongo import MongoClient, UpdateOne, UpdateMany
+
+# from pymongo import MongoClient, UpdateOne, UpdateMany
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
@@ -46,191 +47,225 @@ from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConvert
 from colabfit.tools.dataset import Dataset
 from colabfit.tools.metadata import Metadata
 from colabfit.tools.data_object import DataObject
+import pyspark
+from pyspark.sql import SparkSession
+from pyspark.sql.types import (
+    BooleanType,
+    DoubleType,
+    FloatType,
+    IntegerType,
+    StringType,
+    TimestampType,
+    StructField,
+    StructType,
+)
+
+config_schema = StructType(
+    [
+        StructField("id", StringType(), False),
+        StructField("hash", StringType(), False),
+        StructField("last_modified", TimestampType(), False),
+        StructField("dataset_ids", StringType(), True),  # ArrayType(StringType())
+        StructField("chemical_formula_hill", StringType(), True),
+        StructField("chemical_formula_reduced", StringType(), True),
+        StructField("chemical_formula_anonymous", StringType(), True),
+        StructField("elements", StringType(), True),  # ArrayType(StringType())
+        StructField("elements_ratios", StringType(), True),  # ArrayType(IntegerType())
+        StructField("atomic_numbers", StringType(), True),  # ArrayType(IntegerType())
+        StructField("nsites", IntegerType(), True),
+        StructField("nelements", IntegerType(), True),
+        StructField("nperiodic_dimensions", IntegerType(), True),
+        StructField("cell", StringType(), True),  # ArrayType(ArrayType(DoubleType()))
+        StructField("dimension_types", StringType(), True),  # ArrayType(IntegerType())
+        StructField("pbc", StringType(), True),  # ArrayType(IntegerType())
+        StructField(
+            "positions", StringType(), True
+        ),  # ArrayType(ArrayType(DoubleType()))
+        StructField("names", StringType(), True),  # ArrayType(StringType())
+    ]
+)
 
 
-class MongoDatabase(MongoClient):
+class CFSparkSession(SparkSession):
+    """Create a SparkSession to interact with Vast or SQL database"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.spark = SparkSession.builder.appName("colabfit").getOrCreate()
+        # self.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
+        user = (None,)
+        pwrd = (None,)
+        uri = (None,)
+        database_name = None
+
+    def get_spark(self):
+        return self.spark
+
+    def get_spark_context(self):
+        return self.spark.sparkContext
+
+
+class OldClass:
     """
-    A MongoDatabase stores all of the data in Mongo documents, and
-    provides additinal functionality like filtering and optimized queries.
+    # class MongoDatabase(MongoClient):
+    #"""
 
-    The Mongo database has the following structure
+    #     A MongoDatabase stores all of the data in Mongo documents, and
+    #     provides additinal functionality like filtering and optimized queries.
 
-    .. code-block:: text
+    #     The Mongo database has the following structure
 
-        /configurations
-            _id
-            short-id
-            atomic_numbers
-            positions
-            cell
-            pbc
-            names
-            elements
-            nelements
-            elements_ratios
-            chemical_formula_reduced
-            chemical_formula_anonymous
-            chemical_formula_hill
-            nsites
-            dimension_types
-            nperiodic_dimensions
-            latice_vectors
-            last_modified
-            relationships
-                property_instances
-                configuration_sets
+    #     .. code-block:: text
 
-        /property_definitions
-            _id
-            short-id
-            definition
+    #         /configurations
+    #             _id
+    #             short-id
+    #             atomic_numbers
+    #             positions
+    #             cell
+    #             pbc
+    #             names
+    #             elements
+    #             nelements
+    #             elements_ratios
+    #             chemical_formula_reduced
+    #             chemical_formula_anonymous
+    #             chemical_formula_hill
+    #             nsites
+    #             dimension_types
+    #             nperiodic_dimensions
+    #             latice_vectors
+    #             last_modified
+    #             relationships
+    #                 property_instances
+    #                 configuration_sets
 
-        /properties
-            _id
-            short-id
-            type
-            property_name
-                each field in the property definition
-            methods
-            last_modified
-            relationships
-                metadata
-                configurations
+    #         /property_definitions
+    #             _id
+    #             short-id
+    #             definition
 
-        /metadata
-            hash
-            dict
+    #         /properties
+    #             _id
+    #             short-id
+    #             type
+    #             property_name
+    #                 each field in the property definition
+    #             methods
+    #             last_modified
+    #             relationships
+    #                 metadata
+    #                 configurations
 
-        /configuration_sets
-            _id
-            short-id
-            last_modified
-            aggregated_info
-                (from configurations)
-                nconfigurations
-                nsites
-                nelements
-                chemical_systems
-                elements
-                total_elements_ratios
-                chemical_formula_reduced
-                chemical_formula_anonymous
-                chemical_formula_hill
-                nperiodic_dimensions
-                dimension_types
-            relationships
-                configurations
-                datasets
+    #         /metadata
+    #             hash
+    #             dict
 
-        /datasets
-            _id
-            short-id
-            extended-id
-            last_modified
-            aggregated_info
-                (from configuration sets)
-                nconfigurations
-                nsites
-                nelements
-                chemical_systems
-                elements
-                total_elements_ratios
-                chemical_formula_reduced
-                chemical_formula_anonymous
-                chemical_formula_hill
-                nperiodic_dimensions
-                dimension_types
+    #         /configuration_sets
+    #             _id
+    #             short-id
+    #             last_modified
+    #             aggregated_info
+    #                 (from configurations)
+    #                 nconfigurations
+    #                 nsites
+    #                 nelements
+    #                 chemical_systems
+    #                 elements
+    #                 total_elements_ratios
+    #                 chemical_formula_reduced
+    #                 chemical_formula_anonymous
+    #                 chemical_formula_hill
+    #                 nperiodic_dimensions
+    #                 dimension_types
+    #             relationships
+    #                 configurations
+    #                 datasets
 
-                (from properties)
-                property_types
-                property_fields
-                methods
-                methods_counts
-            relationships
-                property_instances
-                configuration_sets
+    #         /datasets
+    #             _id
+    #             short-id
+    #             extended-id
+    #             last_modified
+    #             aggregated_info
+    #                 (from configuration sets)
+    #                 nconfigurations
+    #                 nsites
+    #                 nelements
+    #                 chemical_systems
+    #                 elements
+    #                 total_elements_ratios
+    #                 chemical_formula_reduced
+    #                 chemical_formula_anonymous
+    #                 chemical_formula_hill
+    #                 nperiodic_dimensions
+    #                 dimension_types
 
-    Attributes:
+    #                 (from properties)
+    #                 property_types
+    #                 property_fields
+    #                 methods
+    #                 methods_counts
+    #             relationships
+    #                 property_instances
+    #                 configuration_sets
 
-        database_name (str):
-            The name of the Mongo database
+    #     Attributes:
+    #     """
 
-        configurations (Collection):
-            A Mongo collection of configuration documents
+    #     def __init__(
+    #         self,
+    #         database_name,
+    #         configuration_type=AtomicConfiguration,
+    #         nprocs=1,
+    #         uri=None,
+    #         drop_database=False,
+    #         user=None,
+    #         pwrd=None,
+    #         port=27017,
+    #         *args,
+    #         **kwargs,
+    #     ):
+    #         """
+    #         Args:
 
-        properties (Collection):
-            A Mongo collection of property documents
+    #             database_name (str):
+    #                 The name of the database
 
-        property_definitions (Collection):
-            A Mongo collection of property definitions
+    #             configuration_type (Configuration, default=BaseConfiguration):
+    #                 The configuration type that will be stored in the database.
 
-        metadata (Collection):
-            A Mongo collection of metadata documents
+    #             nprocs (int):
+    #                 The size of the processor pool
 
-        configuration_sets (Collection):
-            A Mongo collection of configuration set documents
+    #             uri (str):
+    #                 The full Mongo URI
 
-        datasets (Collection):
-            A Mongo collection of dataset documents
-    """
+    #             drop_database (bool, default=False):
+    #                 If True, deletes the existing Mongo database.
 
-    # TODO: Should database be instantiated with nprocs, or should it be passed in as an
-    #       argument to methods in which this would be relevant
-    def __init__(
-        self,
-        database_name,
-        configuration_type=AtomicConfiguration,
-        nprocs=1,
-        uri=None,
-        drop_database=False,
-        user=None,
-        pwrd=None,
-        port=27017,
-        *args,
-        **kwargs,
-    ):
-        """
-        Args:
+    #             user (str, default=None):
+    #                 Mongo server username
 
-            database_name (str):
-                The name of the database
+    #             pwrd (str, default=None):
+    #                 Mongo server password
 
-            configuration_type (Configuration, default=BaseConfiguration):
-                The configuration type that will be stored in the database.
+    #             port (int, default=27017):
+    #                 Mongo server port number
 
-            nprocs (int):
-                The size of the processor pool
+    #             *args, **kwargs (list, dict):
+    #                 All additional arguments will be passed directly to the
+    #                 MongoClient constructor.
 
-            uri (str):
-                The full Mongo URI
+    # self.configuration_type = configuration_type
+    # self.uri = uri
+    # self.login_args = args
+    # self.login_kwargs = kwargs
 
-            drop_database (bool, default=False):
-                If True, deletes the existing Mongo database.
-
-            user (str, default=None):
-                Mongo server username
-
-            pwrd (str, default=None):
-                Mongo server password
-
-            port (int, default=27017):
-                Mongo server port number
-
-            *args, **kwargs (list, dict):
-                All additional arguments will be passed directly to the
-                MongoClient constructor.
-
-
-        """
-        self.configuration_type = configuration_type
-        self.uri = uri
-        self.login_args = args
-        self.login_kwargs = kwargs
-
-        self.user = user
-        self.pwrd = pwrd
-        self.port = port
-
+    # self.user = user
+    # self.pwrd = pwrd
+    # self.port = port
+    def oldfunc():
         if self.uri is not None:
             super().__init__(self.uri, *args, **kwargs)
         else:
@@ -671,7 +706,6 @@ class MongoDatabase(MongoClient):
             available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
             pi_hash = None
 
-            # new_pi_hashes = []
             for pname, pmap_list in property_map.items():
                 for pmap_i, pmap in enumerate(pmap_list):
                     pi_relationships_dict = {}
@@ -694,7 +728,6 @@ class MongoDatabase(MongoClient):
                     if not available:
                         continue
 
-                    # metadata_hashes = []
                     # Attach property metadata, if any were given
                     if "_metadata" in pmap:
 
@@ -704,7 +737,6 @@ class MongoDatabase(MongoClient):
                             property_map=pmap_copy,
                         )
                         pi_hash = str(hash(prop))
-                        # new_pi_hashes.append(pi_hash)
 
                         pi_md = Metadata.from_map(d=pmap["_metadata"], source=atoms)
                         pi_md_hash = str(pi_md._hash)
