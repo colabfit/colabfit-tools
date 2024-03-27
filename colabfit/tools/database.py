@@ -2058,6 +2058,7 @@ class MongoDatabase(MongoClient):
         links=None,
         description="",
         data_license="CC0",
+        publication_year=None,
         resync=False,
         verbose=False,
         overloaded_ds_id=None,
@@ -2213,6 +2214,7 @@ class MongoDatabase(MongoClient):
                     "description": description,
                     "hash": str(ds_hash),
                     "license": data_license,
+                    "publication-year": publication_year,
                 },
                 "$set": {
                     "aggregated_info": aggregated_info,
