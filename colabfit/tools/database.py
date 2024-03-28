@@ -1150,14 +1150,14 @@ class MongoDatabase(MongoClient):
                 ca_hash = str(calc._hash)
                 ca_ids.add(ca_hash)
                 ca_insert_doc = _build_ca_insert_doc(calc)
-                ca_insert_doc["chemical_formula_hill"] = self.configurations.find_one({'hash':co_key})['chemical_formula_hill']
+                ca_insert_doc["chemical_formula_hill"] = self.configurations.find_one({'hash':co_key.split('_')[-1]})['chemical_formula_hill']
                 ca_update_doc = {  # update document
                     "$setOnInsert": ca_insert_doc,
                     # Set MD relationships here
                     "$addToSet": {
                         "property_types": {"$each": calc_lists["PI_type"]},
                         "relationships": {
-                            "configuration": "CO_" + calc_lists["CO"],
+                            "configuration": calc_lists["CO"],
                             "property_instance": ["PI_" + j for j in calc_lists["PI"]],
                             "metadata": list(
                                 set([j["metadata"] for j in pi_relationships_list])
