@@ -4096,10 +4096,14 @@ def _build_c_update_doc(configuration, external_file=None):
                 print ('Large Configuration Detected...Saving to File')
                 large_pos = v
                 large = 1
+            else:
+                c_update_doc["$setOnInsert"].update({k: v.tolist()})
         elif k == "atomic_numbers":
             if len(v) > LARGE_CONFIGURATION_SIZE:
                 c_update_doc["$setOnInsert"].update({k: {'external-file': external_file}})
                 large_nums = v
+            else:
+                c_update_doc["$setOnInsert"].update({k: v.tolist()})
         else:
             c_update_doc["$setOnInsert"].update({k: v.tolist()})
     if large:
