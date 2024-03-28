@@ -321,12 +321,14 @@ class Property(dict):
                     )
                 )[0]
 
-        update_edn_with_conf(instance, configuration)
+        #update_edn_with_conf(instance, configuration)
 
         for key, val in property_map.items():
             if "value" in val:
                 # Default value provided
                 data = val["value"]
+            elif val["field"] in configuration:
+                data = configuration[val["field"]]
             elif val["field"] in configuration.info:
                 data = configuration.info[val["field"]]
             elif val["field"] in configuration.arrays:

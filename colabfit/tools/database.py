@@ -960,6 +960,263 @@ class MongoDatabase(MongoClient):
             upsert=True,
             hint="definition.property-name",
         )
+ 
+    def add_properties_to_configurations(self, property_dict, property_map):
+        """Creates DOs by linking properties to configurations
+           We assume the user will provide the colabfit-ids of the configurations and,
+           the property values themselves as a dict, and information about the property.
+
+           Args:
+
+               property_dict (dict): Key-value pairs where the keys are colabfit-ids of configurations
+               and values are their associated properties, given as a dict. This dict should be formatted like
+               {'energy': -100.} where the key can be associated with a property mapping 
+               property_mapping (dict): Mappings that specify the colabfit property definitions and any associated 
+               metadata. Same input as insert_data.
+
+        """
+        property_definitions = {}
+        for pname in property_map:
+            doc = self.property_definitions.find_one(
+                {"definition.property-name": pname}
+            )
+
+            if doc is None:
+                raise RuntimeError(
+                    "Property definition '{}' does not exist. "
+                    "Use insert_property_definition() first".format(pname)
+                )
+            else:
+                property_definitions[pname] = doc["definition"]
+        ignore_keys = {
+            "property-id",
+            "property-title",
+            "property-description",
+            "last_modified",
+            "definition",
+            "_id",
+            SHORT_ID_STRING_NAME,
+            "settings",
+            "property-name",
+        }
+
+        expected_keys = {
+            pname: [
+                set(
+                    # property_map[pname][f]['field']
+                    pmap[f]["field"]
+                    for f in property_definitions[pname].keys() - ignore_keys
+                    if property_definitions[pname][f]["required"] and "field" in pmap[f]
+                )
+                for pmap in property_map[pname]
+            ]
+            for pname in property_map
+        }
+
+        insertions = []
+        ca_ids = set()
+        config_docs = []
+        property_docs = []
+        calc_docs = []
+        meta_docs = []
+        #        co_relationships_dict = {}
+        #        pi_relationships_dict = {}
+        meta_update_dict = {}
+
+        for co_key, pi_val in property_dict.items():
+            pi_relationships_list = []
+            property_docs_do = []
+            calc_lists = {}
+            calc_lists["CO"] = co_key
+            calc_lists["PI"] = []
+            calc_lists["PI_type"] = []
+            
+            available_keys = pi_val.keys()
+            p_hash = None
+
+            new_p_hashes = []
+            for pname, pmap_list in property_map.items():
+                for pmap_i, pmap in enumerate(pmap_list):
+                    pi_relationships_dict = {}
+                    pmap_copy = dict(pmap)
+                    if "_metadata" in pmap_copy:
+                        del pmap_copy["_metadata"]
+
+                    # Pre-check to avoid having to delete partially-added properties
+                    missing_keys = expected_keys[pname][pmap_i] - available_keys
+                    if missing_keys:
+                        continue
+                    # checks if property is present in atoms->if not, skip over it
+
+                    available = 0
+                    for k in pmap_copy.keys():
+                        if "value" in pmap_copy[k]:
+                            available += 1
+                        elif pmap_copy[k]["field"] in available_keys:
+                            available += 1
+                    if not available:
+                        continue
+
+                    metadata_hashes = []
+                    # Attach property metadata, if any were given
+                    if "_metadata" in pmap:
+                        pi_md = Metadata.from_map(d=pmap["_metadata"], source=pi_val)
+
+                        pi_md_set_on_insert = _build_md_insert_doc(pi_md)
+                        # TODO what if atoms is not defined?
+                        prop = Property.from_definition(
+                            definition=property_definitions[pname],
+                            configuration=pi_val,
+                            property_map=pmap_copy,
+                        )
+                        p_hash = str(hash(prop))
+
+                        new_p_hashes.append(p_hash)
+
+                        pi_md_update_doc = {  # update document
+                            "$setOnInsert": pi_md_set_on_insert,
+                            "$set": {
+                                "last_modified": datetime.datetime.now().strftime(
+                                    "%Y-%m-%dT%H:%M:%SZ"
+                                )
+                            },
+                        }
+
+                        meta_docs.append(
+                            UpdateOne(
+                                {"hash": str(pi_md._hash)},
+                                pi_md_update_doc,
+                                upsert=True,
+                                hint="hash",
+                             )
+                        )
+                        metadata_hashes.append(str(pi_md._hash))
+                    else:
+                        # TODO what if atoms is not defined?
+                        prop = Property.from_definition(
+                            definition=property_definitions[pname],
+                            configuration=pi_val,
+                            property_map=pmap_copy,
+                        )
+                        p_hash = str(hash(prop))
+
+                        new_p_hashes.append(p_hash)
+                    calc_lists["PI"].append(p_hash)
+                    calc_lists["PI_type"].append(pname)
+                    # Prepare the property instance EDN document
+                    setOnInsert = {}
+                    # for k in property_map[pname]:
+                    for k in pmap:
+                        if k not in prop.keys():
+                            # To allow for missing non-required keys.
+                            # Required keys checked for in Property.from_definition
+                            continue
+
+                        if isinstance(prop[k]["source-value"], (int, float, str)):
+                            # Add directly
+                            setOnInsert[k] = {"source-value": prop[k]["source-value"]}
+                        else:
+                            # Then it's array-like and should be converted to a list
+                            setOnInsert[k] = {
+                                "source-value": np.atleast_1d(
+                                    prop[k]["source-value"]
+                                ).tolist()
+                            }
+
+                        if "source-unit" in prop[k]:
+                            setOnInsert[k]["source-unit"] = prop[k]["source-unit"]
+                        # TODO: Look at: can probably safely move out one level
+                    pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
+                    p_update_doc = {
+                        "$setOnInsert": {
+                            "hash": p_hash,
+                            SHORT_ID_STRING_NAME: "PI_" + p_hash,
+                            "type": pname,
+                            pname: setOnInsert,
+                        },
+                        "$set": {
+                            "last_modified": datetime.datetime.now().strftime(
+                                "%Y-%m-%dT%H:%M:%SZ"
+                            )
+                        },
+                    }
+
+                    property_docs_do.append(p_update_doc)
+                    pi_relationships_list.append(pi_relationships_dict)
+            ca_hash = None
+            #if calc_lists["PI"]:
+            if 1:
+                calc = DataObject(calc_lists["CO"], calc_lists["PI"])
+                ca_hash = str(calc._hash)
+                ca_ids.add(ca_hash)
+                ca_insert_doc = _build_ca_insert_doc(calc)
+                ca_insert_doc["chemical_formula_hill"] = self.configurations.find_one({'hash':co_key})['chemical_formula_hill']
+                ca_update_doc = {  # update document
+                    "$setOnInsert": ca_insert_doc,
+                    # Set MD relationships here
+                    "$addToSet": {
+                        "property_types": {"$each": calc_lists["PI_type"]},
+                        "relationships": {
+                            "configuration": "CO_" + calc_lists["CO"],
+                            "property_instance": ["PI_" + j for j in calc_lists["PI"]],
+                            "metadata": list(
+                                set([j["metadata"] for j in pi_relationships_list])
+                            ),
+                        },
+                    },
+                # '$inc': {
+                #     'ncounts': 1
+                # },
+                    "$set": {
+                        "last_modified": datetime.datetime.now().strftime(
+                            "%Y-%m-%dT%H:%M:%SZ"
+                     )
+                    },
+                }
+                calc_docs.append(
+                    UpdateOne(
+                        {"hash": ca_hash},
+                        ca_update_doc,
+                        upsert=True,
+                        hint="hash",
+                    )
+                )
+            for pi_doc_i, pi_doc in enumerate(property_docs_do):
+                #pi_doc["$addToSet"] = {
+                #    "relationships": {
+                #        "dataset": pi_relationships_list[pi_doc_i].pop("dataset")
+                #    }
+                #}
+                property_docs.append(
+                    UpdateOne(
+                        {"hash": pi_doc["$setOnInsert"]["hash"]},
+                        pi_doc,
+                        upsert=True,
+                        hint="hash",
+                    )
+                )
+
+            insertions.append(ca_hash)
+
+        if property_docs:
+            res = self.property_instances.bulk_write(property_docs, ordered=False)
+            nmatch = res.bulk_api_result["nMatched"]
+            if nmatch:
+                warnings.warn("{} duplicate properties detected".format(nmatch))
+        if calc_docs:
+            res = self.data_objects.bulk_write(calc_docs, ordered=False)
+            nmatch = res.bulk_api_result["nMatched"]
+            if nmatch:
+                warnings.warn("{} duplicate data objects detected".format(nmatch))
+
+        if meta_docs:
+            res = self.metadata.bulk_write(meta_docs, ordered=False)
+            nmatch = res.bulk_api_result["nMatched"]
+            if nmatch:
+                warnings.warn("{} duplicate metadata objects detected".format(nmatch))
+        return insertions
+
+
 
     def get_property_definition(self, name):
         """Returns a property definition using its 'definition.property-name' key"""

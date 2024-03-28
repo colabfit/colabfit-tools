@@ -39,6 +39,7 @@ setup(
         'periodictable',
         'unidecode',
         'notebook',
+        'lmdb',
     ],
 )
 
