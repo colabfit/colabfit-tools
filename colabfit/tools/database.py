@@ -1554,8 +1554,10 @@ class MongoDatabase(MongoClient):
                 max_dbs = 10,
                 )
             with lmdb_env.begin() as txn:
-                pos = pickle.loads(txn.get((co_doc['colabfit-id']).encode("ascii")))['positions']
-                co_doc['positions'] = pos
+                loaded_info = pickle.loads(txn.get((co_doc['colabfit-id']).encode("ascii")))
+
+                co_doc['positions'] = loaded_info['positions']
+                co_doc['atomic_numbers'] = loaded_info['atomic_numbers']
         return co_doc        
 
 
@@ -4086,22 +4088,30 @@ def _build_c_update_doc(configuration, external_file=None):
         },
     }
     # Make sure to check for positions array size here and if big give pointer to file
+    large = 0
     for k,v in configuration.unique_identifiers.items():
         if k == "positions":
             if v.shape[0] > LARGE_CONFIGURATION_SIZE:
                 c_update_doc["$setOnInsert"].update({k: {'external-file': external_file}})
                 print ('Large Configuration Detected...Saving to File')
-                lmdb_env = lmdb.open(
-                    external_file, 
+                large_pos = v
+                large = 1
+        elif k == "atomic_numbers":
+            if len(v) > LARGE_CONFIGURATION_SIZE:
+                c_update_doc["$setOnInsert"].update({k: {'external-file': external_file}})
+                large_nums = v
+        else:
+            c_update_doc["$setOnInsert"].update({k: v.tolist()})
+    if large:
+        lmdb_env = lmdb.open(
+                    external_file,
                     map_size = 1099511627776 * 2,
                     subdir = False,
                     meminit = False,
                     max_dbs = 10,
-                    ) 
-                with lmdb_env.begin(write=True) as txn:
-                    txn.put(('CO_' + c_hash).encode("ascii"), value=pickle.dumps({'positions':v},protocol=-1))
-        else:
-            c_update_doc["$setOnInsert"].update({k: v.tolist()})
+                    )
+        with lmdb_env.begin(write=True) as txn:
+            txn.put(('CO_' + c_hash).encode("ascii"), value=pickle.dumps({'atomic_numbers':large_nums,'positions':large_pos},protocol=-1))
     c_update_doc["$setOnInsert"].update({k: v for k, v in processed_fields.items()})
     return c_update_doc, c_hash, write_to_file
 
