@@ -2055,10 +2055,12 @@ class MongoDatabase(MongoClient):
         ds_id=None,
         authors=None,
         cs_ids=None,
-        links=None,
         description="",
         data_license="CC0",
         publication_year=None,
+        data_link=None,
+        publication_link=None,
+        other_links=None,
         resync=False,
         verbose=False,
         overloaded_ds_id=None,
@@ -2082,17 +2084,24 @@ class MongoDatabase(MongoClient):
             cs_ids (list or str, default=None):
                 The IDs of the configuration sets to link to the dataset.
 
-            links (list or str or None):
-                External links (e.g., journal articles, Git repositories, ...)
-                to be associated with the dataset. If None, then no links are
-                added.
+            publication_link (str or None):
+                Source publication link (e.g., journal article DOI)
+                to be associated with the dataset.
+            
+            data_link (str or None):
+                Source data link (e.g., repository DOI, GitHub link)
+                to be associated with the dataset.
+
+            other_links (list or str or None):
+                Other links associated with dataset (e.g., GitHub link, second
+                publication DOI) to be associated with the dataset.
 
             description (str or None):
                 A human-readable description of the dataset. If None, then not
                 description is added.
 
             data_license (str):
-                License associated with the Dataset's data
+                License associated with the Dataset's data. SPDX identifier.
 
             resync (bool):
                 If True, re-synchronizes the configuration sets and properties
@@ -2150,9 +2159,15 @@ class MongoDatabase(MongoClient):
                         auth
                     )
                 )
+        if other_links is not None:
+            if isinstance(other_links, str):
+                other_links = [other_links]
+        links = {
+            "source-publication":publication_link,
+            "source-data":data_link,
+            "other":other_links
+            }
 
-        if isinstance(links, str):
-            links = [links]
 
         ds_hash = sha512()
         if cs_ids is not None:
