@@ -2093,6 +2093,7 @@ class OldClass:
         data_link=None,
         publication_link=None,
         other_links=None,
+        doi=None,
         resync=False,
         verbose=False,
         overloaded_ds_id=None,
@@ -2119,7 +2120,7 @@ class OldClass:
             publication_link (str or None):
                 Source publication link (e.g., journal article DOI)
                 to be associated with the dataset.
-            
+
             data_link (str or None):
                 Source data link (e.g., repository DOI, GitHub link)
                 to be associated with the dataset.
@@ -2134,6 +2135,9 @@ class OldClass:
 
             data_license (str):
                 License associated with the Dataset's data. SPDX identifier.
+
+            doi: (str):
+                DOI of the dataset. Default None.
 
             resync (bool):
                 If True, re-synchronizes the configuration sets and properties
@@ -2195,11 +2199,10 @@ class OldClass:
             if isinstance(other_links, str):
                 other_links = [other_links]
         links = {
-            "source-publication":publication_link,
-            "source-data":data_link,
-            "other":other_links
-            }
-
+            "source-publication": publication_link,
+            "source-data": data_link,
+            "other": other_links,
+        }
 
         ds_hash = sha512()
         if cs_ids is not None:
@@ -2262,6 +2265,7 @@ class OldClass:
                     "hash": str(ds_hash),
                     "license": data_license,
                     "publication-year": publication_year,
+                    "doi": doi,
                 },
                 "$set": {
                     "aggregated_info": aggregated_info,
