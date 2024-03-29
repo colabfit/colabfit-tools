@@ -1944,7 +1944,7 @@ class MongoDatabase(MongoClient):
                                 }
                             },
                         ],
-                        "ndata_object ": [
+                        "ndata_object": [
                             {
                                 "$group": {
                                     "_id": None,
