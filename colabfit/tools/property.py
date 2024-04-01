@@ -280,7 +280,7 @@ class Property(dict):
 
     def __init__(
         self,
-        # definition,
+        definitions,
         instance,
         property_map=None,
         metadata=None,
@@ -289,8 +289,8 @@ class Property(dict):
         """
         Args:
 
-            definition (dict):
-                A KIM Property Definition
+            definitions (list(dict)):
+                KIM Property Definitions
 
             instance (dict):
                 A dictionary defining an OpenKIM Property Instance
@@ -303,6 +303,8 @@ class Property(dict):
                 is False
         """
         self.instance = instance
+        self.instance_json = json.dumps(instance)
+        self.definitions = definitions
 
         if property_map is not None:
             self.property_map = dict(property_map)
@@ -339,7 +341,11 @@ class Property(dict):
         return self._property_fields
 
     @classmethod
-    def get_kim_instance(cls, definition, configuration):
+    def get_kim_instance(
+        cls,
+        definition,
+        # configuration
+    ):
         """
         A function for constructing a Property given a property setting hash, a property
         definition, and a property map.
@@ -434,13 +440,6 @@ class Property(dict):
                 )[0]
 
         # update_edn_with_conf(instance, configuration)
-        print(instance)
-        print(definition)
-        check_instance_optional_key_marked_required_are_present(
-            instance,
-            {k: v for k, v in definition.items() if k != "property-name"},
-            # KIM_PROPERTIES[self.instance['property-id']]
-        )
         return instance
 
     @classmethod
@@ -465,12 +464,12 @@ class Property(dict):
 
         """
         print(definitions)
+        pdef_dict = {pdef["property-name"]: pdef for pdef in definitions}
         instances = {
-            p_def["property-name"]: cls.get_kim_instance(p_def, configuration)
-            for p_def in definitions
+            pdef_name: cls.get_kim_instance(pdef)
+            for pdef_name, pdef in pdef_dict.items()
         }
 
-        # update_edn_with_conf(instance, configuration)
         # props_dict = defaultdict(list)
         props_dict = {}
         for pname, pmap_list in property_map.items():
@@ -511,6 +510,12 @@ class Property(dict):
 
                     if (val["units"] != "None") and (val["units"] is not None):
                         instance[key]["source-unit"] = val["units"]
+            # hack to get around OpenKIM requiring the property-name be a dict
+            prop_name_tmp = pdef_dict[pname].pop("property-name")
+            check_instance_optional_key_marked_required_are_present(
+                instance, pdef_dict[pname]
+            )
+            pdef_dict[pname]["property-name"] = prop_name_tmp
 
             # Would we be handling multiple instances of the same property?
             # props_dict[pname].append(
@@ -522,7 +527,7 @@ class Property(dict):
 
         # return props_dict
         return cls(
-            definition=definitions,
+            definitions=definitions,
             property_map=property_map,
             instance=props_dict,
             metadata=pi_md,
@@ -583,12 +588,12 @@ class Property(dict):
                 hashval = np.round_(
                     np.array(val["source-value"]), decimals=12
                 ).data.tobytes()
-            except TypeError:
+            except (TypeError, KeyError):
                 try:
                     hashval = np.array(
                         val["source-value"], dtype=STRING_DTYPE_SPECIFIER
                     ).data.tobytes()
-                except TypeError:
+                except (TypeError, KeyError):
                     try:
                         hashval = np.array(
                             val, dtype=STRING_DTYPE_SPECIFIER

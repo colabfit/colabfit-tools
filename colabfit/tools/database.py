@@ -1976,14 +1976,14 @@ class OldClass:
                                 }
                             },
                         ],
-                        "ndata_object ": [
+                        "ndata_object": [
                             {
                                 "$group": {
                                     "_id": None,
-                                    "ndata_object ": {"$sum": 1},
+                                    "ndata_object": {"$sum": 1},
                                 }
                             },
-                            {"$project": {"_id": 0, "ndata_object ": 1}},
+                            {"$project": {"_id": 0, "ndata_object": 1}},
                         ],
                         "configuration_ids": [
                             {
@@ -2003,7 +2003,7 @@ class OldClass:
             results = self.data_objects.aggregate(pipeline)
             results = next(results)
             co_ids.extend(results["configuration_ids"][0]["configuration_ids"])
-            ndata_object += results["ndata_object "][0]["ndata_object "]
+            ndata_object += results["ndata_object"][0]["ndata_object"]
             for x in results["typesCount"]:
                 property_types[x["_id"]] += x["count"]
 
@@ -2017,7 +2017,7 @@ class OldClass:
         )
         aggregated_info["property_types"] = list(property_types.keys())
         aggregated_info["property_types_counts"] = list(property_types.values())
-        aggregated_info["ndata_object "] = ndata_object
+        aggregated_info["ndata_object"] = ndata_object
         return aggregated_info
 
     # TODO: Make Configuration "type" agnostic (only need to change docstring)
