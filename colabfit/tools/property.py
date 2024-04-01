@@ -521,9 +521,7 @@ class Property(dict):
             # props_dict[pname].append(
             #     {k: v for k, v in instance.items() if k not in _ignored_fields}
             # )
-            props_dict[pname] = {
-                k: v for k, v in instance.items() if k not in _ignored_fields
-            }
+            props_dict[pname] = {k: v for k, v in instance.items()}
 
         # return props_dict
         return cls(
@@ -580,35 +578,35 @@ class Property(dict):
         Hashes the Property by hashing its EDN.
         """
         _hash = sha512()
-
-        for key, val in self.instance.items():
-            if key in _ignored_fields:
-                continue
-            try:
-                hashval = np.round_(
-                    np.array(val["source-value"]), decimals=12
-                ).data.tobytes()
-            except (TypeError, KeyError):
+        for p_name, p_dict in self.instance.items():
+            for key, val in p_dict.items():
+                if key in _ignored_fields:
+                    continue
                 try:
-                    hashval = np.array(
-                        val["source-value"], dtype=STRING_DTYPE_SPECIFIER
+                    hashval = np.round_(
+                        np.array(val["source-value"]), decimals=12
                     ).data.tobytes()
                 except (TypeError, KeyError):
                     try:
                         hashval = np.array(
-                            val, dtype=STRING_DTYPE_SPECIFIER
+                            val["source-value"], dtype=STRING_DTYPE_SPECIFIER
                         ).data.tobytes()
-                    except Exception as e:
-                        raise PropertyHashError(
-                            "Could not hash key {}: {}. Error type {}".format(
-                                key, val, type(e)
+                    except (TypeError, KeyError):
+                        try:
+                            hashval = np.array(
+                                val, dtype=STRING_DTYPE_SPECIFIER
+                            ).data.tobytes()
+                        except Exception as e:
+                            raise PropertyHashError(
+                                "Could not hash key {}: {}. Error type {}".format(
+                                    key, val, type(e)
+                                )
                             )
-                        )
 
-            _hash.update(hashval)
-            # What if values are identical but are added in different units? Should these hash to unique PIs?
-            if "source-unit" in val:
-                _hash.update(str(val["source-unit"]).encode("utf-8"))
+                _hash.update(hashval)
+                # What if values are identical but are added in different units? Should these hash to unique PIs?
+                if "source-unit" in val:
+                    _hash.update(str(val["source-unit"]).encode("utf-8"))
 
         return int(_hash.hexdigest(), 16)
 
@@ -683,8 +681,9 @@ class Property(dict):
         del self.instance[edn_key]
 
     def __str__(self):
-        return "Property(instance_id={}, name='{}')".format(
-            self.instance["instance-id"], self.name
+        return "Property(properties={})".format(
+            # self.instance["instance-id"],
+            [pdef["property-name"] for pdef in self.definitions],
         )
 
     def __repr__(self):
