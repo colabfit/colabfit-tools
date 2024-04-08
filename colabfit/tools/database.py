@@ -2763,9 +2763,15 @@ class MongoDatabase(MongoClient):
 
 
         # check dos to see if they contain a do that has same co as one to be added, if so remove from list
+        # this is for automatic updating when properties are added
+        # TODO: Need to better think about consequences here
         if isinstance(add_do_ids, str) or isinstance(add_do_ids,tuple):
            add_do_ids = list(add_do_ids)
            
+        if len(set(add_do_ids) - set(do_ids)) == 0:
+            raise RuntimeError(
+                "All data objects to be added are already present in DS.")
+
         new_do_cos = {}          
         for i in add_do_ids:
            new_do_co = self.data_objects.find_one({'hash':i})['relationships'][0]['configuration']
@@ -2777,10 +2783,7 @@ class MongoDatabase(MongoClient):
         if add_do_ids is not None:
             do_ids.extend(add_do_ids)
             do_ids = list(set(do_ids))
-#            if len(do_ids) == init_len_do:
-#                raise RuntimeError(
-#                    "All data objects to be added are already present in DS."
-#                )
+                
         # insert new version of DS
 
         self.insert_dataset(
