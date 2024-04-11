@@ -1,10 +1,9 @@
+import datetime
 import re
 import time
 from collections import defaultdict
 from functools import partial
 from hashlib import sha512
-
-# from multiprocessing import Pool
 from string import ascii_lowercase, ascii_uppercase
 
 import numpy as np
@@ -13,6 +12,46 @@ from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 
 from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
+
+from pyspark.sql.types import (
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
+
+config_schema = StructType(
+    [
+        StructField("id", StringType(), False),
+        StructField("hash", StringType(), False),
+        StructField("last_modified", TimestampType(), False),
+        StructField("dataset_ids", StringType(), True),  # ArrayType(StringType())
+        StructField("chemical_formula_hill", StringType(), True),
+        StructField("chemical_formula_reduced", StringType(), True),
+        StructField("chemical_formula_anonymous", StringType(), True),
+        StructField("elements", StringType(), True),  # ArrayType(StringType())
+        StructField("elements_ratios", StringType(), True),  # ArrayType(IntegerType())
+        StructField("atomic_numbers", StringType(), True),  # ArrayType(IntegerType())
+        StructField("nsites", IntegerType(), True),
+        StructField("nelements", IntegerType(), True),
+        StructField("nperiodic_dimensions", IntegerType(), True),
+        StructField("cell", StringType(), True),  # ArrayType(ArrayType(DoubleType()))
+        StructField("dimension_types", StringType(), True),  # ArrayType(IntegerType())
+        StructField("pbc", StringType(), True),  # ArrayType(IntegerType())
+        StructField(
+            "positions", StringType(), True
+        ),  # ArrayType(ArrayType(DoubleType()))
+        StructField("names", StringType(), True),  # ArrayType(StringType())
+    ]
+)
+
+
+def _empty_dict_from_schema(schema):
+    empty_dict = {}
+    for field in schema:
+        empty_dict[field.name] = None
+    return empty_dict
 
 
 class BaseConfiguration:
@@ -182,7 +221,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         # Check for name conflicts in info/arrays; would cause bug in parsing
         if set(self.info.keys()).intersection(set(self.arrays.keys())):
             raise RuntimeError(
-                "The same key should not be used in both Configuration.info and Configuration.arrays"
+                "The same key should not be used in both Configuration.info and "
+                "Configuration.arrays"
             )
 
     @property
@@ -291,6 +331,21 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             "nperiodic_dimensions": int(sum(self.get_pbc())),
             # 'species': species,  # Is this ever used?
         }
+
+    def to_spark_row(self):
+        co_dict = _empty_dict_from_schema(config_schema)
+        co_dict["hash"] = self._hash
+        co_dict["id"] = f"CO_{self._hash}"
+        co_dict["cell"] = self.cell.tolist()
+        co_dict["positions"] = self.positions
+        co_dict["names"] = self.info[ATOMS_NAME_FIELD]
+        co_dict["pbc"] = self.pbc
+        co_dict["last_modified"] = datetime.datetime.now(
+            tz=datetime.timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        co_dict["atomic_numbers"] = self.numbers
+        co_dict.update(self.configuration_summary())
+        return co_dict
 
     @classmethod
     def from_ase(cls, atoms):

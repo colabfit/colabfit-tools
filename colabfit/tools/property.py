@@ -4,7 +4,6 @@ import json
 import os
 import tempfile
 import warnings
-from collections import defaultdict
 from copy import deepcopy
 from hashlib import sha512
 
@@ -13,8 +12,6 @@ from ase.units import create_units
 from pyspark.sql.types import (
     BooleanType,
     DoubleType,
-    FloatType,
-    IntegerType,
     StringType,
     StructField,
     StructType,
