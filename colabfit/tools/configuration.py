@@ -27,6 +27,7 @@ config_schema = StructType(
         StructField("hash", StringType(), False),
         StructField("last_modified", TimestampType(), False),
         StructField("dataset_ids", StringType(), True),  # ArrayType(StringType())
+        StructField("metadata", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
         StructField("chemical_formula_reduced", StringType(), True),
         StructField("chemical_formula_anonymous", StringType(), True),
@@ -60,18 +61,20 @@ class BaseConfiguration:
     This class should never be directly instantiated-all other Configuration classes
     must subclass this along with any other useful classes.
 
-    Configuration classes must pass all necessary unique identifiers as individual keyword arguments
-    to their associated constructor. Unique identifiers are values that are needed to uniquely
-    identify one Configuration instance from another. These values will be used to produce
-    a unique hash for each Configuration instance and be added to the database with
-    their associated keyword. See :attr:`unique_identifer_kw`.
+    Configuration classes must pass all necessary unique identifiers as individual
+    keyword arguments to their associated constructor. Unique identifiers are values
+    that are needed to uniquely identify one Configuration instance from another.
+    These values will be used to produce a unique hash for each Configuration instance
+    and be added to the database with their associated keyword. See
+    :attr:`unique_identifer_kw`.
 
-    All Configuration classes must define a :code:`self.configuration_summary` method. This is used
-    to extract any other useful information that will be included (in addition to all unique
-    identifiers) in the Configuration's entry in the Database.
+    All Configuration classes must define a :code:`self.configuration_summary` method.
+    This is used to extract any other useful information that will be included (in
+    addition to all unique identifiers) in the Configuration's entry in the Database.
 
-    All Configuration classes must also define a :code:`self.aggregate_configuration_summaries` method. This is used
-    to extract useful information from a collection of Configurations.
+    All Configuration classes must also define a
+    :code:`self.aggregate_configuration_summaries` method. This is used to extract
+    useful information from a collection of Configurations.
 
     See :meth:`~colabfit.tools.configuration.AtomicConfiguration` as an example.
 
@@ -81,11 +84,13 @@ class BaseConfiguration:
             Stores important metadata for a Configuration. At a minimum, it will include
             keywords "_name" and "_labels".
         _array_order (array):
-             Optional ordering of array unique identifiers so that trivial permutations do not hash
-             differently
+             Optional ordering of array unique identifiers so that trivial permutations
+             do not hash differently
         unique_identifier_kw (list):
-            Class attribute that specifies the keywords to be used for all unique identifiers.
-            All Configuration classes should accept each keyword as an argument to their constructor.
+            Class attribute that specifies the keywords to be used for all unique
+            identifiers.
+            All Configuration classes should accept each keyword as an argument to
+            their constructor.
         unique_identifier_kw_types (dict):
             Class attribute that specifies the data types of the unique
             identifier keywords. key = identifier keyword; value = identifier
@@ -119,11 +124,13 @@ class BaseConfiguration:
         """Extracts useful information from a Configuration.
 
         All Configuration classes should implement this.
-        Any useful information that should be included under a Configuration's entry in the Database
-        (in addition to its unique identifiers) should be extracted and added to a dict.
+        Any useful information that should be included under a Configuration's entry in
+        the Database (in addition to its unique identifiers) should be extracted and
+        added to a dict.
 
         Returns:
-            dict: Keys and their associated values that will be included under a Configuration's entry in the Database
+            dict: Keys and their associated values that will be included under a
+            Configuration's entry in the Database
         """
         raise NotImplementedError("All Configuration classes should implement this.")
 
@@ -175,8 +182,9 @@ class BaseConfiguration:
 
 class AtomicConfiguration(BaseConfiguration, Atoms):
     """
-    An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and an :class:`ase.Atoms`
-    object that is guaranteed to have the following fields in its :attr:`info` dictionary:
+    An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and an
+    :class:`ase.Atoms` object that is guaranteed to have the following fields in
+    its :attr:`info` dictionary:
 
     - :attr:`~colabfit.ATOMS_NAME_FIELD` = :code:"_name"
     - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
@@ -199,10 +207,12 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             names (str, list of str):
                 Names to be associated with a Configuration
             **kwargs:
-                Other keyword arguments that can be passed to :meth:`ase.Atoms.__init__()`
+                Other keyword arguments that can be passed to
+                :meth:`ase.Atoms.__init__()`
         """
 
         BaseConfiguration.__init__(self, names=names)
+        self.metadata = None
 
         kwargs["info"] = self.info
         if "atomic_numbers" in list(kwargs.keys()):
@@ -295,7 +305,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         * :code:`dimension_types`: the periodic boundary condition
 
         Returns:
-            dict: Keys and their associated values that will be included under a Configuration's entry in the Database
+            dict: Keys and their associated values that will be included under a
+            Configuration's entry in the Database
         """
 
         atomic_species = self.get_chemical_symbols()
@@ -379,6 +390,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             tz=datetime.timezone.utc
         ).strftime("%Y-%m-%dT%H:%M:%SZ")
         co_dict["atomic_numbers"] = self.numbers
+        co_dict["metadata"] = self.metadata
         co_dict.update(self.configuration_summary())
         return co_dict
 
@@ -579,7 +591,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
 class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
     """
-    A BioSequenceConfiguration is an extension of a :class:`BaseConfiguration` and an :class:`Bio.SeqRecord object.`
+    A BioSequenceConfiguration is an extension of a :class:`BaseConfiguration` and an
+    :class:`Bio.SeqRecord object.`
     """
 
     unique_identifier_kw = ["sequence"]
@@ -590,8 +603,8 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
         **kwargs,
     ):
         """
-        Constructs a BioSequenceConfiguration. Calls :meth:`BaseConfiguration.__init__()`
-        and :meth:`Bio.SeqRecord.__init__()`
+        Constructs a BioSequenceConfiguration. Calls
+        :meth:`BaseConfiguration.__init__()` and :meth:`Bio.SeqRecord.__init__()`
 
         Args:
             names (str, list of str):
@@ -599,7 +612,8 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
             labels (str, list of str):
                 Labels to be associated with a Configuration
             **kwargs:
-                Other keyword arguments that can be passed to :meth:`Bio.SeqRecord.__init__()`
+                Other keyword arguments that can be passed to
+                :meth:`Bio.SeqRecord.__init__()`
         """
 
         BaseConfiguration.__init__(self, names=names)
@@ -622,14 +636,16 @@ class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
         Extracts useful metadata from a sequence.
 
         Returns:
-            dict: Keys and their associated values that will be included under a Configuration's entry in the Database
+            dict: Keys and their associated values that will be included under a
+            Configuration's entry in the Database
         """
         return {"seq_length": len(self.unique_identifiers["sequence"])}
 
     @classmethod
     def from_seqrecord(cls, seqrec):
         """
-        Generates a :class:`BioSequenceConfiguration` from a :code:`Bio.SeqRecord` object.
+        Generates a :class:`BioSequenceConfiguration` from a :code:`Bio.SeqRecord`
+        object.
         """
         return cls(
             seq=seqrec.seq,

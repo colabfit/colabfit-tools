@@ -302,13 +302,15 @@ class Property(dict):
             value = A sub-dictionary with the following keys:
 
             * :attr:`field`:
-                A field name used to access :attr:`Configuration.info` or :attr:`Configuration.arrays`
+                A field name used to access :attr:`Configuration.info` or
+                :attr:`Configuration.arrays`
             * :attr:`units`:
-                A string matching one of the units names in `ase.units <https://wiki.fysik.dtu.dk/ase/ase/units.html>`_.
-                These units will be used to convert the given units to eV,
-                Angstrom, a.m.u., Kelvin, ... For compound units (e.g. "eV/Ang"), the string will be split on
-                '*' and '/'. The raw data will be multiplied by the first unit
-                and anything preceded by a '*'. It will be divided by anything
+                A string matching one of the units names in
+                `ase.units <https://wiki.fysik.dtu.dk/ase/ase/units.html>`_.
+                These units will be used to convert the given units to eV, Angstrom,
+                a.m.u., Kelvin, ... For compound units (e.g. "eV/Ang"), the string will
+                be split on '*' and '/'. The raw data will be multiplied by the first
+                unit and anything preceded by a '*'. It will be divided by anything
                 preceded by a '/'.
 
 
@@ -698,7 +700,8 @@ class Property(dict):
         return self.instance.keys()
 
     def __setitem__(self, k, v):
-        """Overloaded :meth:`dict.__setitem__` for setting the values of :attr:`self.edn`"""
+        """Overloaded :meth:`dict.__setitem__` for setting the values of
+        :attr:`self.edn`"""
         edn_key = EDN_KEY_MAP.get(k, k)
 
         if k in self.instance:
@@ -709,7 +712,8 @@ class Property(dict):
             KeyError(f"Field '{k}' not found in Property.edn. Returning None")
 
     def __getitem__(self, k):
-        """Overloaded :meth:`dict.__getitem__` for getting the values of :attr:`self.edn`"""
+        """Overloaded :meth:`dict.__getitem__` for getting the values of
+        :attr:`self.edn`"""
         edn_key = EDN_KEY_MAP.get(k, k)
 
         if k in self.instance:

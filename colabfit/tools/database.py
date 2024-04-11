@@ -1,64 +1,58 @@
-import json
 import datetime
-import warnings
 import itertools
+import json
+import multiprocessing
+import os
 import string
+import time
+import warnings
 from collections import defaultdict
+from copy import deepcopy
+from functools import partial
+from hashlib import sha512
 from math import ceil
 
-import numpy as np
-from tqdm import tqdm
-import multiprocessing
-from copy import deepcopy
-from hashlib import sha512
-from functools import partial
-
-# from pymongo import MongoClient, UpdateOne, UpdateMany
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import findspark
 import matplotlib.pyplot as plt
-from ase.io import write as ase_write
-from ase import Atoms
-from unidecode import unidecode
+import numpy as np
 import periodictable
-import time
-from kim_property.definition import check_property_definition
-from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
+import pyspark
+from ase import Atoms
+from ase.io import write as ase_write
 from django.utils.crypto import get_random_string
+from dotenv import load_dotenv
+from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
+from kim_property.definition import check_property_definition
+from pyspark.sql import SparkSession
+from pyspark.sql.types import (
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
+from tqdm import tqdm
+from unidecode import unidecode
+
 from colabfit import (
-    ID_FORMAT_STRING,
     _CONFIGS_COLLECTION,
-    _PROPS_COLLECTION,
-    _METADATA_COLLECTION,
-    _DATAOBJECT_COLLECTION,
     _CONFIGSETS_COLLECTION,
-    _PROPDEFS_COLLECTION,
     _DATASETS_COLLECTION,
+    _PROPDEFS_COLLECTION,
+    _PROPOBJECT_COLLECTION,
+
     ATOMS_NAME_FIELD,
+    EXTENDED_ID_STRING_NAME,
+    ID_FORMAT_STRING,
     MAX_STRING_LENGTH,
     SHORT_ID_STRING_NAME,
-    EXTENDED_ID_STRING_NAME,
-    _AGGREGATED_INFO_COLLECTION,
 )
-from colabfit.tools.configuration import BaseConfiguration, AtomicConfiguration
-from colabfit.tools.property import Property
+from colabfit.tools.configuration import AtomicConfiguration, BaseConfiguration
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.dataset import Dataset
 from colabfit.tools.metadata import Metadata
-from colabfit.tools.data_object import DataObject
-import pyspark
-from pyspark.sql import SparkSession
-from pyspark.sql.types import (
-    BooleanType,
-    DoubleType,
-    FloatType,
-    IntegerType,
-    StringType,
-    TimestampType,
-    StructField,
-    StructType,
-)
+from colabfit.tools.property import Property
 
 config_schema = StructType(
     [
@@ -85,18 +79,39 @@ config_schema = StructType(
     ]
 )
 
+def generate_ds_id():
+    ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
+    return ds_id
 
-class CFSparkSession(SparkSession):
-    """Create a SparkSession to interact with Vast or SQL database"""
+class CFPGSparkSession():
+    """Create a SparkSession to interact with a PostGresQL database"""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.spark = SparkSession.builder.appName("colabfit").getOrCreate()
+    def __init__(self, appname="colabfit", env="./.env", **kwargs):
         # self.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
+        JARFILE = os.environ.get("CLASSPATH")
+        self.spark = (
+            SparkSession.builder.appName(appname)
+            .config("spark.jars", JARFILE)
+            .getOrCreate()
+        )
+        url = "jdbc:postgresql://localhost:5432/colabfit"
+        user = os.environ.get("PGS_USER")
+        password = os.environ.get("PGS_PASS")
+        driver = os.environ.get("PGS_DRIVER")
+        properties = {
+            "user": user,
+            "password": password,
+            "driver": driver,
+        }
         user = (None,)
         pwrd = (None,)
-        uri = (None,)
         database_name = None
+        findspark.init()
+
+        format = "jdbc"  # for postgres local
+        load_dotenv(env)
+    
+    def load_data(self, )
 
     def get_spark(self):
         return self.spark
@@ -104,114 +119,27 @@ class CFSparkSession(SparkSession):
     def get_spark_context(self):
         return self.spark.sparkContext
 
+    def insert_data(
+        self,
+        configurations,
+        property_map=None,
+        co_md_map=None,
+        transform=None,
+        verbose=True,
+        ds_id=None,
+        generator=None,
+    ):
+        """"""
+        if ds_id is None:
+            # Maybe check to see wehther the DS ID already exists?
+            ds_id = generate_ds_id()
+            print("Generated new DS ID:", ds_id)
+
 
 class OldClass:
     """
-    # class MongoDatabase(MongoClient):
-    #"""
 
-    #     A MongoDatabase stores all of the data in Mongo documents, and
-    #     provides additinal functionality like filtering and optimized queries.
 
-    #     The Mongo database has the following structure
-
-    #     .. code-block:: text
-
-    #         /configurations
-    #             _id
-    #             short-id
-    #             atomic_numbers
-    #             positions
-    #             cell
-    #             pbc
-    #             names
-    #             elements
-    #             nelements
-    #             elements_ratios
-    #             chemical_formula_reduced
-    #             chemical_formula_anonymous
-    #             chemical_formula_hill
-    #             nsites
-    #             dimension_types
-    #             nperiodic_dimensions
-    #             latice_vectors
-    #             last_modified
-    #             relationships
-    #                 property_instances
-    #                 configuration_sets
-
-    #         /property_definitions
-    #             _id
-    #             short-id
-    #             definition
-
-    #         /properties
-    #             _id
-    #             short-id
-    #             type
-    #             property_name
-    #                 each field in the property definition
-    #             methods
-    #             last_modified
-    #             relationships
-    #                 metadata
-    #                 configurations
-
-    #         /metadata
-    #             hash
-    #             dict
-
-    #         /configuration_sets
-    #             _id
-    #             short-id
-    #             last_modified
-    #             aggregated_info
-    #                 (from configurations)
-    #                 nconfigurations
-    #                 nsites
-    #                 nelements
-    #                 chemical_systems
-    #                 elements
-    #                 total_elements_ratios
-    #                 chemical_formula_reduced
-    #                 chemical_formula_anonymous
-    #                 chemical_formula_hill
-    #                 nperiodic_dimensions
-    #                 dimension_types
-    #             relationships
-    #                 configurations
-    #                 datasets
-
-    #         /datasets
-    #             _id
-    #             short-id
-    #             extended-id
-    #             last_modified
-    #             aggregated_info
-    #                 (from configuration sets)
-    #                 nconfigurations
-    #                 nsites
-    #                 nelements
-    #                 chemical_systems
-    #                 elements
-    #                 total_elements_ratios
-    #                 chemical_formula_reduced
-    #                 chemical_formula_anonymous
-    #                 chemical_formula_hill
-    #                 nperiodic_dimensions
-    #                 dimension_types
-
-    #                 (from properties)
-    #                 property_types
-    #                 property_fields
-    #                 methods
-    #                 methods_counts
-    #             relationships
-    #                 property_instances
-    #                 configuration_sets
-
-    #     Attributes:
-    #     """
 
     #     def __init__(
     #         self,
@@ -226,7 +154,8 @@ class OldClass:
     #         *args,
     #         **kwargs,
     #     ):
-    #         """
+    #"""
+
     #         Args:
 
     #             database_name (str):
@@ -457,25 +386,9 @@ class OldClass:
         """
         # Generate DS ID here so relationships can be grouped
         if ds_id is None:
-            ds_ids = [
-                i["colabfit-id"] for i in self.datasets.find({}, {"colabfit-id": 1})
-            ]
-            missing_ids = set()
-            for i in self.configurations.find(
-                {"relationships.$[elem].dataset": {"$nin": ds_ids}},
-                {"relationships": 1},
-            ):
-                for j in i["relationships"]:
-                    if j["dataset"] not in ds_ids:
-                        missing_ids.add(j["dataset"])
-            if len(list(missing_ids)) > 1:
-                raise Exception("DS ID could not be inferred from existing data")
-            elif len(list(missing_ids)) == 1:
-                print("Using existing DS ID", list(missing_ids)[0])
-                ds_id = list(missing_ids)[0]
-            else:
-                ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
-                print("Generated new DS ID:", ds_id)
+            # Maybe check to see wehther the DS ID already exists?
+            ds_id = generate_ds_id()
+            print("Generated new DS ID:", ds_id)
         if self.uri is not None:
             mongo_login = self.uri
         else:
