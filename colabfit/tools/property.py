@@ -1,3 +1,4 @@
+import datetime
 import itertools
 import json
 import os
@@ -8,7 +9,7 @@ from copy import deepcopy
 from hashlib import sha512
 
 import numpy as np
-import pyspark
+from ase.units import create_units
 from pyspark.sql.types import (
     BooleanType,
     DoubleType,
@@ -31,17 +32,6 @@ ID_FORMAT_STRING = "{}_{}_{:0d}"
 MAX_STRING_LENGTH = 255
 STRING_DTYPE_SPECIFIER = f"S{MAX_STRING_LENGTH}"
 
-# _DBASE_COLLECTION           = '_databases'
-_DATABASE_NAME = "colabfit_database"
-_CONFIGS_COLLECTION = "configurations"
-_PROPS_COLLECTION = "property_instances"
-_PROPDEFS_COLLECTION = "property_definitions"
-_DATAOBJECT_COLLECTION = "data_objects"
-_METADATA_COLLECTION = "metadata"
-_CONFIGSETS_COLLECTION = "configuration_sets"
-_DATASETS_COLLECTION = "datasets"
-_AGGREGATED_INFO_COLLECTION = "aggregated_info"
-
 SHORT_ID_STRING_NAME = "colabfit-id"
 EXTENDED_ID_STRING_NAME = "extended-id"
 
@@ -54,7 +44,6 @@ DEFAULT_PROPERTY_NAME = (
     "configuration-nonorthogonal-periodic-3d-cell-fixed-particles-fixed"
 )
 
-from ase.units import create_units
 
 UNITS = create_units("2014")
 
@@ -90,8 +79,6 @@ from kim_property.create import KIM_PROPERTIES
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.instance import check_property_instances
 
-# from colabfit import STRING_DTYPE_SPECIFIER, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
-
 # These are fields that are related to the geometry of the atomic structure
 # or the OpenKIM Property Definition and shouldn't be used for equality checks
 _ignored_fields = [
@@ -111,6 +98,62 @@ def _empty_dict_from_schema(schema):
     for field in schema:
         empty_dict[field.name] = None
     return empty_dict
+
+
+def energy_to_schema(prop_name, en_prop: dict):
+    new_name = prop_name.replace("-", "_")
+    en_dict = {
+        f"{new_name}_property_id": en_prop["property-id"],
+        f"{new_name}": en_prop["energy"]["source-value"],
+        f"{new_name}_unit": en_prop["energy"]["source-unit"],
+        f"{new_name}_per_atom": en_prop["per-atom"]["source-value"],
+    }
+    ref_en = en_prop.get("reference-energy")
+    if ref_en is not None:
+        ref_en = ref_en["source-value"]
+    ref_unit = en_prop.get("reference-energy")
+    if ref_unit is not None:
+        ref_unit = ref_unit["source-unit"]
+    en_dict[f"{new_name}_reference"] = ref_en
+    en_dict[f"{new_name}_reference_unit"] = ref_unit
+
+    return en_dict
+
+
+def atomic_forces_to_schema(af_prop: dict):
+    af_dict = {
+        "atomic_forces_property_id": af_prop["property-id"],
+        "atomic_forces": af_prop["forces"]["source-value"],
+        "atomic_forces_unit": af_prop["forces"]["source-unit"],
+    }
+    return af_dict
+
+
+def cauchy_stress_to_schema(cs_prop: dict):
+    cs_dict = {
+        "cauchy_stress_property_id": cs_prop["property-id"],
+        "cauchy_stress": cs_prop["stress"]["source-value"],
+        "cauchy_stress_unit": cs_prop["stress"]["source-unit"],
+        "cauchy_stress_volume_normalized": cs_prop["volume-normalized"]["source-value"],
+    }
+    return cs_dict
+
+
+def band_gap_to_schema(bg_prop: dict):
+    bg_dict = {
+        "band_gap_property_id": bg_prop["property-id"],
+        "band_gap": bg_prop["band-gap"]["source-value"],
+        "band_gap_unit": bg_prop["band-gap"]["source-unit"],
+    }
+    return bg_dict
+
+
+prop_to_row_mapper = {
+    "energy": energy_to_schema,
+    "atomic-forces": atomic_forces_to_schema,
+    "cauchy-stress": cauchy_stress_to_schema,
+    "band-gap": band_gap_to_schema,
+}
 
 
 def md_from_map(pmap_md, config: AtomicConfiguration):
@@ -209,9 +252,9 @@ def stringify_lists(row_dict):
     for key, val in row_dict.items():
         if (
             isinstance(val, np.ndarray)
-            or isinstance(val, list)
-            or isinstance(val, tuple)
-            or isinstance(val, dict)
+            or isinstance(val, list)  # noqa W503
+            or isinstance(val, tuple)  # noqa W503
+            or isinstance(val, dict)  # noqa W503
         ):
             row_dict[key] = str(val)
     return row_dict
@@ -310,12 +353,12 @@ class Property(dict):
             self.property_map = dict(property_map)
         else:
             self.property_map = {}
-        if metadata is not None:
-            self.metadata = metadata
+        self.metadata = metadata
 
         if convert_units:
             self.convert_units()
 
+        self.chemical_formula_hill = instance.pop("chemical_formula_hill")
         self._hash = hash(self)
 
     @property
@@ -444,7 +487,11 @@ class Property(dict):
 
     @classmethod
     def from_definition(
-        cls, definitions, configuration, property_map, convert_units=False
+        cls,
+        definitions,
+        configuration,
+        property_map,
+        # convert_units=False
     ):
         """
         A function for constructing a Property given a property setting hash, a property
@@ -463,7 +510,6 @@ class Property(dict):
                 A property map as described in the Property attributes section.
 
         """
-        print(definitions)
         pdef_dict = {pdef["property-name"]: pdef for pdef in definitions}
         instances = {
             pdef_name: cls.get_kim_instance(pdef)
@@ -472,65 +518,88 @@ class Property(dict):
 
         # props_dict = defaultdict(list)
         props_dict = {}
+        pi_md = None
         for pname, pmap_list in property_map.items():
             instance = instances.get(pname, None)
-            if instance is None:
-                raise PropertyParsingError(f"Property {pname} not found in definitions")
+            if pname == "_metadata":
+                pi_md = md_from_map(pmap_list, configuration)
             else:
-                instance = instance.copy()
-            for pmap_i, pmap in enumerate(pmap_list):
-                pmap_copy = dict(pmap)
-                if "_metadata" in pmap_copy:
-                    pi_md = pmap_copy.pop("_metadata")
-                for key, val in pmap_copy.items():
-                    print(key, ":", val)
-                    if "value" in val:
-                        # Default value provided
-                        data = val["value"]
-                    elif val["field"] in configuration.info:
-                        data = configuration.info[val["field"]]
-                    elif val["field"] in configuration.arrays:
-                        data = configuration.arrays[val["field"]]
-                    else:
-                        # Key not found on configurations. Will be checked later
-                        continue
+                if instance is None:
+                    raise PropertyParsingError(
+                        f"Property {pname} not found in definitions"
+                    )
+                else:
+                    instance = instance.copy()
+                for pmap_i, pmap in enumerate(pmap_list):
+                    for key, val in pmap.items():
+                        if "value" in val:
+                            # Default value provided
+                            data = val["value"]
+                        elif val["field"] in configuration.info:
+                            data = configuration.info[val["field"]]
+                        elif val["field"] in configuration.arrays:
+                            data = configuration.arrays[val["field"]]
+                        else:
+                            # Key not found on configurations. Will be checked later
+                            continue
 
-                    if isinstance(data, (np.ndarray, list)):
-                        data = np.atleast_1d(data).tolist()
-                    elif isinstance(data, (str, bool, int, float)):
-                        pass
-                    elif np.issubdtype(data.dtype, np.integer):
-                        data = int(data)
-                    elif np.issubdtype(data.dtype, np.float):
-                        data = float(data)
+                        if isinstance(data, (np.ndarray, list)):
+                            data = np.atleast_1d(data).tolist()
+                        elif isinstance(data, (str, bool, int, float)):
+                            pass
+                        elif np.issubdtype(data.dtype, np.integer):
+                            data = int(data)
+                        elif np.issubdtype(data.dtype, np.float):
+                            data = float(data)
 
-                    instance[key] = {
-                        "source-value": data,
-                    }
+                        instance[key] = {
+                            "source-value": data,
+                        }
 
-                    if (val["units"] != "None") and (val["units"] is not None):
-                        instance[key]["source-unit"] = val["units"]
-            # hack to get around OpenKIM requiring the property-name be a dict
-            prop_name_tmp = pdef_dict[pname].pop("property-name")
-            check_instance_optional_key_marked_required_are_present(
-                instance, pdef_dict[pname]
-            )
-            pdef_dict[pname]["property-name"] = prop_name_tmp
+                        if (val["units"] != "None") and (val["units"] is not None):
+                            instance[key]["source-unit"] = val["units"]
+                # hack to get around OpenKIM requiring the property-name be a dict
+                prop_name_tmp = pdef_dict[pname].pop("property-name")
+                check_instance_optional_key_marked_required_are_present(
+                    instance, pdef_dict[pname]
+                )
+                pdef_dict[pname]["property-name"] = prop_name_tmp
 
-            # Would we be handling multiple instances of the same property?
-            # props_dict[pname].append(
-            #     {k: v for k, v in instance.items() if k not in _ignored_fields}
-            # )
-            props_dict[pname] = {k: v for k, v in instance.items()}
+                # Would we be handling multiple instances of the same property?
+                # props_dict[pname].append(
+                #     {k: v for k, v in instance.items() if k not in _ignored_fields}
+                # )
+                props_dict[pname] = {k: v for k, v in instance.items()}
+        props_dict["chemical_formula_hill"] = configuration.get_chemical_formula()
 
-        # return props_dict
         return cls(
             definitions=definitions,
             property_map=property_map,
             instance=props_dict,
             metadata=pi_md,
-            convert_units=convert_units,
+            # convert_units=convert_units,
         )
+
+    def to_spark_row(self):
+        """
+        Convert the Property to a Spark Row object
+        """
+        row_dict = _empty_dict_from_schema(property_object_schema)
+        row_dict["metadata"] = self.metadata
+        for key, val in self.instance.items():
+            if key != "_metadata":
+                if "energy" in key:
+                    row_dict.update(prop_to_row_mapper["energy"](key, val))
+                else:
+                    row_dict.update(prop_to_row_mapper[key](val))
+        row_dict["last_modified"] = datetime.datetime.now(
+            tz=datetime.timezone.utc
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        row_dict["hash"] = self._hash
+        row_dict["id"] = f"PO_{self._hash}"
+        row_dict["chemical_formula_hill"] = self.chemical_formula_hill
+        row_dict = stringify_lists(row_dict)
+        return row_dict
 
     def convert_units(self):
         """
@@ -604,7 +673,8 @@ class Property(dict):
                             )
 
                 _hash.update(hashval)
-                # What if values are identical but are added in different units? Should these hash to unique PIs?
+                # What if values are identical but are added in different units?
+                # Should these hash to unique PIs?
                 if "source-unit" in val:
                     _hash.update(str(val["source-unit"]).encode("utf-8"))
 
@@ -691,30 +761,30 @@ class Property(dict):
 
 
 # Eric->Do we need to do this?
-def update_edn_with_conf(edn, conf):
-    edn["species"] = {"source-value": conf.get_chemical_symbols()}
+# def update_edn_with_conf(edn, conf):
+#     edn["species"] = {"source-value": conf.get_chemical_symbols()}
 
-    lattice = np.array(conf.get_cell()).tolist()
+#     lattice = np.array(conf.get_cell()).tolist()
 
-    edn["unrelaxed-periodic-cell-vector-1"] = {
-        "source-value": lattice[0],
-        "source-unit": "angstrom",
-    }
+#     edn["unrelaxed-periodic-cell-vector-1"] = {
+#         "source-value": lattice[0],
+#         "source-unit": "angstrom",
+#     }
 
-    edn["unrelaxed-periodic-cell-vector-2"] = {
-        "source-value": lattice[1],
-        "source-unit": "angstrom",
-    }
+#     edn["unrelaxed-periodic-cell-vector-2"] = {
+#         "source-value": lattice[1],
+#         "source-unit": "angstrom",
+#     }
 
-    edn["unrelaxed-periodic-cell-vector-3"] = {
-        "source-value": lattice[2],
-        "source-unit": "angstrom",
-    }
+#     edn["unrelaxed-periodic-cell-vector-3"] = {
+#         "source-value": lattice[2],
+#         "source-unit": "angstrom",
+#     }
 
-    edn["unrelaxed-configuration-positions"] = {
-        "source-value": conf.positions.tolist(),
-        "source-unit": "angstrom",
-    }
+#     edn["unrelaxed-configuration-positions"] = {
+#         "source-value": conf.positions.tolist(),
+#         "source-unit": "angstrom",
+#     }
 
 
 class PropertyHashError(Exception):
