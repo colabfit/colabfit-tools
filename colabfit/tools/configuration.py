@@ -1,4 +1,5 @@
 import datetime
+import json
 import re
 import time
 from collections import defaultdict
@@ -9,10 +10,6 @@ from string import ascii_lowercase, ascii_uppercase
 import numpy as np
 from ase import Atoms
 from Bio.SeqRecord import SeqRecord
-from tqdm import tqdm
-
-from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
-
 from pyspark.sql.types import (
     IntegerType,
     StringType,
@@ -20,6 +17,9 @@ from pyspark.sql.types import (
     StructType,
     TimestampType,
 )
+from tqdm import tqdm
+
+from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
 
 config_schema = StructType(
     [
@@ -224,6 +224,41 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                 "The same key should not be used in both Configuration.info and "
                 "Configuration.arrays"
             )
+
+    def set_metadata(self, co_md_map):
+        """Sets metadata for a configuration from a property map.
+
+        Args:
+            co_md_map (dict): Property map of metadata to be used to set configuration
+            metadata for a configuration.
+
+        """
+        gathered_fields = {}
+        for md_field in co_md_map.keys():
+            if "value" in co_md_map[md_field]:
+                v = co_md_map[md_field]["value"]
+            elif "field" in co_md_map[md_field]:
+                field_key = co_md_map[md_field]["field"]
+
+                if field_key in self.info:
+                    v = self.info[field_key]
+                elif field_key in self.arrays:
+                    v = self.arrays[field_key]
+                else:
+                    # No keys are required; ignored if missing
+                    continue
+            else:
+                # No keys are required; ignored if missing
+                continue
+
+            if "units" in co_md_map[md_field]:
+                gathered_fields[md_field] = {
+                    f"{md_field}": v,
+                    f"{md_field}_unit": co_md_map[md_field]["units"],
+                }
+            else:
+                gathered_fields[md_field] = v
+        self.metadata = json.dumps(gathered_fields)
 
     @property
     def unique_identifiers(self):
