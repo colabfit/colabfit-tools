@@ -153,6 +153,7 @@ class DataManager:
 
     def _gather_co_do_rows(self, prop_defs, prop_map, configs):
         """Convert COs and DOs to Spark rows."""
+        print('x')
         return (
             configs.to_spark_row(),
             Property.from_definition(
@@ -181,7 +182,7 @@ class DataManager:
     def gather_co_do_rows_pool(self, config_chunk, pool):
         """Convert COs and DOs to Spark rows using multiprocessing.
         Returns batches of tuples of (configuration_row, property_row)."""
-
+        print(len(config_chunk))
         part_gather = partial(
             self._gather_co_do_rows,
             self.prop_defs,
