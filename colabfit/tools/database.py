@@ -40,7 +40,6 @@ from colabfit import (
     _DATASETS_COLLECTION,
     _PROPDEFS_COLLECTION,
     _PROPOBJECT_COLLECTION,
-
     ATOMS_NAME_FIELD,
     EXTENDED_ID_STRING_NAME,
     ID_FORMAT_STRING,
@@ -79,14 +78,22 @@ config_schema = StructType(
     ]
 )
 
+
 def generate_ds_id():
     ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
     return ds_id
 
-class CFPGSparkSession():
+
+class CFPGSparkSession:
     """Create a SparkSession to interact with a PostGresQL database"""
 
-    def __init__(self, appname="colabfit", env="./.env", **kwargs):
+    def __init__(
+        self,
+        appname: str = "colabfit",
+        env: str = "./.env",
+        database_name: str = None,
+        **kwargs,
+    ):
         # self.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
         JARFILE = os.environ.get("CLASSPATH")
         self.spark = (
@@ -103,15 +110,21 @@ class CFPGSparkSession():
             "password": password,
             "driver": driver,
         }
-        user = (None,)
-        pwrd = (None,)
-        database_name = None
+        self.database_name = database_name
         findspark.init()
 
-        format = "jdbc"  # for postgres local
+        self.format = "jdbc"  # for postgres local
         load_dotenv(env)
-    
-    def load_data(self, )
+        self.config_table = _CONFIGS_COLLECTION
+        self.config_set_table = _CONFIGSETS_COLLECTION
+        self.dataset_table = _DATASETS_COLLECTION
+        self.prop_def_table = _PROPDEFS_COLLECTION
+        self.prop_object_table = _PROPOBJECT_COLLECTION
+
+    def load_data(
+        self,
+    ):
+        pass
 
     def get_spark(self):
         return self.spark
@@ -129,73 +142,15 @@ class CFPGSparkSession():
         ds_id=None,
         generator=None,
     ):
-        """
-        
-        """
+        """ """
         if ds_id is None:
-            # Maybe check to see wehther the DS ID already exists?
+            # Maybe check to see whether the DS ID already exists?
             ds_id = generate_ds_id()
             print("Generated new DS ID:", ds_id)
 
 
 class OldClass:
-    """
 
-
-
-    #     def __init__(
-    #         self,
-    #         database_name,
-    #         configuration_type=AtomicConfiguration,
-    #         nprocs=1,
-    #         uri=None,
-    #         drop_database=False,
-    #         user=None,
-    #         pwrd=None,
-    #         port=27017,
-    #         *args,
-    #         **kwargs,
-    #     ):
-    #"""
-
-    #         Args:
-
-    #             database_name (str):
-    #                 The name of the database
-
-    #             configuration_type (Configuration, default=BaseConfiguration):
-    #                 The configuration type that will be stored in the database.
-
-    #             nprocs (int):
-    #                 The size of the processor pool
-
-    #             uri (str):
-    #                 The full Mongo URI
-
-    #             drop_database (bool, default=False):
-    #                 If True, deletes the existing Mongo database.
-
-    #             user (str, default=None):
-    #                 Mongo server username
-
-    #             pwrd (str, default=None):
-    #                 Mongo server password
-
-    #             port (int, default=27017):
-    #                 Mongo server port number
-
-    #             *args, **kwargs (list, dict):
-    #                 All additional arguments will be passed directly to the
-    #                 MongoClient constructor.
-
-    # self.configuration_type = configuration_type
-    # self.uri = uri
-    # self.login_args = args
-    # self.login_kwargs = kwargs
-
-    # self.user = user
-    # self.pwrd = pwrd
-    # self.port = port
     def oldfunc():
         if self.uri is not None:
             super().__init__(self.uri, *args, **kwargs)
@@ -210,9 +165,6 @@ class OldClass:
                 )
 
         self.database_name = database_name
-
-        if drop_database:
-            self.drop_database(database_name)
 
         self.configurations = self[database_name][_CONFIGS_COLLECTION]
         self.property_instances = self[database_name][_PROPS_COLLECTION]
