@@ -3926,9 +3926,10 @@ class MongoDatabase(MongoClient):
     def compare_datasets(self,ds1,ds2):
          ds1_doc = set([i['colabfit-id'] for i in self.data_objects.find({'relationships.dataset':ds1},{'colabfit-id':1})])
          ds2_doc = set([i['colabfit-id'] for i in self.data_objects.find({'relationships.dataset':ds2},{'colabfit-id':1})])
-         print ('Datasets have %s data_objects in common' %(len(ds1_doc.intersection(ds2_doc))))
-         print ('Returning Differences')
-         return {'DS1-DS2': ds1_doc - ds2_doc, 'DS2-DS1': ds2_doc - ds1_doc}
+         intersection = ds1_doc.intersection(ds2_doc)
+         print ('Datasets have %s data_objects in common' %(len(intersection)))
+         print ('Returning Intersection and Differences')
+         return {'DS1 & DS2': intersection, 'DS1 - DS2': ds1_doc - ds2_doc, 'DS2 - DS1': ds2_doc - ds1_doc}
 
 def build_do(ca, client_name, client_uri):
     client = MongoDatabase(client_name, uri=client_uri)
