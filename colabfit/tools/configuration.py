@@ -2,6 +2,7 @@ import datetime
 import json
 import re
 import time
+import dateutil
 from collections import defaultdict
 from functools import partial
 from hashlib import sha512
@@ -53,6 +54,24 @@ def _empty_dict_from_schema(schema):
     for field in schema:
         empty_dict[field.name] = None
     return empty_dict
+
+
+def stringify_lists(row_dict):
+    """
+    Replace list/tuple fields with comma-separated strings.
+    Spark and Vast both support array columns, but the connector does not,
+    so keeping cell values in list format crashes the table.
+    TODO: Remove when no longer necessary
+    """
+    for key, val in row_dict.items():
+        if (
+            isinstance(val, np.ndarray)
+            or isinstance(val, list)  # noqa W503
+            or isinstance(val, tuple)  # noqa W503
+            or isinstance(val, dict)  # noqa W503
+        ):
+            row_dict[key] = str(val)
+    return row_dict
 
 
 class BaseConfiguration:
@@ -386,9 +405,11 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         co_dict["positions"] = self.positions
         co_dict["names"] = self.info[ATOMS_NAME_FIELD]
         co_dict["pbc"] = self.pbc
-        co_dict["last_modified"] = datetime.datetime.now(
-            tz=datetime.timezone.utc
-        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        co_dict["last_modified"] = dateutil.parser.parse(
+            datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+        )
         co_dict["atomic_numbers"] = self.numbers
         co_dict["metadata"] = self.metadata
         co_dict.update(self.configuration_summary())

@@ -1,4 +1,5 @@
 import datetime
+import dateutil
 import itertools
 import json
 import os
@@ -522,13 +523,10 @@ class Property(dict):
             instance = instances.get(pname, None)
             if pname == "_metadata":
                 pi_md = md_from_map(pmap_list, configuration)
+            elif instance is None:
+                raise PropertyParsingError(f"Property {pname} not found in definitions")
             else:
-                if instance is None:
-                    raise PropertyParsingError(
-                        f"Property {pname} not found in definitions"
-                    )
-                else:
-                    instance = instance.copy()
+                instance = instance.copy()
                 for pmap_i, pmap in enumerate(pmap_list):
                     for key, val in pmap.items():
                         if "value" in val:
@@ -559,6 +557,7 @@ class Property(dict):
                             instance[key]["source-unit"] = val["units"]
                 # hack to get around OpenKIM requiring the property-name be a dict
                 prop_name_tmp = pdef_dict[pname].pop("property-name")
+
                 check_instance_optional_key_marked_required_are_present(
                     instance, pdef_dict[pname]
                 )
@@ -591,9 +590,11 @@ class Property(dict):
                     row_dict.update(prop_to_row_mapper["energy"](key, val))
                 else:
                     row_dict.update(prop_to_row_mapper[key](val))
-        row_dict["last_modified"] = datetime.datetime.now(
-            tz=datetime.timezone.utc
-        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        row_dict["last_modified"] = dateutil.parser.parse(
+            datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+        )
         row_dict["hash"] = self._hash
         row_dict["id"] = f"PO_{self._hash}"
         row_dict["chemical_formula_hill"] = self.chemical_formula_hill
