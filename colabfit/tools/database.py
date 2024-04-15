@@ -128,12 +128,15 @@ class PGDataLoader:
         )
 
 
-def batched(iterable, n):
+def batched(configs, n):
     "Batch data into tuples of length n. The last batch may be shorter."
-    it = iter(iterable)
-    for i, batch in enumerate(islice(it, n)):
-        print(f"batch {i}")
-        yield batch
+    it = iter(configs)
+    while True:
+        batch = list(islice(it, n))
+        if not batch:
+            return []
+        else:
+            yield batch
 
 
 class DataManager:
@@ -151,48 +154,43 @@ class DataManager:
         self.prop_map = prop_map
         self.nprocs = nprocs
 
-    def _gather_co_do_rows(self, prop_defs, prop_map, configs):
+    def _gather_co_do_rows(
+        self, prop_defs: list[dict], prop_map: dict, configs: list[AtomicConfiguration]
+    ):
         """Convert COs and DOs to Spark rows."""
-        print("x")
-        return (
-            configs.to_spark_row(),
-            Property.from_definition(
-                prop_defs,
-                configuration=configs,
-                property_map=prop_map,
-            ).to_spark_row(),
-        )
-        # print(configs)
-        # configs = list(configs)
-        # co_po_rows = []
-        # for config in configs:
-        #     co_po_rows.append(
-        #         (
-        #             config.to_spark_row(),
-        #             Property.from_definition(
-        #                 prop_defs,
-        #                 configuration=config,
-        #                 property_map=prop_map,
-        #             ).to_spark_row(),
-        #         )
-        #     )
+        print("type configs: ", type(configs))
+        print("len configs: ", len(configs))
+        co_po_rows = []
+        for config in configs:
+            co_po_rows.append(
+                (
+                    config.to_spark_row(),
+                    Property.from_definition(
+                        prop_defs,
+                        configuration=config,
+                        property_map=prop_map,
+                    ).to_spark_row(),
+                )
+            )
 
-        # return co_po_rows
+        return co_po_rows
 
-    def gather_co_do_rows_pool(self, config_chunk, pool):
-        """Convert COs and DOs to Spark rows using multiprocessing.
-        Returns batches of tuples of (configuration_row, property_row)."""
-        print(len(config_chunk))
+    def gather_co_do_rows_pool(
+        self, config_chunks: list[list[AtomicConfiguration]], pool: multiprocessing.Pool
+    ):
+        """
+        Wrapper for _gather_co_do_rows.
+        Convert COs and DOs to Spark rows using multiprocessing Pool.
+        Returns a batch of tuples of (configuration_row, property_row).
+        """
+        print("number of chunks", len(config_chunks))
         part_gather = partial(
             self._gather_co_do_rows,
             self.prop_defs,
             self.prop_map,
         )
-        return itertools.chain.from_iterable(pool.map(part_gather, config_chunk))
+        return itertools.chain.from_iterable(pool.map(part_gather, config_chunks))
 
-        # for batch in tuple(islice(pimap, chunk_size)):
-        #     yield batch
-        #     break
         # For running without multiprocessing on notebook
         # part_gather = partial(
         #     self._gather_co_do_rows,
@@ -204,16 +202,27 @@ class DataManager:
         #     break
 
     def gather_configs_in_batches(self):
-        chunk_size = 10
+        """
+        Wrapper function for gather_co_do_rows_pool.
+        Yields batches of CO-DO rows, preventing configuration iterator from
+        being consumed all at once.
+        """
+        chunk_size = 10000
         config_chunks = batched(self.configs, chunk_size)
+
+        print("type config chunks", type(config_chunks))
         with Pool(self.nprocs) as pool:
-            for i, config_chunk in enumerate(config_chunks):
-                if i >= 1:
-                    print("second iter")
+            while True:
+
+                config_batches = list(islice(config_chunks, self.nprocs))
+                if not config_batches:
                     break
-                print(len(config_chunk), type(config_chunk))
-                print(config_chunk[0])
-                yield self.gather_co_do_rows_pool(config_chunk, pool)
+                else:
+                    yield list(
+                        # itertools.chain.from_iterable(
+                        self.gather_co_do_rows_pool(config_batches, pool)
+                        # )
+                    )
 
     def load_data_to_pg_in_batches(self, loader: PGDataLoader):
         """Load data to PostgreSQL database in batches."""
