@@ -153,7 +153,7 @@ class DataManager:
 
     def _gather_co_do_rows(self, prop_defs, prop_map, configs):
         """Convert COs and DOs to Spark rows."""
-        print('x')
+        print("x")
         return (
             configs.to_spark_row(),
             Property.from_definition(
