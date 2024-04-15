@@ -187,7 +187,6 @@ class MongoDatabase(MongoClient):
         configuration_type=AtomicConfiguration,
         nprocs=1,
         uri=None,
-        drop_database=False,
         external_file=None,
         user=None,
         pwrd=None,
@@ -209,9 +208,6 @@ class MongoDatabase(MongoClient):
 
             uri (str):
                 The full Mongo URI
-
-            drop_database (bool, default=False):
-                If True, deletes the existing Mongo database.
 
             user (str, default=None):
                 Mongo server username
@@ -251,8 +247,6 @@ class MongoDatabase(MongoClient):
 
         self.database_name = database_name
 
-        if drop_database:
-            self.drop_database(database_name)
 
         self.configurations = self[database_name][_CONFIGS_COLLECTION]
         self.property_instances = self[database_name][_PROPS_COLLECTION]
