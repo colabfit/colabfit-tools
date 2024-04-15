@@ -154,7 +154,7 @@ class DataManager:
         self.prop_map = prop_map
         self.nprocs = nprocs
 
-    def _gather_co_do_rows(
+    def _gather_co_po_rows(
         self, prop_defs: list[dict], prop_map: dict, configs: list[AtomicConfiguration]
     ):
         """Convert COs and DOs to Spark rows."""
@@ -175,17 +175,17 @@ class DataManager:
 
         return co_po_rows
 
-    def gather_co_do_rows_pool(
+    def gather_co_po_rows_pool(
         self, config_chunks: list[list[AtomicConfiguration]], pool: multiprocessing.Pool
     ):
         """
-        Wrapper for _gather_co_do_rows.
+        Wrapper for _gather_co_po_rows.
         Convert COs and DOs to Spark rows using multiprocessing Pool.
         Returns a batch of tuples of (configuration_row, property_row).
         """
         print("number of chunks", len(config_chunks))
         part_gather = partial(
-            self._gather_co_do_rows,
+            self._gather_co_po_rows,
             self.prop_defs,
             self.prop_map,
         )
@@ -193,7 +193,7 @@ class DataManager:
 
         # For running without multiprocessing on notebook
         # part_gather = partial(
-        #     self._gather_co_do_rows,
+        #     self._gather_co_po_rows,
         #     self.prop_defs,
         #     self.prop_map,
         # )
@@ -201,9 +201,9 @@ class DataManager:
         #     yield batch
         #     break
 
-    def gather_configs_in_batches(self):
+    def gather_co_po_in_batches(self):
         """
-        Wrapper function for gather_co_do_rows_pool.
+        Wrapper function for gather_co_po_rows_pool.
         Yields batches of CO-DO rows, preventing configuration iterator from
         being consumed all at once.
         """
@@ -219,14 +219,12 @@ class DataManager:
                     break
                 else:
                     yield list(
-                        # itertools.chain.from_iterable(
-                        self.gather_co_do_rows_pool(config_batches, pool)
-                        # )
+                        self.gather_co_po_rows_pool(config_batches, pool)
                     )
 
     def load_data_to_pg_in_batches(self, loader: PGDataLoader):
         """Load data to PostgreSQL database in batches."""
-        co_po_rows = self.gather_co_do_rows_pool()
+        co_po_rows = self.gather_co_po_in_batches()
         for co_po_batch in co_po_rows:
             co_rows, po_rows = list(zip(*co_po_batch))
 
