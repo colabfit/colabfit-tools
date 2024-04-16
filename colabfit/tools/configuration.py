@@ -74,6 +74,20 @@ def stringify_lists(row_dict):
     return row_dict
 
 
+def _format_for_hash(v):
+    if isinstance(v, np.ndarray):
+        if np.issubdtype(v.dtype, np.floating):
+            return np.round_(v.astype(np.float64), decimals=16)
+        elif np.issubdtype(v.dtype, np.integer):
+            return v.astype(np.int64)
+        else:
+            return v
+    elif isinstance(v, str):
+        return v.encode("utf-8")
+    else:
+        return v
+
+
 class BaseConfiguration:
     """Abstract parent class for all Configurations.
 
@@ -209,14 +223,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
     """
 
-    unique_identifier_kw = ["atomic_numbers", "positions", "cell", "pbc"]
-    unique_identifier_kw_types = {
-        "atomic_numbers": int,
-        "positions": float,
-        "cell": float,
-        "pbc": bool,
-    }
-
     def __init__(self, names=None, **kwargs):
         """
         Constructs an AtomicConfiguration. Calls :meth:`BaseConfiguration.__init__()`
@@ -239,15 +245,18 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             kwargs.pop("atomic_numbers")
 
         Atoms.__init__(self, **kwargs)
-        self._array_order = np.lexsort(
-            (
-                self.arrays["positions"][:, 2],
-                self.arrays["positions"][:, 1],
-                self.arrays["positions"][:, 0],
-            )
-        )
+        self.unique_identifier_kw = [
+            "atomic_numbers",
+            "positions",
+            "cell",
+            "pbc",
+            #  'metadata'
+        ]
+        self.spark_row = self.to_spark_row()
         self._hash = hash(self)
         self.id = f"CO_{self._hash}"
+        self.spark_row["id"] = self.id
+        self.spark_row["hash"] = self._hash
         # Check for name conflicts in info/arrays; would cause bug in parsing
         if set(self.info.keys()).intersection(set(self.arrays.keys())):
             raise RuntimeError(
@@ -296,7 +305,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             "atomic_numbers": self.get_atomic_numbers(),
             "positions": self.get_positions(),
             "cell": np.array(self.get_cell()),
-            "pbc": self.get_pbc().astype(int),
+            "pbc": self.get_pbc(),
         }
 
     @unique_identifiers.setter
@@ -400,8 +409,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
     def to_spark_row(self):
         co_dict = _empty_dict_from_schema(config_schema)
-        co_dict["hash"] = self._hash
-        co_dict["id"] = self.id
+        # co_dict["hash"] = self._hash
+        # co_dict["id"] = self.id
         co_dict["cell"] = self.cell.array
         co_dict["positions"] = self.positions
         co_dict["names"] = self.info[ATOMS_NAME_FIELD]
@@ -610,6 +619,25 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         return "AtomicConfiguration(name={}, {})".format(
             self.info[ATOMS_NAME_FIELD], ase_str[20:-1]
         )
+
+    def __hash__(self):
+
+        identifiers = [self.spark_row[i] for i in self.unique_identifier_kw]
+        _hash = sha512()
+        ordering = np.lexsort(
+            (
+                self.spark_row["positions"][:, 2],
+                self.spark_row["positions"][:, 1],
+                self.spark_row["positions"][:, 0],
+            )
+        )
+        for k, v in zip(self.unique_identifier_kw, identifiers):
+            if k in ["positions", "atomic_numbers"]:
+                _hash.update(bytes(_format_for_hash(v[ordering])))
+            else:
+                _hash.update(bytes(_format_for_hash(v)))
+
+        return int(_hash.hexdigest(), 16)
 
 
 class BioSequenceConfiguration(BaseConfiguration, SeqRecord):
