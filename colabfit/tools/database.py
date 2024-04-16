@@ -8,11 +8,12 @@ import time
 import warnings
 from collections import defaultdict
 from copy import deepcopy
-from functools import partial
+from functools import partial, reduce
 from hashlib import sha512
 from math import ceil
 from multiprocessing import Pool
 from itertools import islice
+from types import GeneratorType
 
 import findspark
 import matplotlib.pyplot as plt
@@ -24,7 +25,7 @@ from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.definition import check_property_definition
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import (
     IntegerType,
     StringType,
@@ -119,8 +120,8 @@ class PGDataLoader:
         return self.spark.sparkContext
 
     def write_table(self, spark_rows: list[dict], table_name: str, schema: StructType):
-        po_df = self.spark.createDataFrame(spark_rows, schema=schema)
-        po_df.write.jdbc(
+        df = self.spark.createDataFrame(spark_rows, schema=schema)
+        df.write.jdbc(
             url=self.url,
             table=table_name,
             mode="append",
@@ -130,13 +131,13 @@ class PGDataLoader:
 
 def batched(configs, n):
     "Batch data into tuples of length n. The last batch may be shorter."
-    it = iter(configs)
+    if not isinstance(configs, GeneratorType):
+        configs = iter(configs)
     while True:
-        batch = list(islice(it, n))
-        if not batch:
-            return []
-        else:
-            yield batch
+        batch = list(islice(configs, n))
+        if len(batch) == 0:
+            break
+        yield batch
 
 
 class DataManager:
@@ -158,8 +159,6 @@ class DataManager:
         self, prop_defs: list[dict], prop_map: dict, configs: list[AtomicConfiguration]
     ):
         """Convert COs and DOs to Spark rows."""
-        print("type configs: ", type(configs))
-        print("len configs: ", len(configs))
         co_po_rows = []
         for config in configs:
             co_po_rows.append(
@@ -184,6 +183,7 @@ class DataManager:
         Returns a batch of tuples of (configuration_row, property_row).
         """
         print("number of chunks", len(config_chunks))
+        print(len(config_chunks[0]))
         part_gather = partial(
             self._gather_co_po_rows,
             self.prop_defs,
@@ -218,16 +218,14 @@ class DataManager:
                 if not config_batches:
                     break
                 else:
-                    yield list(
-                        self.gather_co_po_rows_pool(config_batches, pool)
-                    )
+                    yield list(self.gather_co_po_rows_pool(config_batches, pool))
 
     def load_data_to_pg_in_batches(self, loader: PGDataLoader):
         """Load data to PostgreSQL database in batches."""
         co_po_rows = self.gather_co_po_in_batches()
+
         for co_po_batch in co_po_rows:
             co_rows, po_rows = list(zip(*co_po_batch))
-
             loader.write_table(
                 co_rows,
                 _CONFIGS_COLLECTION,

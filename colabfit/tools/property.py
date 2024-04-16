@@ -154,7 +154,11 @@ prop_to_row_mapper = {
 }
 
 
-def md_from_map(pmap_md, config: AtomicConfiguration):
+def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
+    """
+    Extract metadata from a property map.
+    Returns metadata dict as a JSON string, method, and software.
+    """
     gathered_fields = {}
     for md_field in pmap_md.keys():
         if "value" in pmap_md[md_field]:
@@ -180,7 +184,13 @@ def md_from_map(pmap_md, config: AtomicConfiguration):
             }
         else:
             gathered_fields[md_field] = {"source-value": v}
-    return json.dumps(gathered_fields)
+    method = gathered_fields.pop("method", None)
+    software = gathered_fields.pop("software", None)
+    if method is not None:
+        method = method["source-value"]
+    if software is not None:
+        software = software["source-value"]
+    return json.dumps(gathered_fields), method, software
 
 
 property_object_schema = StructType(
@@ -191,6 +201,8 @@ property_object_schema = StructType(
         StructField("configuration_ids", StringType(), True),  # ArrayType(StringType())
         StructField("dataset_ids", StringType(), True),  # ArrayType(StringType())
         StructField("metadata", StringType(), True),
+        StructField("software", StringType(), True),
+        StructField("method", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
         StructField("potential_energy", DoubleType(), True),
         StructField("potential_energy_unit", StringType(), True),
@@ -522,7 +534,10 @@ class Property(dict):
         for pname, pmap_list in property_map.items():
             instance = instances.get(pname, None)
             if pname == "_metadata":
-                pi_md = md_from_map(pmap_list, configuration)
+
+                pi_md, method, software = md_from_map(pmap_list, configuration)
+                props_dict["method"] = method
+                props_dict["software"] = software
             elif instance is None:
                 raise PropertyParsingError(f"Property {pname} not found in definitions")
             else:
@@ -569,6 +584,7 @@ class Property(dict):
                 # )
                 props_dict[pname] = {k: v for k, v in instance.items()}
         props_dict["chemical_formula_hill"] = configuration.get_chemical_formula()
+        props_dict["configuration_ids"] = [configuration.id]
 
         return cls(
             definitions=definitions,
@@ -584,12 +600,20 @@ class Property(dict):
         """
         row_dict = _empty_dict_from_schema(property_object_schema)
         row_dict["metadata"] = self.metadata
+
         for key, val in self.instance.items():
-            if key != "_metadata":
-                if "energy" in key:
-                    row_dict.update(prop_to_row_mapper["energy"](key, val))
-                else:
-                    row_dict.update(prop_to_row_mapper[key](val))
+            if key == "method":
+                row_dict["method"] = val
+            elif key == "software":
+                row_dict["software"] = val
+            elif key == "_metadata":
+                continue
+            elif key == "configuration_ids":
+                row_dict["configuration_ids"] = val
+            elif "energy" in key:
+                row_dict.update(prop_to_row_mapper["energy"](key, val))
+            else:
+                row_dict.update(prop_to_row_mapper[key](val))
         row_dict["last_modified"] = dateutil.parser.parse(
             datetime.datetime.now(tz=datetime.timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%SZ"
@@ -647,36 +671,41 @@ class Property(dict):
         Hashes the Property by hashing its EDN.
         """
         _hash = sha512()
-        for p_name, p_dict in self.instance.items():
-            for key, val in p_dict.items():
-                if key in _ignored_fields:
-                    continue
-                try:
-                    hashval = np.round_(
-                        np.array(val["source-value"]), decimals=12
-                    ).data.tobytes()
-                except (TypeError, KeyError):
+        for p_name, p_val in self.instance.items():
+            if isinstance(p_val, str):
+                _hash.update(p_val.encode("utf-8"))
+            elif p_name == "configuration_ids":
+                continue
+            else:
+                for key, val in p_val.items():
+                    if key in _ignored_fields:
+                        continue
                     try:
-                        hashval = np.array(
-                            val["source-value"], dtype=STRING_DTYPE_SPECIFIER
+                        hashval = np.round_(
+                            np.array(val["source-value"]), decimals=12
                         ).data.tobytes()
                     except (TypeError, KeyError):
                         try:
                             hashval = np.array(
-                                val, dtype=STRING_DTYPE_SPECIFIER
+                                val["source-value"], dtype=STRING_DTYPE_SPECIFIER
                             ).data.tobytes()
-                        except Exception as e:
-                            raise PropertyHashError(
-                                "Could not hash key {}: {}. Error type {}".format(
-                                    key, val, type(e)
+                        except (TypeError, KeyError):
+                            try:
+                                hashval = np.array(
+                                    val, dtype=STRING_DTYPE_SPECIFIER
+                                ).data.tobytes()
+                            except Exception as e:
+                                raise PropertyHashError(
+                                    "Could not hash key {}: {}. Error type {}".format(
+                                        key, val, type(e)
+                                    )
                                 )
-                            )
 
-                _hash.update(hashval)
-                # What if values are identical but are added in different units?
-                # Should these hash to unique PIs?
-                if "source-unit" in val:
-                    _hash.update(str(val["source-unit"]).encode("utf-8"))
+                    _hash.update(hashval)
+                    # What if values are identical but are added in different units?
+                    # Should these hash to unique PIs?
+                    if "source-unit" in val:
+                        _hash.update(str(val["source-unit"]).encode("utf-8"))
 
         return int(_hash.hexdigest(), 16)
 
