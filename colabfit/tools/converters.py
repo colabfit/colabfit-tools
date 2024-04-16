@@ -337,6 +337,7 @@ class FolderConverter(BaseConverter):
         labels_field,
         verbose,
         glob_string,
+        exclude_pattern=None,
         **kwargs,
     ):
         """
@@ -356,6 +357,9 @@ class FolderConverter(BaseConverter):
 
         ai = 0
         files = list(Path(file_path).rglob(glob_string))
+        if exclude_pattern is not None:
+            exclude_files = list(Path(file_path).rglob(exclude_pattern))
+            files = [f for f in files if f not in exclude_files]
         nf = len(files)
         for fi, fpath in tqdm(enumerate(files)):
             new = self.reader(fpath, **kwargs)
