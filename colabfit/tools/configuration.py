@@ -402,7 +402,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         co_dict = _empty_dict_from_schema(config_schema)
         co_dict["hash"] = self._hash
         co_dict["id"] = self.id
-        co_dict["cell"] = self.cell.tolist()
+        co_dict["cell"] = self.cell.array
         co_dict["positions"] = self.positions
         co_dict["names"] = self.info[ATOMS_NAME_FIELD]
         co_dict["pbc"] = self.pbc
@@ -414,7 +414,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         co_dict["atomic_numbers"] = self.numbers
         co_dict["metadata"] = self.metadata
         co_dict.update(self.configuration_summary())
-        co_dict = stringify_lists(co_dict)
+        # co_dict = stringify_lists(co_dict)
         return co_dict
 
     @classmethod
