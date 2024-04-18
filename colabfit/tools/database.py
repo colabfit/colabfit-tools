@@ -155,20 +155,21 @@ class DataManager:
         self.prop_map = prop_map
         self.nprocs = nprocs
 
+    @staticmethod
     def _gather_co_po_rows(
-        self, prop_defs: list[dict], prop_map: dict, configs: list[AtomicConfiguration]
+        prop_defs: list[dict], prop_map: dict, configs: list[AtomicConfiguration]
     ):
         """Convert COs and DOs to Spark rows."""
         co_po_rows = []
         for config in configs:
             co_po_rows.append(
                 (
-                    config.to_spark_row(),
+                    config.spark_row,
                     Property.from_definition(
                         prop_defs,
                         configuration=config,
                         property_map=prop_map,
-                    ).to_spark_row(),
+                    ).spark_row,
                 )
             )
 
@@ -189,7 +190,6 @@ class DataManager:
             self.prop_defs,
             self.prop_map,
         )
-        print(type(config_chunks))
         return itertools.chain.from_iterable(pool.map(part_gather, list(config_chunks)))
 
         # For running without multiprocessing on notebook
@@ -208,15 +208,14 @@ class DataManager:
         Yields batches of CO-DO rows, preventing configuration iterator from
         being consumed all at once.
         """
-        chunk_size = 10000
+        chunk_size = 1000
         config_chunks = batched(self.configs, chunk_size)
 
-        print("type config chunks", type(config_chunks))
         with Pool(self.nprocs) as pool:
             while True:
 
                 config_batches = list(islice(config_chunks, self.nprocs))
-                print(f"type config batch single {type(config_batches[0])}")
+
                 if not config_batches:
                     break
                 else:
@@ -228,16 +227,19 @@ class DataManager:
 
         for co_po_batch in co_po_rows:
             co_rows, po_rows = list(zip(*co_po_batch))
-            loader.write_table(
-                co_rows,
-                _CONFIGS_COLLECTION,
-                config_schema,
-            )
-            loader.write_table(
-                po_rows,
-                _PROPOBJECT_COLLECTION,
-                property_object_schema,
-            )
+            if len(co_rows) == 0:
+                continue
+            else:
+                loader.write_table(
+                    co_rows,
+                    _CONFIGS_COLLECTION,
+                    config_schema,
+                )
+                loader.write_table(
+                    po_rows,
+                    _PROPOBJECT_COLLECTION,
+                    property_object_schema,
+                )
 
     def create_dataset(self, ds_id=None):
         if ds_id is None:
