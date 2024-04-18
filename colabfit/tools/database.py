@@ -189,7 +189,8 @@ class DataManager:
             self.prop_defs,
             self.prop_map,
         )
-        return itertools.chain.from_iterable(pool.map(part_gather, config_chunks))
+        print(type(config_chunks))
+        return itertools.chain.from_iterable(pool.map(part_gather, list(config_chunks)))
 
         # For running without multiprocessing on notebook
         # part_gather = partial(
@@ -215,6 +216,7 @@ class DataManager:
             while True:
 
                 config_batches = list(islice(config_chunks, self.nprocs))
+                print(f"type config batch single {type(config_batches[0])}")
                 if not config_batches:
                     break
                 else:

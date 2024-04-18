@@ -89,6 +89,24 @@ _ignored_fields = [
     "unrelaxed-periodic-cell-vector-2",
     "unrelaxed-periodic-cell-vector-3",
 ]
+_hash_ignored_fields = [
+    "id",
+    "hash",
+    "last_modified",
+    "configuration_ids",
+    "dataset_ids",
+]
+
+
+def _format_for_hash(v):
+    if isinstance(v, list):
+        return np.array(v).data.tobytes()
+    elif isinstance(v, str):
+        return v.encode("utf-8")
+    elif isinstance(v, float):
+        return np.array(v).data.tobytes()
+    else:
+        return v
 
 
 def _empty_dict_from_schema(schema):
@@ -357,6 +375,11 @@ class Property(dict):
                 If True, converts units to those expected by ColabFit. Default
                 is False
         """
+        self.unique_identifier_kw = [
+            k
+            for k in property_object_schema.fieldNames()
+            if k not in _hash_ignored_fields
+        ]
         self.instance = instance
         self.instance_json = json.dumps(instance)
         self.definitions = definitions
@@ -371,7 +394,12 @@ class Property(dict):
             self.convert_units()
 
         self.chemical_formula_hill = instance.pop("chemical_formula_hill")
+        self.spark_row = self.to_spark_row()
         self._hash = hash(self)
+        self.spark_row["hash"] = self._hash
+        self._id = f"PO_{self._hash}"
+        self.spark_row["id"] = self._id
+        self.spark_row = stringify_lists(self.spark_row)
 
     @property
     def instance(self):
@@ -619,10 +647,8 @@ class Property(dict):
                 "%Y-%m-%dT%H:%M:%SZ"
             )
         )
-        row_dict["hash"] = self._hash
-        row_dict["id"] = f"PO_{self._hash}"
         row_dict["chemical_formula_hill"] = self.chemical_formula_hill
-        row_dict = stringify_lists(row_dict)
+        # row_dict = stringify_lists(row_dict)
         return row_dict
 
     def convert_units(self):
@@ -667,46 +693,24 @@ class Property(dict):
             self.property_map[key]["units"] = self.instance[edn_key]["source-unit"]
 
     def __hash__(self):
-        """
-        Hashes the Property by hashing its EDN.
-        """
+
+        identifiers = [self.spark_row[i] for i in self.unique_identifier_kw]
         _hash = sha512()
-        for p_name, p_val in self.instance.items():
-            if isinstance(p_val, str):
-                _hash.update(p_val.encode("utf-8"))
-            elif p_name == "configuration_ids":
+        # # Do we need to worry about sorting atomic forces?
+        # # ordering = np.lexsort(
+        # #     (
+        # #         self.spark_row["positions"][:, 2],
+        # #         self.spark_row["positions"][:, 1],
+        # #         self.spark_row["positions"][:, 0],
+        # #     )
+        # # )
+        for k, v in zip(self.unique_identifier_kw, identifiers):
+
+            if v is None:
                 continue
             else:
-                for key, val in p_val.items():
-                    if key in _ignored_fields:
-                        continue
-                    try:
-                        hashval = np.round_(
-                            np.array(val["source-value"]), decimals=12
-                        ).data.tobytes()
-                    except (TypeError, KeyError):
-                        try:
-                            hashval = np.array(
-                                val["source-value"], dtype=STRING_DTYPE_SPECIFIER
-                            ).data.tobytes()
-                        except (TypeError, KeyError):
-                            try:
-                                hashval = np.array(
-                                    val, dtype=STRING_DTYPE_SPECIFIER
-                                ).data.tobytes()
-                            except Exception as e:
-                                raise PropertyHashError(
-                                    "Could not hash key {}: {}. Error type {}".format(
-                                        key, val, type(e)
-                                    )
-                                )
-
-                    _hash.update(hashval)
-                    # What if values are identical but are added in different units?
-                    # Should these hash to unique PIs?
-                    if "source-unit" in val:
-                        _hash.update(str(val["source-unit"]).encode("utf-8"))
-
+                _hash.update(bytes(k.encode("utf-8")))
+                _hash.update(bytes(_format_for_hash(v)))
         return int(_hash.hexdigest(), 16)
 
     def __eq__(self, other):
@@ -789,33 +793,6 @@ class Property(dict):
 
     def __repr__(self):
         return str(self)
-
-
-# Eric->Do we need to do this?
-# def update_edn_with_conf(edn, conf):
-#     edn["species"] = {"source-value": conf.get_chemical_symbols()}
-
-#     lattice = np.array(conf.get_cell()).tolist()
-
-#     edn["unrelaxed-periodic-cell-vector-1"] = {
-#         "source-value": lattice[0],
-#         "source-unit": "angstrom",
-#     }
-
-#     edn["unrelaxed-periodic-cell-vector-2"] = {
-#         "source-value": lattice[1],
-#         "source-unit": "angstrom",
-#     }
-
-#     edn["unrelaxed-periodic-cell-vector-3"] = {
-#         "source-value": lattice[2],
-#         "source-unit": "angstrom",
-#     }
-
-#     edn["unrelaxed-configuration-positions"] = {
-#         "source-value": conf.positions.tolist(),
-#         "source-unit": "angstrom",
-#     }
 
 
 class PropertyHashError(Exception):
