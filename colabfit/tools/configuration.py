@@ -64,13 +64,11 @@ def stringify_lists(row_dict):
     TODO: Remove when no longer necessary
     """
     for key, val in row_dict.items():
-        if (
-            isinstance(val, np.ndarray)
-            or isinstance(val, list)  # noqa W503
-            or isinstance(val, tuple)  # noqa W503
-            or isinstance(val, dict)  # noqa W503
-        ):
+        if isinstance(val, (list, tuple, dict, np.ndarray)):
             row_dict[key] = str(val)
+        # Below would convert numpy arrays to comma-separated
+        # elif isinstance(val, np.ndarray):
+        #     row_dict[key] = str(val.tolist())
     return row_dict
 
 
