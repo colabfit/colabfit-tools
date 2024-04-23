@@ -278,13 +278,11 @@ def stringify_lists(row_dict):
     TODO: Remove when no longer necessary
     """
     for key, val in row_dict.items():
-        if (
-            isinstance(val, np.ndarray)
-            or isinstance(val, list)  # noqa W503
-            or isinstance(val, tuple)  # noqa W503
-            or isinstance(val, dict)  # noqa W503
-        ):
+        if isinstance(val, (list, tuple, dict)):
             row_dict[key] = str(val)
+        # Below would convert numpy arrays to comma-separated
+        elif isinstance(val, np.ndarray):
+            row_dict[key] = str(val.tolist())
     return row_dict
 
 
@@ -358,6 +356,7 @@ class Property(dict):
         property_map=None,
         metadata=None,
         convert_units=False,
+        dataset_id=None,
     ):
         """
         Args:
@@ -381,7 +380,6 @@ class Property(dict):
             if k not in _hash_ignored_fields
         ]
         self.instance = instance
-        self.instance_json = json.dumps(instance)
         self.definitions = definitions
 
         if property_map is not None:
@@ -399,6 +397,8 @@ class Property(dict):
         self.spark_row["hash"] = self._hash
         self._id = f"PO_{self._hash}"
         self.spark_row["id"] = self._id
+        if dataset_id is not None:
+            self.spark_row["dataset_ids"] = [dataset_id]
         self.spark_row = stringify_lists(self.spark_row)
 
     @property
@@ -619,6 +619,7 @@ class Property(dict):
             property_map=property_map,
             instance=props_dict,
             metadata=pi_md,
+            dataset_id=configuration.dataset_ids,
             # convert_units=convert_units,
         )
 

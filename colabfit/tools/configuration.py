@@ -64,11 +64,11 @@ def stringify_lists(row_dict):
     TODO: Remove when no longer necessary
     """
     for key, val in row_dict.items():
-        if isinstance(val, (list, tuple, dict, np.ndarray)):
+        if isinstance(val, (list, tuple, dict)):
             row_dict[key] = str(val)
         # Below would convert numpy arrays to comma-separated
-        # elif isinstance(val, np.ndarray):
-        #     row_dict[key] = str(val.tolist())
+        elif isinstance(val, np.ndarray):
+            row_dict[key] = str(val.tolist())
     return row_dict
 
 
@@ -348,7 +348,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
     """
 
-    def __init__(self, names=None, co_md_map=None, **kwargs):
+    def __init__(self, names=None, co_md_map=None, dataset_id=None, **kwargs):
         """
         Constructs an AtomicConfiguration. Calls :meth:`BaseConfiguration.__init__()`
         and :meth:`ase.Atoms.__init__()`
@@ -384,11 +384,14 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             "pbc",
             "metadata",
         ]
+        self.dataset_id = dataset_id
         self.spark_row = self.to_spark_row()
         self._hash = hash(self)
         self.id = f"CO_{self._hash}"
         self.spark_row["id"] = self.id
         self.spark_row["hash"] = self._hash
+        if self.dataset_id is not None:
+            self.spark_row["dataset_ids"] = self.dataset_id
         self.spark_row = stringify_lists(self.spark_row)
         # Check for name conflicts in info/arrays; would cause bug in parsing
         if set(self.info.keys()).intersection(set(self.arrays.keys())):

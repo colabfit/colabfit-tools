@@ -1,6 +1,4 @@
-from hashlib import sha512
 import datetime
-import dateutil
 import itertools
 import json
 import os
@@ -8,8 +6,10 @@ import tempfile
 import warnings
 from copy import deepcopy
 from hashlib import sha512
-import pyspark.sql.functions as sf
+
+import dateutil
 import numpy as np
+import pyspark.sql.functions as sf
 from ase.units import create_units
 from pyspark.sql.types import (
     IntegerType,
@@ -19,6 +19,9 @@ from pyspark.sql.types import (
     StructType,
     TimestampType,
 )
+from unidecode import unidecode
+
+from colabfit import MAX_STRING_LENGTH
 
 dataset_schema = StructType(
     [
@@ -49,7 +52,9 @@ dataset_schema = StructType(
         StructField("description", StringType(), True),
         StructField("extended_id", StringType(), True),
         StructField("license", StringType(), True),
-        StructField("links", StringType(), True),  # ArrayType(StringType())
+        StructField("publication_link", StringType(), True),  # ArrayType(StringType())
+        StructField("data_link", StringType(), True),  # ArrayType(StringType()
+        StructField("other_links", StringType(), True),  # ArrayType(StringType()
         StructField("name", StringType(), True),
     ]
 )
@@ -60,6 +65,25 @@ def _empty_dict_from_schema(schema):
     for field in schema:
         empty_dict[field.name] = None
     return empty_dict
+
+
+def stringify_lists(row_dict):
+    """
+    Replace list/tuple fields with comma-separated strings.
+    Spark and Vast both support array columns, but the connector does not,
+    so keeping cell values in list format crashes the table.
+    TODO: Remove when no longer necessary
+    """
+    for key, val in row_dict.items():
+        if isinstance(val, (list, tuple, dict)):
+            row_dict[key] = str(val)
+        # Below would convert numpy arrays to comma-separated
+        elif isinstance(val, np.ndarray):
+            row_dict[key] = str(val.tolist())
+    return row_dict
+
+
+_hash_ignored_fields = ["id", "hash", "last_modified", "extended_id"]
 
 
 class Dataset:
@@ -123,32 +147,53 @@ class Dataset:
 
     def __init__(
         self,
-        configuration_set_ids,
-        property_ids,
-        name,
-        authors,
-        links,
-        description,
-        aggregated_info,
-        data_license="CC-BY-ND-4.0",
+        name: str,
+        authors: list[str],
+        publication_link: str,
+        data_link: str,
+        description: str,
+        other_links: list[str] = None,
+        ds_id: str = None,
+        # configuration_sets: list[str] = None, # not implemented
+        data_license: str = "CC-BY-ND-4.0",
     ):
         for auth in authors:
             if not "".join(auth.split(" ")[-1].replace("-", "")).isalpha():
                 raise RuntimeError(
-                    "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(
-                        auth
-                    )
+                    f"Bad author name '{auth}'. Author names "
+                    "can only contain [a-z][A-Z]"
                 )
 
-        self.configuration_set_ids = configuration_set_ids
-        self.property_ids = property_ids
         self.name = name
         self.authors = authors
-        self.links = links
+        self.publication_link = publication_link
+        self.data_link = data_link
+        self.other_links = other_links
         self.description = description
-        self.aggregated_info = aggregated_info
         self.data_license = data_license
+        self.ds_id = ds_id
+        self.unique_identifier_kw = [
+            k for k in dataset_schema.fieldNames() if k not in _hash_ignored_fields
+        ]
+        self.spark_row = self.to_spark_row()
         self._hash = hash(self)
+        self.id = f"DS_{self._hash}"
+
+        self.spark_row["id"] = self.ds_id
+        if ds_id is None:
+            raise ValueError("Dataset ID must be provided")
+        id_prefix = "_".join(
+            [
+                self.name,
+                "".join([unidecode(auth.split()[-1]) for auth in authors]),
+            ]
+        )
+        if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
+            id_prefix = id_prefix[: MAX_STRING_LENGTH - len(ds_id) - 2]
+            warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
+        extended_id = f"{id_prefix}__{ds_id}"
+        self.spark_row["extended_id"] = extended_id
+        self.spark_row = stringify_lists(self.spark_row)
 
     def to_spark_row(self, loader):
         """"""
@@ -156,9 +201,9 @@ class Dataset:
             table = f"{loader.prefix}.{loader.config_table}"
         else:
             table = loader.config_table
-        df = loader.spark.read.jdbc(
+        config_df = loader.spark.read.jdbc(
             url=loader.url, table=table, properties=loader.properties
-        ).fi
+        ).where(f"ds_id is {self.ds_id}")
 
         row_dict = _empty_dict_from_schema(dataset_schema)
         row_dict["last_modified"] = dateutil.parser.parse(
@@ -167,10 +212,10 @@ class Dataset:
             )
         )
         row_dict["nconfigurations"] = len(self.configuration_set_ids)
-        row_dict["nsites"] = df.agg({"nsites": "sum"}).first()[0]
+        row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
 
         row_dict["elements"] = sorted(
-            df.withColumn(
+            config_df.withColumn(
                 "elements_unstrung",
                 sf.from_json(sf.col("elements"), sf.ArrayType(sf.StringType())),
             )
@@ -181,17 +226,20 @@ class Dataset:
         )
         row_dict["nelements"] = len(row_dict["elements"])
         atomic = (
-            df.withColumn(
+            config_df.withColumn(
                 "atomic_unstrung",
                 sf.from_json(
-                    # Using regexp_replace bc. str(numpy.ndarray) is not comma-delimited
-                    sf.regexp_replace(
-                        sf.regexp_replace(sf.col("atomic_numbers"), "\[ ", "[").alias(
-                            "an_first_space_removed"
-                        ),
-                        "\s+",
-                        ", ",
-                    ),
+                    # commented lines use regexp_replace in case of using numpy.ndarray
+                    # because str(numpy.ndarray) is not comma-delimited
+                    # sf.regexp_replace(
+                    #     sf.regexp_replace(
+                    sf.col("atomic_numbers"),
+                    #           "\[ ", "[").alias(
+                    #         "an_first_space_removed"
+                    #     ),
+                    #     "\s+",
+                    #     ", ",
+                    # ),
                     sf.ArrayType(IntegerType()),
                 ),
             )
@@ -209,71 +257,84 @@ class Dataset:
             .collect()
         )
         row_dict["total_elements_ratios"] = dict(
-            sorted(atomic, key=lambda x: x["element"], reverse=False)
+            sorted(atomic, key=lambda x: x["element"])
         )
-        row_dict["nperiodic_dimensions"] = json.dumps(
-            self.aggregated_info["nperiodic_dimensions"]
+
+        row_dict["nperiodic_dimensions"] = config_df.agg(
+            sf.collect_set("nperiodic_dimensions")
+        ).collect()[0][0]
+
+        row_dict["dimension_types"] = (
+            config_df.withColumn(
+                "dims_unstrung",
+                sf.from_json(sf.col("dimension_types"), sf.ArrayType(sf.StringType())),
+            )
+            .select("dims_unstrung")
+            .agg(sf.collect_set("dims_unstrung"))
+            .collect()[0][0]
         )
-        row_dict["dimension_types"] = json.dumps(
-            self.aggregated_info["dimension_types"]
-        )
-        row_dict["potential_energy_count"] = self.aggregated_info[
-            "potential_energy_count"
-        ]
-        row_dict["atomic_forces_count"] = self.aggregated_info["atomic_forces_count"]
-        row_dict["cauchy_stress_count"] = self.aggregated_info["cauchy_stress_count"]
-        row_dict["free_energy_count"] = self.aggregated_info["free_energy_count"]
-        row_dict["authors"] = json.dumps(self.authors)
+
+        prop_df = loader.spark.read.jdbc(
+            url=loader.url,
+            table="public.property_objects",
+            properties=loader.properties,
+        ).where(f"dataset_ids is {self.ds_id}")
+        for prop in [
+            "atomization_energy",
+            "adsorption_energy",
+            "band_gap",
+            "formation_energy",
+            "free_energy",
+            "potential_energy",
+            "atomic_forces",
+            "cauchy_stress",
+        ]:
+            row_dict[f"{prop}_count"] = (
+                prop_df.select(prop).where(f"{prop} is not null").count()
+            )
+        row_dict["nproperty_objects"] = prop_df.count()
+        row_dict["nconfigurations"] = config_df.count()
+
+        row_dict["authors"] = str(self.authors)
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license
-        row_dict["links"] = json.dumps(self.links)
+        row_dict["publication_link"] = self.publication_link
+        row_dict["data_link"] = self.data_link
+        if self.other_links is not None:
+            row_dict["other_links"] = str(self.other_links)
         row_dict["name"] = self.name
 
-        return (
-            self._hash,
-            dateutil.parser.parse(
-                datetime.datetime.now(tz=datetime.timezone.utc).strftime(
-                    "%Y-%m-%dT%H:%M:%SZ"
-                )
-            ),
-            len(self.configuration_set_ids),
-            self.aggregated_info["nsites"],
-            self.aggregated_info["nelements"],
-            json.dumps(self.aggregated_info["elements"]),
-            json.dumps(self.aggregated_info["total_elements_ratios"]),
-            json.dumps(self.aggregated_info["nperiodic_dimensions"]),
-            json.dumps(self.aggregated_info["dimension_types"]),
-            self.aggregated_info["potential_energy_count"],
-            self.aggregated_info["atomic_forces_count"],
-            self.aggregated_info["cauchy_stress_count"],
-            self.aggregated_info["free_energy_count"],
-            json.dumps(self.authors),
-            self.description,
-            None,
-            self.data_license,
-            json.dumps(self.links),
-            self.name,
-        )
+        return row_dict
+
+    @staticmethod
+    def _format_for_hash(v):
+        if isinstance(v, list):
+            return np.array(v).data.tobytes()
+        elif isinstance(v, str):
+            return v.encode("utf-8")
+        elif isinstance(v, (int, float)):
+            return np.array(v).data.tobytes()
+        else:
+            return v
 
     def __hash__(self):
-        """Hashes the dataset using its configuration set and property IDs"""
-        ds_hash = sha512()
+        identifiers = [self.spark_row[i] for i in self.unique_identifier_kw]
+        _hash = sha512()
+        for k, v in zip(self.unique_identifier_kw, identifiers):
 
-        for i in sorted(self.configuration_set_ids):
-            ds_hash.update(str(i).encode("utf-8"))
-
-        for i in sorted(self.property_ids):
-            ds_hash.update(str(i).encode("utf-8"))
-
-        return int(ds_hash.hexdigest(), 16)
+            if v is None:
+                continue
+            else:
+                _hash.update(bytes(k.encode("utf-8")))
+                _hash.update(bytes(self._format_for_hash(v)))
+        return int(_hash.hexdigest(), 16)
 
     def __str__(self):
         return (
-            "Dataset(description='{}', nconfiguration_sets={}, nproperties={})".format(
-                self.description,
-                len(self.configuration_set_ids),
-                len(self.property_ids),
-            )
+            f"Dataset(description='{self.description}', "
+            # f"nconfiguration_sets={len(self.spark_row['configuration_sets'])}, "
+            f"nproperties={self.spark_row['nproperties']})"
+            f"nconfigurations={self.spark_row['nconfigurations']}"
         )
 
     def __repr__(self):

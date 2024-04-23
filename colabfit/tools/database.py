@@ -77,6 +77,8 @@ class PGDataLoader:
         url="jdbc:postgresql://localhost:5432/colabfit",
         database_name: str = None,
         env="./.env",
+        table_prefix: str = None,
+        ds_id=None,
         *args,
         **kwargs,
     ):
@@ -98,10 +100,21 @@ class PGDataLoader:
         }
         self.url = url
         self.database_name = database_name
+        self.table_prefix = table_prefix
+        self.ds_id = ds_id
         findspark.init()
 
         self.format = "jdbc"  # for postgres local
         load_dotenv(env)
+        # Commented out below may not be necessary/may not work,
+        # but may be used in cases like postgres, where a prefix like 'public.' is used
+        # if table_prefix is not None:
+        #     self.config_table = table_prefix + _CONFIGS_COLLECTION
+        #     self.config_set_table = table_prefix + _CONFIGSETS_COLLECTION
+        #     self.dataset_table = table_prefix + _DATASETS_COLLECTION
+        #     self.prop_def_table = table_prefix + _PROPDEFS_COLLECTION
+        #     self.prop_object_table = table_prefix + _PROPOBJECT_COLLECTION
+        # else:
         self.config_table = _CONFIGS_COLLECTION
         self.config_set_table = _CONFIGSETS_COLLECTION
         self.dataset_table = _DATASETS_COLLECTION
@@ -147,6 +160,7 @@ class DataManager:
         configs: list[AtomicConfiguration] = None,
         prop_defs: list[dict] = None,
         prop_map: dict = None,
+        dataset_id=None,
     ):
         self.configs = configs
         if isinstance(prop_defs, dict):
@@ -154,14 +168,21 @@ class DataManager:
         self.prop_defs = prop_defs
         self.prop_map = prop_map
         self.nprocs = nprocs
+        self.dataset_id = dataset_id
 
+    # TODO: consider moving where we assign dataset_id to configs
+    # TODO: properly manage multiple dataset-ids in case of hash/id collision
     @staticmethod
     def _gather_co_po_rows(
-        prop_defs: list[dict], prop_map: dict, configs: list[AtomicConfiguration]
+        prop_defs: list[dict],
+        prop_map: dict,
+        dataset_id,
+        configs: list[AtomicConfiguration],
     ):
         """Convert COs and DOs to Spark rows."""
         co_po_rows = []
         for config in configs:
+            config.dataset_ids = dataset_id
             co_po_rows.append(
                 (
                     config.spark_row,
@@ -186,9 +207,7 @@ class DataManager:
         print("number of chunks", len(config_chunks))
         print(len(config_chunks[0]))
         part_gather = partial(
-            self._gather_co_po_rows,
-            self.prop_defs,
-            self.prop_map,
+            self._gather_co_po_rows, self.prop_defs, self.prop_map, self.dataset_id
         )
         return itertools.chain.from_iterable(pool.map(part_gather, list(config_chunks)))
 
@@ -213,9 +232,7 @@ class DataManager:
 
         with Pool(self.nprocs) as pool:
             while True:
-
                 config_batches = list(islice(config_chunks, self.nprocs))
-
                 if not config_batches:
                     break
                 else:
