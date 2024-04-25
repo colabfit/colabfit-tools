@@ -1,81 +1,75 @@
 import datetime
-import dateutil
 import itertools
 import json
 import os
 import tempfile
 import warnings
 from copy import deepcopy
-from hashlib import sha512
 
+import dateutil
 import numpy as np
-from ase.units import create_units
-from pyspark.sql.types import (
-    BooleanType,
-    DoubleType,
-    StringType,
-    StructField,
-    StructType,
-    TimestampType,
-)
+
+# from ase.units import create_units
 
 from colabfit.tools.configuration import AtomicConfiguration
+from colabfit.tools.utilities import _empty_dict_from_schema, _hash, stringify_lists
+from colabfit.tools.schema import property_object_schema
 
-HASH_LENGTH = 12
-HASH_SHIFT = 0
-# HASH_SHIFT = 2**63
+# HASH_LENGTH = 12
+# HASH_SHIFT = 0
+# # HASH_SHIFT = 2**63
 
-ID_FORMAT_STRING = "{}_{}_{:0d}"
+# ID_FORMAT_STRING = "{}_{}_{:0d}"
 
-MAX_STRING_LENGTH = 255
-STRING_DTYPE_SPECIFIER = f"S{MAX_STRING_LENGTH}"
+# MAX_STRING_LENGTH = 255
+# STRING_DTYPE_SPECIFIER = f"S{MAX_STRING_LENGTH}"
 
-SHORT_ID_STRING_NAME = "colabfit-id"
-EXTENDED_ID_STRING_NAME = "extended-id"
+# SHORT_ID_STRING_NAME = "colabfit-id"
+# EXTENDED_ID_STRING_NAME = "extended-id"
 
-ATOMS_NAME_FIELD = "_name"
-ATOMS_LABELS_FIELD = "_labels"
-ATOMS_LAST_MODIFIED_FIELD = "_last_modified"
-ATOMS_CONSTRAINTS_FIELD = "_constraints"
+# ATOMS_NAME_FIELD = "_name"
+# ATOMS_LABELS_FIELD = "_labels"
+# ATOMS_LAST_MODIFIED_FIELD = "_last_modified"
+# ATOMS_CONSTRAINTS_FIELD = "_constraints"
 
-DEFAULT_PROPERTY_NAME = (
-    "configuration-nonorthogonal-periodic-3d-cell-fixed-particles-fixed"
-)
+# DEFAULT_PROPERTY_NAME = (
+#     "configuration-nonorthogonal-periodic-3d-cell-fixed-particles-fixed"
+# )
 
 
-UNITS = create_units("2014")
+# UNITS = create_units("2014")
 
-# Make GPa the base unit
-UNITS["bar"] = 1e-4  # bar to GPa
-UNITS["kilobar"] = 1e-1  # kilobar to GPa
-UNITS["pascal"] = 1e-9  # pascal to GPa
-UNITS["GPa"] = 1
+# # Make GPa the base unit
+# UNITS["bar"] = 1e-4  # bar to GPa
+# UNITS["kilobar"] = 1e-1  # kilobar to GPa
+# UNITS["pascal"] = 1e-9  # pascal to GPa
+# UNITS["GPa"] = 1
 
-UNITS["angstrom"] = UNITS["Ang"]
+# UNITS["angstrom"] = UNITS["Ang"]
 
-OPENKIM_PROPERTY_UNITS = {
-    "energy": "eV",
-    "forces": "eV/angstrom",
-    "stress": "GPa",
-    "unrelaxed-potential-energy": "eV",
-    "unrelaxed-potential-forces": "eV/angstrom",
-    "unrelaxed-cauchy-stress": "GPa",
-}
+# OPENKIM_PROPERTY_UNITS = {
+#     "energy": "eV",
+#     "forces": "eV/angstrom",
+#     "stress": "GPa",
+#     "unrelaxed-potential-energy": "eV",
+#     "unrelaxed-potential-forces": "eV/angstrom",
+#     "unrelaxed-cauchy-stress": "GPa",
+# }
 
-EDN_KEY_MAP = {
-    "energy": "unrelaxed-potential-energy",
-    "forces": "unrelaxed-potential-forces",
-    "stress": "unrelaxed-cauchy-stress",
-    "virial": "unrelaxed-cauchy-stress",
-}
+# EDN_KEY_MAP = {
+#     "energy": "unrelaxed-potential-energy",
+#     "forces": "unrelaxed-potential-forces",
+#     "stress": "unrelaxed-cauchy-stress",
+#     "virial": "unrelaxed-cauchy-stress",
+# }
 import kim_edn
 from kim_property import (
     check_instance_optional_key_marked_required_are_present,
     kim_property_create,
 )
+
 from kim_property.create import KIM_PROPERTIES
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
-from kim_property.instance import check_property_instances
 
 # These are fields that are related to the geometry of the atomic structure
 # or the OpenKIM Property Definition and shouldn't be used for equality checks
@@ -96,24 +90,6 @@ _hash_ignored_fields = [
     "configuration_ids",
     "dataset_ids",
 ]
-
-
-def _format_for_hash(v):
-    if isinstance(v, list):
-        return np.array(v).data.tobytes()
-    elif isinstance(v, str):
-        return v.encode("utf-8")
-    elif isinstance(v, float):
-        return np.array(v).data.tobytes()
-    else:
-        return v
-
-
-def _empty_dict_from_schema(schema):
-    empty_dict = {}
-    for field in schema:
-        empty_dict[field.name] = None
-    return empty_dict
 
 
 def energy_to_schema(prop_name, en_prop: dict):
@@ -209,81 +185,6 @@ def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
     if software is not None:
         software = software["source-value"]
     return json.dumps(gathered_fields), method, software
-
-
-property_object_schema = StructType(
-    [
-        StructField("id", StringType(), False),
-        StructField("hash", StringType(), False),
-        StructField("last_modified", TimestampType(), False),
-        StructField("configuration_ids", StringType(), True),  # ArrayType(StringType())
-        StructField("dataset_ids", StringType(), True),  # ArrayType(StringType())
-        StructField("metadata", StringType(), True),
-        StructField("software", StringType(), True),
-        StructField("method", StringType(), True),
-        StructField("chemical_formula_hill", StringType(), True),
-        StructField("potential_energy", DoubleType(), True),
-        StructField("potential_energy_unit", StringType(), True),
-        StructField("potential_energy_per_atom", BooleanType(), True),
-        StructField("potential_energy_reference", DoubleType(), True),
-        StructField("potential_energy_reference_unit", StringType(), True),
-        StructField("potential_energy_property_id", StringType(), True),
-        StructField(
-            "atomic_forces", StringType(), True
-        ),  # ArrayType(ArrayType(DoubleType()))
-        StructField("atomic_forces_unit", StringType(), True),
-        StructField("atomic_forces_property_id", StringType(), True),
-        StructField(
-            "cauchy_stress", StringType(), True
-        ),  # ArrayType(ArrayType(DoubleType()))
-        StructField("cauchy_stress_unit", StringType(), True),
-        StructField("cauchy_stress_volume_normalized", BooleanType(), True),
-        StructField("cauchy_stress_property_id", StringType(), True),
-        StructField("free_energy", DoubleType(), True),
-        StructField("free_energy_unit", StringType(), True),
-        StructField("free_energy_per_atom", BooleanType(), True),
-        StructField("free_energy_reference", DoubleType(), True),
-        StructField("free_energy_reference_unit", StringType(), True),
-        StructField("free_energy_property_id", StringType(), True),
-        StructField("band_gap", DoubleType(), True),
-        StructField("band_gap_unit", StringType(), True),
-        StructField("band_gap_property_id", StringType(), True),
-        StructField("formation_energy", DoubleType(), True),
-        StructField("formation_energy_unit", StringType(), True),
-        StructField("formation_energy_per_atom", BooleanType(), True),
-        StructField("formation_energy_reference", DoubleType(), True),
-        StructField("formation_energy_reference_unit", StringType(), True),
-        StructField("formation_energy_property_id", StringType(), True),
-        StructField("adsorption_energy", DoubleType(), True),
-        StructField("adsorption_energy_unit", StringType(), True),
-        StructField("adsorption_energy_per_atom", BooleanType(), True),
-        StructField("adsorption_energy_reference", DoubleType(), True),
-        StructField("adsorption_energy_reference_unit", StringType(), True),
-        StructField("adsorption_energy_property_id", StringType(), True),
-        StructField("atomization_energy", DoubleType(), True),
-        StructField("atomization_energy_unit", StringType(), True),
-        StructField("atomization_energy_per_atom", BooleanType(), True),
-        StructField("atomization_energy_reference", DoubleType(), True),
-        StructField("atomization_energy_reference_unit", StringType(), True),
-        StructField("atomization_energy_property_id", StringType(), True),
-    ]
-)
-
-
-def stringify_lists(row_dict):
-    """
-    Replace list/tuple fields with comma-separated strings.
-    Spark and Vast both support array columns, but the connector does not,
-    so keeping cell values in list format crashes the table.
-    TODO: Remove when no longer necessary
-    """
-    for key, val in row_dict.items():
-        if isinstance(val, (list, tuple, dict)):
-            row_dict[key] = str(val)
-        # Below would convert numpy arrays to comma-separated
-        elif isinstance(val, np.ndarray):
-            row_dict[key] = str(val.tolist())
-    return row_dict
 
 
 class PropertyParsingError(Exception):
@@ -619,7 +520,7 @@ class Property(dict):
             property_map=property_map,
             instance=props_dict,
             metadata=pi_md,
-            dataset_id=configuration.dataset_ids,
+            dataset_id=configuration.dataset_id,
             # convert_units=convert_units,
         )
 
@@ -695,24 +596,7 @@ class Property(dict):
 
     def __hash__(self):
 
-        identifiers = [self.spark_row[i] for i in self.unique_identifier_kw]
-        _hash = sha512()
-        # # Do we need to worry about sorting atomic forces?
-        # # ordering = np.lexsort(
-        # #     (
-        # #         self.spark_row["positions"][:, 2],
-        # #         self.spark_row["positions"][:, 1],
-        # #         self.spark_row["positions"][:, 0],
-        # #     )
-        # # )
-        for k, v in zip(self.unique_identifier_kw, identifiers):
-
-            if v is None:
-                continue
-            else:
-                _hash.update(bytes(k.encode("utf-8")))
-                _hash.update(bytes(_format_for_hash(v)))
-        return int(_hash.hexdigest(), 16)
+        return _hash(self.spark_row, self.unique_identifier_kw)
 
     def __eq__(self, other):
         """

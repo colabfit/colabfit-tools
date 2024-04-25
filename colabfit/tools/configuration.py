@@ -2,91 +2,19 @@ import datetime
 import json
 import re
 import time
-import dateutil
 from collections import defaultdict
 from functools import partial
 from hashlib import sha512
 from string import ascii_lowercase, ascii_uppercase
 
+import dateutil
 import numpy as np
 from ase import Atoms
-from Bio.SeqRecord import SeqRecord
-from pyspark.sql.types import (
-    IntegerType,
-    StringType,
-    StructField,
-    StructType,
-    TimestampType,
-)
 from tqdm import tqdm
 
 from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
-
-config_schema = StructType(
-    [
-        StructField("id", StringType(), False),
-        StructField("hash", StringType(), False),
-        StructField("last_modified", TimestampType(), False),
-        StructField("dataset_ids", StringType(), True),  # ArrayType(StringType())
-        StructField("metadata", StringType(), True),
-        StructField("chemical_formula_hill", StringType(), True),
-        StructField("chemical_formula_reduced", StringType(), True),
-        StructField("chemical_formula_anonymous", StringType(), True),
-        StructField("elements", StringType(), True),  # ArrayType(StringType())
-        StructField("elements_ratios", StringType(), True),  # ArrayType(IntegerType())
-        StructField("atomic_numbers", StringType(), True),  # ArrayType(IntegerType())
-        StructField("nsites", IntegerType(), True),
-        StructField("nelements", IntegerType(), True),
-        StructField("nperiodic_dimensions", IntegerType(), True),
-        StructField("cell", StringType(), True),  # ArrayType(ArrayType(DoubleType()))
-        StructField("dimension_types", StringType(), True),  # ArrayType(IntegerType())
-        StructField("pbc", StringType(), True),  # ArrayType(IntegerType())
-        StructField(
-            "positions", StringType(), True
-        ),  # ArrayType(ArrayType(DoubleType()))
-        StructField("names", StringType(), True),  # ArrayType(StringType())
-    ]
-)
-
-
-def _empty_dict_from_schema(schema):
-    empty_dict = {}
-    for field in schema:
-        empty_dict[field.name] = None
-    return empty_dict
-
-
-def stringify_lists(row_dict):
-    """
-    Replace list/tuple fields with comma-separated strings.
-    Spark and Vast both support array columns, but the connector does not,
-    so keeping cell values in list format crashes the table.
-    TODO: Remove when no longer necessary
-    """
-    for key, val in row_dict.items():
-        if isinstance(val, (list, tuple, dict)):
-            row_dict[key] = str(val)
-        # Below would convert numpy arrays to comma-separated
-        elif isinstance(val, np.ndarray):
-            row_dict[key] = str(val.tolist())
-    return row_dict
-
-
-def _format_for_hash(v):
-    if isinstance(v, np.ndarray):
-        if np.issubdtype(v.dtype, np.floating):
-            return np.round_(v.astype(np.float64), decimals=16)
-        elif np.issubdtype(v.dtype, np.integer):
-            return v.astype(np.int64)
-        elif np.issubdtype(v.dtype, bool):
-            return v.astype(np.int64)
-        else:
-            return v
-    elif isinstance(v, str):
-        return v.encode("utf-8")
-
-    else:
-        return v
+from colabfit.tools.schema import config_schema
+from colabfit.tools.utilities import _empty_dict_from_schema, _hash, stringify_lists
 
 
 class BaseConfigurationOld:
@@ -390,8 +318,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         self.id = f"CO_{self._hash}"
         self.spark_row["id"] = self.id
         self.spark_row["hash"] = self._hash
-        if self.dataset_id is not None:
-            self.spark_row["dataset_ids"] = self.dataset_id
+        self.spark_row["dataset_id"] = self.dataset_id
         self.spark_row = stringify_lists(self.spark_row)
         # Check for name conflicts in info/arrays; would cause bug in parsing
         if set(self.info.keys()).intersection(set(self.arrays.keys())):
@@ -617,36 +544,15 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         )
 
     def __hash__(self):
-
-        identifiers = [self.spark_row[i] for i in self.unique_identifier_kw]
-        _hash = sha512()
-        ordering = np.lexsort(
-            (
-                self.spark_row["positions"][:, 2],
-                self.spark_row["positions"][:, 1],
-                self.spark_row["positions"][:, 0],
-            )
-        )
-        for k, v in zip(self.unique_identifier_kw, identifiers):
-            if k in ["positions", "atomic_numbers"]:
-                _hash.update(bytes(_format_for_hash(v[ordering])))
-            elif k == "metadata":
-                if v is None:
-                    continue
-                else:
-                    _hash.update(bytes(_format_for_hash(v)))
-
-            else:
-                _hash.update(bytes(_format_for_hash(v)))
-
-        return int(_hash.hexdigest(), 16)
+        return _hash(self.spark_row, self.unique_identifier_kw)
 
 
 ###################################################
 class AtomicConfigurationOld(BaseConfigurationOld, Atoms):
     """
-    An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and an :class:`ase.Atoms`
-    object that is guaranteed to have the following fields in its :attr:`info` dictionary:
+    An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and a
+    :class:`ase.Atoms` object that is guaranteed to have the following fields in
+    its :attr:`info` dictionary:
 
     - :attr:`~colabfit.ATOMS_NAME_FIELD` = :code:"_name"
     - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
@@ -669,7 +575,8 @@ class AtomicConfigurationOld(BaseConfigurationOld, Atoms):
             names (str, list of str):
                 Names to be associated with a Configuration
             **kwargs:
-                Other keyword arguments that can be passed to :meth:`ase.Atoms.__init__()`
+                Other keyword arguments that can be passed to
+                :meth:`ase.Atoms.__init__()`
         """
 
         BaseConfiguration.__init__(self, names=names)
@@ -691,7 +598,8 @@ class AtomicConfigurationOld(BaseConfigurationOld, Atoms):
         # Check for name conflicts in info/arrays; would cause bug in parsing
         if set(self.info.keys()).intersection(set(self.arrays.keys())):
             raise RuntimeError(
-                "The same key should not be used in both Configuration.info and Configuration.arrays"
+                "The same key should not be used in both Configuration.info and "
+                "Configuration.arrays"
             )
 
     @property
@@ -729,7 +637,8 @@ class AtomicConfigurationOld(BaseConfigurationOld, Atoms):
         * :code:`dimension_types`: the periodic boundary condition
 
         Returns:
-            dict: Keys and their associated values that will be included under a Configuration's entry in the Database
+            dict: Keys and their associated values that will be included under a
+            Configuration's entry in the Database
         """
 
         atomic_species = self.get_chemical_symbols()
