@@ -101,6 +101,7 @@ dataset_schema = StructType(
         StructField("hash", LongType(), False),
         StructField("last_modified", TimestampType(), False),
         StructField("nconfigurations", IntegerType(), True),
+        StructField("nproperty_objects", IntegerType(), True),
         StructField("nsites", IntegerType(), True),
         StructField("nelements", IntegerType(), True),
         StructField("elements", StringType(), True),  # ArrayType(StringType())
@@ -115,6 +116,7 @@ dataset_schema = StructType(
         ),  # ArrayType(ArrayType(IntegerType()))
         StructField("atomization_energy_count", IntegerType(), True),
         StructField("adsorption_energy_count", IntegerType(), True),
+        StructField("formation_energy_count", IntegerType(), True),
         StructField("free_energy_count", IntegerType(), True),
         StructField("potential_energy_count", IntegerType(), True),
         StructField("atomic_forces_count", IntegerType(), True),
@@ -127,6 +129,7 @@ dataset_schema = StructType(
         StructField("publication_link", StringType(), True),  # ArrayType(StringType())
         StructField("data_link", StringType(), True),  # ArrayType(StringType()
         StructField("other_links", StringType(), True),  # ArrayType(StringType()
+        StructField("labels", StringType(), True),  # ArrayType(StringType()
         StructField("name", StringType(), True),
     ]
 )

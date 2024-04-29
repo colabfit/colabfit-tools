@@ -464,7 +464,9 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
     def set_dataset_id(self, dataset_id):
         self.dataset_id = dataset_id
-        self.spark_row["dataset_ids"] = [dataset_id]
+        self.spark_row["dataset_ids"] = str([dataset_id])
+        # TODO: Remove below when arrays can be passed to vastdb
+        # self.spark_row = stringify_lists(self.spark_row)
 
     def to_spark_row(self):
         co_dict = _empty_dict_from_schema(config_schema)

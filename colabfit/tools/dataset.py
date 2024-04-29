@@ -16,7 +16,6 @@ from colabfit.tools.utilities import (
     stringify_lists,
     ELEMENT_MAP,
 )
-from colabfit.tools.database import DataManager
 
 _hash_ignored_fields = ["id", "hash", "last_modified", "extended_id"]
 
@@ -87,9 +86,11 @@ class Dataset:
         publication_link: str,
         data_link: str,
         description: str,
-        loader: DataManager,
+        config_df,
+        prop_df,
         other_links: list[str] = None,
         dataset_id: str = None,
+        labels: list[str] = None,
         # configuration_sets: list[str] = [], # not implemented
         data_license: str = "CC-BY-ND-4.0",
     ):
@@ -111,10 +112,9 @@ class Dataset:
         self.unique_identifier_kw = [
             k for k in dataset_schema.fieldNames() if k not in _hash_ignored_fields
         ]
-        self.spark_row = self.to_spark_row(loader=loader)
+        self.spark_row = self.to_spark_row(config_df=config_df, prop_df=prop_df)
         self._hash = hash(self)
-        self.id = f"DS_{self._hash}"
-
+        self.spark_row["hash"] = self._hash
         self.spark_row["id"] = self.dataset_id
         if dataset_id is None:
             raise ValueError("Dataset ID must be provided")
@@ -129,25 +129,11 @@ class Dataset:
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
         extended_id = f"{id_prefix}__{dataset_id}"
         self.spark_row["extended_id"] = extended_id
+        self.spark_row["labels"] = labels
         self.spark_row = stringify_lists(self.spark_row)
 
-    def to_spark_row(self, loader):
+    def to_spark_row(self, config_df, prop_df):
         """"""
-        # Define tables -- postgres prefix may be i.e. "public"
-        if loader.table_prefix is not None:
-            config_table = f"{loader.table_prefix}.{loader.config_table}"
-            prop_table = f"{loader.table_prefix}.{loader.prop_table}"
-        else:
-            config_table = loader.config_table
-            prop_table = loader.prop_object_table
-
-        config_df = loader.spark.read.jdbc(
-            url=loader.url, table=config_table, properties=loader.properties
-        ).withColumn(
-            "ds_ids_unstrung",
-            sf.from_json(sf.col("dataset_ids"), sf.ArrayType(sf.StringType())),
-        )
-
         row_dict = _empty_dict_from_schema(dataset_schema)
         row_dict["last_modified"] = dateutil.parser.parse(
             datetime.datetime.now(tz=datetime.timezone.utc).strftime(
@@ -189,9 +175,9 @@ class Dataset:
             .select("element", "ratio")
             .collect()
         )
-        row_dict["total_elements_ratios"] = dict(
-            sorted(atomic, key=lambda x: x["element"])
-        )
+        row_dict["total_elements_ratios"] = [
+            x[1] for x in sorted(atomic, key=lambda x: x["element"])
+        ]
 
         row_dict["nperiodic_dimensions"] = config_df.agg(
             sf.collect_set("nperiodic_dimensions")
@@ -207,14 +193,6 @@ class Dataset:
             .collect()[0][0]
         )
 
-        prop_df = prop_df = loader.spark.read.jdbc(
-            url=loader.url,
-            table=prop_table,
-            properties=loader.properties,
-        ).withColumn(
-            "ds_ids_unstrung",
-            sf.from_json(sf.col("dataset_ids"), sf.ArrayType(sf.StringType())),
-        )
         for prop in [
             "atomization_energy",
             "adsorption_energy",
@@ -238,7 +216,7 @@ class Dataset:
         if self.other_links is not None:
             row_dict["other_links"] = str(self.other_links)
         row_dict["name"] = self.name
-
+        print(row_dict)
         return row_dict
 
     @staticmethod

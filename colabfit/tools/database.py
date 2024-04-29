@@ -12,18 +12,15 @@ from multiprocessing import Pool
 from types import GeneratorType
 
 import findspark
+import pyspark.sql.functions as sf
 from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
-from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
-
-# from kim_property.definition import check_property_definition
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType
 from tqdm import tqdm
 from unidecode import unidecode
-from pyspark.sql.types import StructType
 
-from colabfit import (  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,;
-    # MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,
+from colabfit import (  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,;; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,
     _CONFIGS_COLLECTION,
     _CONFIGSETS_COLLECTION,
     _DATASETS_COLLECTION,
@@ -31,10 +28,14 @@ from colabfit import (  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,;
     _PROPOBJECT_COLLECTION,
     ID_FORMAT_STRING,
 )
-from colabfit.tools.configuration import AtomicConfiguration, config_schema
-from colabfit.tools.property import Property, property_object_schema
+from colabfit.tools.configuration import AtomicConfiguration
+from colabfit.tools.dataset import Dataset
+from colabfit.tools.property import Property
+from colabfit.tools.schema import config_schema, dataset_schema, property_object_schema
 
-# from colabfit.tools.dataset import Dataset
+# from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
+
+# from kim_property.definition import check_property_definition
 
 
 def generate_string():
@@ -53,9 +54,6 @@ class PGDataLoader:
         database_name: str = None,
         env="./.env",
         table_prefix: str = None,
-        ds_id=None,
-        *args,
-        **kwargs,
     ):
         # self.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
         JARFILE = os.environ.get("CLASSPATH")
@@ -76,7 +74,6 @@ class PGDataLoader:
         self.url = url
         self.database_name = database_name
         self.table_prefix = table_prefix
-        self.ds_id = ds_id
         findspark.init()
 
         self.format = "jdbc"  # for postgres local
@@ -109,6 +106,7 @@ class PGDataLoader:
 
     def write_table(self, spark_rows: list[dict], table_name: str, schema: StructType):
         df = self.spark.createDataFrame(spark_rows, schema=schema)
+
         df.write.jdbc(
             url=self.url,
             table=table_name,
@@ -231,14 +229,69 @@ class DataManager:
             else:
                 loader.write_table(
                     co_rows,
-                    _CONFIGS_COLLECTION,
+                    loader.config_table,
                     config_schema,
                 )
                 loader.write_table(
                     po_rows,
-                    _PROPOBJECT_COLLECTION,
+                    loader.prop_object_table,
                     property_object_schema,
                 )
+
+    def create_write_dataset(
+        self,
+        loader,
+        name: str,
+        authors: list[str],
+        publication_link: str,
+        data_link: str,
+        description: str,
+        labels: list[str],
+    ):
+        if loader.table_prefix is not None:
+            config_table = f"{loader.table_prefix}.{loader.config_table}"
+            prop_table = f"{loader.table_prefix}.{loader.prop_table}"
+        else:
+            config_table = loader.config_table
+            prop_table = loader.prop_object_table
+
+        config_df = (
+            loader.spark.read.jdbc(
+                url=loader.url, table=config_table, properties=loader.properties
+            )
+            .withColumn(
+                "ds_ids_unstrung",
+                sf.from_json(sf.col("dataset_ids"), sf.ArrayType(sf.StringType())),
+            )
+            .filter(sf.array_contains("ds_ids_unstrung", self.dataset_id))
+            .drop("ds_ids_unstrung")
+        )
+        prop_df = (
+            loader.spark.read.jdbc(
+                url=loader.url,
+                table=prop_table,
+                properties=loader.properties,
+            )
+            .withColumn(
+                "ds_ids_unstrung",
+                sf.from_json(sf.col("dataset_ids"), sf.ArrayType(sf.StringType())),
+            )
+            .filter(sf.array_contains("ds_ids_unstrung", self.dataset_id))
+            .drop("ds_ids_unstrung")
+        )
+        dataset = Dataset(
+            config_df=config_df,
+            prop_df=prop_df,
+            name=name,
+            authors=authors,
+            publication_link=publication_link,
+            data_link=data_link,
+            description=description,
+            labels=labels,
+            dataset_id=self.dataset_id,
+        )
+        row = dataset.spark_row
+        loader.write_table([row], loader.dataset_table, schema=dataset_schema)
 
     @staticmethod
     def generate_ds_id():
