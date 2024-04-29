@@ -21,6 +21,10 @@ def _format_for_hash(v):
         return np.array(v).data.tobytes()
     elif isinstance(v, NoneType):
         return np.array(0).data.tobytes()
+    # Only use is for total_element_ratios, which may be implemented as an array instead
+    # Possibly remove
+    elif isinstance(v, dict):
+        return str(v).encode("utf-8")
     else:
         return v
 

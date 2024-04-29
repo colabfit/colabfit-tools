@@ -276,7 +276,13 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     - :attr:`~colabfit.ATOMS_LABELS_FIELD` = :code:"_labels"
     """
 
-    def __init__(self, names=None, co_md_map=None, dataset_id=None, **kwargs):
+    def __init__(
+        self,
+        names=None,
+        co_md_map=None,
+        #  dataset_id=None,
+        **kwargs,
+    ):
         """
         Constructs an AtomicConfiguration. Calls :meth:`BaseConfiguration.__init__()`
         and :meth:`ase.Atoms.__init__()`
@@ -312,13 +318,13 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             "pbc",
             "metadata",
         ]
-        self.dataset_id = dataset_id
+        # self.dataset_id = dataset_id
         self.spark_row = self.to_spark_row()
         self._hash = hash(self)
         self.id = f"CO_{self._hash}"
         self.spark_row["id"] = self.id
         self.spark_row["hash"] = self._hash
-        self.spark_row["dataset_id"] = self.dataset_id
+        # self.spark_row["dataset_ids"] = [self.dataset_id]
         self.spark_row = stringify_lists(self.spark_row)
         # Check for name conflicts in info/arrays; would cause bug in parsing
         if set(self.info.keys()).intersection(set(self.arrays.keys())):
@@ -455,6 +461,10 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             "nperiodic_dimensions": int(sum(self.get_pbc())),
             # 'species': species,  # Is this ever used?
         }
+
+    def set_dataset_id(self, dataset_id):
+        self.dataset_id = dataset_id
+        self.spark_row["dataset_ids"] = [dataset_id]
 
     def to_spark_row(self):
         co_dict = _empty_dict_from_schema(config_schema)

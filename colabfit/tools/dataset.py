@@ -7,6 +7,7 @@ import pyspark.sql.functions as sf
 from unidecode import unidecode
 from pyspark.sql.types import IntegerType, StringType
 
+
 from colabfit import MAX_STRING_LENGTH
 from colabfit.tools.schema import dataset_schema
 from colabfit.tools.utilities import (
@@ -15,6 +16,7 @@ from colabfit.tools.utilities import (
     stringify_lists,
     ELEMENT_MAP,
 )
+from colabfit.tools.database import DataManager
 
 _hash_ignored_fields = ["id", "hash", "last_modified", "extended_id"]
 
@@ -85,9 +87,10 @@ class Dataset:
         publication_link: str,
         data_link: str,
         description: str,
+        loader: DataManager,
         other_links: list[str] = None,
-        ds_id: str = None,
-        # configuration_sets: list[str] = None, # not implemented
+        dataset_id: str = None,
+        # configuration_sets: list[str] = [], # not implemented
         data_license: str = "CC-BY-ND-4.0",
     ):
         for auth in authors:
@@ -104,16 +107,16 @@ class Dataset:
         self.other_links = other_links
         self.description = description
         self.data_license = data_license
-        self.ds_id = ds_id
+        self.dataset_id = dataset_id
         self.unique_identifier_kw = [
             k for k in dataset_schema.fieldNames() if k not in _hash_ignored_fields
         ]
-        self.spark_row = self.to_spark_row()
+        self.spark_row = self.to_spark_row(loader=loader)
         self._hash = hash(self)
         self.id = f"DS_{self._hash}"
 
-        self.spark_row["id"] = self.ds_id
-        if ds_id is None:
+        self.spark_row["id"] = self.dataset_id
+        if dataset_id is None:
             raise ValueError("Dataset ID must be provided")
         id_prefix = "_".join(
             [
@@ -121,22 +124,22 @@ class Dataset:
                 "".join([unidecode(auth.split()[-1]) for auth in authors]),
             ]
         )
-        if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
-            id_prefix = id_prefix[: MAX_STRING_LENGTH - len(ds_id) - 2]
+        if len(id_prefix) > (MAX_STRING_LENGTH - len(dataset_id) - 2):
+            id_prefix = id_prefix[: MAX_STRING_LENGTH - len(dataset_id) - 2]
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
-        extended_id = f"{id_prefix}__{ds_id}"
+        extended_id = f"{id_prefix}__{dataset_id}"
         self.spark_row["extended_id"] = extended_id
         self.spark_row = stringify_lists(self.spark_row)
 
     def to_spark_row(self, loader):
         """"""
         # Define tables -- postgres prefix may be i.e. "public"
-        if loader.prefix is not None:
-            config_table = f"{loader.prefix}.{loader.config_table}"
-            prop_table = f"{loader.prefix}.{loader.prop_table}"
+        if loader.table_prefix is not None:
+            config_table = f"{loader.table_prefix}.{loader.config_table}"
+            prop_table = f"{loader.table_prefix}.{loader.prop_table}"
         else:
             config_table = loader.config_table
-            prop_table = loader.prop_table
+            prop_table = loader.prop_object_table
 
         config_df = loader.spark.read.jdbc(
             url=loader.url, table=config_table, properties=loader.properties
@@ -151,7 +154,7 @@ class Dataset:
                 "%Y-%m-%dT%H:%M:%SZ"
             )
         )
-        row_dict["nconfigurations"] = len(self.configuration_set_ids)
+        # row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
 
         row_dict["elements"] = sorted(
@@ -227,7 +230,6 @@ class Dataset:
             )
         row_dict["nproperty_objects"] = prop_df.count()
         row_dict["nconfigurations"] = config_df.count()
-
         row_dict["authors"] = str(self.authors)
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license

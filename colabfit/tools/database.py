@@ -144,6 +144,7 @@ class DataManager:
         self.prop_map = prop_map
         self.nprocs = nprocs
         self.dataset_id = dataset_id
+        print("Dataset ID:", self.dataset_id)
         if self.dataset_id is None:
             self.dataset_id = self.generate_ds_id()
 
@@ -159,15 +160,14 @@ class DataManager:
         """Convert COs and DOs to Spark rows."""
         co_po_rows = []
         for config in configs:
-            config.dataset_id = dataset_id
+            config.set_dataset_id(dataset_id)
             co_po_rows.append(
                 (
-                    config.spark_row.update({"dataset_ids": [dataset_id]}),
+                    config.spark_row,
                     Property.from_definition(
                         prop_defs,
                         configuration=config,
                         property_map=prop_map,
-                        dataset_id=dataset_id,
                     ).spark_row,
                 )
             )
@@ -241,9 +241,8 @@ class DataManager:
                 )
 
     @staticmethod
-    def generate_ds_id(ds_id=None):
-        if ds_id is None:
-            # Maybe check to see whether the DS ID already exists?
-            ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
-            print("Generated new DS ID:", ds_id)
+    def generate_ds_id():
+        # Maybe check to see whether the DS ID already exists?
+        ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
+        print("Generated new DS ID:", ds_id)
         return ds_id
