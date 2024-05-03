@@ -182,7 +182,7 @@ class BaseConfiguration:
             data type.
     """
 
-    def __init__(self, names=None):
+    def __init__(self):
         """
         Args:
             names (str, list of str):
@@ -191,12 +191,6 @@ class BaseConfiguration:
         self.unique_identifier_kw = []
         self.unique_identifier_kw_types = {}
         self._array_order = None
-
-        self.info = {}
-        if names is None:
-            self.info[ATOMS_NAME_FIELD] = set()
-        else:
-            self.info[ATOMS_NAME_FIELD] = set(list(names))
 
     # @property
     # def unique_identifiers(self):
@@ -278,9 +272,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
     def __init__(
         self,
-        names=None,
         co_md_map=None,
-        #  dataset_id=None,
+        info=None,
         **kwargs,
     ):
         """
@@ -288,20 +281,19 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         and :meth:`ase.Atoms.__init__()`
 
         Args:
-            names (str, list of str):
-                Names to be associated with a Configuration
+            co_md_map (dict) optional:
+                Property map of metadata to be used to set configuration metadata for a
+                configuration. This should be called at creation of AtomicConfiguration
+                in order to include metadata in the hash.
             **kwargs:
                 Other keyword arguments that can be passed to
                 :meth:`ase.Atoms.__init__()`
         """
-
-        BaseConfiguration.__init__(self, names=names)
+        BaseConfiguration.__init__(self)
         self.metadata = self.set_metadata(co_md_map)
 
-        kwargs["info"] = self.info
         if "atomic_numbers" in list(kwargs.keys()):
-            kwargs["numbers"] = kwargs["atomic_numbers"]
-            kwargs.pop("atomic_numbers")
+            kwargs["numbers"] = kwargs.pop("atomic_numbers")
 
         Atoms.__init__(self, **kwargs)
         self._array_order = np.lexsort(
@@ -318,10 +310,23 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
             "pbc",
             "metadata",
         ]
-        # self.dataset_id = dataset_id
+        self.info = info
+
+        names = self.info.pop(ATOMS_NAME_FIELD, None)
+        if isinstance(names, str):
+            self.names = [names]
+        else:
+            self.names = names
+
+        labels = self.info.pop(ATOMS_LABELS_FIELD, None)
+        if isinstance(labels, str):
+            self.labels = [labels]
+        else:
+            self.labels = labels
         self.spark_row = self.to_spark_row()
         self._hash = hash(self)
         self.id = f"CO_{self._hash}"
+
         self.spark_row["id"] = self.id
         self.spark_row["hash"] = self._hash
         # self.spark_row["dataset_ids"] = [self.dataset_id]
@@ -371,7 +376,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                 }
             else:
                 gathered_fields[md_field] = v
-        return json.dumps(gathered_fields)
+        return str(gathered_fields)
 
     def configuration_summary(self):
         """Extracts useful metadata from a Configuration
@@ -472,7 +477,8 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         co_dict = _empty_dict_from_schema(config_schema)
         co_dict["cell"] = self.cell.array
         co_dict["positions"] = self.positions
-        co_dict["names"] = self.info[ATOMS_NAME_FIELD]
+        co_dict["names"] = self.names
+        co_dict["labels"] = self.labels
         co_dict["pbc"] = self.pbc
         co_dict["last_modified"] = dateutil.parser.parse(
             datetime.datetime.now(tz=datetime.timezone.utc).strftime(

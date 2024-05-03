@@ -31,7 +31,11 @@ config_schema = StructType(
         StructField(
             "positions", StringType(), True
         ),  # ArrayType(ArrayType(DoubleType()))
-        StructField("names", StringType(), True),  # ArrayType(StringType())
+        StructField("names", StringType(), True),  # ArrayType(StringType()),
+        StructField("labels", StringType(), True),  # ArrayType(StringType())
+        StructField(
+            "configuration_set_ids", StringType(), True
+        ),  # ArrayType(StringType())
     ]
 )
 
@@ -131,5 +135,17 @@ dataset_schema = StructType(
         StructField("other_links", StringType(), True),  # ArrayType(StringType()
         StructField("labels", StringType(), True),  # ArrayType(StringType()
         StructField("name", StringType(), True),
+    ]
+)
+configuration_set_schema = StructType(
+    [
+        StructField("id", StringType(), False),
+        StructField("hash", LongType(), False),
+        StructField("last_modified", TimestampType(), False),
+        StructField("nconfigurations", IntegerType(), True),
+        StructField("nsites", IntegerType(), True),
+        StructField("nelements", IntegerType(), True),
+        StructField("elements", StringType(), True),  # ArrayType(StringType()),
+        StructField("dataset_id", StringType(), True),  # ArrayType(DoubleType()),
     ]
 )

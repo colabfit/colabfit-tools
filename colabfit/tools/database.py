@@ -13,6 +13,7 @@ from types import GeneratorType
 
 import findspark
 import pyspark.sql.functions as sf
+from pyspark.sql.types import ArrayType, StringType
 from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
 from pyspark.sql import SparkSession
@@ -30,8 +31,14 @@ from colabfit import (  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,;; MAX_STRI
 )
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.dataset import Dataset
+from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.property import Property
-from colabfit.tools.schema import config_schema, dataset_schema, property_object_schema
+from colabfit.tools.schema import (
+    config_schema,
+    dataset_schema,
+    property_object_schema,
+    configuration_set_schema,
+)
 
 # from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
@@ -114,6 +121,15 @@ class PGDataLoader:
             properties=self.properties,
         )
 
+    def update_rows(self, spark_rows: list[dict], table_name: str, schema: StructType):
+        df = self.spark.createDataFrame(spark_rows, schema=schema)
+        df.write.jdbc(
+            url=self.url,
+            table=table_name,
+            mode="overwrite",
+            properties=self.properties,
+        )
+
 
 def batched(configs, n):
     "Batch data into tuples of length n. The last batch may be shorter."
@@ -180,8 +196,7 @@ class DataManager:
         Convert COs and DOs to Spark rows using multiprocessing Pool.
         Returns a batch of tuples of (configuration_row, property_row).
         """
-        # print("number of chunks", len(config_chunks))
-        # print(len(config_chunks[0]))
+
         part_gather = partial(
             self._gather_co_po_rows, self.prop_defs, self.prop_map, self.dataset_id
         )
@@ -237,6 +252,58 @@ class DataManager:
                     loader.prop_object_table,
                     property_object_schema,
                 )
+
+    def create_configuration_set(
+        self,
+        loader,
+        name: str,
+        description: str,
+        name_label_match: list[tuple],
+        dataset_id: str,
+    ):
+        config_df = (
+            loader.spark.read.jdbc(
+                url=loader.url, table=loader.config_table, properties=loader.properties
+            )
+            .withColumn(
+                "names_unstrung", sf.from_json(sf.col("names"), ArrayType(StringType()))
+            )
+            .withColumn(
+                "labels_unstrung",
+                sf.from_json(sf.col("labels"), ArrayType(StringType())),
+            )
+            .withColumn(
+                "dataset_ids_unstrung",
+                sf.from_json("dataset_ids", ArrayType(StringType())),
+            )
+            .drop("names", "labels", "dataset_ids")
+            .withColumnRenamed("names_unstrung", "names")
+            .withColumnRenamed("labels_unstrung", "labels")
+            .withColumnRenamed("dataset_ids_unstrung", "dataset_ids")
+            .filter(sf.array_contains(sf.col("dataset_ids"), dataset_id))
+        )
+
+        for i, (names_match, label_match) in enumerate(name_label_match):
+            if names_match:
+                config_set_query = config_df.withColumn(
+                    "names_exploded", sf.explode(sf.col("names"))
+                ).filter(
+                    sf.regexp_like(sf.col("names_exploded"), sf.lit(rf"{names_match}"))
+                )
+            if label_match:
+                config_set_query = config_set_query.withColumn(
+                    "labels_exploded", sf.explode(sf.col("labels"))
+                ).filter(
+                    sf.regexp_like(sf.col("labels_exploded"), sf.lit(rf"{label_match}"))
+                )
+            co_ids = [x[0] for x in config_set_query.select("id").distinct().collect()]
+            loader.spark.write.jdbc(
+                url=loader.url, table=loader.config_table, properties=loader.properties
+            )
+            row = config_set.spark_row
+            loader.write_table(
+                [row], loader.config_set_table, schema=configuration_set_schema
+            )
 
     def create_write_dataset(
         self,

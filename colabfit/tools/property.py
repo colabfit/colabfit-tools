@@ -530,7 +530,6 @@ class Property(dict):
         """
         row_dict = _empty_dict_from_schema(property_object_schema)
         row_dict["metadata"] = self.metadata
-
         for key, val in self.instance.items():
             if key == "method":
                 row_dict["method"] = val

@@ -12,7 +12,6 @@ from colabfit import MAX_STRING_LENGTH
 from colabfit.tools.schema import dataset_schema
 from colabfit.tools.utilities import (
     _empty_dict_from_schema,
-    _hash,
     stringify_lists,
     ELEMENT_MAP,
 )
@@ -154,7 +153,7 @@ class Dataset:
             .take(1)[0][0]
         )
         row_dict["nelements"] = len(row_dict["elements"])
-        atomic = (
+        atomic_ratios_df = (
             config_df.withColumn(
                 "atomic_unstrung",
                 sf.from_json(
@@ -176,7 +175,7 @@ class Dataset:
             .collect()
         )
         row_dict["total_elements_ratios"] = [
-            x[1] for x in sorted(atomic, key=lambda x: x["element"])
+            x[1] for x in sorted(atomic_ratios_df, key=lambda x: x["element"])
         ]
 
         row_dict["nperiodic_dimensions"] = config_df.agg(
@@ -231,7 +230,7 @@ class Dataset:
             return v
 
     def __hash__(self):
-        return _hash(self.spark_row, self.unique_identifier_kw)
+        return hash(self.name)
 
     def __str__(self):
         return (
