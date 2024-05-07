@@ -10,7 +10,7 @@ from functools import partial
 from itertools import islice
 from multiprocessing import Pool
 from types import GeneratorType
-
+import psycopg
 import findspark
 import pyspark.sql.functions as sf
 from pyspark.sql.types import ArrayType, StringType
@@ -129,6 +129,27 @@ class PGDataLoader:
             mode="overwrite",
             properties=self.properties,
         )
+
+    def update_co_rows_cs_id(self, co_ids: list[str], cs_id: str):
+        with psycopg.connect(
+            """dbname=colabfit user=%s password=%s host=localhost port=5432"""
+            % (
+                self.user,
+                self.password,
+            )
+        ) as conn:
+            cur = conn.execute(
+                """UPDATE configurations
+                        SET configuration_set_ids = concat(%s::text, rtrim(ltrim(replace(configuration_set_ids,%s,''), '['),']'), %s::text)""",
+                (
+                    "[",
+                    f", {cs_id}",
+                    f", {cs_id}]",
+                ),
+                # WHERE id = ANY(%s)""",
+                # (cs_id, co_ids),
+            )
+            conn.commit()
 
 
 def batched(configs, n):
@@ -256,8 +277,9 @@ class DataManager:
     def create_configuration_set(
         self,
         loader,
-        name: str,
-        description: str,
+        # below args in order:
+        # [config-name-regex-pattern], [config-label-regex-pattern], \
+        # [config-set-name], [config-set-description]
         name_label_match: list[tuple],
         dataset_id: str,
     ):
@@ -283,7 +305,9 @@ class DataManager:
             .filter(sf.array_contains(sf.col("dataset_ids"), dataset_id))
         )
 
-        for i, (names_match, label_match) in enumerate(name_label_match):
+        for i, (names_match, label_match, cs_name, cs_desc) in enumerate(
+            name_label_match
+        ):
             if names_match:
                 config_set_query = config_df.withColumn(
                     "names_exploded", sf.explode(sf.col("names"))
@@ -297,13 +321,16 @@ class DataManager:
                     sf.regexp_like(sf.col("labels_exploded"), sf.lit(rf"{label_match}"))
                 )
             co_ids = [x[0] for x in config_set_query.select("id").distinct().collect()]
-            loader.spark.write.jdbc(
-                url=loader.url, table=loader.config_table, properties=loader.properties
+            config_set = ConfigurationSet(
+                name=cs_name,
+                description=cs_desc,
+                config_df=config_df.filter(sf.col("id").isin(co_ids)),
             )
             row = config_set.spark_row
             loader.write_table(
                 [row], loader.config_set_table, schema=configuration_set_schema
             )
+            loader.update_co_rows_cs_id(co_ids, config_set.spark_row["id"])
 
     def create_write_dataset(
         self,
