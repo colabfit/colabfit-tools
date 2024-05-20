@@ -6,7 +6,8 @@ import tempfile
 import warnings
 from copy import deepcopy
 
-import dateutil
+# import dateutil
+import dateutil.parser
 import numpy as np
 
 # from ase.units import create_units
