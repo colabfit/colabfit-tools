@@ -22,13 +22,14 @@ from tqdm import tqdm
 from unidecode import unidecode
 
 from colabfit import (  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,;; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,
-    _CONFIGS_COLLECTION,
-    _CONFIGSETS_COLLECTION,
-    _DATASETS_COLLECTION,
-    _PROPDEFS_COLLECTION,
-    _PROPOBJECT_COLLECTION,
+    # _CONFIGS_COLLECTION,
+    # _CONFIGSETS_COLLECTION,
+    # _DATASETS_COLLECTION,
+    # _PROPOBJECT_COLLECTION,
     ID_FORMAT_STRING,
 )
+
+
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.dataset import Dataset
 from colabfit.tools.configuration_set import ConfigurationSet
@@ -40,6 +41,11 @@ from colabfit.tools.schema import (
     configuration_set_schema,
 )
 
+_CONFIGS_COLLECTION = "gpw_test_configs"
+_CONFIGSETS_COLLECTION = "gpw_test_configsets"
+_DATASETS_COLLECTION = "gpw_test_datasets"
+_PROPOBJECT_COLLECTION = "gpw_test_propobjects"
+
 # from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 # from kim_property.definition import check_property_definition
@@ -47,6 +53,27 @@ from colabfit.tools.schema import (
 
 def generate_string():
     return get_random_string(12, allowed_chars=string.ascii_lowercase + "1234567890")
+
+
+class SparkDataLoader:
+
+    def __init__(self, table_prefix: str = "ndb.colabfit.dev"):
+        self.table_prefix = table_prefix
+        self.spark = SparkSession.builder.appName("ColabfitDataLoader").getOrCreate()
+        self.spark.sparkContext.setLogLevel("WARN")
+        self.config_table = f"{self.table_prefix}.{_CONFIGS_COLLECTION}"
+        self.config_set_table = f"{self.table_prefix}.{_CONFIGSETS_COLLECTION}"
+        self.dataset_table = f"{self.table_prefix}.{_DATASETS_COLLECTION}"
+        self.prop_object_table = f"{self.table_prefix}.{_PROPOBJECT_COLLECTION}"
+
+    def write_table(self, spark_rows: list[dict], table_name: str, schema: StructType):
+        """Include self.table_prefix in the table name when passed to this function"""
+        df = self.spark.createDataFrame(spark_rows, schema=schema)
+        # df.map(stringify_lists)
+        df.write.mode("append").saveAsTable(table_name)
+
+    def stop_spark(self):
+        self.spark.stop()
 
 
 class PGDataLoader:
@@ -97,7 +124,6 @@ class PGDataLoader:
         self.config_table = _CONFIGS_COLLECTION
         self.config_set_table = _CONFIGSETS_COLLECTION
         self.dataset_table = _DATASETS_COLLECTION
-        self.prop_def_table = _PROPDEFS_COLLECTION
         self.prop_object_table = _PROPOBJECT_COLLECTION
 
     def load_data(

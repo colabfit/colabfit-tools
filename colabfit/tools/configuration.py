@@ -312,7 +312,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         ]
         self.info = info
 
-        names = self.info.pop(ATOMS_NAME_FIELD, None)
+        names = self.info[ATOMS_NAME_FIELD]
         if isinstance(names, str):
             self.names = [names]
         else:
@@ -918,9 +918,7 @@ class AtomicConfigurationOld(BaseConfigurationOld, Atoms):
 
     def __str__(self):
         ase_str = super().__str__()
-        return "AtomicConfiguration(name={}, {})".format(
-            self.info[ATOMS_NAME_FIELD], ase_str[20:-1]
-        )
+        return "AtomicConfiguration(name={}, {})".format(self.names, ase_str[20:-1])
 
 
 ###################################################
