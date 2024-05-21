@@ -44,7 +44,7 @@ from colabfit.tools.schema import (
     configuration_set_schema,
     configuration_set_df_schema,
 )
-from colabfit.tools.utilities import unstringify
+from colabfit.tools.utilities import unstringify, stringify_lists
 
 _CONFIGS_COLLECTION = "gpw_test_configs"
 _CONFIGSETS_COLLECTION = "gpw_test_configsets"
@@ -72,8 +72,11 @@ class SparkDataLoader:
 
     def write_table(self, spark_rows: list[dict], table_name: str, schema: StructType):
         """Include self.table_prefix in the table name when passed to this function"""
-        df = self.spark.createDataFrame(spark_rows, schema=schema)
-        # df.map(stringify_lists)
+        df = (
+            self.spark.sparkContext.parallelize(spark_rows)
+            .map(stringify_lists)
+            .toDF(schema)
+        )
         df.write.mode("append").saveAsTable(table_name)
 
     def read_table(self, table_name: str, unstring: bool = False):
@@ -82,10 +85,8 @@ class SparkDataLoader:
         Ex: loader.read_table(loader.config_table, unstring=True)
         Arguments:
             table_name {str} -- Name of the table to read from database
-
         Keyword Arguments:
             unstring {bool} -- Convert stringified lists to lists (default: {False})
-
         Returns:
             DataFrame -- Spark DataFrame
         """
@@ -155,7 +156,7 @@ class PGDataLoader:
         self.dataset_table = _DATASETS_COLLECTION
         self.prop_object_table = _PROPOBJECT_COLLECTION
 
-    def load_data(
+    def read_table(
         self,
     ):
         pass

@@ -66,6 +66,7 @@ def stringify_lists(row_dict):
     Replace list/tuple fields with comma-separated strings.
     Spark and Vast both support array columns, but the connector does not,
     so keeping cell values in list format crashes the table.
+    Use with dicts
     TODO: Remove when no longer necessary
     """
     for key, val in row_dict.items():
@@ -84,6 +85,19 @@ def unstringify(row):
         if isinstance(val, str) and len(val) > 0 and val[0] in ["{", "["]:
             dval = eval(row[key])
             row_dict[key] = dval
+    new_row = Row(**row_dict)
+    return new_row
+
+
+def stringify_rows(row):
+    """
+    Convert list/tuple fields to comma-separated strings.
+    Use with rdd rows
+    Should be mapped as DataFrame.rdd.map(stringify_rows)"""
+    row_dict = row.asDict()
+    for key, val in row_dict.items():
+        if isinstance(val, (list, tuple, dict)):
+            row_dict[key] = str(val)
     new_row = Row(**row_dict)
     return new_row
 
