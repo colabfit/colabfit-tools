@@ -36,10 +36,15 @@ from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.property import Property
 from colabfit.tools.schema import (
     config_schema,
+    config_df_schema,
     dataset_schema,
+    dataset_df_schema,
     property_object_schema,
+    property_object_df_schema,
     configuration_set_schema,
+    configuration_set_df_schema,
 )
+from colabfit.tools.utilities import unstringify
 
 _CONFIGS_COLLECTION = "gpw_test_configs"
 _CONFIGSETS_COLLECTION = "gpw_test_configsets"
@@ -56,7 +61,6 @@ def generate_string():
 
 
 class SparkDataLoader:
-
     def __init__(self, table_prefix: str = "ndb.colabfit.dev"):
         self.table_prefix = table_prefix
         self.spark = SparkSession.builder.appName("ColabfitDataLoader").getOrCreate()
@@ -71,6 +75,31 @@ class SparkDataLoader:
         df = self.spark.createDataFrame(spark_rows, schema=schema)
         # df.map(stringify_lists)
         df.write.mode("append").saveAsTable(table_name)
+
+    def read_table(self, table_name: str, unstring: bool = False):
+        """
+        Include self.table_prefix in the table name when passed to this function.
+        Ex: loader.read_table(loader.config_table, unstring=True)
+        Arguments:
+            table_name {str} -- Name of the table to read from database
+
+        Keyword Arguments:
+            unstring {bool} -- Convert stringified lists to lists (default: {False})
+
+        Returns:
+            DataFrame -- Spark DataFrame
+        """
+        schema_dict = {
+            self.config_table: config_df_schema,
+            self.config_set_table: configuration_set_df_schema,
+            self.dataset_table: dataset_df_schema,
+            self.prop_object_table: property_object_df_schema,
+        }
+        if unstring:
+            df = self.spark.read.table(table_name)
+            return df.rdd.map(unstringify).toDF(schema_dict[table_name])
+        else:
+            return self.spark.read.table(table_name)
 
     def stop_spark(self):
         self.spark.stop()
@@ -276,13 +305,13 @@ class DataManager:
                 else:
                     yield list(self.gather_co_po_rows_pool(config_batches, pool))
 
-    def load_data_to_pg_in_batches(self, loader: PGDataLoader):
-        """Load data to PostgreSQL database in batches."""
+    def load_data_to_pg_in_batches(self, loader):
+        """Load data to PostgreSQL or VastDB database in batches."""
         co_po_rows = self.gather_co_po_in_batches()
 
         for co_po_batch in tqdm(
             co_po_rows,
-            desc="Loading data to PostgreSQL: ",
+            desc="Loading data to database: ",
             unit="batch",
         ):
             co_rows, po_rows = list(zip(*co_po_batch))

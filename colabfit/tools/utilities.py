@@ -1,6 +1,7 @@
 import numpy as np
 from hashlib import sha512
 from types import NoneType
+from pyspark.sql import Row
 
 
 def _format_for_hash(v):
@@ -74,6 +75,17 @@ def stringify_lists(row_dict):
         elif isinstance(val, np.ndarray):
             row_dict[key] = str(val.tolist())
     return row_dict
+
+
+def unstringify(row):
+    """Should be mapped as DataFrame.rdd.map(unstringify)"""
+    row_dict = row.asDict()
+    for key, val in row_dict.items():
+        if isinstance(val, str) and len(val) > 0 and val[0] in ["{", "["]:
+            dval = eval(row[key])
+            row_dict[key] = dval
+    new_row = Row(**row_dict)
+    return new_row
 
 
 ELEMENT_MAP = {

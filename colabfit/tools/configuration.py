@@ -481,9 +481,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         co_dict["labels"] = self.labels
         co_dict["pbc"] = self.pbc
         co_dict["last_modified"] = dateutil.parser.parse(
-            datetime.datetime.now(tz=datetime.timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
+            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
         co_dict["atomic_numbers"] = self.numbers
         co_dict["metadata"] = self.metadata
