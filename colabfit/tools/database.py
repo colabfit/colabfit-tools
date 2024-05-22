@@ -70,6 +70,24 @@ class SparkDataLoader:
         self.dataset_table = f"{self.table_prefix}.{_DATASETS_COLLECTION}"
         self.prop_object_table = f"{self.table_prefix}.{_PROPOBJECT_COLLECTION}"
 
+    def get_duplicate_rows(self, table_name, ids):
+        return self.spark.read.table(table_name).where(sf.col("id").isin(ids))
+
+    def add_elem_to_col(df, col_name, elem):
+        df_added_elem = df.withColumn(
+            col_name,
+            sf.when(
+                sf.col(col_name).isNull(), sf.array().cast(ArrayType(StringType()))
+            ).otherwise(sf.col(col_name)),
+        )
+        df_added_elem = df_added_elem.withColumn(
+            col_name, sf.array_union(sf.col(col_name), sf.array(sf.lit(elem)))
+        )
+        return df_added_elem
+
+    def delete_from_table(self, table_name, ids):
+        self.spark.sql(f"delete from {table_name} where id in {tuple(ids)}")
+
     def write_table(self, spark_rows: list[dict], table_name: str, schema: StructType):
         """Include self.table_prefix in the table name when passed to this function"""
         df = (
