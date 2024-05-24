@@ -97,10 +97,55 @@ class SparkDataLoader:
         )
         df.write.mode("append").saveAsTable(table_name)
 
+    def write_duplicates(self, table_name, df_to_update, update_ids):
+        """Writes rows to table where id already exists"""
+
+        tmp_table_name = f"{table_name}_tmp"
+        try:
+            print("writing to tmp table")
+            df_to_update.write.mode("overwrite").saveAsTable(tmp_table_name)
+        except Exception as e:
+            raise Exception(
+                f"Error writing to temporary table: {tmp_table_name} --> {e}"
+            )
+        try:
+            print("deleting duplicates from table")
+            self.delete_from_table(self, table_name, update_ids)
+            print("writing new rows to table")
+            self.spark.sql(f"INSERT INTO {table_name} SELECT * FROM {tmp_table_name}")
+            # OR
+            # df_to_update.write.mode('append').saveAsTable(table_name)
+        except Exception as e:
+            raise Exception(f"Error writing to table: {table_name} --> {e}")
+        print("dropping tmp table")
+        self.spark.sql(f"drop table {tmp_table_name}")
+        return
+
+    # edit_schema should be *_df_* schema
     def find_dups_append_elem(
-        self, table_name, ids, col, elem, edit_schema, write_schema
+        self, table_name, ids, cols, elems, edit_schema, write_schema
     ):
-        """Returns tuple(non-duplicate-ids, duplicate-ids)"""
+        """Returns tuple(non-duplicate-ids, duplicate-ids)
+
+        Args:
+        self: SparkDataLoader instance
+        table_name: str, name of table to search
+        ids: list, ids to search for
+        cols: str or list[str], column name to append elem to
+        elems: str or list[str], element to append to column
+        edit_schema: StructType, schema of DataFrame with [col] type ArrayType(StringType)
+            wherever elem will be appended
+        write_schema: StructType, schema of DataFrame with stringified array columns
+
+        Returns:
+        tuple: (list, list)
+        1. Row ids not duplicated in table
+        2. Row ids duplicated in table
+        """
+        if isinstance(cols, str):
+            cols = [cols]
+        if isinstance(elems, str):
+            elems = [elems]
         rows_to_update = self.get_duplicate_rows(self, table_name, ids)
         if rows_to_update.isEmpty():
             print("No duplicates found")
@@ -108,37 +153,12 @@ class SparkDataLoader:
         else:
             update_ids = [x["id"] for x in rows_to_update.collect()]
             ids_not_found = [id for id in ids if id not in update_ids]
-            print(f"Found {len(ids_not_found)} non-duplicates")
-            print("getting rows to update unstrung")
-            rows_to_update = rows_to_update.rdd.map(unstringify).collect()
-            print("sending to df")
-            rows_update_df = self.spark.createDataFrame(
-                rows_to_update, schema=edit_schema
-            )
-            print("adding elem to col")
-            rows_update_df = self.add_elem_to_col(rows_update_df, col, elem)
-            print("stringifying, making to write schema")
-            rows_update_df = self.spark.createDataFrame(
-                rows_update_df.rdd.map(stringify_rows), schema=write_schema
-            )
-            # Prevent loss of data in case of interruption
-            try:
-                print("writing to tmp table")
-                rows_update_df.write.mode("append").saveAsTable(f"{table_name}_tmp")
-            except Exception as e:
-                raise Exception(
-                    f"Error writing to temporary table: {table_name}_tmp --> {e}"
-                )
-            try:
-                print("deleting duplicates from table")
-                self.delete_from_table(self, table_name, ids)
-                print("writing new rows to table")
-                rows_update_df.write.mode("append").saveAsTable(table_name)
-            except Exception as e:
-                raise Exception(f"Error writing to table: {table_name} --> {e}")
-            print("dropping tmp table")
-            self.spark.sql(f"drop table {table_name}_tmp")
-            return (ids_not_found, [row["id"] for row in rows_to_update])
+            rows_to_update = rows_to_update.rdd.map(unstringify).toDF(edit_schema)
+            for col, elem in zip(cols, elems):
+                rows_to_update = self.add_elem_to_col(rows_to_update, col, elem)
+            rows_to_update = rows_to_update.rdd.map(stringify_rows).toDF(write_schema)
+            self.write_duplicates(self, table_name, rows_to_update, update_ids)
+            return (ids_not_found, update_ids)
 
     def read_table(self, table_name: str, unstring: bool = False):
         """

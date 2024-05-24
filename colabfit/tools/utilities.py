@@ -83,6 +83,8 @@ def unstringify(row):
     """Should be mapped as DataFrame.rdd.map(unstringify)"""
     row_dict = row.asDict()
     for key, val in row_dict.items():
+        if key == "metadata":
+            continue
         if isinstance(val, str) and len(val) > 0 and val[0] in ["{", "["]:
             dval = literal_eval(row[key])
             row_dict[key] = dval
