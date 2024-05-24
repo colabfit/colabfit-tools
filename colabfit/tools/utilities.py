@@ -2,6 +2,7 @@ import numpy as np
 from hashlib import sha512
 from types import NoneType
 from pyspark.sql import Row
+from ast import literal_eval
 
 
 def _format_for_hash(v):
@@ -83,7 +84,7 @@ def unstringify(row):
     row_dict = row.asDict()
     for key, val in row_dict.items():
         if isinstance(val, str) and len(val) > 0 and val[0] in ["{", "["]:
-            dval = eval(row[key])
+            dval = literal_eval(row[key])
             row_dict[key] = dval
     new_row = Row(**row_dict)
     return new_row
