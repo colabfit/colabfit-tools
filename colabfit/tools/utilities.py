@@ -2,7 +2,9 @@ import numpy as np
 from hashlib import sha512
 from types import NoneType
 from pyspark.sql import Row
+import pyarrow as pa
 from ast import literal_eval
+from pyspark.sql.types import IntegerType, StringType, StructType
 
 
 def _format_for_hash(v):
@@ -55,6 +57,53 @@ def _hash(row, indentifying_fields_list):
     return int(_hash.hexdigest(), 16)
 
 
+def get_spark_field_type(schema, field_name):
+    for field in schema:
+        if field.name == field_name:
+            return field.dataType
+    raise ValueError(f"Field name {field_name} not found in schema")
+
+
+def spark_to_arrow_type(spark_type):
+    """
+    Convert PySpark type to PyArrow type.
+    Do not include field.nullable, as this conflicts with vastdb-sdk
+    """
+    if isinstance(spark_type, IntegerType):
+        return pa.int32()
+    elif isinstance(spark_type, StringType):
+        return pa.string()
+    elif isinstance(spark_type, StructType):
+        return pa.struct(
+            [
+                pa.field(field.name, spark_to_arrow_type(field.dataType))
+                for field in spark_type
+            ]
+        )
+    else:
+        raise ValueError(f"Unsupported type: {spark_type}")
+
+
+def spark_schema_to_arrow_schema(spark_schema):
+    """
+    Convert PySpark schema to a PyArrow Schema.
+    """
+    fields = []
+    for field in spark_schema:
+        if field.name == "$row_id":
+            fields.append(pa.field(field.name, pa.uint64()))
+        else:
+            fields.append(pa.field(field.name, spark_to_arrow_type(field.dataType)))
+    return pa.schema(fields)
+
+
+def arrow_record_batch_to_rdd(schema, batch):
+    names = schema.fieldNames()
+    arrays = [batch.column(i) for i in range(batch.num_columns)]
+    for i in range(batch.num_rows):
+        yield {names[j]: array[i].as_py() for j, array in enumerate(arrays)}
+
+
 def _empty_dict_from_schema(schema):
     empty_dict = {}
     for field in schema:
@@ -79,6 +128,26 @@ def stringify_lists(row_dict):
     return row_dict
 
 
+def stringify_rows(row):
+    """
+    Convert list/tuple fields to comma-separated strings.
+    Use with spark Rows
+    Should be mapped as DataFrame.rdd.map(stringify_rows)"""
+    row_dict = row.asDict()
+    for key, val in row_dict.items():
+        if isinstance(val, (list, tuple, dict)):
+            row_dict[key] = str(val)
+    new_row = Row(**row_dict)
+    return new_row
+
+
+def stringify_row_dict(row_dict):
+    for key, val in row_dict.items():
+        if isinstance(val, (list, tuple, dict)):
+            row_dict[key] = str(val)
+    return row_dict
+
+
 def unstringify(row):
     """Should be mapped as DataFrame.rdd.map(unstringify)"""
     row_dict = row.asDict()
@@ -92,17 +161,20 @@ def unstringify(row):
     return new_row
 
 
-def stringify_rows(row):
-    """
-    Convert list/tuple fields to comma-separated strings.
-    Use with rdd rows
-    Should be mapped as DataFrame.rdd.map(stringify_rows)"""
-    row_dict = row.asDict()
+def unstringify_row_dict(row_dict):
+    """Should be mapped as rdd.map(unstringify_row_dict)"""
     for key, val in row_dict.items():
-        if isinstance(val, (list, tuple, dict)):
-            row_dict[key] = str(val)
-    new_row = Row(**row_dict)
-    return new_row
+        if key == "metadata":
+            continue
+        if isinstance(val, str) and len(val) > 0 and val[0] in ["{", "["]:
+            dval = literal_eval(row_dict[key])
+            row_dict[key] = dval
+    return row_dict
+
+
+def add_elem_to_row_dict(col_name, elem, row_dict):
+    row_dict[col_name] = list(set(row_dict.get(col_name, []) + [elem]))
+    return row_dict
 
 
 ELEMENT_MAP = {

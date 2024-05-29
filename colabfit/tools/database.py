@@ -10,41 +10,53 @@ from functools import partial
 from itertools import islice
 from multiprocessing import Pool
 from types import GeneratorType
-import psycopg
+
 import findspark
+import psycopg
+import pyarrow as pa
 import pyspark.sql.functions as sf
-from pyspark.sql.types import ArrayType, StringType
 from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
+from ibis import _
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType
+from pyspark.sql.types import (
+    ArrayType,
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+)
 from tqdm import tqdm
 from unidecode import unidecode
+from vastdb.session import Session
 
-from colabfit import (  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,;; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,
-    # _CONFIGS_COLLECTION,
-    # _CONFIGSETS_COLLECTION,
-    # _DATASETS_COLLECTION,
-    # _PROPOBJECT_COLLECTION,
+from colabfit import (
     ID_FORMAT_STRING,
-)
-
-
+)  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,;; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,; _CONFIGS_COLLECTION,; _CONFIGSETS_COLLECTION,; _DATASETS_COLLECTION,; _PROPOBJECT_COLLECTION,
 from colabfit.tools.configuration import AtomicConfiguration
-from colabfit.tools.dataset import Dataset
 from colabfit.tools.configuration_set import ConfigurationSet
+from colabfit.tools.dataset import Dataset
 from colabfit.tools.property import Property
 from colabfit.tools.schema import (
-    config_schema,
     config_df_schema,
-    dataset_schema,
-    dataset_df_schema,
-    property_object_schema,
-    property_object_df_schema,
-    configuration_set_schema,
+    config_schema,
     configuration_set_df_schema,
+    configuration_set_schema,
+    dataset_df_schema,
+    dataset_schema,
+    property_object_df_schema,
+    property_object_schema,
 )
-from colabfit.tools.utilities import unstringify, stringify_lists, stringify_rows
+from colabfit.tools.utilities import (
+    add_elem_to_row_dict,
+    arrow_record_batch_to_rdd,
+    get_spark_field_type,
+    spark_schema_to_arrow_schema,
+    stringify_lists,
+    stringify_row_dict,
+    unstringify,
+    unstringify_row_dict,
+)
 
 _CONFIGS_COLLECTION = "gpw_test_configs"
 _CONFIGSETS_COLLECTION = "gpw_test_configsets"
@@ -61,14 +73,29 @@ def generate_string():
 
 
 class SparkDataLoader:
-    def __init__(self, table_prefix: str = "ndb.colabfit.dev"):
+    def __init__(
+        self,
+        table_prefix: str = "ndb.colabfit.dev",
+        endpoint=None,
+        access_key=None,
+        access_secret=None,
+    ):
         self.table_prefix = table_prefix
         self.spark = SparkSession.builder.appName("ColabfitDataLoader").getOrCreate()
         self.spark.sparkContext.setLogLevel("WARN")
+        self.endpoint = endpoint
+        self.access_key = access_key
+        self.access_secret = access_secret
         self.config_table = f"{self.table_prefix}.{_CONFIGS_COLLECTION}"
         self.config_set_table = f"{self.table_prefix}.{_CONFIGSETS_COLLECTION}"
         self.dataset_table = f"{self.table_prefix}.{_DATASETS_COLLECTION}"
         self.prop_object_table = f"{self.table_prefix}.{_PROPOBJECT_COLLECTION}"
+
+    def get_vastdb_session(self, endpoint, access_key, access_secret):
+        return Session(endpoint=endpoint, access=access_key, secret=access_secret)
+
+    def set_vastdb_session(self, endpoint, access_key, access_secret):
+        self.session = self.get_vastdb_session(endpoint, access_key, access_secret)
 
     def get_duplicate_rows(self, table_name, ids):
         return self.spark.read.table(table_name).where(sf.col("id").isin(ids))
@@ -121,44 +148,67 @@ class SparkDataLoader:
         self.spark.sql(f"drop table {tmp_table_name}")
         return
 
-    # edit_schema should be *_df_* schema
-    def find_dups_append_elem(
+    def find_dups_append_elem_sdk(
         self, table_name, ids, cols, elems, edit_schema, write_schema
     ):
-        """Returns tuple(non-duplicate-ids, duplicate-ids)
-
-        Args:
-        self: SparkDataLoader instance
-        table_name: str, name of table to search
-        ids: list, ids to search for
-        cols: str or list[str], column name to append elem to
-        elems: str or list[str], element to append to column
-        edit_schema: StructType, schema of DataFrame with [col] type ArrayType(StringType)
-            wherever elem will be appended
-        write_schema: StructType, schema of DataFrame with stringified array columns
-
-        Returns:
-        tuple: (list, list)
-        1. Row ids not duplicated in table
-        2. Row ids duplicated in table
-        """
         if isinstance(cols, str):
             cols = [cols]
         if isinstance(elems, str):
             elems = [elems]
-        rows_to_update = self.get_duplicate_rows(self, table_name, ids)
-        if rows_to_update.isEmpty():
-            print("No duplicates found")
-            return (ids, None)
-        else:
-            update_ids = [x["id"] for x in rows_to_update.collect()]
-            ids_not_found = [id for id in ids if id not in update_ids]
-            rows_to_update = rows_to_update.rdd.map(unstringify).toDF(edit_schema)
-            for col, elem in zip(cols, elems):
-                rows_to_update = self.add_elem_to_col(rows_to_update, col, elem)
-            rows_to_update = rows_to_update.rdd.map(stringify_rows).toDF(write_schema)
-            self.write_duplicates(self, table_name, rows_to_update, update_ids)
-            return (ids_not_found, update_ids)
+        col_types = {"id": StringType(), "$row_id": IntegerType()}
+        edit_col_types = {"id": StringType(), "$row_id": IntegerType()}
+        update_cols = [col for col in col_types if col != "id"]
+        for col in cols:
+            col_types[col] = get_spark_field_type(write_schema, col)
+            edit_col_types[col] = get_spark_field_type(edit_schema, col)
+        query_schema = StructType(
+            [
+                StructField(col, col_types[col], False)
+                for i, col in enumerate(cols + ["id", "$row_id"])
+            ]
+        )
+        edit_schema = StructType(
+            [
+                StructField(col, edit_col_types[col], False)
+                for i, col in enumerate(cols + ["id", "$row_id"])
+            ]
+        )
+        partial_batch_to_rdd = partial(arrow_record_batch_to_rdd, query_schema)
+        with self.session.transaction() as tx:
+            # string would be 'ndb.colabfit.dev.[table name]'
+            table_path = table_name.split(".")
+            table = tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
+            rec_batch = table.select(
+                predicate=_.id.isin(ids), columns=cols + ["id"], internal_row_id=True
+            )
+            rdd = self.spark.sparkContext.parallelize([])
+            for batch in rec_batch:
+                rdd = rdd.union(
+                    self.spark.sparkContext.parallelize(
+                        list(partial_batch_to_rdd(batch))
+                    )
+                )
+        rdd.map(unstringify_row_dict)
+        for col, elem in zip(cols, elems):
+            partial_add = partial(add_elem_to_row_dict, col, elem)
+            rdd = rdd.map(partial_add)
+        update_ids = rdd.map(lambda x: x["id"]).collect()
+        new_ids = [id for id in ids if id not in update_ids]
+        print(f"Found {len(new_ids)} non-duplicates")
+        print("stringifying, making to write schema")
+        rdd = rdd.map(stringify_row_dict)
+        rdd_collect = rdd.map(lambda x: [x[col] for col in update_cols]).collect()
+        update_schema = StructType(
+            [StructField(col, col_types[col], False) for col in update_cols]
+        )
+        arrow_schema = spark_schema_to_arrow_schema(update_schema)
+        update_table = pa.table(
+            [pa.array(col) for col in zip(*rdd_collect)], schema=arrow_schema
+        )
+        with self.session.transaction() as tx:
+            table = tx.bucket(table_path[0]).schema(table_path[1]).table(table_path[2])
+            table.update(rows=update_table)
+        return (new_ids, update_ids)
 
     def read_table(self, table_name: str, unstring: bool = False):
         """
