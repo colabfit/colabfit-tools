@@ -113,11 +113,15 @@ class SparkDataLoader:
         self.spark.sql(f"delete from {table_name} where id in {tuple(ids)}")
 
     def check_unique_ids(self, table_name: str, rdd):
+        if not self.spark.catalog.tableExists(table_name):
+            print(f"Table {table_name} does not yet exist.")
+            return True
         ids = rdd.map(lambda x: x["id"]).collect()
+        broadcast_ids = self.spark.sparkContext.broadcast(ids)
         n_dups = (
             self.spark.read.table(table_name)
             .select(sf.col("id"))
-            .filter(sf.col("id").isin(ids))
+            .filter(sf.col("id").isin(broadcast_ids.value))
             .count()
         )
         return n_dups == 0
