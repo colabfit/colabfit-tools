@@ -392,17 +392,17 @@ class DataManager:
         co_po_rows = []
         for config in configs:
             config.set_dataset_id(dataset_id)
+            property = Property.from_definition(
+                prop_defs,
+                configuration=config,
+                property_map=prop_map,
+            )
             co_po_rows.append(
                 (
                     config.spark_row,
-                    Property.from_definition(
-                        prop_defs,
-                        configuration=config,
-                        property_map=prop_map,
-                    ).spark_row,
+                    property.spark_row,
                 )
             )
-
         return co_po_rows
 
     def gather_co_po_rows_pool(
@@ -480,7 +480,7 @@ class DataManager:
         dataset_id: str,
     ):
 
-        ## Make this loader.read_table, and loader-agnostic
+        # Make this loader.read_table, and loader-agnostic
         config_df = (
             loader.spark.read.jdbc(
                 url=loader.url, table=loader.config_table, properties=loader.properties
