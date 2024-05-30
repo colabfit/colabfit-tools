@@ -91,16 +91,13 @@ class SparkDataLoader:
         self.dataset_table = f"{self.table_prefix}.{_DATASETS_COLLECTION}"
         self.prop_object_table = f"{self.table_prefix}.{_PROPOBJECT_COLLECTION}"
 
-    def get_vastdb_session(self, endpoint, access_key, access_secret):
+    def get_vastdb_session(self, endpoint, access_key: str, access_secret: str):
         return Session(endpoint=endpoint, access=access_key, secret=access_secret)
 
-    def set_vastdb_session(self, endpoint, access_key, access_secret):
+    def set_vastdb_session(self, endpoint, access_key: str, access_secret: str):
         self.session = self.get_vastdb_session(endpoint, access_key, access_secret)
 
-    def get_duplicate_rows(self, table_name, ids):
-        return self.spark.read.table(table_name).where(sf.col("id").isin(ids))
-
-    def add_elem_to_col(df, col_name, elem):
+    def add_elem_to_col(df, col_name: str, elem: str):
         df_added_elem = df.withColumn(
             col_name,
             sf.when(
@@ -112,44 +109,50 @@ class SparkDataLoader:
         )
         return df_added_elem
 
-    def delete_from_table(self, table_name, ids):
+    def delete_from_table(self, table_name: str, ids: list[str]):
         self.spark.sql(f"delete from {table_name} where id in {tuple(ids)}")
 
-    def write_table(self, spark_rows: list[dict], table_name: str, schema: StructType):
-        """Include self.table_prefix in the table name when passed to this function"""
-        df = (
-            self.spark.sparkContext.parallelize(spark_rows)
-            .map(stringify_lists)
-            .toDF(schema)
+    def check_unique_ids(self, table_name: str, rdd):
+        ids = rdd.map(lambda x: x["id"]).collect()
+        n_dups = (
+            self.spark.read.table(table_name)
+            .select(sf.col("id"))
+            .filter(sf.col("id").isin(ids))
+            .count()
         )
-        df.write.mode("append").saveAsTable(table_name)
+        return n_dups == 0
 
-    def write_duplicates(self, table_name, df_to_update, update_ids):
-        """Writes rows to table where id already exists"""
-
-        tmp_table_name = f"{table_name}_tmp"
-        try:
-            print("writing to tmp table")
-            df_to_update.write.mode("overwrite").saveAsTable(tmp_table_name)
-        except Exception as e:
-            raise Exception(
-                f"Error writing to temporary table: {tmp_table_name} --> {e}"
+    def write_table(
+        self,
+        spark_rows: list[dict],
+        table_name: str,
+        schema: StructType,
+        ids_filter: list[str] = None,
+    ):
+        """Include self.table_prefix in the table name when passed to this function"""
+        if ids_filter is not None:
+            rdd = (
+                self.spark.sparkContext.parallelize(spark_rows)
+                .map(stringify_lists)
+                .filter(lambda x: x["id"] in ids_filter)
             )
-        try:
-            print("deleting duplicates from table")
-            self.delete_from_table(self, table_name, update_ids)
-            print("writing new rows to table")
-            self.spark.sql(f"INSERT INTO {table_name} SELECT * FROM {tmp_table_name}")
-            # OR
-            # df_to_update.write.mode('append').saveAsTable(table_name)
-        except Exception as e:
-            raise Exception(f"Error writing to table: {table_name} --> {e}")
-        print("dropping tmp table")
-        self.spark.sql(f"drop table {tmp_table_name}")
-        return
+        else:
+            rdd = self.spark.sparkContext.parallelize(spark_rows).map(stringify_lists)
+        all_unique = self.check_unique_ids(table_name, rdd)
+        if all_unique:
+            rdd.toDF(schema).write.mode("append").saveAsTable(table_name)
+        else:
+            print("Duplicate IDs found in table")
+            return False
 
     def find_dups_append_elem_sdk(
-        self, table_name, ids, cols, elems, edit_schema, write_schema
+        self,
+        table_name: str,
+        ids: list[str],
+        cols: list[str],
+        elems: list[str],
+        edit_schema: StructType,
+        write_schema: StructType,
     ):
         if isinstance(cols, str):
             cols = [cols]
@@ -157,10 +160,10 @@ class SparkDataLoader:
             elems = [elems]
         col_types = {"id": StringType(), "$row_id": IntegerType()}
         edit_col_types = {"id": StringType(), "$row_id": IntegerType()}
-        update_cols = [col for col in col_types if col != "id"]
         for col in cols:
             col_types[col] = get_spark_field_type(write_schema, col)
             edit_col_types[col] = get_spark_field_type(edit_schema, col)
+        update_cols = [col for col in col_types if col != "id"]
         query_schema = StructType(
             [
                 StructField(col, col_types[col], False)
@@ -188,14 +191,12 @@ class SparkDataLoader:
                         list(partial_batch_to_rdd(batch))
                     )
                 )
-        rdd.map(unstringify_row_dict)
+        rdd = rdd.map(unstringify_row_dict)
         for col, elem in zip(cols, elems):
             partial_add = partial(add_elem_to_row_dict, col, elem)
             rdd = rdd.map(partial_add)
         update_ids = rdd.map(lambda x: x["id"]).collect()
         new_ids = [id for id in ids if id not in update_ids]
-        print(f"Found {len(new_ids)} non-duplicates")
-        print("stringifying, making to write schema")
         rdd = rdd.map(stringify_row_dict)
         rdd_collect = rdd.map(lambda x: [x[col] for col in update_cols]).collect()
         update_schema = StructType(
@@ -206,7 +207,7 @@ class SparkDataLoader:
             [pa.array(col) for col in zip(*rdd_collect)], schema=arrow_schema
         )
         with self.session.transaction() as tx:
-            table = tx.bucket(table_path[0]).schema(table_path[1]).table(table_path[2])
+            table = tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
             table.update(rows=update_table)
         return (new_ids, update_ids)
 
@@ -273,15 +274,6 @@ class PGDataLoader:
 
         self.format = "jdbc"  # for postgres local
         load_dotenv(env)
-        # Commented out below may not be necessary/may not work,
-        # but may be used in cases like postgres, where a prefix like 'public.' is used
-        # if table_prefix is not None:
-        #     self.config_table = table_prefix + _CONFIGS_COLLECTION
-        #     self.config_set_table = table_prefix + _CONFIGSETS_COLLECTION
-        #     self.dataset_table = table_prefix + _DATASETS_COLLECTION
-        #     self.prop_def_table = table_prefix + _PROPDEFS_COLLECTION
-        #     self.prop_object_table = table_prefix + _PROPOBJECT_COLLECTION
-        # else:
         self.config_table = _CONFIGS_COLLECTION
         self.config_set_table = _CONFIGSETS_COLLECTION
         self.dataset_table = _DATASETS_COLLECTION
@@ -305,15 +297,6 @@ class PGDataLoader:
             url=self.url,
             table=table_name,
             mode="append",
-            properties=self.properties,
-        )
-
-    def update_rows(self, spark_rows: list[dict], table_name: str, schema: StructType):
-        df = self.spark.createDataFrame(spark_rows, schema=schema)
-        df.write.jdbc(
-            url=self.url,
-            table=table_name,
-            mode="overwrite",
             properties=self.properties,
         )
 
@@ -348,6 +331,28 @@ def batched(configs, n):
         if len(batch) == 0:
             break
         yield batch
+
+
+class SparkDataManager:
+    def init(
+        self,
+        configs: list[AtomicConfiguration] = None,
+        prop_defs: list[dict] = None,
+        prop_map: dict = None,
+        dataset_id=None,
+    ):
+        self.configs = configs
+        if isinstance(prop_defs, dict):
+            prop_defs = [prop_defs]
+        self.prop_defs = prop_defs
+        self.prop_map = prop_map
+        self.dataset_id = dataset_id
+        print("Dataset ID:", self.dataset_id)
+        if self.dataset_id is None:
+            self.dataset_id = self.generate_ds_id()
+
+    def gather_cos(self):
+        pass
 
 
 class DataManager:
@@ -438,7 +443,7 @@ class DataManager:
                     yield list(self.gather_co_po_rows_pool(config_batches, pool))
 
     def load_data_to_pg_in_batches(self, loader):
-        """Load data to PostgreSQL or VastDB database in batches."""
+        """Load data to PostgreSQL in batches."""
         co_po_rows = self.gather_co_po_in_batches()
 
         for co_po_batch in tqdm(
@@ -470,6 +475,8 @@ class DataManager:
         name_label_match: list[tuple],
         dataset_id: str,
     ):
+
+        ## Make this loader.read_table, and loader-agnostic
         config_df = (
             loader.spark.read.jdbc(
                 url=loader.url, table=loader.config_table, properties=loader.properties

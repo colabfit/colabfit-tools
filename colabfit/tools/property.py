@@ -13,7 +13,7 @@ import numpy as np
 # from ase.units import create_units
 
 from colabfit.tools.configuration import AtomicConfiguration
-from colabfit.tools.utilities import _empty_dict_from_schema, _hash, stringify_lists
+from colabfit.tools.utilities import _empty_dict_from_schema, _hash
 from colabfit.tools.schema import property_object_schema
 
 # HASH_LENGTH = 12
@@ -301,7 +301,6 @@ class Property(dict):
         self.spark_row["id"] = self._id
         if dataset_id is not None:
             self.spark_row["dataset_ids"] = [dataset_id]
-        self.spark_row = stringify_lists(self.spark_row)
 
     @property
     def instance(self):
@@ -550,7 +549,6 @@ class Property(dict):
             )
         )
         row_dict["chemical_formula_hill"] = self.chemical_formula_hill
-        # row_dict = stringify_lists(row_dict)
         return row_dict
 
     def convert_units(self):

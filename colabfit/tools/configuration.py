@@ -14,130 +14,10 @@ from tqdm import tqdm
 
 from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
 from colabfit.tools.schema import config_schema
-from colabfit.tools.utilities import _empty_dict_from_schema, _hash, stringify_lists
+from colabfit.tools.utilities import _empty_dict_from_schema, _hash
 
 
-class BaseConfiguration:
-    """Abstract parent class for all Configurations.
-
-    This class should never be directly instantiated-all other Configuration classes
-    must subclass this along with any other useful classes.
-
-    Configuration classes must pass all necessary unique identifiers as individual
-    keyword arguments to their associated constructor. Unique identifiers are values
-    that are needed to uniquely identify one Configuration instance from another.
-    These values will be used to produce a unique hash for each Configuration instance
-    and be added to the database with their associated keyword. See
-    :attr:`unique_identifer_kw`.
-
-    All Configuration classes must define a :code:`self.configuration_summary` method.
-    This is used to extract any other useful information that will be included (in
-    addition to all unique identifiers) in the Configuration's entry in the Database.
-
-    All Configuration classes must also define a
-    :code:`self.aggregate_configuration_summaries` method. This is used to extract
-    useful information from a collection of Configurations.
-
-    See :meth:`~colabfit.tools.configuration.AtomicConfiguration` as an example.
-
-    Attributes:
-
-        info (dict):
-            Stores important metadata for a Configuration. At a minimum, it will include
-            keywords "_name" and "_labels".
-        _array_order (array):
-             Optional ordering of array unique identifiers so that trivial permutations
-             do not hash differently
-        unique_identifier_kw (list):
-            Class attribute that specifies the keywords to be used for all unique
-            identifiers.
-            All Configuration classes should accept each keyword as an argument to
-            their constructor.
-        unique_identifier_kw_types (dict):
-            Class attribute that specifies the data types of the unique
-            identifier keywords. key = identifier keyword; value = identifier
-            data type.
-    """
-
-    def __init__(self):
-        """
-        Args:
-            names (str, list of str):
-                Names to be associated with a Configuration
-        """
-        self.unique_identifier_kw = []
-        self.unique_identifier_kw_types = {}
-        self._array_order = None
-
-    # @property
-    # def unique_identifiers(self):
-    #     raise NotImplementedError("All Configuration classes should implement this.")
-
-    # @unique_identifiers.setter
-    # def unique_identifiers(self, values):
-    #     raise NotImplementedError("All Configuration classes should implement this.")
-
-    def configuration_summary(self):
-        """Extracts useful information from a Configuration.
-
-        All Configuration classes should implement this.
-        Any useful information that should be included under a Configuration's entry in
-        the Database (in addition to its unique identifiers) should be extracted and
-        added to a dict.
-
-        Returns:
-            dict: Keys and their associated values that will be included under a
-            Configuration's entry in the Database
-        """
-        raise NotImplementedError("All Configuration classes should implement this.")
-
-    @staticmethod
-    def aggregate_configuration_summaries(db, hashes):
-        """Aggregates information for given configurations.
-
-        All Configuration classes should implement this.
-        Similar to :code:`self.configuration_summary`, but summarizes information
-        for a collection of Configurations
-
-        Args:
-            db:
-                database where aggregation should occur
-            hashes:
-                hashes of Configurations of interest
-
-        Returns:
-            dict: Key-value pairs of information aggregated from multiple Configurations
-        """
-        raise NotImplementedError("All Configuration classes should implement this.")
-
-    def __hash__(self):
-        """Generates a hash for :code:`self`.
-
-        Hashes all values in self.unique_identifiers.
-        hashlib is used instead of hash() to avoid hash randomisation.
-
-        Returns:
-            int: Value of hash
-        """
-        if len(self.unique_identifiers) == 0:
-            raise Exception("Ensure unique identifiers are properly defined!")
-        _hash = sha512()
-        for k, v in self.unique_identifiers.items():
-            _hash.update(bytes(pre_hash_formatting(k, v, self._array_order)))
-        return int(_hash.hexdigest(), 16)
-
-    def __eq__(self, other):
-        """
-        Two Configurations are considered to be identical if they have the same
-        hash value.
-        """
-        return hash(self) == hash(other)
-
-
-#
-
-
-class AtomicConfiguration(BaseConfiguration, Atoms):
+class AtomicConfiguration(Atoms):
     """
     An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and an
     :class:`ase.Atoms` object that is guaranteed to have the following fields in
@@ -166,7 +46,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
                 Other keyword arguments that can be passed to
                 :meth:`ase.Atoms.__init__()`
         """
-        BaseConfiguration.__init__(self)
         self.metadata = self.set_metadata(co_md_map)
 
         if "atomic_numbers" in list(kwargs.keys()):
@@ -207,7 +86,7 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
         self.spark_row["id"] = self.id
         self.spark_row["hash"] = self._hash
         # self.spark_row["dataset_ids"] = [self.dataset_id]
-        self.spark_row = stringify_lists(self.spark_row)
+        self.spark_row = self.spark_row
         # Check for name conflicts in info/arrays; would cause bug in parsing
         if set(self.info.keys()).intersection(set(self.arrays.keys())):
             raise RuntimeError(
@@ -347,8 +226,6 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
     def set_dataset_id(self, dataset_id):
         self.dataset_id = dataset_id
         self.spark_row["dataset_ids"] = str([dataset_id])
-        # TODO: Remove below when arrays can be passed to vastdb
-        # self.spark_row = stringify_lists(self.spark_row)
 
     def to_spark_row(self):
         co_dict = _empty_dict_from_schema(config_schema)
@@ -438,114 +315,3 @@ class AtomicConfiguration(BaseConfiguration, Atoms):
 
     def __hash__(self):
         return _hash(self.spark_row, self.unique_identifier_kw)
-
-
-# TODO: string encodings, etc to ensure consistent hashing
-#       Add support for lists, etc
-def pre_hash_formatting(k, v, ordering):
-    """
-    Ensures proper datatypes, precision, etc. prior to hashing of unique identifiers
-
-    Args:
-        k:
-            Key of item to hash
-        v:
-            Value to hash
-        ordering:
-            Potential ordering of arrays prior to hashing
-
-    Returns:
-        Reformatted value
-
-    """
-    # hard code for positions and numbers for now
-    if k in ["atomic_numbers", "positions"]:
-        v = v[ordering]
-    # for now all AtomicConfiguration UIs are defined to be ndarrays
-    if isinstance(v, np.ndarray):
-        if v.dtype in [np.half, np.single, np.double, np.longdouble]:
-            return np.round_(v.astype(np.float64), decimals=16)
-        elif v.dtype in [np.int8, np.int16, np.int32, np.int64]:
-            return v.astype(np.int64)
-        else:
-
-            return v
-    else:
-        return v
-
-
-def agg(db_name, uri, co_hashes):
-    """Gather large aggregation documents in batches"""
-    from colabfit.tools.database import MongoDatabase
-
-    client = MongoDatabase(database_name=db_name, uri=uri)
-    query = {"hash": {"$in": co_hashes}}
-    pipeline = [
-        {"$match": query},
-        {
-            "$facet": {
-                "chemical_formula_hill_counts": [
-                    {
-                        "$group": {
-                            "_id": "$chemical_formula_hill",
-                            "count": {"$sum": 1},
-                        }
-                    },
-                ],
-                "chemical_formula_anonymous": [
-                    {
-                        "$group": {
-                            "_id": None,
-                            "chemical_formula_anonymous": {
-                                "$addToSet": "$chemical_formula_anonymous"
-                            },
-                        }
-                    },
-                    {"$project": {"_id": 0, "chemical_formula_anonymous": 1}},
-                ],
-                "chemical_formula_reduced": [
-                    {
-                        "$group": {
-                            "_id": None,
-                            "chemical_formula_reduced": {
-                                "$addToSet": "$chemical_formula_reduced"
-                            },
-                        }
-                    },
-                    {"$project": {"_id": 0, "chemical_formula_reduced": 1}},
-                ],
-                "chemical_systems": [
-                    {
-                        "$group": {
-                            "_id": None,
-                            "chemical_systems": {"$addToSet": "$elements"},
-                        }
-                    },
-                    {"$project": {"_id": 0, "chemical_systems": 1}},
-                ],
-            }
-        },
-    ]
-    results = next(client.configurations.aggregate(pipeline))
-    chemical_systems = [
-        "".join(sorted(x)) for x in results["chemical_systems"][0]["chemical_systems"]
-    ]
-
-    chemical_formula_hill_counts = results["chemical_formula_hill_counts"]
-    chemical_formula_hill = [x["_id"] for x in chemical_formula_hill_counts]
-    chemical_formula_anonymous = results["chemical_formula_anonymous"][0][
-        "chemical_formula_anonymous"
-    ]
-    chemical_formula_reduced = results["chemical_formula_reduced"][0][
-        "chemical_formula_reduced"
-    ]
-
-    client.close()
-
-    return {
-        "chemical_systems": chemical_systems,
-        "chemical_formula_reduced": chemical_formula_reduced,
-        "chemical_formula_anonymous": chemical_formula_anonymous,
-        "chemical_formula_hill": chemical_formula_hill,
-        "chemical_formula_hill_counts": chemical_formula_hill_counts,
-    }

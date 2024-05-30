@@ -173,7 +173,8 @@ def unstringify_row_dict(row_dict):
 
 
 def add_elem_to_row_dict(col_name, elem, row_dict):
-    row_dict[col_name] = list(set(row_dict.get(col_name, []) + [elem]))
+    val = row_dict.get(col_name, [])
+    row_dict[col_name] = set(val).add(elem)
     return row_dict
 
 
