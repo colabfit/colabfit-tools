@@ -446,6 +446,68 @@ class DataManager:
                 else:
                     yield list(self.gather_co_po_rows_pool(config_batches, pool))
 
+    def load_co_po_to_vastdb(self, loader):
+        co_po_rows = self.gather_co_po_in_batches()
+        for co_po_batch in tqdm(
+            co_po_rows,
+            desc="Loading data to database: ",
+            unit="batch",
+        ):
+            co_rows, po_rows = list(zip(*co_po_batch))
+            if len(co_rows) == 0:
+                continue
+            co_rdd = loader.spark.sparkContext.parallelize(co_rows)
+            po_rdd = loader.spark.sparkContext.parallelize(po_rows)
+            all_unique_co = loader.check_unique_ids(loader.config_table, co_rdd)
+            all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_rdd)
+            if not all_unique_co:
+                co_ids = co_rdd.map(lambda x: x["id"]).collect()
+                new_ids, update_ids = loader.find_dups_append_elem_sdk(
+                    table_name=loader.config_table,
+                    ids=co_ids,
+                    cols=["dataset_ids"],
+                    elems=[self.dataset_id],
+                    edit_schema=config_df_schema,
+                    write_schema=config_schema,
+                )
+                print(f"Updated {len(update_ids)} rows in {loader.config_table}")
+                loader.write_table(
+                    co_rows, loader.config_table, config_schema, ids_filter=new_ids
+                )
+                print(f"Inserted {len(new_ids)} rows into {loader.config_table}")
+            else:
+                loader.write_table(
+                    co_rows,
+                    loader.config_table,
+                    config_schema,
+                )
+                print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
+            if not all_unique_po:
+                po_ids = po_rdd.map(lambda x: x["id"]).collect()
+                new_ids, update_ids = loader.find_dups_append_elem_sdk(
+                    table_name=loader.prop_object_table,
+                    ids=po_ids,
+                    cols=["dataset_ids"],
+                    elems=[self.dataset_id],
+                    edit_schema=property_object_df_schema,
+                    write_schema=property_object_schema,
+                )
+                print(f"Updated {len(update_ids)} rows in {loader.prop_object_table}")
+                loader.write_table(
+                    po_rows,
+                    loader.prop_object_table,
+                    property_object_schema,
+                    ids_filter=new_ids,
+                )
+                print(f"Inserted {len(new_ids)} rows into {loader.prop_object_table}")
+            else:
+                loader.write_table(
+                    po_rows,
+                    loader.prop_object_table,
+                    property_object_schema,
+                )
+                print(f"Inserted {len(po_rows)} rows into {loader.prop_object_table}")
+
     def load_data_to_pg_in_batches(self, loader):
         """Load data to PostgreSQL in batches."""
         co_po_rows = self.gather_co_po_in_batches()
