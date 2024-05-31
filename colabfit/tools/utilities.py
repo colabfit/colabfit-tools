@@ -175,7 +175,7 @@ def unstringify_row_dict(row_dict):
 def add_elem_to_row_dict(col_name, elem, row_dict):
     val = row_dict.get(col_name, [])
     val.append(elem)
-    row_dict[col_name] = set(val)
+    row_dict[col_name] = list(set(val))
     return row_dict
 
 
