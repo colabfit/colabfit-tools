@@ -178,6 +178,7 @@ def add_elem_to_row_dict(col, elem, row_dict):
         val = [elem]
     else:
         val.append(elem)
+        val = list(set(val))
     row_dict[col] = val
     return row_dict
 

@@ -61,25 +61,14 @@ class ConfigurationSet:
 
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
         row_dict["elements"] = sorted(
-            config_df.withColumn(
-                "elements_unstrung",
-                sf.from_json(sf.col("elements"), sf.ArrayType(sf.StringType())),
-            )
-            .withColumn("exploded_elements", sf.explode("elements_unstrung"))
+            config_df.withColumn("exploded_elements", sf.explode("elements"))
             .agg(sf.collect_set("exploded_elements").alias("exploded_elements"))
             .select("exploded_elements")
             .take(1)[0][0]
         )
         atomic_ratios_df = (
-            config_df.withColumn(
-                "atomic_unstrung",
-                sf.from_json(
-                    sf.col("atomic_numbers"),
-                    sf.ArrayType(IntegerType()),
-                ),
-            )
-            .select("atomic_unstrung")
-            .withColumn("exploded_atom", sf.explode("atomic_unstrung"))
+            config_df.select("atomic_numbers")
+            .withColumn("exploded_atom", sf.explode("atomic_numbers"))
             .groupBy(sf.col("exploded_atom").alias("atomic_number"))
             .count()
             .withColumn("ratio", sf.col("count") / row_dict["nsites"])
