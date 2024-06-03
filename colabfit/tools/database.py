@@ -149,7 +149,7 @@ class SparkDataLoader:
             print("Duplicate IDs found in table")
             return False
 
-    def find_dups_append_elem_sdk(
+    def find_existing_rows_append_elem(
         self,
         table_name: str,
         ids: list[str],
@@ -462,7 +462,7 @@ class DataManager:
             all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_rdd)
             if not all_unique_co:
                 co_ids = co_rdd.map(lambda x: x["id"]).collect()
-                new_ids, update_ids = loader.find_dups_append_elem_sdk(
+                new_ids, update_ids = loader.find_existing_rows_append_elem(
                     table_name=loader.config_table,
                     ids=co_ids,
                     cols=["dataset_ids"],
@@ -484,7 +484,7 @@ class DataManager:
                 print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
             if not all_unique_po:
                 po_ids = po_rdd.map(lambda x: x["id"]).collect()
-                new_ids, update_ids = loader.find_dups_append_elem_sdk(
+                new_ids, update_ids = loader.find_existing_rows_append_elem(
                     table_name=loader.prop_object_table,
                     ids=po_ids,
                     cols=["dataset_ids"],
