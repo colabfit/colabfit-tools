@@ -118,13 +118,13 @@ class SparkDataLoader:
             return True
         ids = rdd.map(lambda x: x["id"]).collect()
         broadcast_ids = self.spark.sparkContext.broadcast(ids)
-        n_dups = (
+        dupes_exist = len(
             self.spark.read.table(table_name)
             .select(sf.col("id"))
             .filter(sf.col("id").isin(broadcast_ids.value))
-            .count()
+            .take(1)
         )
-        return n_dups == 0
+        return dupes_exist == 0
 
     def write_table(
         self,
@@ -456,57 +456,71 @@ class DataManager:
             co_rows, po_rows = list(zip(*co_po_batch))
             if len(co_rows) == 0:
                 continue
-            co_rdd = loader.spark.sparkContext.parallelize(co_rows)
-            po_rdd = loader.spark.sparkContext.parallelize(po_rows)
-            all_unique_co = loader.check_unique_ids(loader.config_table, co_rdd)
-            all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_rdd)
-            if not all_unique_co:
-                co_ids = co_rdd.map(lambda x: x["id"]).collect()
-                new_ids, update_ids = loader.find_existing_rows_append_elem(
-                    table_name=loader.config_table,
-                    ids=co_ids,
-                    cols=["dataset_ids"],
-                    elems=[self.dataset_id],
-                    edit_schema=config_df_schema,
-                    write_schema=config_schema,
-                )
-                print(f"Updated {len(update_ids)} rows in {loader.config_table}")
-                loader.write_table(
-                    co_rows, loader.config_table, config_schema, ids_filter=new_ids
-                )
-                print(f"Inserted {len(new_ids)} rows into {loader.config_table}")
             else:
-                loader.write_table(
-                    co_rows,
-                    loader.config_table,
-                    config_schema,
+                print(co_rows[0])
+                co_rdd = loader.spark.sparkContext.parallelize(co_rows)
+                po_rdd = loader.spark.sparkContext.parallelize(po_rows)
+                # print(type(co_rdd))
+                # print(co_rdd.take(1))
+                print(co_rdd.count())
+                # print(co_rdd.collect()[:10])
+                all_unique_co = loader.check_unique_ids(loader.config_table, co_rdd)
+                all_unique_po = loader.check_unique_ids(
+                    loader.prop_object_table, po_rdd
                 )
-                print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
-            if not all_unique_po:
-                po_ids = po_rdd.map(lambda x: x["id"]).collect()
-                new_ids, update_ids = loader.find_existing_rows_append_elem(
-                    table_name=loader.prop_object_table,
-                    ids=po_ids,
-                    cols=["dataset_ids"],
-                    elems=[self.dataset_id],
-                    edit_schema=property_object_df_schema,
-                    write_schema=property_object_schema,
-                )
-                print(f"Updated {len(update_ids)} rows in {loader.prop_object_table}")
-                loader.write_table(
-                    po_rows,
-                    loader.prop_object_table,
-                    property_object_schema,
-                    ids_filter=new_ids,
-                )
-                print(f"Inserted {len(new_ids)} rows into {loader.prop_object_table}")
-            else:
-                loader.write_table(
-                    po_rows,
-                    loader.prop_object_table,
-                    property_object_schema,
-                )
-                print(f"Inserted {len(po_rows)} rows into {loader.prop_object_table}")
+                if not all_unique_co:
+                    co_ids = co_rdd.map(lambda x: x["id"]).collect()
+                    new_ids, update_ids = loader.find_existing_rows_append_elem(
+                        table_name=loader.config_table,
+                        ids=co_ids,
+                        cols=["dataset_ids"],
+                        elems=[self.dataset_id],
+                        edit_schema=config_df_schema,
+                        write_schema=config_schema,
+                    )
+                    print(f"Updated {len(update_ids)} rows in {loader.config_table}")
+                    loader.write_table(
+                        co_rows, loader.config_table, config_schema, ids_filter=new_ids
+                    )
+                    print(f"Inserted {len(new_ids)} rows into {loader.config_table}")
+                else:
+                    loader.write_table(
+                        co_rows,
+                        loader.config_table,
+                        config_schema,
+                    )
+                    print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
+                if not all_unique_po:
+                    po_ids = po_rdd.map(lambda x: x["id"]).collect()
+                    new_ids, update_ids = loader.find_existing_rows_append_elem(
+                        table_name=loader.prop_object_table,
+                        ids=po_ids,
+                        cols=["dataset_ids"],
+                        elems=[self.dataset_id],
+                        edit_schema=property_object_df_schema,
+                        write_schema=property_object_schema,
+                    )
+                    print(
+                        f"Updated {len(update_ids)} rows in {loader.prop_object_table}"
+                    )
+                    loader.write_table(
+                        po_rows,
+                        loader.prop_object_table,
+                        property_object_schema,
+                        ids_filter=new_ids,
+                    )
+                    print(
+                        f"Inserted {len(new_ids)} rows into {loader.prop_object_table}"
+                    )
+                else:
+                    loader.write_table(
+                        po_rows,
+                        loader.prop_object_table,
+                        property_object_schema,
+                    )
+                    print(
+                        f"Inserted {len(po_rows)} rows into {loader.prop_object_table}"
+                    )
 
     def load_data_to_pg_in_batches(self, loader):
         """Load data to PostgreSQL in batches."""
