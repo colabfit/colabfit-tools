@@ -112,18 +112,14 @@ class SparkDataLoader:
     def delete_from_table(self, table_name: str, ids: list[str]):
         self.spark.sql(f"delete from {table_name} where id in {tuple(ids)}")
 
-    def check_unique_ids(self, table_name: str, rdd):
+    def check_unique_ids(self, table_name: str, ids: list[str]):
         if not self.spark.catalog.tableExists(table_name):
             print(f"Table {table_name} does not yet exist.")
             return True
-        ids = rdd.map(lambda x: x["id"]).collect()
-        broadcast_ids = self.spark.sparkContext.broadcast(ids)
-        dupes_exist = len(
-            self.spark.read.table(table_name)
-            .select(sf.col("id"))
-            .filter(sf.col("id").isin(broadcast_ids.value))
-            .take(1)
+        dupes_exist = (
+            self.spark.read.table(table_name).filter(sf.col("id").isin(ids)).limit(1)
         )
+        dupes_exist = dupes_exist.count()
         return dupes_exist == 0
 
     def write_table(
@@ -142,7 +138,8 @@ class SparkDataLoader:
             )
         else:
             rdd = self.spark.sparkContext.parallelize(spark_rows).map(stringify_lists)
-        all_unique = self.check_unique_ids(table_name, rdd)
+        ids = rdd.map(lambda x: x["id"]).collect()
+        all_unique = self.check_unique_ids(table_name, ids)
         if all_unique:
             rdd.toDF(schema).write.mode("append").saveAsTable(table_name)
         else:
@@ -181,12 +178,16 @@ class SparkDataLoader:
             ]
         )
         partial_batch_to_rdd = partial(arrow_record_batch_to_rdd, query_schema)
+        broadcast_ids = self.spark.sparkContext.broadcast(ids)
         with self.session.transaction() as tx:
             # string would be 'ndb.colabfit.dev.[table name]'
             table_path = table_name.split(".")
             table = tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
             rec_batch = table.select(
-                predicate=_.id.isin(ids), columns=cols + ["id"], internal_row_id=True
+                predicate=_.id.isin(broadcast_ids.value),
+                # predicate=_.id.isin(ids),
+                columns=cols + ["id"],
+                internal_row_id=True,
             )
             rdd = self.spark.sparkContext.parallelize([])
             for batch in rec_batch:
@@ -446,8 +447,24 @@ class DataManager:
                 else:
                     yield list(self.gather_co_po_rows_pool(config_batches, pool))
 
+    def gather_co_po_in_batches_no_pool(self):
+        """
+        Wrapper function for gather_co_po_rows_pool.
+        Yields batches of CO-DO rows, preventing configuration iterator from
+        being consumed all at once.
+        """
+        chunk_size = 1000
+        config_chunks = batched(self.configs, chunk_size)
+
+        for chunk in config_chunks:
+            yield list(
+                self._gather_co_po_rows(
+                    self.prop_defs, self.prop_map, self.dataset_id, chunk
+                )
+            )
+
     def load_co_po_to_vastdb(self, loader):
-        co_po_rows = self.gather_co_po_in_batches()
+        co_po_rows = self.gather_co_po_in_batches_no_pool()
         for co_po_batch in tqdm(
             co_po_rows,
             desc="Loading data to database: ",
@@ -464,12 +481,13 @@ class DataManager:
                 # print(co_rdd.take(1))
                 print(co_rdd.count())
                 # print(co_rdd.collect()[:10])
-                all_unique_co = loader.check_unique_ids(loader.config_table, co_rdd)
+                co_ids = co_rdd.map(lambda x: x["id"]).collect()
+                po_ids = po_rdd.map(lambda x: x["id"]).collect()
+                all_unique_co = loader.check_unique_ids(loader.config_table, co_ids)
                 all_unique_po = loader.check_unique_ids(
-                    loader.prop_object_table, po_rdd
+                    loader.prop_object_table, po_ids
                 )
                 if not all_unique_co:
-                    co_ids = co_rdd.map(lambda x: x["id"]).collect()
                     new_ids, update_ids = loader.find_existing_rows_append_elem(
                         table_name=loader.config_table,
                         ids=co_ids,
@@ -491,7 +509,6 @@ class DataManager:
                     )
                     print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
                 if not all_unique_po:
-                    po_ids = po_rdd.map(lambda x: x["id"]).collect()
                     new_ids, update_ids = loader.find_existing_rows_append_elem(
                         table_name=loader.prop_object_table,
                         ids=po_ids,
@@ -546,65 +563,60 @@ class DataManager:
                     property_object_schema,
                 )
 
-    def create_configuration_set(
+    def create_configuration_sets(
         self,
         loader,
         # below args in order:
         # [config-name-regex-pattern], [config-label-regex-pattern], \
         # [config-set-name], [config-set-description]
         name_label_match: list[tuple],
-        dataset_id: str,
     ):
-
-        # Make this loader.read_table, and loader-agnostic
-        config_df = (
-            loader.spark.read.jdbc(
-                url=loader.url, table=loader.config_table, properties=loader.properties
-            )
-            .withColumn(
-                "names_unstrung", sf.from_json(sf.col("names"), ArrayType(StringType()))
-            )
-            .withColumn(
-                "labels_unstrung",
-                sf.from_json(sf.col("labels"), ArrayType(StringType())),
-            )
-            .withColumn(
-                "dataset_ids_unstrung",
-                sf.from_json("dataset_ids", ArrayType(StringType())),
-            )
-            .drop("names", "labels", "dataset_ids")
-            .withColumnRenamed("names_unstrung", "names")
-            .withColumnRenamed("labels_unstrung", "labels")
-            .withColumnRenamed("dataset_ids_unstrung", "dataset_ids")
-            .filter(sf.array_contains(sf.col("dataset_ids"), dataset_id))
+        config_set_rows = []
+        # Load unstrung dataframe of configs, filter for just includes ds-id
+        config_df = loader.read_table(table_name=loader.config_table, unstring=True)
+        config_df = config_df.filter(
+            sf.array_contains(sf.col("dataset_ids"), self.dataset_id)
         )
-
-        for i, (names_match, label_match, cs_name, cs_desc) in enumerate(
-            name_label_match
+        for i, (names_match, label_match, cs_name, cs_desc) in tqdm(
+            enumerate(name_label_match), desc="Creating Configuration Sets"
         ):
+            print(
+                f"names match: {names_match}, label {label_match}, "
+                f"cs_name {cs_name}, cs_desc {cs_desc}"
+            )
             if names_match:
                 config_set_query = config_df.withColumn(
                     "names_exploded", sf.explode(sf.col("names"))
-                ).filter(
-                    sf.regexp_like(sf.col("names_exploded"), sf.lit(rf"{names_match}"))
-                )
-            if label_match:
-                config_set_query = config_set_query.withColumn(
-                    "labels_exploded", sf.explode(sf.col("labels"))
-                ).filter(
-                    sf.regexp_like(sf.col("labels_exploded"), sf.lit(rf"{label_match}"))
-                )
-            co_ids = [x[0] for x in config_set_query.select("id").distinct().collect()]
+                ).filter(sf.col("names_exploded").rlike(names_match))
+            # Currently an AND operation on labels: labels col contains x AND y
+            if label_match is not None:
+                if isinstance(label_match, str):
+                    label_match = [label_match]
+                for label in label_match:
+                    config_set_query = config_set_query.filter(
+                        sf.array_contains(sf.col("labels"), label)
+                    )
+            co_ids = [
+                x["id"] for x in config_set_query.select("id").distinct().collect()
+            ]
+            loader.find_existing_rows_append_elem(
+                table_name=loader.config_table,
+                ids=co_ids,
+                cols="configuration_set_ids",
+                elems=cs_name,
+                edit_schema=config_df_schema,
+                write_schema=config_schema,
+            )
             config_set = ConfigurationSet(
                 name=cs_name,
                 description=cs_desc,
-                config_df=config_df.filter(sf.col("id").isin(co_ids)),
+                config_df=config_set_query,
+                dataset_id=self.dataset_id,
             )
-            row = config_set.spark_row
-            loader.write_table(
-                [row], loader.config_set_table, schema=configuration_set_schema
-            )
-            loader.update_co_rows_cs_id(co_ids, config_set.spark_row["id"])
+            config_set_rows.append(config_set.spark_row)
+        loader.write_table(
+            config_set_rows, loader.config_set_table, schema=configuration_set_schema
+        )
 
     def create_write_dataset(
         self,

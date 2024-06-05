@@ -3,6 +3,8 @@ from pyspark.sql import functions as sf
 from colabfit.tools.utilities import _empty_dict_from_schema
 from colabfit.tools.schema import configuration_set_schema
 from pyspark.sql.types import IntegerType, StringType
+from datetime import datetime
+import dateutil.parser
 
 from colabfit.tools.utilities import ELEMENT_MAP
 
@@ -44,9 +46,10 @@ class ConfigurationSet:
 
     """
 
-    def __init__(self, config_df, name, description, ordered=False):
+    def __init__(self, config_df, name, description, dataset_id, ordered=False):
         self.name = name
         self.description = description
+        self.dataset_id = dataset_id
         # self.ordered = ordered
         self.spark_row = self.to_spark_row(config_df)
         self._hash = hash(self)
@@ -58,6 +61,9 @@ class ConfigurationSet:
         row_dict["name"] = self.name
         row_dict["description"] = self.description
         row_dict["nconfigurations"] = config_df.count()
+        row_dict["last_modified"] = dateutil.parser.parse(
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
 
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
         row_dict["elements"] = sorted(
@@ -89,6 +95,7 @@ class ConfigurationSet:
         print(row_dict["total_elements_ratios"])
         row_dict["nelements"] = len(row_dict["elements"])
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
+        row_dict["dataset_id"] = self.dataset_id
         return row_dict
 
     def __hash__(self):

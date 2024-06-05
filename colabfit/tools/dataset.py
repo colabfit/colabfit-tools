@@ -90,7 +90,7 @@ class Dataset:
         other_links: list[str] = None,
         dataset_id: str = None,
         labels: list[str] = None,
-        # configuration_sets: list[str] = [], # not implemented
+        configuration_set_ids: list[str] = [],
         data_license: str = "CC-BY-ND-4.0",
     ):
         for auth in authors:
@@ -108,6 +108,7 @@ class Dataset:
         self.description = description
         self.data_license = data_license
         self.dataset_id = dataset_id
+        self.configuration_set_ids = configuration_set_ids
         self.unique_identifier_kw = [
             k for k in dataset_schema.fieldNames() if k not in _hash_ignored_fields
         ]
@@ -139,30 +140,19 @@ class Dataset:
                 "%Y-%m-%dT%H:%M:%SZ"
             )
         )
-        # row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
+        row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
 
         row_dict["elements"] = sorted(
-            config_df.withColumn(
-                "elements_unstrung",
-                sf.from_json(sf.col("elements"), sf.ArrayType(sf.StringType())),
-            )
-            .withColumn("exploded_elements", sf.explode("elements_unstrung"))
+            config_df.withColumn("exploded_elements", sf.explode("elements"))
             .agg(sf.collect_set("exploded_elements").alias("exploded_elements"))
             .select("exploded_elements")
             .take(1)[0][0]
         )
         row_dict["nelements"] = len(row_dict["elements"])
         atomic_ratios_df = (
-            config_df.withColumn(
-                "atomic_unstrung",
-                sf.from_json(
-                    sf.col("atomic_numbers"),
-                    sf.ArrayType(IntegerType()),
-                ),
-            )
-            .select("atomic_unstrung")
-            .withColumn("exploded_atom", sf.explode("atomic_unstrung"))
+            config_df.select("atomic_numbers")
+            .withColumn("exploded_atom", sf.explode("atomic_numbers"))
             .groupBy(sf.col("exploded_atom").alias("atomic_number"))
             .count()
             .withColumn("ratio", sf.col("count") / row_dict["nsites"])
@@ -183,11 +173,7 @@ class Dataset:
         ).collect()[0][0]
 
         row_dict["dimension_types"] = (
-            config_df.withColumn(
-                "dims_unstrung",
-                sf.from_json(sf.col("dimension_types"), sf.ArrayType(sf.StringType())),
-            )
-            .select("dims_unstrung")
+            config_df.select("dims_unstrung")
             .agg(sf.collect_set("dims_unstrung"))
             .collect()[0][0]
         )
@@ -235,7 +221,7 @@ class Dataset:
     def __str__(self):
         return (
             f"Dataset(description='{self.description}', "
-            # f"nconfiguration_sets={len(self.spark_row['configuration_sets'])}, "
+            f"nconfiguration_sets={len(self.spark_row['configuration_sets'])}, "
             f"nproperties={self.spark_row['nproperties']})"
             f"nconfigurations={self.spark_row['nconfigurations']}"
         )

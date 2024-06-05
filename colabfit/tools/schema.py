@@ -268,6 +268,11 @@ configuration_set_schema = StructType(
         StructField("nsites", IntegerType(), True),
         StructField("nelements", IntegerType(), True),
         StructField("elements", StringType(), True),  # ArrayType(StringType()),
+        StructField(
+            "total_elements_ratios", StringType(), True
+        ),  # ArrayType(DoubleType())
+        StructField("description", StringType(), False),
+        StructField("name", StringType(), False),
         StructField("dataset_id", StringType(), True),
     ]
 )
