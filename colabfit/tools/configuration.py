@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
 from colabfit.tools.schema import config_schema
-from colabfit.tools.utilities import _empty_dict_from_schema, _hash
+from colabfit.tools.utilities import _empty_dict_from_schema, _hash, _sort_dict
 
 
 class AtomicConfiguration(Atoms):
@@ -132,7 +132,7 @@ class AtomicConfiguration(Atoms):
                 }
             else:
                 gathered_fields[md_field] = v
-        return str(gathered_fields)
+        return str(_sort_dict(gathered_fields))
 
     def configuration_summary(self):
         """Extracts useful metadata from a Configuration
