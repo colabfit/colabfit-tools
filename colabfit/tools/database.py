@@ -4,11 +4,11 @@ import json
 import multiprocessing
 import os
 import string
-import time
 import warnings
 from functools import partial
 from itertools import islice
 from multiprocessing import Pool
+from time import time
 from types import GeneratorType
 
 import findspark
@@ -184,7 +184,8 @@ class SparkDataLoader:
             table_path = table_name.split(".")
             table = tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
             rec_batch = table.select(
-                predicate=_.id.isin(broadcast_ids.value),
+                predicate=table["id"].isin(broadcast_ids.value),
+                # predicate=_.id.isin(broadcast_ids.value),
                 # predicate=_.id.isin(ids),
                 columns=cols + ["id"],
                 internal_row_id=True,
@@ -572,7 +573,6 @@ class DataManager:
         name_label_match: list[tuple],
     ):
         config_set_rows = []
-        # Load unstrung dataframe of configs, filter for just includes ds-id
         config_df = loader.read_table(table_name=loader.config_table, unstring=True)
         config_df = config_df.filter(
             sf.array_contains(sf.col("dataset_ids"), self.dataset_id)
@@ -596,29 +596,42 @@ class DataManager:
                     config_set_query = config_set_query.filter(
                         sf.array_contains(sf.col("labels"), label)
                     )
-            co_ids = [
-                x["id"] for x in config_set_query.select("id").distinct().collect()
-            ]
-            loader.find_existing_rows_append_elem(
-                table_name=loader.config_table,
-                ids=co_ids,
-                cols="configuration_set_ids",
-                elems=cs_name,
-                edit_schema=config_df_schema,
-                write_schema=config_schema,
-            )
+            t = time()
             config_set = ConfigurationSet(
                 name=cs_name,
                 description=cs_desc,
                 config_df=config_set_query,
                 dataset_id=self.dataset_id,
             )
+            t_end = time() - t
+            print(f"Time to create config set: {t_end}")
+            co_ids = [
+                x["id"] for x in config_set_query.select("id").distinct().collect()
+            ]
+            print(f"Num config ids in config set: {len(co_ids)}")
+
+            batched_ids = batched(co_ids, 10000)
+
+            t = time()
+            for batch in tqdm(batched_ids, desc="Updating configuration set ids"):
+                loader.find_existing_rows_append_elem(
+                    table_name=loader.config_table,
+                    ids=list(batch),
+                    cols="configuration_set_ids",
+                    elems=config_set.spark_row["id"],
+                    edit_schema=config_df_schema,
+                    write_schema=config_schema,
+                )
+            t_end = time() - t
+            print(f"Time to update co-ids: {t_end}")
+
             config_set_rows.append(config_set.spark_row)
         loader.write_table(
             config_set_rows, loader.config_set_table, schema=configuration_set_schema
         )
+        return config_set_rows
 
-    def create_write_dataset(
+    def create_dataset(
         self,
         loader,
         name: str,
@@ -626,52 +639,90 @@ class DataManager:
         publication_link: str,
         data_link: str,
         description: str,
-        labels: list[str],
+        other_links: list[str] = None,
+        dataset_id: str = None,
+        labels: list[str] = None,
+        data_license: str = "CC-BY-ND-4.0",
     ):
-        if loader.table_prefix is not None:
-            config_table = f"{loader.table_prefix}.{loader.config_table}"
-            prop_table = f"{loader.table_prefix}.{loader.prop_table}"
+        cs_ids = loader.read_table(loader.config_set_table).select("id").collect()
+        if len(cs_ids) == 0:
+            cs_ids = None
         else:
-            config_table = loader.config_table
-            prop_table = loader.prop_object_table
-
-        config_df = (
-            loader.spark.read.jdbc(
-                url=loader.url, table=config_table, properties=loader.properties
-            )
-            .withColumn(
-                "ds_ids_unstrung",
-                sf.from_json(sf.col("dataset_ids"), sf.ArrayType(sf.StringType())),
-            )
-            .filter(sf.array_contains("ds_ids_unstrung", self.dataset_id))
-            .drop("ds_ids_unstrung")
+            cs_ids = [x["id"] for x in cs_ids]
+        config_df = loader.read_table(loader.config_table, unstring=True)
+        config_df = config_df.filter(
+            sf.array_contains(sf.col("dataset_ids"), dataset_id)
         )
-        prop_df = (
-            loader.spark.read.jdbc(
-                url=loader.url,
-                table=prop_table,
-                properties=loader.properties,
-            )
-            .withColumn(
-                "ds_ids_unstrung",
-                sf.from_json(sf.col("dataset_ids"), sf.ArrayType(sf.StringType())),
-            )
-            .filter(sf.array_contains("ds_ids_unstrung", self.dataset_id))
-            .drop("ds_ids_unstrung")
-        )
-        dataset = Dataset(
-            config_df=config_df,
-            prop_df=prop_df,
+        prop_df = loader.read_table(loader.prop_object_table, unstring=True)
+        prop_df = prop_df.filter(sf.array_contains(sf.col("dataset_ids"), dataset_id))
+        ds = Dataset(
             name=name,
             authors=authors,
+            config_df=config_df,
+            prop_df=prop_df,
             publication_link=publication_link,
             data_link=data_link,
             description=description,
+            other_links=other_links,
+            dataset_id=dataset_id,
             labels=labels,
-            dataset_id=self.dataset_id,
+            data_license=data_license,
+            configuration_set_ids=cs_ids,
         )
-        row = dataset.spark_row
-        loader.write_table([row], loader.dataset_table, schema=dataset_schema)
+        loader.write_table([ds.spark_row], loader.dataset_table, schema=dataset_schema)
+
+    # def create_dataset(
+    #     self,
+    #     loader,
+    #     name: str,
+    #     authors: list[str],
+    #     publication_link: str,
+    #     data_link: str,
+    #     description: str,
+    #     labels: list[str],
+    #     configuration_set_ids: list[str] = [],
+    # ):
+    #     config_table = loader.config_table
+    #     prop_table = loader.prop_object_table
+
+    #     config_df = (
+    #         loader.spark.read.jdbc(
+    #             url=loader.url, table=config_table, properties=loader.properties
+    #         )
+    #         .withColumn(
+    #             "ds_ids_unstrung",
+    #             sf.from_json(sf.col("dataset_ids"), sf.ArrayType(sf.StringType())),
+    #         )
+    #         .filter(sf.array_contains("ds_ids_unstrung", self.dataset_id))
+    #         .drop("ds_ids_unstrung")
+    #     )
+    #     prop_df = (
+    #         loader.spark.read.jdbc(
+    #             url=loader.url,
+    #             table=prop_table,
+    #             properties=loader.properties,
+    #         )
+    #         .withColumn(
+    #             "ds_ids_unstrung",
+    #             sf.from_json(sf.col("dataset_ids"), sf.ArrayType(sf.StringType())),
+    #         )
+    #         .filter(sf.array_contains("ds_ids_unstrung", self.dataset_id))
+    #         .drop("ds_ids_unstrung")
+    #     )
+    #     dataset = Dataset(
+    #         config_df=config_df,
+    #         prop_df=prop_df,
+    #         name=name,
+    #         authors=authors,
+    #         publication_link=publication_link,
+    #         data_link=data_link,
+    #         description=description,
+    #         labels=labels,
+    #         dataset_id=self.dataset_id,
+    #         configuration_set_ids=configuration_set_ids,
+    #     )
+    #     row = dataset.spark_row
+    #     loader.write_table([row], loader.dataset_table, schema=dataset_schema)
 
     @staticmethod
     def generate_ds_id():
