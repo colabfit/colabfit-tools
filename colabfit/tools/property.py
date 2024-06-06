@@ -13,7 +13,7 @@ import numpy as np
 # from ase.units import create_units
 
 from colabfit.tools.configuration import AtomicConfiguration
-from colabfit.tools.utilities import _empty_dict_from_schema, _hash
+from colabfit.tools.utilities import _empty_dict_from_schema, _hash, _sort_dict
 from colabfit.tools.schema import property_object_schema
 
 # HASH_LENGTH = 12
@@ -185,7 +185,7 @@ def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
         method = method["source-value"]
     if software is not None:
         software = software["source-value"]
-    return json.dumps(gathered_fields), method, software
+    return str(_sort_dict(gathered_fields)), method, software
 
 
 class PropertyParsingError(Exception):
