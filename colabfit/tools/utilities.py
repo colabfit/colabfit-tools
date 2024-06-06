@@ -5,6 +5,7 @@ from pyspark.sql import Row
 import pyarrow as pa
 from ast import literal_eval
 from pyspark.sql.types import IntegerType, StringType, StructType
+from pathlib import Path
 
 
 def _format_for_hash(v):
@@ -104,6 +105,12 @@ def arrow_record_batch_to_rdd(schema, batch):
         yield {names[j]: array[i].as_py() for j, array in enumerate(arrays)}
 
 
+def _sort_dict(dictionary):
+    keys = list(dictionary.keys())
+    keys.sort()
+    return {k: dictionary[k] for k in keys}
+
+
 def _empty_dict_from_schema(schema):
     empty_dict = {}
     for field in schema:
@@ -181,6 +188,65 @@ def add_elem_to_row_dict(col, elem, row_dict):
         val = list(set(val))
     row_dict[col] = val
     return row_dict
+
+
+def _write_value(path_prefix, id_str, filetype, BUCKET_DIR, value):
+    """i.e.: _write_value(
+    value=co['positions'],
+    'CO/positions', co['id'],
+    'txt', '/save/here'
+    )
+    """
+    # Use the final 4 digits of the id for an ~1000-way split
+    split = id_str[-4:]
+    filename = f"{id_str}.{filetype}"
+    full_path = Path(BUCKET_DIR) / path_prefix / split / filename
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    full_path.write_text(str(value))
+    return full_path
+
+
+def write_value_to_file(path_prefix, extension, BUCKET_DIR, write_column, row):
+    """i.e.: partial(_write_value(
+    'CO/positions',
+    'txt',
+    '/save/here'
+    'positions',
+    )
+    """
+    id = row["id"]
+    # Use the final 4 digits of the id for an ~1000-way split
+    value = row[write_column]
+    split = id[-4:]
+    filename = f"{id}.{extension}"
+    full_path = Path(BUCKET_DIR) / path_prefix / split / filename
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    full_path.write_text(str(value))
+    row_dict = row.asDict()
+    row_dict[write_column] = str(full_path)
+    return Row(**row_dict)
+
+
+def multi_value_to_file(path_prefixes, extension, BUCKET_DIR, write_columns, row):
+    """i.e.: partial(_write_value(
+    'CO/positions',
+    'txt',
+    '/save/here'
+    'positions',
+    )
+    """
+    id = row["id"]
+    split = id[-4:]
+
+    row_dict = row.asDict()
+    for write_column, path_prefix in zip(write_columns, path_prefixes):
+        value = row[write_column]
+        filename = f"{id}.{extension}"
+        full_path = Path(BUCKET_DIR) / path_prefix / split / filename
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text(str(value))
+        row_dict[write_column] = str(full_path)
+    return Row(**row_dict)
 
 
 ELEMENT_MAP = {
