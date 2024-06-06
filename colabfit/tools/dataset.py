@@ -12,7 +12,6 @@ from colabfit import MAX_STRING_LENGTH
 from colabfit.tools.schema import dataset_schema
 from colabfit.tools.utilities import (
     _empty_dict_from_schema,
-    stringify_lists,
     ELEMENT_MAP,
 )
 
@@ -130,7 +129,7 @@ class Dataset:
         extended_id = f"{id_prefix}__{dataset_id}"
         self.spark_row["extended_id"] = extended_id
         self.spark_row["labels"] = labels
-        self.spark_row = stringify_lists(self.spark_row)
+        self.spark_row = self.spark_row
 
     def to_spark_row(self, config_df, prop_df):
         """"""
@@ -173,8 +172,8 @@ class Dataset:
         ).collect()[0][0]
 
         row_dict["dimension_types"] = (
-            config_df.select("dims_unstrung")
-            .agg(sf.collect_set("dims_unstrung"))
+            config_df.select("dimension_types")
+            .agg(sf.collect_set("dimension_types"))
             .collect()[0][0]
         )
 
