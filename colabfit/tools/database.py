@@ -240,6 +240,42 @@ class SparkDataLoader:
         else:
             return self.spark.read.table(table_name)
 
+    def read_filter_table(self, filter_conditions: list[tuple[str, str, str]]):
+        """
+        ex: filter_conditions = [("id", "in", array_of_config_ids),
+                                 ("labels", "array_contains", "label1")]
+        In the first, "id" is a single value compared to an array of configuration ids
+        In the second, the array column "labels" is compared to a single value "label1"
+        """
+        co_df = self.read_table(self.config_table, unstring=True).withColumnRenamed(
+            "id", "co_id"
+        )
+        for i, (column, operand, condition) in enumerate(filter_conditions):
+            if operand == "in":
+                co_df = co_df.filter(sf.col(column).isin(condition))
+            elif operand == "like":
+                co_df = co_df.filter(sf.col(column).like(condition))
+            elif operand == "rlike":
+                co_df = co_df.filter(sf.col(column).rlike(condition))
+            elif operand == "==":
+                co_df = co_df.filter(sf.col(column) == condition)
+            elif operand == "array_contains":
+                co_df = co_df.filter(sf.array_contains(sf.col(column), condition))
+            else:
+                raise ValueError(
+                    f"Operand {operand} not implemented in read_filter_table"
+                )
+        po_df = (
+            self.read_table(self.prop_object_table, unstring=True)
+            .withColumn("configuration_id", sf.explode(sf.col("configuration_ids")))
+            .withColumnRenamed("id", "po_id")
+            .drop("configuration_ids")
+        )
+        co_po_df = co_df.join(
+            po_df, co_df["co_id"] == po_df["configuration_id"], "inner"
+        )
+        return co_po_df
+
     def stop_spark(self):
         self.spark.stop()
 
