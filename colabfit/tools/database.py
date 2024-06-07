@@ -243,9 +243,18 @@ class SparkDataLoader:
 
     def get_pos_cos_by_filter(
         self,
-        po_filter_conditions: list[tuple],
-        co_filter_conditions: list[tuple] = None,
+        po_filter_conditions: list[tuple[str, str, str | int | float | list]],
+        co_filter_conditions: list[
+            tuple[str, str, str | int | float | list | None]
+        ] = None,
     ):
+        """
+        example filter conditions:
+        po_filter_conditions = [("dataset_ids", "in", ["po_id1", "po_id2"]),
+                                ("method", "like", "DFT%")]
+        co_filter_conditions = [("nsites", ">", 15),
+                                ('labels', 'array_contains', 'label1')]
+        """
         po_df = self.read_table(
             self.prop_object_table, unstring=True
         ).withColumnRenamed("id", "po_id")
@@ -264,7 +273,9 @@ class SparkDataLoader:
         return co_po_df
 
     def get_filtered_table(
-        self, df: DataFrame, filter_conditions: list[tuple[str, str, str]]
+        self,
+        df: DataFrame,
+        filter_conditions: list[tuple[str, str, str | int | float | list]],
     ):
         for i, (column, operand, condition) in enumerate(filter_conditions):
             if operand == "in":
