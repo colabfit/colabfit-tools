@@ -53,7 +53,8 @@ class ConfigurationSet:
         # self.ordered = ordered
         self.spark_row = self.to_spark_row(config_df)
         self._hash = hash(self)
-        self.spark_row["id"] = f"CS_{self._hash}"
+        self.id = f"CS_{self._hash}"
+        self.spark_row["id"] = self.id
         self.spark_row["hash"] = self._hash
 
     def to_spark_row(self, config_df):
@@ -64,7 +65,6 @@ class ConfigurationSet:
         row_dict["last_modified"] = dateutil.parser.parse(
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
-
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
         row_dict["elements"] = sorted(
             config_df.withColumn("exploded_elements", sf.explode("elements"))
@@ -86,13 +86,9 @@ class ConfigurationSet:
             .select("element", "ratio")
             .collect()
         )
-        print(type(atomic_ratios_df))
-        print(atomic_ratios_df)
-        print([x[1] for x in sorted(atomic_ratios_df, key=lambda x: x["element"])])
         row_dict["total_elements_ratios"] = [
             x[1] for x in sorted(atomic_ratios_df, key=lambda x: x["element"])
         ]
-        print(row_dict["total_elements_ratios"])
         row_dict["nelements"] = len(row_dict["elements"])
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
         row_dict["dataset_id"] = self.dataset_id
