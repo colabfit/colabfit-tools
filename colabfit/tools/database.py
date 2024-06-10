@@ -117,11 +117,23 @@ class SparkDataLoader:
         if not self.spark.catalog.tableExists(table_name):
             print(f"Table {table_name} does not yet exist.")
             return True
-        dupes_exist = (
-            self.spark.read.table(table_name).filter(sf.col("id").isin(ids)).limit(1)
-        )
-        dupes_exist = dupes_exist.count()
-        return dupes_exist == 0
+        batched_ids = batched(ids, 100)
+        for batch in tqdm(batched_ids, desc="Checking for duplicate ids"):
+            batch = list(batch)
+            print(len(batch))
+            print(type(batch))
+            print(batch[0])
+            broadcast_ids = self.spark.sparkContext.broadcast(batch)
+            dupes_exist = (
+                self.spark.read.table(table_name)
+                .filter(sf.col("id").isin(broadcast_ids.value))
+                .limit(1)
+            )
+            print("\n\nbefore collect")
+            if len(dupes_exist.collect()) > 0:
+                return False
+            print("\n\nafter collect")
+        return True
 
     def write_table(
         self,
