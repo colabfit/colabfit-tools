@@ -720,7 +720,6 @@ class DataManager:
                 x["id"] for x in config_set_query.select("id").distinct().collect()
             ]
             print(f"Num config ids in config set: {len(co_ids)}")
-
             t = time()
             loader.find_existing_rows_append_elem(
                 table_name=loader.config_table,

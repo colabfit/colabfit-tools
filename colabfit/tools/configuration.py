@@ -65,9 +65,7 @@ class AtomicConfiguration(Atoms):
             "pbc",
             "metadata",
         ]
-        print("setting info")
         self.info = info
-        print("setting metadata")
         self.metadata = self.set_metadata(co_md_map)
 
         names = self.info[ATOMS_NAME_FIELD]
