@@ -179,6 +179,22 @@ def unstringify_row_dict(row_dict):
     return row_dict
 
 
+def append_ith_element_to_rdd(row_elem):
+    """
+    row_elem: tuple created by joining two RDD.zipWithIndex
+    new_co_ids: list of configuration ids
+    """
+    (index, (po_row, new_co_ids)) = row_elem
+    val = po_row.get("configuration_ids")
+    if val is None:
+        val = new_co_ids
+    else:
+        val.extend(new_co_ids)
+        val = list(set(val))
+    po_row["configuration_ids"] = val
+    return po_row
+
+
 def add_elem_to_row_dict(col, elem, row_dict):
     val = row_dict.get(col)
     if val is None:
