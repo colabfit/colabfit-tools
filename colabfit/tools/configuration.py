@@ -132,7 +132,11 @@ class AtomicConfiguration(Atoms):
                 }
             else:
                 gathered_fields[md_field] = v
-        return str(_sort_dict(gathered_fields))
+        metadata = str(_sort_dict(gathered_fields))
+        if len(metadata) > 60000:
+            print("Metadata too long, truncating")
+            metadata = metadata[:60000]
+        return metadata
 
     def configuration_summary(self):
         """Extracts useful metadata from a Configuration
