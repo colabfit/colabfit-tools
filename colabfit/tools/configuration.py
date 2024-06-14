@@ -247,33 +247,48 @@ class AtomicConfiguration(Atoms):
         return co_dict
 
     @classmethod
-    def from_ase(cls, atoms):
+    def from_ase(self, atoms, co_md_map=None):
         """
         Generates an :class:`AtomicConfiguration` from an :code:`ase.Atoms` object.
         """
         # Workaround for bug in todict() fromdict() with constraints.
         # Merge request: https://gitlab.com/ase/ase/-/merge_requests/2574
-        if atoms.constraints is not None:
-            atoms.constraints = [c.todict() for c in atoms.constraints]
         # This means kwargs need to be same as those in ASE
-        conf = cls.fromdict(atoms.todict())
+        dct = atoms.todict()
+        kw = {name: dct.pop(name) for name in ["numbers", "positions", "cell", "pbc"]}
+        constraints = dct.pop("constraints", None)
+        if constraints:
+            constraints = [c.todict() for c in atoms.constraints]
+            from ase.constraints import dict2constraint
 
-        for k, v in atoms.info.items():
+            constraints = [dict2constraint(d) for d in constraints]
+        info = dct.pop("info", None)
+        for k, v in info.items():
             if k in [ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD]:
                 if not isinstance(v, set):
                     if not isinstance(v, list):
                         v = [v]
-
-                    conf.info[k] = set(v)
+                    info[k] = set(v)
                 else:
-                    conf.info[k] = v
+                    info[k] = v
             else:
-                conf.info[k] = v
+                info[k] = v
+        config = self(
+            constraint=constraints,
+            celldisp=dct.pop("celldisp", None),
+            info=info,
+            co_md_map=co_md_map,
+            **kw,
+        )
+        natoms = len(atoms)
+        for name, arr in dct.items():
+            assert len(arr) == natoms, name
+            assert isinstance(arr, np.ndarray)
+            config.arrays[name] = arr
+        # for k, v in atoms.arrays.items():
+        #     conf.arrays[k] = v
 
-        for k, v in atoms.arrays.items():
-            conf.arrays[k] = v
-
-        return conf
+        return config
 
     @staticmethod
     def aggregate_configuration_summaries(db, co_hashes, verbose=False):
