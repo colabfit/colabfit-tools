@@ -486,13 +486,12 @@ class Property(dict):
 
                         if isinstance(data, (np.ndarray, list)):
                             data = np.atleast_1d(data).tolist()
+                        elif isinstance(data, np.integer):
+                            data = int(data)
+                        elif isinstance(data, np.floating):
+                            data = float(data)
                         elif isinstance(data, (str, bool, int, float)):
                             pass
-                        elif np.issubdtype(data.dtype, np.integer):
-                            data = int(data)
-                        elif np.issubdtype(data.dtype, np.float):
-                            data = float(data)
-
                         instance[key] = {
                             "source-value": data,
                         }
