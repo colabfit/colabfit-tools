@@ -152,7 +152,7 @@ class SparkDataLoader:
             print("Duplicate IDs found in table. Not writing.")
             return False
 
-    def reduce_po_rdd(po_rdd):
+    def reduce_po_rdd(self, po_rdd):
         rdd = po_rdd.map(lambda x: (x["id"], x))
         rdd_grouped = rdd.groupByKey()
 
