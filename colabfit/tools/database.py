@@ -820,11 +820,9 @@ class DataManager:
             print(f"Num config ids in config set: {len(co_ids)}")
             t = time()
             loader.find_existing_co_rows_append_elem(
-                table_name=loader.config_table,
-                ids=co_ids,
+                co_rdd=config_set_query.rdd,
                 cols="configuration_set_ids",
                 elems=config_set.spark_row["id"],
-                write_schema=config_schema,
             )
             t_end = time() - t
             print(f"Time to update co-ids: {t_end}")
