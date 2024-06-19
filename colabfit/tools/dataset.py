@@ -140,17 +140,22 @@ class Dataset:
             )
         )
         row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
-        row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
-
+        config_df = config_df.withColumnRenamed("id", "config_id").withColumnRenamed(
+            "hash", "config_hash"
+        )
+        co_po_df = prop_df.join(
+            config_df, prop_df["configuration_id"] == config_df["config_id"], "inner"
+        )
+        row_dict["nsites"] = co_po_df.agg({"nsites": "sum"}).first()[0]
         row_dict["elements"] = sorted(
-            config_df.withColumn("exploded_elements", sf.explode("elements"))
+            co_po_df.withColumn("exploded_elements", sf.explode("elements"))
             .agg(sf.collect_set("exploded_elements").alias("exploded_elements"))
             .select("exploded_elements")
             .take(1)[0][0]
         )
         row_dict["nelements"] = len(row_dict["elements"])
         atomic_ratios_df = (
-            config_df.select("atomic_numbers")
+            co_po_df.select("atomic_numbers")
             .withColumn("exploded_atom", sf.explode("atomic_numbers"))
             .groupBy(sf.col("exploded_atom").alias("atomic_number"))
             .count()
@@ -167,12 +172,12 @@ class Dataset:
             x[1] for x in sorted(atomic_ratios_df, key=lambda x: x["element"])
         ]
 
-        row_dict["nperiodic_dimensions"] = config_df.agg(
+        row_dict["nperiodic_dimensions"] = co_po_df.agg(
             sf.collect_set("nperiodic_dimensions")
         ).collect()[0][0]
 
         row_dict["dimension_types"] = (
-            config_df.select("dimension_types")
+            co_po_df.select("dimension_types")
             .agg(sf.collect_set("dimension_types"))
             .collect()[0][0]
         )
@@ -191,7 +196,7 @@ class Dataset:
                 prop_df.select(prop).where(f"{prop} is not null").count()
             )
         row_dict["nproperty_objects"] = prop_df.count()
-        row_dict["nconfigurations"] = config_df.count()
+        row_dict["nconfigurations"] = co_po_df.count()
         row_dict["authors"] = str(self.authors)
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license
