@@ -22,28 +22,24 @@ config_schema = StructType(
         StructField("id", StringType(), False),
         StructField("hash", StringType(), False),
         StructField("last_modified", TimestampType(), False),
-        StructField("dataset_ids", StringType(), True),  # ArrayType(StringType())
+        StructField("dataset_ids", StringType(), True),
         StructField("metadata", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
         StructField("chemical_formula_reduced", StringType(), True),
         StructField("chemical_formula_anonymous", StringType(), True),
-        StructField("elements", StringType(), True),  # ArrayType(StringType())
-        StructField("elements_ratios", StringType(), True),  # ArrayType(IntegerType())
-        StructField("atomic_numbers", StringType(), True),  # ArrayType(IntegerType())
+        StructField("elements", StringType(), True),
+        StructField("elements_ratios", StringType(), True),
+        StructField("atomic_numbers", StringType(), True),
         StructField("nsites", IntegerType(), True),
         StructField("nelements", IntegerType(), True),
         StructField("nperiodic_dimensions", IntegerType(), True),
-        StructField("cell", StringType(), True),  # ArrayType(ArrayType(DoubleType()))
-        StructField("dimension_types", StringType(), True),  # ArrayType(IntegerType())
-        StructField("pbc", StringType(), True),  # ArrayType(IntegerType())
-        StructField(
-            "positions", StringType(), True
-        ),  # ArrayType(ArrayType(DoubleType()))
-        StructField("names", StringType(), True),  # ArrayType(StringType()),
-        StructField("labels", StringType(), True),  # ArrayType(StringType())
-        StructField(
-            "configuration_set_ids", StringType(), True
-        ),  # ArrayType(StringType())
+        StructField("cell", StringType(), True),
+        StructField("dimension_types", StringType(), True),
+        StructField("pbc", StringType(), True),
+        StructField("positions", StringType(), True),
+        StructField("names", StringType(), True),
+        StructField("labels", StringType(), True),
+        StructField("configuration_set_ids", StringType(), True),
     ]
 )
 
@@ -79,8 +75,9 @@ property_object_schema = StructType(
         StructField("id", StringType(), False),
         StructField("hash", StringType(), False),
         StructField("last_modified", TimestampType(), False),
-        StructField("configuration_ids", StringType(), True),  # ArrayType(StringType())
-        StructField("dataset_ids", StringType(), True),  # ArrayType(StringType())
+        StructField("configuration_ids", StringType(), True),
+        StructField("dataset_ids", StringType(), True),
+        StructField("multiplicity", IntegerType(), True),
         StructField("metadata", StringType(), True),
         StructField("software", StringType(), True),
         StructField("method", StringType(), True),
@@ -91,14 +88,10 @@ property_object_schema = StructType(
         StructField("potential_energy_reference", DoubleType(), True),
         StructField("potential_energy_reference_unit", StringType(), True),
         StructField("potential_energy_property_id", StringType(), True),
-        StructField(
-            "atomic_forces", StringType(), True
-        ),  # ArrayType(ArrayType(DoubleType()))
+        StructField("atomic_forces", StringType(), True),
         StructField("atomic_forces_unit", StringType(), True),
         StructField("atomic_forces_property_id", StringType(), True),
-        StructField(
-            "cauchy_stress", StringType(), True
-        ),  # ArrayType(ArrayType(DoubleType()))
+        StructField("cauchy_stress", StringType(), True),
         StructField("cauchy_stress_unit", StringType(), True),
         StructField("cauchy_stress_volume_normalized", BooleanType(), True),
         StructField("cauchy_stress_property_id", StringType(), True),
@@ -137,8 +130,9 @@ property_object_df_schema = StructType(
         StructField("id", StringType(), False),
         StructField("hash", StringType(), False),
         StructField("last_modified", TimestampType(), False),
-        StructField("configuration_ids", ArrayType(StringType()), True),
-        StructField("dataset_ids", ArrayType(StringType()), True),
+        StructField("configuration_id", ArrayType(StringType()), True),
+        StructField("dataset_id", ArrayType(StringType()), True),
+        StructField("multiplicity", IntegerType(), True),
         StructField("metadata", StringType(), True),
         StructField("software", StringType(), True),
         StructField("method", StringType(), True),
@@ -196,16 +190,10 @@ dataset_schema = StructType(
         StructField("nproperty_objects", IntegerType(), True),
         StructField("nsites", IntegerType(), True),
         StructField("nelements", IntegerType(), True),
-        StructField("elements", StringType(), True),  # ArrayType(StringType())
-        StructField(
-            "total_elements_ratios", StringType(), True
-        ),  # ArrayType(DoubleType())
-        StructField(
-            "nperiodic_dimensions", StringType(), True
-        ),  # ArrayType(IntegerType())
-        StructField(
-            "dimension_types", StringType(), True
-        ),  # ArrayType(ArrayType(IntegerType()))
+        StructField("elements", StringType(), True),
+        StructField("total_elements_ratios", StringType(), True),
+        StructField("nperiodic_dimensions", StringType(), True),
+        StructField("dimension_types", StringType(), True),
         StructField("atomization_energy_count", IntegerType(), True),
         StructField("adsorption_energy_count", IntegerType(), True),
         StructField("formation_energy_count", IntegerType(), True),
@@ -214,14 +202,14 @@ dataset_schema = StructType(
         StructField("atomic_forces_count", IntegerType(), True),
         StructField("band_gap_count", IntegerType(), True),
         StructField("cauchy_stress_count", IntegerType(), True),
-        StructField("authors", StringType(), True),  # ArrayType(StringType())
+        StructField("authors", StringType(), True),
         StructField("description", StringType(), True),
         StructField("extended_id", StringType(), True),
         StructField("license", StringType(), True),
-        StructField("publication_link", StringType(), True),  # ArrayType(StringType())
-        StructField("data_link", StringType(), True),  # ArrayType(StringType()
-        StructField("other_links", StringType(), True),  # ArrayType(StringType()
-        StructField("labels", StringType(), True),  # ArrayType(StringType()
+        StructField("publication_link", StringType(), True),
+        StructField("data_link", StringType(), True),
+        StructField("other_links", StringType(), True),
+        StructField("labels", StringType(), True),
         StructField("name", StringType(), True),
     ]
 )
@@ -267,10 +255,8 @@ configuration_set_schema = StructType(
         StructField("nconfigurations", IntegerType(), True),
         StructField("nsites", IntegerType(), True),
         StructField("nelements", IntegerType(), True),
-        StructField("elements", StringType(), True),  # ArrayType(StringType()),
-        StructField(
-            "total_elements_ratios", StringType(), True
-        ),  # ArrayType(DoubleType())
+        StructField("elements", StringType(), True),
+        StructField("total_elements_ratios", StringType(), True),
         StructField("description", StringType(), False),
         StructField("name", StringType(), False),
         StructField("dataset_id", StringType(), True),

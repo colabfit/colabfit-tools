@@ -25,11 +25,12 @@ from pyspark.sql.types import (
     StringType,
     StructField,
     StructType,
+    TimestampType,
 )
 from tqdm import tqdm
 from unidecode import unidecode
 from vastdb.session import Session
-
+import dateutil.parser
 from colabfit import (
     ID_FORMAT_STRING,
 )  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,; _CONFIGS_COLLECTION,; _CONFIGSETS_COLLECTION,; _DATASETS_COLLECTION,; _PROPOBJECT_COLLECTION,
@@ -49,7 +50,7 @@ from colabfit.tools.schema import (
 )
 from colabfit.tools.utilities import (
     add_elem_to_row_dict,
-    append_ith_element_to_rdd,
+    append_ith_element_to_rdd_labels,
     arrow_record_batch_to_rdd,
     get_spark_field_type,
     spark_schema_to_arrow_schema,
@@ -151,51 +152,50 @@ class SparkDataLoader:
             print("Duplicate IDs found in table. Not writing.")
             return False
 
-    def reduce_po_rdd(self, po_rdd):
-        po_co_ids = (
-            po_rdd.map(lambda x: (x["id"], x["configuration_ids"][0]))
-            .groupByKey()
-            .mapValues(list)
-        )
-        po_id_map = po_co_ids.collectAsMap()
-        broadcast_map = self.spark.sparkContext.broadcast(po_id_map)
+    def reduce_po_rdd(po_rdd):
+        rdd = po_rdd.map(lambda x: (x["id"], x))
+        rdd_grouped = rdd.groupByKey()
 
-        def replace_id_val(row):
-            row["configuration_ids"] = broadcast_map.value[row["id"]]
-            return row
+        def sum_multiplicity(dicts):
+            summed_dict = None
+            for d in dicts:
+                if summed_dict is None:
+                    summed_dict = d.copy()
+                    summed_dict["multiplicity"] = d["multiplicity"]
+                else:
+                    summed_dict["multiplicity"] += d["multiplicity"]
+            return summed_dict
 
-        po_rdd = po_rdd.map(replace_id_val)
-        po_rdd = (
-            po_rdd.map(lambda x: (x["id"], x))
-            .reduceByKey(lambda a, b: a)
-            .map(lambda x: x[1])
-        )
-        return po_rdd
+        summed_rdd = rdd_grouped.mapValues(lambda rows: sum_multiplicity(rows))
+        result_rdd = summed_rdd.map(lambda x: x[1])
+        return result_rdd
 
-    def find_existing_rows_append_elem(
+    def find_existing_co_rows_append_elem(
         self,
-        table_name: str,
-        ids: list[str],
+        co_rdd,
         cols: list[str],
         elems: list[str],
-        write_schema: StructType,
-        po_rdd=None,
     ):
         if isinstance(cols, str):
             cols = [cols]
         if isinstance(elems, str):
             elems = [elems]
-        col_types = {"id": StringType(), "$row_id": IntegerType()}
+        col_types = {
+            "id": StringType(),
+            "last_modified": TimestampType(),
+            "$row_id": IntegerType(),
+        }
         for col in cols:
-            col_types[col] = get_spark_field_type(write_schema, col)
-        update_cols = [col for col in col_types if col != "id"]
+            col_types[col] = get_spark_field_type(config_schema, col)
+        update_cols = [col for col in col_types if col not in ["id", "$row_id"]]
         query_schema = StructType(
             [
                 StructField(col, col_types[col], False)
-                for i, col in enumerate(cols + ["id", "$row_id"])
+                for i, col in enumerate(update_cols + ["id", "$row_id"])
             ]
         )
-
+        total_write_cols = update_cols + ["$row_id"]
+        ids = co_rdd.map(lambda x: x["id"]).collect()
         partial_batch_to_rdd = partial(arrow_record_batch_to_rdd, query_schema)
         batched_ids = batched(ids, 10000)
         new_ids = []
@@ -206,13 +206,13 @@ class SparkDataLoader:
             # We only have to use vastdb-sdk here bc we need the '$row_id' column
             with self.session.transaction() as tx:
                 # string would be 'ndb.colabfit.dev.[table name]'
-                table_path = table_name.split(".")
+                table_path = self.config_table.split(".")
                 table = (
                     tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
                 )
                 rec_batch = table.select(
                     predicate=table["id"].isin(id_batch),
-                    columns=cols + ["id"],
+                    columns=update_cols + ["id"],
                     internal_row_id=True,
                 )
                 rec_batch = rec_batch.read_all()
@@ -222,27 +222,22 @@ class SparkDataLoader:
                 print(f"length of rdd: {duplicate_rdd.count()}")
             duplicate_rdd = duplicate_rdd.map(unstringify_row_dict)
             for col, elem in zip(cols, elems):
-                # Add 'labels' to this?
-                if col == "configuration_ids":
-                    if po_rdd is None:
-                        raise ValueError(
-                            "Need to pass po_rdd when updating configuration_ids"
-                        )
-                    po_co_id_map = (
-                        po_rdd.map(lambda x: (x["id"], x["configuration_ids"][0]))
+                if col == "labels":
+                    co_label_map = (
+                        co_rdd.map(lambda x: (x["id"], x["labels"]))
                         .groupByKey()
                         .mapValues(list)
                         .collect()
                     )
-                    po_co_id_map = dict(po_co_id_map)
-                    co_ids = duplicate_rdd.map(
-                        lambda x: po_co_id_map[x["id"]]
+                    co_label_map = dict(co_label_map)
+                    labels = duplicate_rdd.map(
+                        lambda x: co_label_map[x["labels"]]
                     ).zipWithIndex()
                     duplicate_rdd = duplicate_rdd.zipWithIndex()
                     duplicate_rdd = duplicate_rdd.map(lambda x: (x[1], x[0]))
-                    co_ids = co_ids.map(lambda x: (x[1], x[0]))
-                    duplicate_rdd = duplicate_rdd.join(co_ids).map(
-                        append_ith_element_to_rdd
+                    labels = labels.map(lambda x: (x[1], x[0]))
+                    duplicate_rdd = duplicate_rdd.join(labels).map(
+                        append_ith_element_to_rdd_labels
                     )
 
                 else:
@@ -251,13 +246,114 @@ class SparkDataLoader:
             existing_ids_batch = duplicate_rdd.map(lambda x: x["id"]).collect()
             new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
             duplicate_rdd = duplicate_rdd.map(stringify_row_dict)
+            update_time = dateutil.parser.parse(
+                datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+            )
+            duplicate_rdd = duplicate_rdd.map(
+                lambda x: {**x, "last_modified": update_time}
+            )
             rdd_collect = duplicate_rdd.map(
-                lambda x: [x[col] for col in update_cols]
+                lambda x: [x[col] for col in total_write_cols]
             ).collect()
             update_schema = StructType(
-                [StructField(col, col_types[col], False) for col in update_cols]
+                [StructField(col, col_types[col], False) for col in total_write_cols]
             )
+            print("update_schema", update_schema)
             arrow_schema = spark_schema_to_arrow_schema(update_schema)
+            print("arrow_schema", arrow_schema)
+            update_table = pa.table(
+                [pa.array(col) for col in zip(*rdd_collect)], schema=arrow_schema
+            )
+            print("update_table", update_table)
+            with self.session.transaction() as tx:
+                table = (
+                    tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
+                )
+                table.update(
+                    rows=update_table,
+                    columns=update_cols,
+                )
+            new_ids.extend(new_ids_batch)
+            existing_ids.extend(existing_ids_batch)
+
+        return (new_ids, list(set(existing_ids)))
+
+    def find_existing_po_rows_append_elem(
+        self,
+        ids: list[str],
+        po_rdd=None,
+    ):
+        cols = ["id", "multiplicity", "last_modified"]
+        col_types = {
+            "id": StringType(),
+            "multiplicity": IntegerType(),
+            "last_modified": TimestampType(),
+            "$row_id": IntegerType(),
+        }
+        query_schema = StructType(
+            [
+                StructField(col, col_types[col], False)
+                for i, col in enumerate(cols + ["$row_id"])
+            ]
+        )
+        write_schema = StructType(
+            [
+                StructField(col, col_types[col], False)
+                for i, col in enumerate(["multiplicity", "last_modified", "$row_id"])
+            ]
+        )
+        partial_batch_to_rdd = partial(arrow_record_batch_to_rdd, query_schema)
+        batched_ids = batched(ids, 10000)
+        new_ids = []
+        existing_ids = []
+        columns = ["id", "multiplicity", "last_modified"]
+        po_rdd_update_cols = po_rdd.map(lambda x: (x["id"], x["multiplicity"]))
+        for id_batch in batched_ids:
+            # broadcast_ids = self.spark.sparkContext.broadcast(id_batch)
+            id_batch = list(set(id_batch))
+            # We only have to use vastdb-sdk here bc we need the '$row_id' column
+            with self.session.transaction() as tx:
+                table_name = "ndb.colabfit.dev.gpw_test_propobjects"
+                # string would be 'ndb.colabfit.dev.[table name]'
+                table_path = table_name.split(".")
+                table = (
+                    tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
+                )
+                rec_batch = table.select(
+                    predicate=table["id"].isin(id_batch),
+                    columns=columns,
+                    internal_row_id=True,
+                )
+                rec_batch = rec_batch.read_all()
+                duplicate_rdd = self.spark.sparkContext.parallelize(
+                    list(partial_batch_to_rdd(rec_batch))
+                )
+                print(f"length of rdd: {duplicate_rdd.count()}")
+
+            update_time = dateutil.parser.parse(
+                datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+            )
+            duplicate_rdd = duplicate_rdd.map(lambda x: (x["id"], x))
+            duplicate_rdd = duplicate_rdd.join(po_rdd_update_cols)
+            duplicate_rdd = duplicate_rdd.map(
+                lambda x: {
+                    "id": x[0],
+                    "last_modified": update_time,
+                    "multiplicity": x[1][0]["multiplicity"] + x[1][1],
+                    "$row_id": x[1][0]["$row_id"],
+                }
+            )
+
+            rdd_collect = duplicate_rdd.map(
+                lambda x: [x[col] for col in col_types.keys() if col != "id"]
+            ).collect()
+            existing_ids_batch = duplicate_rdd.map(lambda x: x["id"]).collect()
+            new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
+            arrow_schema = spark_schema_to_arrow_schema(write_schema)
             update_table = pa.table(
                 [pa.array(col) for col in zip(*rdd_collect)], schema=arrow_schema
             )
@@ -265,7 +361,9 @@ class SparkDataLoader:
                 table = (
                     tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
                 )
-                table.update(rows=update_table)
+                table.update(
+                    rows=update_table, columns=["multiplicity", "last_modified"]
+                )
             new_ids.extend(new_ids_batch)
             existing_ids.extend(existing_ids_batch)
 
@@ -593,12 +691,12 @@ class DataManager:
                 )
                 if not all_unique_co:
                     print("updating old rows")
-                    new_co_ids, update_co_ids = loader.find_existing_rows_append_elem(
-                        table_name=loader.config_table,
-                        ids=co_ids,
-                        cols=["dataset_ids"],
-                        elems=[self.dataset_id],
-                        write_schema=config_schema,
+                    new_co_ids, update_co_ids = (
+                        loader.find_existing_co_rows_append_elem(
+                            co_rdd=co_rdd,
+                            cols=["dataset_ids"],
+                            elems=[self.dataset_id],
+                        )
                     )
                     print(f"Config ids in batch: {len(update_co_ids)}")
                     print("writing new rows after updating old rows")
@@ -617,20 +715,19 @@ class DataManager:
                     print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
 
                 if not all_unique_po:
-                    new_po_ids, update_po_ids = loader.find_existing_rows_append_elem(
-                        po_rdd=po_rdd,
-                        table_name=loader.prop_object_table,
-                        ids=po_ids,
-                        cols=["dataset_ids", "configuration_ids"],
-                        elems=[self.dataset_id, "placeholder"],
-                        write_schema=property_object_schema,
+                    new_po_ids, update_po_ids = (
+                        loader.find_existing_po_rows_append_elem(
+                            po_rdd=po_rdd,
+                            ids=po_ids,
+                        )
                     )
                     print(f"length of update_po_ids {len(update_po_ids)}")
                     print(
                         f"length of set update_po_ids {len(list(set(update_po_ids)))}"
                     )
                     print(
-                        f"Updated {len(update_po_ids)} rows in {loader.prop_object_table}"
+                        f"Updated {len(update_po_ids)} rows in "
+                        f"{loader.prop_object_table}"
                     )
                     loader.write_table(
                         po_rdd,
@@ -639,7 +736,8 @@ class DataManager:
                         ids_filter=new_po_ids,
                     )
                     print(
-                        f"Inserted {len(new_po_ids)} rows into {loader.prop_object_table}"
+                        f"Inserted {len(new_po_ids)} rows into "
+                        f"{loader.prop_object_table}"
                     )
                 else:
                     loader.write_table(

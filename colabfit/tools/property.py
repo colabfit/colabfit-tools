@@ -88,8 +88,8 @@ _hash_ignored_fields = [
     "id",
     "hash",
     "last_modified",
-    "configuration_ids",
-    "dataset_ids",
+    # "configuration_ids",
+    # "dataset_ids",
 ]
 
 
@@ -300,7 +300,7 @@ class Property(dict):
         self._id = f"PO_{self._hash}"
         self.spark_row["id"] = self._id
         if dataset_id is not None:
-            self.spark_row["dataset_ids"] = [dataset_id]
+            self.spark_row["dataset_id"] = dataset_id
 
     @property
     def instance(self):
@@ -548,6 +548,7 @@ class Property(dict):
             )
         )
         row_dict["chemical_formula_hill"] = self.chemical_formula_hill
+        row_dict["multiplicity"] = 1
         return row_dict
 
     def convert_units(self):

@@ -4,7 +4,7 @@ from types import NoneType
 from pyspark.sql import Row
 import pyarrow as pa
 from ast import literal_eval
-from pyspark.sql.types import IntegerType, StringType, StructType
+from pyspark.sql.types import IntegerType, StringType, StructType, TimestampType
 from pathlib import Path
 
 
@@ -74,6 +74,8 @@ def spark_to_arrow_type(spark_type):
         return pa.int32()
     elif isinstance(spark_type, StringType):
         return pa.string()
+    elif isinstance(spark_type, TimestampType):
+        return pa.timestamp("ns")
     elif isinstance(spark_type, StructType):
         return pa.struct(
             [
@@ -179,20 +181,20 @@ def unstringify_row_dict(row_dict):
     return row_dict
 
 
-def append_ith_element_to_rdd(row_elem):
+def append_ith_element_to_rdd_labels(row_elem):
     """
     row_elem: tuple created by joining two RDD.zipWithIndex
-    new_co_ids: list of configuration ids
+    new_labels: list of labels
     """
-    (index, (po_row, new_co_ids)) = row_elem
-    val = po_row.get("configuration_ids")
+    (index, (co_row, new_labels)) = row_elem
+    val = co_row.get("labels")
     if val is None:
-        val = new_co_ids
+        val = new_labels
     else:
-        val.extend(new_co_ids)
+        val.extend(new_labels)
         val = list(set(val))
-    po_row["configuration_ids"] = val
-    return po_row
+    co_row["labels"] = val
+    return co_row
 
 
 def add_elem_to_row_dict(col, elem, row_dict):
