@@ -512,7 +512,7 @@ class Property(dict):
                 # )
                 props_dict[pname] = {k: v for k, v in instance.items()}
         props_dict["chemical_formula_hill"] = configuration.get_chemical_formula()
-        props_dict["configuration_ids"] = [configuration.id]
+        props_dict["configuration_id"] = configuration.id
 
         return cls(
             definitions=definitions,
@@ -536,8 +536,8 @@ class Property(dict):
                 row_dict["software"] = val
             elif key == "_metadata":
                 continue
-            elif key == "configuration_ids":
-                row_dict["configuration_ids"] = val
+            elif key == "configuration_id":
+                row_dict["configuration_id"] = val
             elif "energy" in key:
                 row_dict.update(prop_to_row_mapper["energy"](key, val))
             else:
