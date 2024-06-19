@@ -819,7 +819,7 @@ class DataManager:
             ]
             print(f"Num config ids in config set: {len(co_ids)}")
             t = time()
-            loader.find_existing_rows_append_elem(
+            loader.find_existing_co_rows_append_elem(
                 table_name=loader.config_table,
                 ids=co_ids,
                 cols="configuration_set_ids",
