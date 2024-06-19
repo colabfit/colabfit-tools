@@ -401,7 +401,7 @@ class SparkDataLoader:
     ):
         """
         example filter conditions:
-        po_filter_conditions = [("dataset_ids", "in", ["po_id1", "po_id2"]),
+        po_filter_conditions = [("dataset_id", "=", "ds_id1"),
                                 ("method", "like", "DFT%")]
         co_filter_conditions = [("nsites", ">", 15),
                                 ('labels', 'array_contains', 'label1')]
@@ -685,6 +685,7 @@ class DataManager:
                         f"{len(po_ids) - len(set(po_ids))} duplicates found in PO RDD"
                     )
                     po_rdd = loader.reduce_po_rdd(po_rdd)
+                co_ids = set(co_ids)
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_ids)
                 all_unique_po = loader.check_unique_ids(
                     loader.prop_object_table, po_ids
@@ -847,17 +848,20 @@ class DataManager:
         labels: list[str] = None,
         data_license: str = "CC-BY-ND-4.0",
     ):
-        cs_ids = loader.read_table(loader.config_set_table).select("id").collect()
-        if len(cs_ids) == 0:
-            cs_ids = None
+        if loader.spark.catalog.tableExists(loader.config_set_table):
+            cs_ids = loader.read_table(loader.config_set_table).select("id").collect()
+            if len(cs_ids) == 0:
+                cs_ids = None
+            else:
+                cs_ids = [x["id"] for x in cs_ids]
         else:
-            cs_ids = [x["id"] for x in cs_ids]
+            cs_ids = None
         config_df = loader.read_table(loader.config_table, unstring=True)
         config_df = config_df.filter(
             sf.array_contains(sf.col("dataset_ids"), dataset_id)
         )
         prop_df = loader.read_table(loader.prop_object_table, unstring=True)
-        prop_df = prop_df.filter(sf.array_contains(sf.col("dataset_ids"), dataset_id))
+        prop_df = prop_df.filter(sf.col("dataset_id") == dataset_id)
         ds = Dataset(
             name=name,
             authors=authors,
