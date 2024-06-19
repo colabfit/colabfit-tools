@@ -130,7 +130,7 @@ property_object_df_schema = StructType(
         StructField("id", StringType(), False),
         StructField("hash", StringType(), False),
         StructField("last_modified", TimestampType(), False),
-        StructField("configuration_id", ArrayType(StringType()), True),
+        StructField("configuration_ids", ArrayType(StringType()), True),
         StructField("dataset_id", StringType(), True),
         StructField("multiplicity", IntegerType(), True),
         StructField("metadata", StringType(), True),
