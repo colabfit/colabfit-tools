@@ -85,7 +85,7 @@ class SparkDataLoader:
     ):
         self.table_prefix = table_prefix
         self.spark = SparkSession.builder.appName("ColabfitDataLoader").getOrCreate()
-        self.spark.sparkContext.setLogLevel("WARN")
+        # self.spark.sparkContext.setLogLevel("WARN")
         if endpoint and access_key and access_secret:
             self.endpoint = endpoint
             self.access_key = access_key
@@ -268,13 +268,10 @@ class SparkDataLoader:
             update_schema = StructType(
                 [StructField(col, col_types[col], False) for col in total_write_cols]
             )
-            print("update_schema", update_schema)
             arrow_schema = spark_schema_to_arrow_schema(update_schema)
-            print("arrow_schema", arrow_schema)
             update_table = pa.table(
                 [pa.array(col) for col in zip(*rdd_collect)], schema=arrow_schema
             )
-            print("update_table", update_table)
             with self.session.transaction() as tx:
                 table = (
                     tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
