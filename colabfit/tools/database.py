@@ -81,17 +81,25 @@ class SparkDataLoader:
         endpoint=None,
         access_key=None,
         access_secret=None,
+        check_ids_batch_size=500,
     ):
         self.table_prefix = table_prefix
         self.spark = SparkSession.builder.appName("ColabfitDataLoader").getOrCreate()
         self.spark.sparkContext.setLogLevel("WARN")
-        self.endpoint = endpoint
-        self.access_key = access_key
-        self.access_secret = access_secret
+        if endpoint and access_key and access_secret:
+            self.endpoint = endpoint
+            self.access_key = access_key
+            self.access_secret = access_secret
+            self.session = self.get_vastdb_session(
+                endpoint=self.endpoint,
+                access_key=self.access_key,
+                access_secret=self.access_secret,
+            )
         self.config_table = f"{self.table_prefix}.{_CONFIGS_COLLECTION}"
         self.config_set_table = f"{self.table_prefix}.{_CONFIGSETS_COLLECTION}"
         self.dataset_table = f"{self.table_prefix}.{_DATASETS_COLLECTION}"
         self.prop_object_table = f"{self.table_prefix}.{_PROPOBJECT_COLLECTION}"
+        self.check_unique_ids_batch_size = check_ids_batch_size
 
     def get_vastdb_session(self, endpoint, access_key: str, access_secret: str):
         return Session(endpoint=endpoint, access=access_key, secret=access_secret)
@@ -118,7 +126,7 @@ class SparkDataLoader:
         if not self.spark.catalog.tableExists(table_name):
             print(f"Table {table_name} does not yet exist.")
             return True
-        batched_ids = batched(ids, 500)
+        batched_ids = batched(ids, self.check_unique_ids_batch_size)
         for i, batch in tqdm(
             enumerate(batched_ids),
             desc=f"Checking for duplicate ids in {table_name.split('.')[-1]}",
