@@ -1,6 +1,8 @@
 import numpy as np
 from hashlib import sha512
 from types import NoneType
+from functools import partial
+from pyspark.sql.types import StructField
 from pyspark.sql import Row
 import pyarrow as pa
 from ast import literal_eval
@@ -160,13 +162,19 @@ def stringify_row_dict(row_dict):
 def unstringify(row):
     """Should be mapped as DataFrame.rdd.map(unstringify)"""
     row_dict = row.asDict()
-    for key, val in row_dict.items():
-        if key == "metadata":
-            continue
-        elif isinstance(val, str) and len(val) > 0 and val[0] in ["{", "["]:
-            dval = literal_eval(row[key])
-            row_dict[key] = dval
-    new_row = Row(**row_dict)
+    try:
+        for key, val in row_dict.items():
+            if key == "metadata":
+                continue
+            elif isinstance(val, str) and len(val) > 0 and val[0] in ["["]:
+                dval = literal_eval(row[key])
+                row_dict[key] = dval
+            else:
+                continue
+        new_row = Row(**row_dict)
+    except Exception as e:
+        print(e)
+        print(row_dict)
     return new_row
 
 
@@ -206,6 +214,54 @@ def add_elem_to_row_dict(col, elem, row_dict):
         val = list(set(val))
     row_dict[col] = val
     return row_dict
+
+
+##########################################################
+# Functions for splitting oversize arrays to columns
+##########################################################
+
+
+def split_arr_map(column, row_dict):
+    n = 60000
+    col_string = "".join(
+        np.array2string(
+            np.array(row_dict[column]), threshold=np.inf, separator=","
+        ).replace("\n", "")
+    )
+    row_dict[column] = [col_string[i : i + n] for i in range(0, len(col_string), n)]
+    return row_dict
+
+
+def stacked_arrays_to_columns(column, max_chunks, row_dict):
+    empty = max_chunks - len(row_dict[column])
+    full = len(row_dict[column])
+    for i, force_arr in enumerate(row_dict[column]):
+        row_dict[f"{column}_{i+1}"] = force_arr
+    row_dict[column] = row_dict.pop(f"{column}_1")
+    for i in range(empty):
+        row_dict[f"{column}_{full+i+1}"] = None
+    return row_dict
+
+
+def split_size_n_arrs_to_cols(rdd, column):
+    rdd = rdd.map(partial(split_arr_map, column))
+    max_chunks = rdd.map(lambda x: len(x[column])).max()
+    rdd = rdd.map(partial(stacked_arrays_to_columns, column, max_chunks))
+    return rdd
+
+
+def update_schema(rdd, schema):
+    """Use with array splitting functions to add string columns to schema"""
+    keys = list(rdd.map(lambda x: x.keys()).take(1)[0])
+    extra_keys = [x for x in keys if x not in schema.fieldNames()]
+    for key in extra_keys:
+        schema.add(StructField(key, StringType(), True))
+    return schema
+
+
+##########################################################
+# Functions for writing values to files
+##########################################################
 
 
 def _write_value(path_prefix, id_str, filetype, BUCKET_DIR, value):

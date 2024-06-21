@@ -5,7 +5,7 @@ import dateutil
 import numpy as np
 import pyspark.sql.functions as sf
 from unidecode import unidecode
-from pyspark.sql.types import IntegerType, StringType
+from pyspark.sql.types import StringType
 
 
 from colabfit import MAX_STRING_LENGTH
@@ -14,8 +14,6 @@ from colabfit.tools.utilities import (
     _empty_dict_from_schema,
     ELEMENT_MAP,
 )
-
-_hash_ignored_fields = ["id", "hash", "last_modified", "extended_id"]
 
 
 class Dataset:
@@ -108,9 +106,6 @@ class Dataset:
         self.data_license = data_license
         self.dataset_id = dataset_id
         self.configuration_set_ids = configuration_set_ids
-        self.unique_identifier_kw = [
-            k for k in dataset_schema.fieldNames() if k not in _hash_ignored_fields
-        ]
         self.spark_row = self.to_spark_row(config_df=config_df, prop_df=prop_df)
         self._hash = hash(self)
         self.spark_row["hash"] = self._hash
@@ -129,7 +124,7 @@ class Dataset:
         extended_id = f"{id_prefix}__{dataset_id}"
         self.spark_row["extended_id"] = extended_id
         self.spark_row["labels"] = labels
-        self.spark_row = self.spark_row
+        print(self.spark_row)
 
     def to_spark_row(self, config_df, prop_df):
         """"""
@@ -205,7 +200,6 @@ class Dataset:
         if self.other_links is not None:
             row_dict["other_links"] = str(self.other_links)
         row_dict["name"] = self.name
-        print(row_dict)
         return row_dict
 
     @staticmethod

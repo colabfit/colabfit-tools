@@ -54,16 +54,19 @@ from colabfit.tools.utilities import (
     arrow_record_batch_to_rdd,
     get_spark_field_type,
     spark_schema_to_arrow_schema,
+    split_size_n_arrs_to_cols,
     stringify_lists,
     stringify_row_dict,
     unstringify,
     unstringify_row_dict,
+    update_schema,
 )
 
 _CONFIGS_COLLECTION = "gpw_test_configs"
 _CONFIGSETS_COLLECTION = "gpw_test_configsets"
 _DATASETS_COLLECTION = "gpw_test_datasets"
 _PROPOBJECT_COLLECTION = "gpw_test_propobjects"
+_MAX_STRING_LEN = 60000
 
 # from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
@@ -85,7 +88,7 @@ class SparkDataLoader:
     ):
         self.table_prefix = table_prefix
         self.spark = SparkSession.builder.appName("ColabfitDataLoader").getOrCreate()
-        # self.spark.sparkContext.setLogLevel("WARN")
+        self.spark.sparkContext.setLogLevel("ERROR")
         if endpoint and access_key and access_secret:
             self.endpoint = endpoint
             self.access_key = access_key
@@ -146,12 +149,21 @@ class SparkDataLoader:
         table_name: str,
         schema: StructType,
         ids_filter: list[str] = None,
+        check_length_col: str = None,
     ):
         """Include self.table_prefix in the table name when passed to this function"""
         if ids_filter is not None:
             rdd = spark_rdd.map(stringify_lists).filter(lambda x: x["id"] in ids_filter)
         else:
             rdd = spark_rdd.map(stringify_lists)
+        if check_length_col is not None:
+            oversize_arrays = (
+                spark_rdd.map(lambda x: len(x[check_length_col])).max()
+                > _MAX_STRING_LEN  # noqa E503
+            )
+            if oversize_arrays:
+                spark_rdd = split_size_n_arrs_to_cols(spark_rdd, check_length_col)
+                schema = update_schema(spark_rdd, schema)
         ids = rdd.map(lambda x: x["id"]).collect()
         all_unique = self.check_unique_ids(table_name, ids)
         if all_unique:
@@ -691,6 +703,7 @@ class DataManager:
                     )
                     po_rdd = loader.reduce_po_rdd(po_rdd)
                 co_ids = set(co_ids)
+
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_ids)
                 all_unique_po = loader.check_unique_ids(
                     loader.prop_object_table, po_ids
@@ -711,12 +724,14 @@ class DataManager:
                         loader.config_table,
                         config_schema,
                         ids_filter=new_co_ids,
+                        check_length_col="positions",
                     )
                 else:
                     loader.write_table(
                         co_rdd,
                         loader.config_table,
                         config_schema,
+                        check_length_col="positions",
                     )
                     print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
 
@@ -727,10 +742,6 @@ class DataManager:
                             ids=po_ids,
                         )
                     )
-                    print(f"length of update_po_ids {len(update_po_ids)}")
-                    print(
-                        f"length of set update_po_ids {len(list(set(update_po_ids)))}"
-                    )
                     print(
                         f"Updated {len(update_po_ids)} rows in "
                         f"{loader.prop_object_table}"
@@ -740,6 +751,7 @@ class DataManager:
                         loader.prop_object_table,
                         property_object_schema,
                         ids_filter=new_po_ids,
+                        check_length_col="atomic_forces",
                     )
                     print(
                         f"Inserted {len(new_po_ids)} rows into "
@@ -750,6 +762,7 @@ class DataManager:
                         po_rdd,
                         loader.prop_object_table,
                         property_object_schema,
+                        check_length_col="atomic_forces",
                     )
                     print(
                         f"Inserted {len(po_rows)} rows into {loader.prop_object_table}"
