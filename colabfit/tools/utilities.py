@@ -236,10 +236,10 @@ def stacked_arrays_to_columns(column, max_chunks, row_dict):
     empty = max_chunks - len(row_dict[column])
     full = len(row_dict[column])
     for i, force_arr in enumerate(row_dict[column]):
-        row_dict[f"{column}_{i+1}"] = force_arr
-    row_dict[column] = row_dict.pop(f"{column}_1")
+        row_dict[f"{column}_{i:02d}"] = force_arr
+    # row_dict[column] = row_dict.pop(f"{column}_1")
     for i in range(empty):
-        row_dict[f"{column}_{full+i+1}"] = None
+        row_dict[f"{column}_{(full+i+1):02d}"] = None
     return row_dict
 
 
@@ -250,13 +250,13 @@ def split_size_n_arrs_to_cols(rdd, column):
     return rdd
 
 
-def update_schema(rdd, schema):
-    """Use with array splitting functions to add string columns to schema"""
-    keys = list(rdd.map(lambda x: x.keys()).take(1)[0])
-    extra_keys = [x for x in keys if x not in schema.fieldNames()]
-    for key in extra_keys:
-        schema.add(StructField(key, StringType(), True))
-    return schema
+# def update_schema(rdd, schema):
+#     """Use with array splitting functions to add string columns to schema"""
+#     keys = list(rdd.map(lambda x: x.keys()).take(1)[0])
+#     extra_keys = [x for x in keys if x not in schema.fieldNames()]
+#     for key in extra_keys:
+#         schema.add(StructField(key, StringType(), True))
+#     return schema
 
 
 ##########################################################

@@ -1,11 +1,13 @@
 import datetime
 import warnings
+import re
 
 import dateutil
 import numpy as np
 import pyspark.sql.functions as sf
 from unidecode import unidecode
 from pyspark.sql.types import StringType
+from pyspark.sql.functions import col, sum as spark_sum
 
 
 from colabfit import MAX_STRING_LENGTH
@@ -141,6 +143,9 @@ class Dataset:
         co_po_df = prop_df.join(
             config_df, prop_df["configuration_id"] == config_df["config_id"], "inner"
         )
+        co_po_df = co_po_df.withColumn(
+            "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
+        )
         row_dict["nsites"] = co_po_df.agg({"nsites": "sum"}).first()[0]
         row_dict["elements"] = sorted(
             co_po_df.withColumn("exploded_elements", sf.explode("elements"))
@@ -184,12 +189,26 @@ class Dataset:
             "formation_energy",
             "free_energy",
             "potential_energy",
-            "atomic_forces",
+            # "atomic_forces",
             "cauchy_stress",
         ]:
             row_dict[f"{prop}_count"] = (
                 prop_df.select(prop).where(f"{prop} is not null").count()
             )
+        atomic_re = re.compile(r"atomic_forces_(\d+)")
+        atomic_columns = [col for col in prop_df.columns if atomic_re.match(col)]
+        atomic_df = prop_df.select(*atomic_columns)
+        non_null_counts = atomic_df.select(
+            [
+                spark_sum(col(c).isNotNull().cast("int")).alias(c)
+                for c in atomic_df.columns
+            ]
+        )
+        total_populated_cells = non_null_counts.select(
+            sum([col(c) for c in non_null_counts.columns]).alias(
+                "total_populated_cells"
+            )
+        ).collect()[0][0]
         row_dict["nproperty_objects"] = prop_df.count()
         row_dict["nconfigurations"] = co_po_df.count()
         row_dict["authors"] = str(self.authors)

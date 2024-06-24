@@ -59,9 +59,10 @@ from colabfit.tools.utilities import (
     stringify_row_dict,
     unstringify,
     unstringify_row_dict,
-    update_schema,
+    # update_schema,
 )
 
+NSITES_COL_SPLITS = 20
 _CONFIGS_COLLECTION = "gpw_test_configs"
 _CONFIGSETS_COLLECTION = "gpw_test_configsets"
 _DATASETS_COLLECTION = "gpw_test_datasets"
@@ -152,18 +153,27 @@ class SparkDataLoader:
         check_length_col: str = None,
     ):
         """Include self.table_prefix in the table name when passed to this function"""
+        print("length of rdd to write to table: ", spark_rdd.count())
         if ids_filter is not None:
             rdd = spark_rdd.map(stringify_lists).filter(lambda x: x["id"] in ids_filter)
         else:
             rdd = spark_rdd.map(stringify_lists)
+        print(check_length_col)
         if check_length_col is not None:
             oversize_arrays = (
-                spark_rdd.map(lambda x: len(x[check_length_col])).max()
+                rdd.map(
+                    lambda x: (
+                        len(x[check_length_col])
+                        if x[check_length_col] is not None
+                        else 0
+                    )
+                ).max()
                 > _MAX_STRING_LEN  # noqa E503
             )
+
             if oversize_arrays:
-                spark_rdd = split_size_n_arrs_to_cols(spark_rdd, check_length_col)
-                schema = update_schema(spark_rdd, schema)
+                rdd = split_size_n_arrs_to_cols(rdd, check_length_col)
+                # schema = update_schema(rdd, schema)
         ids = rdd.map(lambda x: x["id"]).collect()
         all_unique = self.check_unique_ids(table_name, ids)
         if all_unique:
@@ -719,13 +729,14 @@ class DataManager:
                     )
                     print(f"Config ids in batch: {len(update_co_ids)}")
                     print("writing new rows after updating old rows")
-                    loader.write_table(
-                        co_rdd,
-                        loader.config_table,
-                        config_schema,
-                        ids_filter=new_co_ids,
-                        check_length_col="positions",
-                    )
+                    if len(new_co_ids) > 0:
+                        loader.write_table(
+                            co_rdd,
+                            loader.config_table,
+                            config_schema,
+                            ids_filter=new_co_ids,
+                            check_length_col="positions",
+                        )
                 else:
                     loader.write_table(
                         co_rdd,
@@ -746,13 +757,14 @@ class DataManager:
                         f"Updated {len(update_po_ids)} rows in "
                         f"{loader.prop_object_table}"
                     )
-                    loader.write_table(
-                        po_rdd,
-                        loader.prop_object_table,
-                        property_object_schema,
-                        ids_filter=new_po_ids,
-                        check_length_col="atomic_forces",
-                    )
+                    if len(new_po_ids) > 0:
+                        loader.write_table(
+                            po_rdd,
+                            loader.prop_object_table,
+                            property_object_schema,
+                            ids_filter=new_po_ids,
+                            check_length_col="atomic_forces",
+                        )
                     print(
                         f"Inserted {len(new_po_ids)} rows into "
                         f"{loader.prop_object_table}"
@@ -805,12 +817,14 @@ class DataManager:
         config_df = config_df.filter(
             sf.array_contains(sf.col("dataset_ids"), self.dataset_id)
         )
+        prop_df = loader.read_table(loader.prop_object_table, unstring=True)
+        prop_df = prop_df.filter(sf.col("dataset_id") == self.dataset_id)
         for i, (names_match, label_match, cs_name, cs_desc) in tqdm(
             enumerate(name_label_match), desc="Creating Configuration Sets"
         ):
             print(
-                f"names match: {names_match}, label {label_match}, "
-                f"cs_name {cs_name}, cs_desc {cs_desc}"
+                f"names match: {names_match}, label: {label_match}, "
+                f"cs_name: {cs_name}, cs_desc: {cs_desc}"
             )
             if names_match:
                 config_set_query = config_df.withColumn(
@@ -824,6 +838,13 @@ class DataManager:
                     config_set_query = config_set_query.filter(
                         sf.array_contains(sf.col("labels"), label)
                     )
+            prop_df = loader.read_table(loader.prop_object_table, unstring=True)
+            prop_df = (
+                prop_df.filter(sf.col("dataset_id") == self.dataset_id)
+                .select("configuration_id", "multiplicity")
+                .withColumnRenamed("configuration_id", "id")
+            )
+            config_set_query = config_set_query.join(prop_df, on="id", how="inner")
             t = time()
             config_set = ConfigurationSet(
                 name=cs_name,

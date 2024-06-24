@@ -17,6 +17,7 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
+NSITES_COL_SPLITS = 20
 config_schema = StructType(
     [
         StructField("id", StringType(), False),
@@ -36,10 +37,15 @@ config_schema = StructType(
         StructField("cell", StringType(), True),
         StructField("dimension_types", StringType(), True),
         StructField("pbc", StringType(), True),
-        StructField("positions", StringType(), True),
         StructField("names", StringType(), True),
         StructField("labels", StringType(), True),
         StructField("configuration_set_ids", StringType(), True),
+    ]
+    + [
+        StructField(
+            f"positions_{i:02d}", StringType(), True
+        )  # ArrayType(ArrayType(DoubleType()))
+        for i in range(NSITES_COL_SPLITS)
     ]
 )
 
@@ -62,10 +68,13 @@ config_df_schema = StructType(
         StructField("cell", ArrayType(ArrayType(DoubleType())), True),
         StructField("dimension_types", ArrayType(IntegerType()), True),
         StructField("pbc", ArrayType(BooleanType()), True),
-        StructField("positions", ArrayType(ArrayType(DoubleType())), True),
         StructField("names", ArrayType(StringType()), True),
         StructField("labels", ArrayType(StringType()), True),
         StructField("configuration_set_ids", ArrayType(StringType()), True),
+    ]
+    + [
+        StructField(f"positions_{i:02d}", ArrayType(ArrayType(DoubleType())), True)
+        for i in range(NSITES_COL_SPLITS)
     ]
 )
 
@@ -82,27 +91,63 @@ property_object_schema = StructType(
         StructField("software", StringType(), True),
         StructField("method", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
+        StructField("energy_conjugate_with_atomic_forces", DoubleType(), True),
+        StructField("energy_conjugate_with_atomic_forces_unit", StringType(), True),
+        StructField(
+            "energy_conjugate_with_atomic_forces_per_atom", BooleanType(), True
+        ),
+        StructField(
+            "energy_conjugate_with_atomic_forces_reference", DoubleType(), True
+        ),
+        StructField(
+            "energy_conjugate_with_atomic_forces_reference_unit", StringType(), True
+        ),
+        StructField(
+            "energy_conjugate_with_atomic_forces_property_id", StringType(), True
+        ),
         StructField("potential_energy", DoubleType(), True),
         StructField("potential_energy_unit", StringType(), True),
         StructField("potential_energy_per_atom", BooleanType(), True),
         StructField("potential_energy_reference", DoubleType(), True),
         StructField("potential_energy_reference_unit", StringType(), True),
         StructField("potential_energy_property_id", StringType(), True),
-        StructField("atomic_forces", StringType(), True),
+        StructField("potential_energy_extrapolated_to_zero", DoubleType(), True),
+        StructField("potential_energy_extrapolated_to_zero_unit", StringType(), True),
+        StructField(
+            "potential_energy_extrapolated_to_zero_per_atom", BooleanType(), True
+        ),
+        StructField(
+            "potential_energy_extrapolated_to_zero_reference", DoubleType(), True
+        ),
+        StructField(
+            "potential_energy_extrapolated_to_zero_reference_unit", StringType(), True
+        ),
+        StructField(
+            "potential_energy_extrapolated_to_zero_property_id", StringType(), True
+        ),
+    ]
+    + [
+        StructField(
+            f"atomic_forces_{i:02d}", StringType(), True
+        )  # ArrayType(ArrayType(DoubleType()))
+        for i in range(NSITES_COL_SPLITS)
+    ]
+    + [
         StructField("atomic_forces_unit", StringType(), True),
         StructField("atomic_forces_property_id", StringType(), True),
         StructField("cauchy_stress", StringType(), True),
         StructField("cauchy_stress_unit", StringType(), True),
         StructField("cauchy_stress_volume_normalized", BooleanType(), True),
         StructField("cauchy_stress_property_id", StringType(), True),
-        StructField("free_energy", DoubleType(), True),
-        StructField("free_energy_unit", StringType(), True),
-        StructField("free_energy_per_atom", BooleanType(), True),
-        StructField("free_energy_reference", DoubleType(), True),
-        StructField("free_energy_reference_unit", StringType(), True),
-        StructField("free_energy_property_id", StringType(), True),
+        StructField("electronic_free_energy", DoubleType(), True),
+        StructField("electronic_free_energy_unit", StringType(), True),
+        StructField("electronic_free_energy_per_atom", BooleanType(), True),
+        StructField("electronic_free_energy_reference", DoubleType(), True),
+        StructField("electronic_free_energy_reference_unit", StringType(), True),
+        StructField("electronic_free_energy_property_id", StringType(), True),
         StructField("band_gap", DoubleType(), True),
         StructField("band_gap_unit", StringType(), True),
+        StructField("band_gap_direct", StringType(), True),
         StructField("band_gap_property_id", StringType(), True),
         StructField("formation_energy", DoubleType(), True),
         StructField("formation_energy_unit", StringType(), True),
@@ -143,19 +188,24 @@ property_object_df_schema = StructType(
         StructField("potential_energy_reference", DoubleType(), True),
         StructField("potential_energy_reference_unit", StringType(), True),
         StructField("potential_energy_property_id", StringType(), True),
-        StructField("atomic_forces", ArrayType(ArrayType(DoubleType())), True),
+    ]
+    + [
+        StructField(f"atomic_forces_{i:02d}", ArrayType(ArrayType(DoubleType())), True)
+        for i in range(NSITES_COL_SPLITS)
+    ]
+    + [
         StructField("atomic_forces_unit", StringType(), True),
         StructField("atomic_forces_property_id", StringType(), True),
         StructField("cauchy_stress", ArrayType(ArrayType(DoubleType())), True),
         StructField("cauchy_stress_unit", StringType(), True),
         StructField("cauchy_stress_volume_normalized", BooleanType(), True),
         StructField("cauchy_stress_property_id", StringType(), True),
-        StructField("free_energy", DoubleType(), True),
-        StructField("free_energy_unit", StringType(), True),
-        StructField("free_energy_per_atom", BooleanType(), True),
-        StructField("free_energy_reference", DoubleType(), True),
-        StructField("free_energy_reference_unit", StringType(), True),
-        StructField("free_energy_property_id", StringType(), True),
+        StructField("electronic_free_energy", DoubleType(), True),
+        StructField("electronic_free_energy_unit", StringType(), True),
+        StructField("electronic_free_energy_per_atom", BooleanType(), True),
+        StructField("electronic_free_energy_reference", DoubleType(), True),
+        StructField("electronic_free_energy_reference_unit", StringType(), True),
+        StructField("electronic_free_energy_property_id", StringType(), True),
         StructField("band_gap", DoubleType(), True),
         StructField("band_gap_unit", StringType(), True),
         StructField("band_gap_property_id", StringType(), True),
@@ -197,7 +247,7 @@ dataset_schema = StructType(
         StructField("atomization_energy_count", IntegerType(), True),
         StructField("adsorption_energy_count", IntegerType(), True),
         StructField("formation_energy_count", IntegerType(), True),
-        StructField("free_energy_count", IntegerType(), True),
+        StructField("electronic_free_energy_count", IntegerType(), True),
         StructField("potential_energy_count", IntegerType(), True),
         StructField("atomic_forces_count", IntegerType(), True),
         StructField("band_gap_count", IntegerType(), True),
@@ -230,7 +280,7 @@ dataset_df_schema = StructType(
         StructField("atomization_energy_count", IntegerType(), True),
         StructField("adsorption_energy_count", IntegerType(), True),
         StructField("formation_energy_count", IntegerType(), True),
-        StructField("free_energy_count", IntegerType(), True),
+        StructField("electronic_free_energy_count", IntegerType(), True),
         StructField("potential_energy_count", IntegerType(), True),
         StructField("atomic_forces_count", IntegerType(), True),
         StructField("band_gap_count", IntegerType(), True),
