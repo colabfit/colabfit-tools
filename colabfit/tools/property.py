@@ -8,13 +8,28 @@ from copy import deepcopy
 
 # import dateutil
 import dateutil.parser
+
+# EDN_KEY_MAP = {
+#     "energy": "unrelaxed-potential-energy",
+#     "forces": "unrelaxed-potential-forces",
+#     "stress": "unrelaxed-cauchy-stress",
+#     "virial": "unrelaxed-cauchy-stress",
+# }
+import kim_edn
 import numpy as np
+from kim_property import (
+    check_instance_optional_key_marked_required_are_present,
+    kim_property_create,
+)
+from kim_property.create import KIM_PROPERTIES
+from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
+
+from colabfit.tools.configuration import AtomicConfiguration
+from colabfit.tools.schema import property_object_schema
+from colabfit.tools.utilities import _empty_dict_from_schema, _hash, _sort_dict
 
 # from ase.units import create_units
 
-from colabfit.tools.configuration import AtomicConfiguration
-from colabfit.tools.utilities import _empty_dict_from_schema, _hash, _sort_dict
-from colabfit.tools.schema import property_object_schema
 
 # HASH_LENGTH = 12
 # HASH_SHIFT = 0
@@ -57,20 +72,6 @@ from colabfit.tools.schema import property_object_schema
 #     "unrelaxed-cauchy-stress": "GPa",
 # }
 
-# EDN_KEY_MAP = {
-#     "energy": "unrelaxed-potential-energy",
-#     "forces": "unrelaxed-potential-forces",
-#     "stress": "unrelaxed-cauchy-stress",
-#     "virial": "unrelaxed-cauchy-stress",
-# }
-import kim_edn
-from kim_property import (
-    check_instance_optional_key_marked_required_are_present,
-    kim_property_create,
-)
-
-from kim_property.create import KIM_PROPERTIES
-from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 # These are fields that are related to the geometry of the atomic structure
 # or the OpenKIM Property Definition and shouldn't be used for equality checks
@@ -88,8 +89,13 @@ _hash_ignored_fields = [
     "id",
     "hash",
     "last_modified",
-    # "configuration_ids",
-    # "dataset_ids",
+    "energy_conjugate_with_forces",
+    "energy_conjugate_with_forces_unit",
+    "energy_conjugate_with_forces_per_atom",
+    "energy_conjugate_with_forces_reference",
+    "energy_conjugate_with_forces_reference_unit",
+    "energy_conjugate_with_forces_property_id",
+    "energy_conjugate_with_forces_column",
 ]
 
 
@@ -259,6 +265,7 @@ class Property(dict):
         metadata=None,
         convert_units=False,
         dataset_id=None,
+        energy_conjugate=None,
     ):
         """
         Args:
@@ -292,7 +299,7 @@ class Property(dict):
 
         if convert_units:
             self.convert_units()
-
+        self.energy_conjugate = energy_conjugate
         self.chemical_formula_hill = instance.pop("chemical_formula_hill")
         self.spark_row = self.to_spark_row()
         self._hash = hash(self)
@@ -432,6 +439,7 @@ class Property(dict):
         definitions,
         configuration,
         property_map,
+        energy_conjugate=None,
         # convert_units=False
     ):
         """
@@ -450,20 +458,21 @@ class Property(dict):
             property_map (dict):
                 A property map as described in the Property attributes section.
 
+            energy_conjugate (str):
+                The energy column that is conjugate with forces, to be used for
+                values in the columns "energy_conjugate_with_forces*"
+
         """
         pdef_dict = {pdef["property-name"]: pdef for pdef in definitions}
         instances = {
             pdef_name: cls.get_kim_instance(pdef)
             for pdef_name, pdef in pdef_dict.items()
         }
-
-        # props_dict = defaultdict(list)
         props_dict = {}
         pi_md = None
         for pname, pmap_list in property_map.items():
             instance = instances.get(pname, None)
             if pname == "_metadata":
-
                 pi_md, method, software = md_from_map(pmap_list, configuration)
                 props_dict["method"] = method
                 props_dict["software"] = software
@@ -520,6 +529,7 @@ class Property(dict):
             instance=props_dict,
             metadata=pi_md,
             dataset_id=configuration.dataset_id,
+            energy_conjugate=energy_conjugate,
             # convert_units=convert_units,
         )
 
@@ -549,6 +559,28 @@ class Property(dict):
         )
         row_dict["chemical_formula_hill"] = self.chemical_formula_hill
         row_dict["multiplicity"] = 1
+        # if self.energy_conjugate is not None:
+        #     if row_dict[self.energy_conjugate] is None:
+        #         raise warnings.warn(
+        #             f"Energy conjugate {self.energy_conjugate} not found in property"
+        #         )
+        #     row_dict["energy_conjugate_with_forces"] = row_dict[self.energy_conjugate]
+        #     row_dict["energy_conjugate_with_forces_unit"] = row_dict[
+        #         f"{self.energy_conjugate}_unit"
+        #     ]
+        #     row_dict["energy_conjugate_with_forces_per_atom"] = row_dict[
+        #         f"{self.energy_conjugate}_per_atom"
+        #     ]
+        #     row_dict["energy_conjugate_with_forces_reference"] = row_dict[
+        #         f"{self.energy_conjugate}_reference"
+        #     ]
+        #     row_dict["energy_conjugate_with_forces_reference_unit"] = row_dict[
+        #         f"{self.energy_conjugate}_reference_unit"
+        #     ]
+        #     row_dict["energy_conjugate_with_forces_property_id"] = row_dict[
+        #         f"{self.energy_conjugate}_property_id"
+        #     ]
+        #     row_dict["energy_conjugate_with_forces_column"] = self.energy_conjugate
         return row_dict
 
     def convert_units(self):

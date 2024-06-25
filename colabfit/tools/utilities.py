@@ -152,6 +152,18 @@ def stringify_rows(row):
     return new_row
 
 
+def stringify_rows_to_dict(row):
+    """
+    Convert list/tuple fields to comma-separated strings.
+    Use with spark Rows
+    Should be mapped as DataFrame.rdd.map(stringify_rows)"""
+    row_dict = row.asDict()
+    for key, val in row_dict.items():
+        if isinstance(val, (list, tuple, dict)):
+            row_dict[key] = str(val)
+    return row_dict
+
+
 def stringify_row_dict(row_dict):
     for key, val in row_dict.items():
         if isinstance(val, (list, tuple, dict)):
@@ -176,6 +188,21 @@ def unstringify(row):
         print(e)
         print(row_dict)
     return new_row
+
+
+def unstring_df_val(val):
+    if isinstance(val, str) and len(val) > 0 and val[0] in ["["]:
+        dval = literal_eval(val)
+        return dval
+    else:
+        return val
+
+
+def stringify_df_val(val):
+    if isinstance(val, (list, tuple, dict)):
+        return str(val)
+    else:
+        return val
 
 
 def unstringify_row_dict(row_dict):

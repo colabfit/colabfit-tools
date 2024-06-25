@@ -233,15 +233,15 @@ class AtomicConfiguration(Atoms):
 
     def to_spark_row(self):
         co_dict = _empty_dict_from_schema(config_schema)
-        co_dict["cell"] = self.cell.array
-        co_dict["positions"] = self.positions
+        co_dict["cell"] = self.cell.array.astype(float).tolist()
+        co_dict["positions"] = self.positions.astype(float).tolist()
         co_dict["names"] = self.names
         co_dict["labels"] = self.labels
-        co_dict["pbc"] = self.pbc
+        co_dict["pbc"] = self.pbc.astype(bool).tolist()
         co_dict["last_modified"] = dateutil.parser.parse(
             datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
-        co_dict["atomic_numbers"] = self.numbers
+        co_dict["atomic_numbers"] = self.numbers.astype(int).tolist()
         co_dict["metadata"] = self.metadata
         co_dict.update(self.configuration_summary())
         return co_dict

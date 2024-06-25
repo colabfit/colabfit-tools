@@ -105,6 +105,7 @@ property_object_schema = StructType(
         StructField(
             "energy_conjugate_with_atomic_forces_property_id", StringType(), True
         ),
+        StructField("energy_conjugate_with_atomic_forces_column", StringType(), True),
         StructField("potential_energy", DoubleType(), True),
         StructField("potential_energy_unit", StringType(), True),
         StructField("potential_energy_per_atom", BooleanType(), True),
@@ -197,6 +198,7 @@ property_object_df_schema = StructType(
         StructField(
             "energy_conjugate_with_atomic_forces_property_id", StringType(), True
         ),
+        StructField("energy_conjugate_with_atomic_forces_column", StringType(), True),
         StructField("potential_energy", DoubleType(), True),
         StructField("potential_energy_unit", StringType(), True),
         StructField("potential_energy_per_atom", BooleanType(), True),
@@ -355,7 +357,7 @@ configuration_set_df_schema = StructType(
         StructField("nsites", IntegerType(), True),
         StructField("nelements", IntegerType(), True),
         StructField("elements", ArrayType(StringType()), True),
-        StructField("total_elements_ratios", ArrayType(DoubleType())(), True),
+        StructField("total_elements_ratios", ArrayType(DoubleType()), True),
         StructField("description", StringType(), False),
         StructField("name", StringType(), False),
         StructField("dataset_id", StringType(), True),
