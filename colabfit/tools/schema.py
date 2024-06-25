@@ -145,10 +145,11 @@ property_object_schema = StructType(
         StructField("electronic_free_energy_reference", DoubleType(), True),
         StructField("electronic_free_energy_reference_unit", StringType(), True),
         StructField("electronic_free_energy_property_id", StringType(), True),
-        StructField("band_gap", DoubleType(), True),
-        StructField("band_gap_unit", StringType(), True),
-        StructField("band_gap_direct", StringType(), True),
-        StructField("band_gap_property_id", StringType(), True),
+        StructField("electronic_band_gap", DoubleType(), True),
+        StructField("electronic_band_gap_unit", StringType(), True),
+        StructField("electronic_band_gap_direct", StringType(), True),
+        StructField("electronic_band_gap_type", StringType(), True),
+        StructField("electronic_band_gap_property_id", StringType(), True),
         StructField("formation_energy", DoubleType(), True),
         StructField("formation_energy_unit", StringType(), True),
         StructField("formation_energy_per_atom", BooleanType(), True),
@@ -182,12 +183,40 @@ property_object_df_schema = StructType(
         StructField("software", StringType(), True),
         StructField("method", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
+        StructField("energy_conjugate_with_atomic_forces", DoubleType(), True),
+        StructField("energy_conjugate_with_atomic_forces_unit", StringType(), True),
+        StructField(
+            "energy_conjugate_with_atomic_forces_per_atom", BooleanType(), True
+        ),
+        StructField(
+            "energy_conjugate_with_atomic_forces_reference", DoubleType(), True
+        ),
+        StructField(
+            "energy_conjugate_with_atomic_forces_reference_unit", StringType(), True
+        ),
+        StructField(
+            "energy_conjugate_with_atomic_forces_property_id", StringType(), True
+        ),
         StructField("potential_energy", DoubleType(), True),
         StructField("potential_energy_unit", StringType(), True),
         StructField("potential_energy_per_atom", BooleanType(), True),
         StructField("potential_energy_reference", DoubleType(), True),
         StructField("potential_energy_reference_unit", StringType(), True),
         StructField("potential_energy_property_id", StringType(), True),
+        StructField("potential_energy_extrapolated_to_zero", DoubleType(), True),
+        StructField("potential_energy_extrapolated_to_zero_unit", StringType(), True),
+        StructField(
+            "potential_energy_extrapolated_to_zero_per_atom", BooleanType(), True
+        ),
+        StructField(
+            "potential_energy_extrapolated_to_zero_reference", DoubleType(), True
+        ),
+        StructField(
+            "potential_energy_extrapolated_to_zero_reference_unit", StringType(), True
+        ),
+        StructField(
+            "potential_energy_extrapolated_to_zero_property_id", StringType(), True
+        ),
     ]
     + [
         StructField(f"atomic_forces_{i:02d}", ArrayType(ArrayType(DoubleType())), True)
@@ -206,9 +235,11 @@ property_object_df_schema = StructType(
         StructField("electronic_free_energy_reference", DoubleType(), True),
         StructField("electronic_free_energy_reference_unit", StringType(), True),
         StructField("electronic_free_energy_property_id", StringType(), True),
-        StructField("band_gap", DoubleType(), True),
-        StructField("band_gap_unit", StringType(), True),
-        StructField("band_gap_property_id", StringType(), True),
+        StructField("electronic_band_gap", DoubleType(), True),
+        StructField("electronic_band_gap_unit", StringType(), True),
+        StructField("electronic_band_gap_direct", StringType(), True),
+        StructField("electronic_band_gap_type", StringType(), True),
+        StructField("electronic_band_gap_property_id", StringType(), True),
         StructField("formation_energy", DoubleType(), True),
         StructField("formation_energy_unit", StringType(), True),
         StructField("formation_energy_per_atom", BooleanType(), True),
@@ -249,8 +280,9 @@ dataset_schema = StructType(
         StructField("formation_energy_count", IntegerType(), True),
         StructField("electronic_free_energy_count", IntegerType(), True),
         StructField("potential_energy_count", IntegerType(), True),
+        StructField("potential_energy_extrapolated_to_zero_count", IntegerType(), True),
         StructField("atomic_forces_count", IntegerType(), True),
-        StructField("band_gap_count", IntegerType(), True),
+        StructField("electronic_band_gap_count", IntegerType(), True),
         StructField("cauchy_stress_count", IntegerType(), True),
         StructField("authors", StringType(), True),
         StructField("description", StringType(), True),
@@ -282,8 +314,9 @@ dataset_df_schema = StructType(
         StructField("formation_energy_count", IntegerType(), True),
         StructField("electronic_free_energy_count", IntegerType(), True),
         StructField("potential_energy_count", IntegerType(), True),
+        StructField("potential_energy_extrapolated_to_zero_count", IntegerType(), True),
         StructField("atomic_forces_count", IntegerType(), True),
-        StructField("band_gap_count", IntegerType(), True),
+        StructField("electronic_band_gap_count", IntegerType(), True),
         StructField("cauchy_stress_count", IntegerType(), True),
         StructField("authors", ArrayType(StringType()), True),
         StructField("description", StringType(), True),
@@ -322,6 +355,9 @@ configuration_set_df_schema = StructType(
         StructField("nsites", IntegerType(), True),
         StructField("nelements", IntegerType(), True),
         StructField("elements", ArrayType(StringType()), True),
-        StructField("dataset_id", ArrayType(StringType()), True),
+        StructField("total_elements_ratios", ArrayType(DoubleType())(), True),
+        StructField("description", StringType(), False),
+        StructField("name", StringType(), False),
+        StructField("dataset_id", StringType(), True),
     ]
 )

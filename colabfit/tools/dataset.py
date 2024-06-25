@@ -184,31 +184,17 @@ class Dataset:
 
         for prop in [
             "atomization_energy",
+            "atomic_forces_00",
             "adsorption_energy",
             "band_gap",
             "formation_energy",
-            "free_energy",
+            "electronic_free_energy",
             "potential_energy",
-            # "atomic_forces",
             "cauchy_stress",
         ]:
             row_dict[f"{prop}_count"] = (
                 prop_df.select(prop).where(f"{prop} is not null").count()
             )
-        atomic_re = re.compile(r"atomic_forces_(\d+)")
-        atomic_columns = [col for col in prop_df.columns if atomic_re.match(col)]
-        atomic_df = prop_df.select(*atomic_columns)
-        non_null_counts = atomic_df.select(
-            [
-                spark_sum(col(c).isNotNull().cast("int")).alias(c)
-                for c in atomic_df.columns
-            ]
-        )
-        total_populated_cells = non_null_counts.select(
-            sum([col(c) for c in non_null_counts.columns]).alias(
-                "total_populated_cells"
-            )
-        ).collect()[0][0]
         row_dict["nproperty_objects"] = prop_df.count()
         row_dict["nconfigurations"] = co_po_df.count()
         row_dict["authors"] = str(self.authors)
