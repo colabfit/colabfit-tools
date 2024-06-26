@@ -1,21 +1,15 @@
 import datetime
 import warnings
-import re
 
 import dateutil
 import numpy as np
 import pyspark.sql.functions as sf
-from unidecode import unidecode
 from pyspark.sql.types import StringType
-from pyspark.sql.functions import col, sum as spark_sum
-
+from unidecode import unidecode
 
 from colabfit import MAX_STRING_LENGTH
 from colabfit.tools.schema import dataset_schema
-from colabfit.tools.utilities import (
-    _empty_dict_from_schema,
-    ELEMENT_MAP,
-)
+from colabfit.tools.utilities import ELEMENT_MAP, _empty_dict_from_schema
 
 
 class Dataset:
@@ -186,11 +180,13 @@ class Dataset:
             "atomization_energy",
             "atomic_forces_00",
             "adsorption_energy",
-            "band_gap",
+            "electronic_band_gap",
+            "cauchy_stress",
             "formation_energy",
             "electronic_free_energy",
+            "energy_conjugate_with_atomic_forces_per_atom",
             "potential_energy",
-            "cauchy_stress",
+            "potential_energy_extrapolated_to_zero",
         ]:
             row_dict[f"{prop}_count"] = (
                 prop_df.select(prop).where(f"{prop} is not null").count()

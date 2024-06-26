@@ -1,12 +1,12 @@
-from hashlib import sha512
-from pyspark.sql import functions as sf
-from colabfit.tools.utilities import _empty_dict_from_schema
-from colabfit.tools.schema import configuration_set_schema
-from pyspark.sql.types import IntegerType, StringType
 from datetime import datetime
-import dateutil.parser
+from hashlib import sha512
 
-from colabfit.tools.utilities import ELEMENT_MAP
+import dateutil.parser
+from pyspark.sql import functions as sf
+from pyspark.sql.types import StringType
+
+from colabfit.tools.schema import configuration_set_schema
+from colabfit.tools.utilities import ELEMENT_MAP, _empty_dict_from_schema
 
 
 class ConfigurationSet:

@@ -254,8 +254,12 @@ class SparkDataLoader:
                 )
                 spark_schema = StructType(
                     [
-                        StructField(col, col_types[col], False)
-                        for i, col in enumerate(update_cols + ["id", "$row_id"])
+                        StructField(col, col_types[col], True)
+                        for i, col in enumerate(update_cols)
+                    ]
+                    + [
+                        StructField("id", StringType(), False),
+                        StructField("$row_id", IntegerType(), False),
                     ]
                 )
                 rec_batch = rec_batch.read_all()
@@ -307,8 +311,13 @@ class SparkDataLoader:
                 [StructField(col, col_types[col], False) for col in total_write_cols]
             )
             arrow_schema = spark_schema_to_arrow_schema(update_schema)
+            print(arrow_schema)
+            print(update_cols)
             update_table = pa.table(
-                [pa.array(col) for col in zip(*duplicate_df.collect())],
+                [
+                    pa.array(col)
+                    for col in zip(*duplicate_df.select(total_write_cols).collect())
+                ],
                 schema=arrow_schema,
             )
             with self.session.transaction() as tx:
@@ -961,9 +970,11 @@ class DataManager:
             print(f"Time to update co-ids: {t_end}")
 
             config_set_rows.append(config_set.spark_row)
-        config_rdd = loader.spark.sparkContext.parallelize(config_set_rows)
+        config_set_df = loader.spark.createDataFrame(
+            config_set_rows, schema=configuration_set_schema
+        )
         loader.write_table(
-            config_rdd, loader.config_set_table, schema=configuration_set_schema
+            config_set_df, loader.config_set_table, schema=configuration_set_schema
         )
         return config_set_rows
 
@@ -1008,8 +1019,8 @@ class DataManager:
             data_license=data_license,
             configuration_set_ids=cs_ids,
         )
-        ds_rdd = loader.spark.sparkContext.parallelize([ds.spark_row])
-        loader.write_table(ds_rdd, loader.dataset_table, schema=dataset_schema)
+        ds_df = loader.spark.createDataFrame([ds.spark_row], schema=dataset_schema)
+        loader.write_table(ds_df, loader.dataset_table, schema=dataset_schema)
 
     @staticmethod
     def generate_ds_id():
