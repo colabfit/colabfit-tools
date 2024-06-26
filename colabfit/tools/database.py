@@ -372,7 +372,7 @@ class SparkDataLoader:
             id_batch = list(set(id_batch))
             # We only have to use vastdb-sdk here bc we need the '$row_id' column
             with self.session.transaction() as tx:
-                table_name = "ndb.colabfit.dev.gpw_test_propobjects"
+                table_name = self.prop_object_table
                 # string would be 'ndb.colabfit.dev.[table name]'
                 table_path = table_name.split(".")
                 table = (
