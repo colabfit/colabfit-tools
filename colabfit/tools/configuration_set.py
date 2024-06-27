@@ -52,8 +52,8 @@ class ConfigurationSet:
         self.dataset_id = dataset_id
         # self.ordered = ordered
         self.spark_row = self.to_spark_row(config_df)
+        self.id = f"CS_{self.name}_{self.dataset_id}"
         self._hash = hash(self)
-        self.id = f"CS_{self._hash}"
         self.spark_row["id"] = self.id
         self.spark_row["hash"] = self._hash
 
@@ -96,7 +96,7 @@ class ConfigurationSet:
 
     def __hash__(self):
         cs_hash = sha512()
-        cs_hash.update(self.name.encode("utf-8"))
+        cs_hash.update(self.id.encode("utf-8"))
         return int(cs_hash.hexdigest(), 16)
 
     def __str__(self):

@@ -122,7 +122,7 @@ def energy_to_schema(prop_name, en_prop: dict):
 def atomic_forces_to_schema(af_prop: dict):
     af_dict = {
         "atomic_forces_property_id": af_prop["property-id"],
-        "atomic_forces": af_prop["forces"]["source-value"],
+        "atomic_forces_00": af_prop["forces"]["source-value"],
         "atomic_forces_unit": af_prop["forces"]["source-unit"],
     }
     return af_dict

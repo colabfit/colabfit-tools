@@ -60,7 +60,7 @@ class AtomicConfiguration(Atoms):
         )
         self.unique_identifier_kw = [
             "atomic_numbers",
-            "positions",
+            "positions_00",
             "cell",
             "pbc",
             "metadata",
@@ -234,7 +234,7 @@ class AtomicConfiguration(Atoms):
     def to_spark_row(self):
         co_dict = _empty_dict_from_schema(config_schema)
         co_dict["cell"] = self.cell.array.astype(float).tolist()
-        co_dict["positions"] = self.positions.astype(float).tolist()
+        co_dict["positions_00"] = self.positions.astype(float).tolist()
         co_dict["names"] = self.names
         co_dict["labels"] = self.labels
         co_dict["pbc"] = self.pbc.astype(bool).tolist()

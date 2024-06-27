@@ -154,56 +154,25 @@ class SparkDataLoader:
         check_length_col: str = None,
     ):
         """Include self.table_prefix in the table name when passed to this function"""
-        spark_rdd = spark_df.rdd
-        print(spark_rdd.take(1))
-        print("length of rdd to write to table: ", spark_rdd.count())
+        string_cols = [
+            f.name for f in spark_df.schema if f.dataType.typeName() == "array"
+        ]
+        print(string_cols)
+        string_col_udf = sf.udf(stringify_df_val, StringType())
+        for col in string_cols:
+            spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
         if ids_filter is not None:
-            rdd = spark_rdd.map(stringify_rows_to_dict).filter(
-                lambda x: x["id"] in ids_filter
-            )
-        else:
-            rdd = spark_rdd.map(stringify_rows_to_dict)
+            spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
+            print(spark_df.first())
+        print("length of df to write to table: ", spark_df.count())
         print(check_length_col)
-        if check_length_col is not None:
-            oversize_arrays = (
-                rdd.map(
-                    lambda x: (
-                        len(x[check_length_col])
-                        if x[check_length_col] is not None
-                        else 0
-                    )
-                ).max()
-                > _MAX_STRING_LEN  # noqa E503
-            )
-
-            if oversize_arrays:
-                rdd = split_size_n_arrs_to_cols(rdd, check_length_col)
-                # schema = update_schema(rdd, schema)
-        ids = rdd.map(lambda x: x["id"]).collect()
+        ids = [x["id"] for x in spark_df.select("id").collect()]
         all_unique = self.check_unique_ids(table_name, ids)
         if all_unique:
-            rdd.toDF(schema).write.mode("append").saveAsTable(table_name)
+            spark_df.write.mode("append").saveAsTable(table_name)
         else:
             print("Duplicate IDs found in table. Not writing.")
             return False
-
-    def reduce_po_rdd(self, po_rdd):
-        rdd = po_rdd.map(lambda x: (x["id"], x))
-        rdd_grouped = rdd.groupByKey()
-
-        def sum_multiplicity(dicts):
-            summed_dict = None
-            for d in dicts:
-                if summed_dict is None:
-                    summed_dict = d.copy()
-                    summed_dict["multiplicity"] = d["multiplicity"]
-                else:
-                    summed_dict["multiplicity"] += d["multiplicity"]
-            return summed_dict
-
-        summed_rdd = rdd_grouped.mapValues(lambda rows: sum_multiplicity(rows))
-        result_rdd = summed_rdd.map(lambda x: x[1])
-        return result_rdd
 
     def find_existing_co_rows_append_elem(
         self,
@@ -266,7 +235,7 @@ class SparkDataLoader:
                 duplicate_df = self.spark.createDataFrame(
                     rec_batch.to_pylist(), schema=spark_schema
                 )
-                print(f"length of rdd: {duplicate_df.count()}")
+                print(f"length of df: {duplicate_df.count()}")
             unstring_udf = sf.udf(unstring_df_val, ArrayType(StringType()))
             for col_name, col_type in col_types.items():
                 if col_type == StringType():
@@ -387,7 +356,7 @@ class SparkDataLoader:
                 duplicate_df = self.spark.createDataFrame(
                     rec_batch.to_pylist(), schema=query_schema
                 )
-                print(f"length of rdd: {duplicate_df.count()}")
+                print(f"length of df: {duplicate_df.count()}")
 
             update_time = dateutil.parser.parse(
                 datetime.datetime.now(tz=datetime.timezone.utc).strftime(
@@ -644,7 +613,9 @@ class PGDataLoader:
         ) as conn:
             cur = conn.execute(
                 """UPDATE configurations
-                        SET configuration_set_ids = concat(%s::text, rtrim(ltrim(replace(configuration_set_ids,%s,''), '['),']'), %s::text)""",
+                        SET configuration_set_ids = concat(%s::text, \
+                rtrim(ltrim(replace(configuration_set_ids,%s,''), '['),']'), %s::text)
+                """,
                 (
                     "[",
                     f", {cs_id}",
@@ -701,13 +672,11 @@ class DataManager:
             else:
                 self.energy_conjugate = energy_conjugate
 
-    # TODO: consider moving where we assign dataset_id to configs
     @staticmethod
     def _gather_co_po_rows(
         prop_defs: list[dict],
         prop_map: dict,
         dataset_id,
-        # energy_conjugate,
         configs: list[AtomicConfiguration],
     ):
         """Convert COs and DOs to Spark rows."""
@@ -718,7 +687,6 @@ class DataManager:
                 definitions=prop_defs,
                 configuration=config,
                 property_map=prop_map,
-                # energy_conjugate=energy_conjugate,
             )
             co_po_rows.append(
                 (
@@ -741,16 +709,6 @@ class DataManager:
             self._gather_co_po_rows, self.prop_defs, self.prop_map, self.dataset_id
         )
         return itertools.chain.from_iterable(pool.map(part_gather, list(config_chunks)))
-
-        # For running without multiprocessing on notebook
-        # part_gather = partial(
-        #     self._gather_co_po_rows,
-        #     self.prop_defs,
-        #     self.prop_map,
-        # )
-        # while batch := tuple(islice(part_gather(self.configs), chunk_size)):
-        #     yield batch
-        #     break
 
     def gather_co_po_in_batches(self):
         """
@@ -799,21 +757,26 @@ class DataManager:
                 continue
             else:
                 pass
-                co_rdd = loader.spark.createDataFrame(co_rows, schema=config_df_schema)
+                co_df = loader.spark.createDataFrame(co_rows, schema=config_df_schema)
                 po_df = loader.spark.createDataFrame(
                     po_rows, schema=property_object_df_schema
                 )
-                co_ids = [x["id"] for x in co_rdd.select("id").collect()]
+                co_ids = [x["id"] for x in co_df.select("id").collect()]
                 if len(set(co_ids)) < len(co_ids):
                     print(f"{len(co_ids) -len(set(co_ids))} duplicates found in CO RDD")
-                    co_rdd = co_rdd.dropDuplicates(["id"])
-                    print(f"New length of co_rdd: {co_rdd.count()}")
+                    co_df = co_df.dropDuplicates(["id"])
                 po_ids = [x["id"] for x in po_df.select("id").collect()]
                 if len(set(po_ids)) < len(po_ids):
                     print(
                         f"{len(po_ids) - len(set(po_ids))} duplicates found in PO RDD"
                     )
+                    multiplicity = po_df.groupBy("id").agg(sf.count("*").alias("count"))
                     po_df = po_df.dropDuplicates(["id"])
+                    po_df = (
+                        po_df.join(multiplicity, on="id", how="inner")
+                        .withColumn("multiplicity", sf.col("count"))
+                        .drop("count")
+                    )
                 co_ids = set(co_ids)
 
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_ids)
@@ -824,7 +787,7 @@ class DataManager:
                     print("updating old rows")
                     new_co_ids, update_co_ids = (
                         loader.find_existing_co_rows_append_elem(
-                            co_rdd=co_rdd,
+                            co_df=co_df,
                             cols=["dataset_ids"],
                             elems=[self.dataset_id],
                         )
@@ -833,7 +796,7 @@ class DataManager:
                     print("writing new rows after updating old rows")
                     if len(new_co_ids) > 0:
                         loader.write_table(
-                            co_rdd,
+                            co_df,
                             loader.config_table,
                             config_schema,
                             ids_filter=new_co_ids,
@@ -841,7 +804,7 @@ class DataManager:
                         )
                 else:
                     loader.write_table(
-                        co_rdd,
+                        co_df,
                         loader.config_table,
                         config_schema,
                         check_length_col="positions_00",
@@ -860,6 +823,19 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                     if len(new_po_ids) > 0:
+                        if self.energy_conjugate is not None:
+                            po_df = po_df.withColumn(
+                                "energy_conjugate_with_forces",
+                                sf.col(self.energy_conjugate),
+                            )
+                            po_df = po_df.withColumn(
+                                "energy_conjugate_with_forces_units", sf.lit("eV")
+                            )
+                            po_df = po_df.withColumn(
+                                "energy_conjugate_with_forces_column",
+                                sf.lit(self.energy_conjugate),
+                            )
+                        # Add the conjugate function here
                         loader.write_table(
                             po_df,
                             loader.prop_object_table,
@@ -872,6 +848,19 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                 else:
+                    # # Add the conjugate function here
+                    # if self.energy_conjugate is not None:
+                    #     po_df = po_df.withColumn(
+                    #         "energy_conjugate_with_forces",
+                    #         sf.col(self.energy_conjugate),
+                    #     )
+                    #     po_df = po_df.withColumn(
+                    #         "energy_conjugate_with_forces_units", sf.lit("eV")
+                    #     )
+                    #     po_df = po_df.withColumn(
+                    #         "energy_conjugate_with_forces_column",
+                    #         sf.lit(self.energy_conjugate),
+                    #     )
                     loader.write_table(
                         po_df,
                         loader.prop_object_table,
@@ -909,11 +898,15 @@ class DataManager:
     def create_configuration_sets(
         self,
         loader,
-        # below args in order:
-        # [config-name-regex-pattern], [config-label-regex-pattern], \
-        # [config-set-name], [config-set-description]
         name_label_match: list[tuple],
     ):
+        """
+        Args for name_label_match in order:
+        1. Regex pattern for matching CONFIGURATION NAMES
+        2. Regex pattern for matching CONFIGURATION LABELS
+        3. Name for configuration set
+        4. Description for configuration set
+        """
         config_set_rows = []
         config_df = loader.read_table(table_name=loader.config_table, unstring=True)
         config_df = config_df.filter(
