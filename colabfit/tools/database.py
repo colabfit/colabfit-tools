@@ -1,6 +1,5 @@
 import datetime
 import itertools
-import json
 import multiprocessing
 import os
 import string
@@ -17,7 +16,6 @@ import pyarrow as pa
 import pyspark.sql.functions as sf
 from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
-from ibis import _
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import (
     ArrayType,
@@ -50,8 +48,6 @@ from colabfit.tools.schema import (
 )
 from colabfit.tools.utilities import (
     add_elem_to_row_dict,
-    append_ith_element_to_rdd_labels,
-    arrow_record_batch_to_rdd,
     get_spark_field_type,
     spark_schema_to_arrow_schema,
     split_size_n_arrs_to_cols,
@@ -59,9 +55,6 @@ from colabfit.tools.utilities import (
     stringify_rows_to_dict,
     stringify_df_val,
     unstring_df_val,
-    unstringify,
-    unstringify_row_dict,
-    # update_schema,
 )
 
 NSITES_COL_SPLITS = 20
@@ -149,7 +142,6 @@ class SparkDataLoader:
         self,
         spark_df,
         table_name: str,
-        schema: StructType,
         ids_filter: list[str] = None,
         check_length_col: str = None,
     ):
@@ -193,7 +185,7 @@ class SparkDataLoader:
         for col in cols:
             col_types[col] = get_spark_field_type(config_schema, col)
             is_arr = get_spark_field_type(config_df_schema, col)
-            if is_arr.typeName == "array":
+            if is_arr.typeName() == "array":
                 arr_cols.append(col)
         update_cols = [col for col in col_types if col not in ["id", "$row_id"]]
         # query_schema = StructType(
@@ -204,7 +196,6 @@ class SparkDataLoader:
         # )
         total_write_cols = update_cols + ["$row_id"]
         ids = [x["id"] for x in co_df.select("id").collect()]
-        # partial_batch_to_rdd = partial(arrow_record_batch_to_rdd, query_schema)
         batched_ids = batched(ids, 10000)
         new_ids = []
         existing_ids = []
@@ -238,19 +229,26 @@ class SparkDataLoader:
                 print(f"length of df: {duplicate_df.count()}")
             unstring_udf = sf.udf(unstring_df_val, ArrayType(StringType()))
             for col_name, col_type in col_types.items():
-                if col_type == StringType():
+                if col_name in arr_cols:
                     duplicate_df = duplicate_df.withColumn(
                         col_name, unstring_udf(sf.col(col_name))
                     )
             for col, elem in zip(cols, elems):
                 if col == "labels":
                     co_df_labels = co_df.select("id", "labels").collect()
-                    duplicate_df.withColumnRenamed("labels", "labels_dup").join(
-                        co_df_labels.withColumnRenamed("labels", "labels_co_df"),
-                        on="id",
-                    ).withColumn(
-                        "labels",
-                        sf.array_distinct(sf.array_union("labels_dup", "labels_co_df")),
+                    duplicate_df = (
+                        duplicate_df.withColumnRenamed("labels", "labels_dup")
+                        .join(
+                            co_df_labels.withColumnRenamed("labels", "labels_co_df"),
+                            on="id",
+                        )
+                        .withColumn(
+                            "labels",
+                            sf.array_distinct(
+                                sf.array_union("labels_dup", "labels_co_df")
+                            ),
+                        )
+                        .drop("labels_dup", "labels_co_df")
                     )
 
                 else:
@@ -260,10 +258,11 @@ class SparkDataLoader:
                             sf.array_union(sf.col(col), sf.array(sf.lit(elem)))
                         ),
                     )
-            existing_ids_batch = duplicate_df.select("id").collect()
+            existing_ids_batch = [x["id"] for x in duplicate_df.select("id").collect()]
             new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
             string_udf = sf.udf(stringify_df_val, StringType())
-            for col_name, col_type in col_types.items():
+            print(arr_cols)
+            for col_name in duplicate_df.columns:
                 if col_name in arr_cols:
                     duplicate_df = duplicate_df.withColumn(
                         col_name, string_udf(sf.col(col_name))
@@ -280,8 +279,6 @@ class SparkDataLoader:
                 [StructField(col, col_types[col], False) for col in total_write_cols]
             )
             arrow_schema = spark_schema_to_arrow_schema(update_schema)
-            print(arrow_schema)
-            print(update_cols)
             update_table = pa.table(
                 [
                     pa.array(col)
@@ -307,28 +304,22 @@ class SparkDataLoader:
         ids: list[str],
         po_df=None,
     ):
-        cols = ["id", "multiplicity", "last_modified"]
-        col_types = {
-            "id": StringType(),
-            "multiplicity": IntegerType(),
-            "last_modified": TimestampType(),
-            "$row_id": IntegerType(),
-        }
-        query_schema = StructType(
+        schema = StructType(
             [
-                StructField(col, col_types[col], False)
-                for i, col in enumerate(cols + ["$row_id"])
+                StructField("id", StringType(), False),
+                StructField("multiplicity", IntegerType(), True),
+                StructField("last_modified", TimestampType(), False),
+                StructField("$row_id", IntegerType(), False),
             ]
         )
-        write_schema = StructType(
+        arrow_schema = pa.schema(
             [
-                StructField(col, col_types[col], False)
-                for i, col in enumerate(
-                    ["id", "multiplicity", "last_modified", "$row_id"]
-                )
+                pa.field("id", pa.string()),
+                pa.field("multiplicity", pa.int32()),
+                pa.field("last_modified", pa.timestamp("ns")),
+                pa.field("$row_id", pa.int32()),
             ]
         )
-        # partial_batch_to_rdd = partial(arrow_record_batch_to_rdd, query_schema)
         batched_ids = batched(ids, 10000)
         new_ids = []
         existing_ids = []
@@ -354,7 +345,7 @@ class SparkDataLoader:
                 )
                 rec_batch = rec_batch.read_all()
                 duplicate_df = self.spark.createDataFrame(
-                    rec_batch.to_pylist(), schema=query_schema
+                    rec_batch.to_pylist(), schema=schema
                 )
                 print(f"length of df: {duplicate_df.count()}")
 
@@ -363,15 +354,19 @@ class SparkDataLoader:
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
             )
-            duplicate_df = duplicate_df.join(po_update_df, on="id").withColumn(
-                "multiplicity", sf.col("multiplicity") + sf.col("multiplicity_update")
+            duplicate_df = (
+                duplicate_df.join(po_update_df, on="id")
+                .withColumn(
+                    "multiplicity",
+                    sf.col("multiplicity") + sf.col("multiplicity_update"),
+                )
+                .drop("multiplicity_update")
             )
             duplicate_df = duplicate_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
-            existing_ids_batch = duplicate_df.select("id").collect()
+            existing_ids_batch = [x["id"] for x in duplicate_df.select("id").collect()]
             new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
-            arrow_schema = spark_schema_to_arrow_schema(write_schema)
             update_table = pa.table(
                 [pa.array(col) for col in zip(*duplicate_df.collect())],
                 schema=arrow_schema,
@@ -816,12 +811,11 @@ class DataManager:
                         )
                     )
                     print(f"Config ids in batch: {len(update_co_ids)}")
-                    print("writing new rows after updating old rows")
                     if len(new_co_ids) > 0:
+                        print(f"Writing {len(new_co_ids)} new rows to table")
                         loader.write_table(
                             co_df,
                             loader.config_table,
-                            config_schema,
                             ids_filter=new_co_ids,
                             check_length_col="positions_00",
                         )
@@ -829,7 +823,6 @@ class DataManager:
                     loader.write_table(
                         co_df,
                         loader.config_table,
-                        config_schema,
                         check_length_col="positions_00",
                     )
                     print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
@@ -846,23 +839,22 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                     if len(new_po_ids) > 0:
-                        if self.energy_conjugate is not None:
-                            po_df = po_df.withColumn(
-                                "energy_conjugate_with_forces",
-                                sf.col(self.energy_conjugate),
-                            )
-                            po_df = po_df.withColumn(
-                                "energy_conjugate_with_forces_units", sf.lit("eV")
-                            )
-                            po_df = po_df.withColumn(
-                                "energy_conjugate_with_forces_column",
-                                sf.lit(self.energy_conjugate),
-                            )
+                        # if self.energy_conjugate is not None:
+                        #     po_df = po_df.withColumn(
+                        #         "energy_conjugate_with_forces",
+                        #         sf.col(self.energy_conjugate),
+                        #     )
+                        #     po_df = po_df.withColumn(
+                        #         "energy_conjugate_with_forces_units", sf.lit("eV")
+                        #     )
+                        #     po_df = po_df.withColumn(
+                        #         "energy_conjugate_with_forces_column",
+                        #         sf.lit(self.energy_conjugate),
+                        #     )
                         # Add the conjugate function here
                         loader.write_table(
                             po_df,
                             loader.prop_object_table,
-                            property_object_schema,
                             ids_filter=new_po_ids,
                             check_length_col="atomic_forces_00",
                         )
@@ -887,7 +879,6 @@ class DataManager:
                     loader.write_table(
                         po_df,
                         loader.prop_object_table,
-                        property_object_schema,
                         check_length_col="atomic_forces_00",
                     )
                     print(
@@ -989,9 +980,7 @@ class DataManager:
         config_set_df = loader.spark.createDataFrame(
             config_set_rows, schema=configuration_set_schema
         )
-        loader.write_table(
-            config_set_df, loader.config_set_table, schema=configuration_set_schema
-        )
+        loader.write_table(config_set_df, loader.config_set_table)
         return config_set_rows
 
     def create_dataset(
@@ -1036,7 +1025,7 @@ class DataManager:
             configuration_set_ids=cs_ids,
         )
         ds_df = loader.spark.createDataFrame([ds.spark_row], schema=dataset_schema)
-        loader.write_table(ds_df, loader.dataset_table, schema=dataset_schema)
+        loader.write_table(ds_df, loader.dataset_table)
 
     @staticmethod
     def generate_ds_id():

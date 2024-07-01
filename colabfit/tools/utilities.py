@@ -108,7 +108,7 @@ def spark_to_arrow_type(spark_type):
     elif isinstance(spark_type, TimestampType):
         return pa.timestamp("ns")
     elif isinstance(spark_type, StructType):
-        return pa.struct(
+        return pa.schema(
             [
                 pa.field(field.name, spark_to_arrow_type(field.dataType))
                 for field in spark_type
@@ -338,15 +338,6 @@ def split_size_n_arrs_to_cols(rdd, column):
     max_chunks = rdd.map(lambda x: len(x[column])).max()
     rdd = rdd.map(partial(stacked_arrays_to_columns, column, max_chunks))
     return rdd
-
-
-# def update_schema(rdd, schema):
-#     """Use with array splitting functions to add string columns to schema"""
-#     keys = list(rdd.map(lambda x: x.keys()).take(1)[0])
-#     extra_keys = [x for x in keys if x not in schema.fieldNames()]
-#     for key in extra_keys:
-#         schema.add(StructField(key, StringType(), True))
-#     return schema
 
 
 ##########################################################
