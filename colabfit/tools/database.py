@@ -399,17 +399,40 @@ class SparkDataLoader:
         Returns:
             DataFrame -- Spark DataFrame
         """
-        schema_dict = {
+        unstring_schema_dict = {
             self.config_table: config_df_schema,
             self.config_set_table: configuration_set_df_schema,
             self.dataset_table: dataset_df_schema,
             self.prop_object_table: property_object_df_schema,
         }
+        string_schema_dict = {
+            self.config_table: config_schema,
+            self.config_set_table: configuration_set_schema,
+            self.dataset_table: dataset_schema,
+            self.prop_object_table: property_object_schema,
+        }
+        df = self.spark.read.table(table_name)
         if unstring:
-            df = self.spark.read.table(table_name)
-            return df.rdd.map(unstringify).toDF(schema_dict[table_name])
+            schema = unstring_schema_dict[table_name]
+            schema_type_dict = {f.name: f.dataType for f in schema}
+            string_cols = [f.name for f in schema if f.dataType.typeName() == "array"]
+            for col in string_cols:
+                string_col_udf = sf.udf(unstring_df_val, schema_type_dict[col])
+                df = df.withColumn(col, string_col_udf(sf.col(col)))
         else:
-            return self.spark.read.table(table_name)
+            schema = string_schema_dict[table_name]
+        mismatched_cols = [
+            x
+            for x in [(f.name, f.dataType.typeName()) for f in df.schema]
+            if x not in [(f.name, f.dataType.typeName()) for f in schema]
+        ]
+        if len(mismatched_cols) == 0:
+            return df
+        else:
+            raise ValueError(
+                f"Schema mismatch for table {table_name}. "
+                f"Mismatched column types in DataFrame: {mismatched_cols}"
+            )
 
     def zero_multiplicity(self, dataset_id):
         """Use to return multiplicity of POs for a given dataset to zero"""

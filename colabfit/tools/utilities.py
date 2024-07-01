@@ -1,13 +1,23 @@
-import numpy as np
-from hashlib import sha512
-from types import NoneType
-from functools import partial
-from pyspark.sql.types import StructField
-from pyspark.sql import Row
-import pyarrow as pa
+import json
+import os
+import sys
 from ast import literal_eval
-from pyspark.sql.types import IntegerType, StringType, StructType, TimestampType
+from functools import partial
+from hashlib import sha512
 from pathlib import Path
+from types import NoneType
+
+import numpy as np
+import pyarrow as pa
+from pyspark.sql import Row
+from pyspark.sql.types import (
+    IntegerType,
+    StringType,
+    StructType,
+    TimestampType,
+)
+
+BUCKET_DIR = "/vast/gw2338/METADATA"
 
 
 def _format_for_hash(v):
@@ -22,42 +32,60 @@ def _format_for_hash(v):
             return v
     elif isinstance(v, list):
         return np.array(v).data.tobytes()
-    elif isinstance(v, str):
-        return v.encode("utf-8")
-    elif isinstance(v, (float, int)):
-        return np.array(v).data.tobytes()
-    elif isinstance(v, NoneType):
-        return np.array(0).data.tobytes()
-    # Only use is for total_element_ratios, which may be implemented as an array instead
-    # Possibly remove
     elif isinstance(v, dict):
         return str(v).encode("utf-8")
+    elif isinstance(v, str):
+        return v.encode("utf-8")
+    elif isinstance(v, (int, float)):
+        return np.array(v).data.tobytes()
     else:
         return v
 
 
-def _hash(row, indentifying_fields_list):
-    identifiers = [row[i] for i in indentifying_fields_list]
-    sort_for_hash = ["positions"]
+def _hash(row, indentifying_key_list, include_keys_in_hash=False):
+    identifiers = [row[i] for i in indentifying_key_list]
+    # sort_for_hash = ["positions", "atomic_forces"]
     _hash = sha512()
-    for k, v in zip(indentifying_fields_list, identifiers):
+    for k, v in zip(indentifying_key_list, identifiers):
         if v is None:
             continue
-        elif k in sort_for_hash:
-            v = np.array(v)
-            sorted_v = v[
-                np.lexsort(
-                    (
-                        v[:, 2],
-                        v[:, 1],
-                        v[:, 0],
-                    )
-                )
-            ]
-            _hash.update(bytes(_format_for_hash(sorted_v)))
+        # elif k in sort_for_hash:
+        #     v = np.array(v)
+        #     sorted_v = v[np.lexsort((
+        #         v[:, 2],
+        #         v[:, 1],
+        #         v[:, 0],
+        #     ))]
+        #     _hash.update(bytes(_format_for_hash(sorted_v)))
         else:
+            if include_keys_in_hash:
+                _hash.update(bytes(_format_for_hash(k)))
             _hash.update(bytes(_format_for_hash(v)))
-    return int(_hash.hexdigest(), 16)
+    return str(int(_hash.hexdigest(), 16))
+
+
+# def _hash(row, indentifying_fields_list):
+#     identifiers = [row[i] for i in indentifying_fields_list]
+#     sort_for_hash = ["positions"]
+#     _hash = sha512()
+#     for k, v in zip(indentifying_fields_list, identifiers):
+#         if v is None:
+#             continue
+#         elif k in sort_for_hash:
+#             v = np.array(v)
+#             sorted_v = v[
+#                 np.lexsort(
+#                     (
+#                         v[:, 2],
+#                         v[:, 1],
+#                         v[:, 0],
+#                     )
+#                 )
+#             ]
+#             _hash.update(bytes(_format_for_hash(sorted_v)))
+#         else:
+#             _hash.update(bytes(_format_for_hash(v)))
+#     return int(_hash.hexdigest(), 16)
 
 
 def get_spark_field_type(schema, field_name):
@@ -109,17 +137,52 @@ def arrow_record_batch_to_rdd(schema, batch):
         yield {names[j]: array[i].as_py() for j, array in enumerate(arrays)}
 
 
+def _empty_dict_from_schema(schema):
+    empty_dict = {}
+    for field in schema:
+        empty_dict[field.name] = None
+    return empty_dict
+
+
 def _sort_dict(dictionary):
     keys = list(dictionary.keys())
     keys.sort()
     return {k: dictionary[k] for k in keys}
 
 
-def _empty_dict_from_schema(schema):
-    empty_dict = {}
-    for field in schema:
-        empty_dict[field.name] = None
-    return empty_dict
+def _parse_unstructured_metadata(md_json):
+    md = {}
+    for key, val in md_json.items():
+        if key in ["_id", "hash", "colabfit-id", "last_modified", "software", "method"]:
+            continue
+        if "source-value" in val.keys():
+            source_value = val["source-value"]
+        else:
+            source_value = val
+        if isinstance(source_value, list) and len(source_value) == 1:
+            source_value = source_value[0]
+        if isinstance(source_value, dict):
+            source_value = _sort_dict(source_value)
+        if isinstance(source_value, bytes):
+            source_value = source_value.decode("utf-8")
+        md[key] = source_value
+    md = _sort_dict(md)
+    md_hash = _hash(md, md.keys(), include_keys_in_hash=True)
+    md["hash"] = md_hash
+    md["id"] = f"MD_{md_hash[:25]}"
+    split = md["id"][-4:]
+    filename = f"{md['id']}.json"
+    full_path = os.path.join(BUCKET_DIR, "MD", split, filename)
+    if not os.path.isfile(full_path):
+        # Write iff the ID is new and unique
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, "w") as f:
+            json.dump(md, f)
+    return {
+        "metadata_id": md["id"],
+        "metadata_path": full_path,
+        "metadata_size": sys.getsizeof(json.dumps(md)),
+    }
 
 
 def stringify_lists(row_dict):
