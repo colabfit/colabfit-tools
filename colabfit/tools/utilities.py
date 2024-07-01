@@ -61,7 +61,8 @@ def _hash(row, indentifying_key_list, include_keys_in_hash=False):
             if include_keys_in_hash:
                 _hash.update(bytes(_format_for_hash(k)))
             _hash.update(bytes(_format_for_hash(v)))
-    return str(int(_hash.hexdigest(), 16))
+    # return str(int(_hash.hexdigest(), 16))
+    return int(_hash.hexdigest(), 16)
 
 
 # def _hash(row, indentifying_fields_list):
@@ -155,19 +156,18 @@ def _parse_unstructured_metadata(md_json):
     for key, val in md_json.items():
         if key in ["_id", "hash", "colabfit-id", "last_modified", "software", "method"]:
             continue
-        if "source-value" in val.keys():
-            source_value = val["source-value"]
-        else:
-            source_value = val
-        if isinstance(source_value, list) and len(source_value) == 1:
-            source_value = source_value[0]
-        if isinstance(source_value, dict):
-            source_value = _sort_dict(source_value)
-        if isinstance(source_value, bytes):
-            source_value = source_value.decode("utf-8")
-        md[key] = source_value
+        if isinstance(val, dict):
+            if "source-value" in val.keys():
+                val = val["source-value"]
+        if isinstance(val, list) and len(val) == 1:
+            val = val[0]
+        if isinstance(val, dict):
+            val = _sort_dict(val)
+        if isinstance(val, bytes):
+            val = val.decode("utf-8")
+        md[key] = val
     md = _sort_dict(md)
-    md_hash = _hash(md, md.keys(), include_keys_in_hash=True)
+    md_hash = str(_hash(md, md.keys(), include_keys_in_hash=True))
     md["hash"] = md_hash
     md["id"] = f"MD_{md_hash[:25]}"
     split = md["id"][-4:]

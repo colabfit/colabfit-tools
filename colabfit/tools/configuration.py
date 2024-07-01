@@ -14,7 +14,11 @@ from tqdm import tqdm
 
 from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
 from colabfit.tools.schema import config_schema
-from colabfit.tools.utilities import _empty_dict_from_schema, _hash, _sort_dict
+from colabfit.tools.utilities import (
+    _empty_dict_from_schema,
+    _hash,
+    _parse_unstructured_metadata,
+)
 
 
 class AtomicConfiguration(Atoms):
@@ -63,7 +67,7 @@ class AtomicConfiguration(Atoms):
             "positions_00",
             "cell",
             "pbc",
-            "metadata",
+            "metadata_id",
         ]
         self.info = info
         self.metadata = self.set_metadata(co_md_map)
@@ -132,11 +136,8 @@ class AtomicConfiguration(Atoms):
                 }
             else:
                 gathered_fields[md_field] = v
-        metadata = str(_sort_dict(gathered_fields))
-        if len(metadata) > 60000:
-            print("Metadata too long, truncating")
-            metadata = metadata[:60000]
-        return metadata
+
+        return _parse_unstructured_metadata(gathered_fields)
 
     def configuration_summary(self):
         """Extracts useful metadata from a Configuration
@@ -242,7 +243,8 @@ class AtomicConfiguration(Atoms):
             datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
         co_dict["atomic_numbers"] = self.numbers.astype(int).tolist()
-        co_dict["metadata"] = self.metadata
+        if self.metadata is not None:
+            co_dict.update(self.metadata)
         co_dict.update(self.configuration_summary())
         return co_dict
 

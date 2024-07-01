@@ -66,9 +66,9 @@ from colabfit.tools.utilities import (
 
 NSITES_COL_SPLITS = 20
 _CONFIGS_COLLECTION = "gpw_test_configs"
-_CONFIGSETS_COLLECTION = "gpw_test_configsets"
+_CONFIGSETS_COLLECTION = "gpw_test_config_sets"
 _DATASETS_COLLECTION = "gpw_test_datasets"
-_PROPOBJECT_COLLECTION = "gpw_test_propobjects"
+_PROPOBJECT_COLLECTION = "gpw_test_prop_objects"
 _MAX_STRING_LEN = 60000
 
 # from kim_property.definition import PROPERTY_ID as VALID_KIM_ID

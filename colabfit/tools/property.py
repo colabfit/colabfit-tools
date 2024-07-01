@@ -26,7 +26,11 @@ from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.schema import property_object_schema
-from colabfit.tools.utilities import _empty_dict_from_schema, _hash, _sort_dict
+from colabfit.tools.utilities import (
+    _empty_dict_from_schema,
+    _hash,
+    _parse_unstructured_metadata,
+)
 
 # from ase.units import create_units
 
@@ -96,6 +100,9 @@ _hash_ignored_fields = [
     "energy_conjugate_with_forces_reference_unit",
     "energy_conjugate_with_forces_property_id",
     "energy_conjugate_with_forces_column",
+    "multiplicity",
+    "metadata_path",
+    "metadata_size",
 ]
 
 
@@ -191,7 +198,7 @@ def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
         method = method["source-value"]
     if software is not None:
         software = software["source-value"]
-    return str(_sort_dict(gathered_fields)), method, software
+    return gathered_fields, method, software
 
 
 class PropertyParsingError(Exception):
@@ -295,7 +302,7 @@ class Property(dict):
             self.property_map = dict(property_map)
         else:
             self.property_map = {}
-        self.metadata = metadata
+        self.metadata = _parse_unstructured_metadata(metadata)
 
         if convert_units:
             self.convert_units()
@@ -538,7 +545,7 @@ class Property(dict):
         Convert the Property to a Spark Row object
         """
         row_dict = _empty_dict_from_schema(property_object_schema)
-        row_dict["metadata"] = self.metadata
+        row_dict.update(self.metadata)
         for key, val in self.instance.items():
             if key == "method":
                 row_dict["method"] = val

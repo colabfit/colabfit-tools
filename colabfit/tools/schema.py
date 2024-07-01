@@ -24,7 +24,6 @@ config_schema = StructType(
         StructField("hash", StringType(), False),
         StructField("last_modified", TimestampType(), False),
         StructField("dataset_ids", StringType(), True),
-        StructField("metadata", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
         StructField("chemical_formula_reduced", StringType(), True),
         StructField("chemical_formula_anonymous", StringType(), True),
@@ -40,6 +39,9 @@ config_schema = StructType(
         StructField("names", StringType(), True),
         StructField("labels", StringType(), True),
         StructField("configuration_set_ids", StringType(), True),
+        StructField("metadata_id", StringType(), True),
+        StructField("metadata_path", StringType(), True),
+        StructField("metadata_size", IntegerType(), True),
     ]
     + [
         StructField(
@@ -55,7 +57,6 @@ config_df_schema = StructType(
         StructField("hash", StringType(), False),
         StructField("last_modified", TimestampType(), False),
         StructField("dataset_ids", ArrayType(StringType()), True),
-        StructField("metadata", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
         StructField("chemical_formula_reduced", StringType(), True),
         StructField("chemical_formula_anonymous", StringType(), True),
@@ -71,6 +72,9 @@ config_df_schema = StructType(
         StructField("names", ArrayType(StringType()), True),
         StructField("labels", ArrayType(StringType()), True),
         StructField("configuration_set_ids", ArrayType(StringType()), True),
+        StructField("metadata_id", StringType(), True),
+        StructField("metadata_path", StringType(), True),
+        StructField("metadata_size", IntegerType(), True),
     ]
     + [
         StructField(f"positions_{i:02d}", ArrayType(ArrayType(DoubleType())), True)
@@ -87,7 +91,9 @@ property_object_schema = StructType(
         StructField("configuration_id", StringType(), True),
         StructField("dataset_id", StringType(), True),
         StructField("multiplicity", IntegerType(), True),
-        StructField("metadata", StringType(), True),
+        StructField("metadata_id", StringType(), True),
+        StructField("metadata_path", StringType(), True),
+        StructField("metadata_size", IntegerType(), True),
         StructField("software", StringType(), True),
         StructField("method", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
@@ -105,27 +111,6 @@ property_object_schema = StructType(
         StructField(
             "energy_conjugate_with_atomic_forces_property_id", StringType(), True
         ),
-        StructField("energy_conjugate_with_atomic_forces_column", StringType(), True),
-        StructField("potential_energy", DoubleType(), True),
-        StructField("potential_energy_unit", StringType(), True),
-        StructField("potential_energy_per_atom", BooleanType(), True),
-        StructField("potential_energy_reference", DoubleType(), True),
-        StructField("potential_energy_reference_unit", StringType(), True),
-        StructField("potential_energy_property_id", StringType(), True),
-        StructField("potential_energy_extrapolated_to_zero", DoubleType(), True),
-        StructField("potential_energy_extrapolated_to_zero_unit", StringType(), True),
-        StructField(
-            "potential_energy_extrapolated_to_zero_per_atom", BooleanType(), True
-        ),
-        StructField(
-            "potential_energy_extrapolated_to_zero_reference", DoubleType(), True
-        ),
-        StructField(
-            "potential_energy_extrapolated_to_zero_reference_unit", StringType(), True
-        ),
-        StructField(
-            "potential_energy_extrapolated_to_zero_property_id", StringType(), True
-        ),
     ]
     + [
         StructField(
@@ -140,12 +125,6 @@ property_object_schema = StructType(
         StructField("cauchy_stress_unit", StringType(), True),
         StructField("cauchy_stress_volume_normalized", BooleanType(), True),
         StructField("cauchy_stress_property_id", StringType(), True),
-        StructField("electronic_free_energy", DoubleType(), True),
-        StructField("electronic_free_energy_unit", StringType(), True),
-        StructField("electronic_free_energy_per_atom", BooleanType(), True),
-        StructField("electronic_free_energy_reference", DoubleType(), True),
-        StructField("electronic_free_energy_reference_unit", StringType(), True),
-        StructField("electronic_free_energy_property_id", StringType(), True),
         StructField("electronic_band_gap", DoubleType(), True),
         StructField("electronic_band_gap_unit", StringType(), True),
         StructField("electronic_band_gap_direct", StringType(), True),
@@ -180,7 +159,9 @@ property_object_df_schema = StructType(
         StructField("configuration_id", StringType(), True),
         StructField("dataset_id", StringType(), True),
         StructField("multiplicity", IntegerType(), True),
-        StructField("metadata", StringType(), True),
+        StructField("metadata_id", StringType(), True),
+        StructField("metadata_path", StringType(), True),
+        StructField("metadata_size", IntegerType(), True),
         StructField("software", StringType(), True),
         StructField("method", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
@@ -198,27 +179,6 @@ property_object_df_schema = StructType(
         StructField(
             "energy_conjugate_with_atomic_forces_property_id", StringType(), True
         ),
-        StructField("energy_conjugate_with_atomic_forces_column", StringType(), True),
-        StructField("potential_energy", DoubleType(), True),
-        StructField("potential_energy_unit", StringType(), True),
-        StructField("potential_energy_per_atom", BooleanType(), True),
-        StructField("potential_energy_reference", DoubleType(), True),
-        StructField("potential_energy_reference_unit", StringType(), True),
-        StructField("potential_energy_property_id", StringType(), True),
-        StructField("potential_energy_extrapolated_to_zero", DoubleType(), True),
-        StructField("potential_energy_extrapolated_to_zero_unit", StringType(), True),
-        StructField(
-            "potential_energy_extrapolated_to_zero_per_atom", BooleanType(), True
-        ),
-        StructField(
-            "potential_energy_extrapolated_to_zero_reference", DoubleType(), True
-        ),
-        StructField(
-            "potential_energy_extrapolated_to_zero_reference_unit", StringType(), True
-        ),
-        StructField(
-            "potential_energy_extrapolated_to_zero_property_id", StringType(), True
-        ),
     ]
     + [
         StructField(f"atomic_forces_{i:02d}", ArrayType(ArrayType(DoubleType())), True)
@@ -231,12 +191,6 @@ property_object_df_schema = StructType(
         StructField("cauchy_stress_unit", StringType(), True),
         StructField("cauchy_stress_volume_normalized", BooleanType(), True),
         StructField("cauchy_stress_property_id", StringType(), True),
-        StructField("electronic_free_energy", DoubleType(), True),
-        StructField("electronic_free_energy_unit", StringType(), True),
-        StructField("electronic_free_energy_per_atom", BooleanType(), True),
-        StructField("electronic_free_energy_reference", DoubleType(), True),
-        StructField("electronic_free_energy_reference_unit", StringType(), True),
-        StructField("electronic_free_energy_property_id", StringType(), True),
         StructField("electronic_band_gap", DoubleType(), True),
         StructField("electronic_band_gap_unit", StringType(), True),
         StructField("electronic_band_gap_direct", StringType(), True),
