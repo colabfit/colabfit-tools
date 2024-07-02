@@ -93,13 +93,6 @@ _hash_ignored_fields = [
     "id",
     "hash",
     "last_modified",
-    "energy_conjugate_with_forces",
-    "energy_conjugate_with_forces_unit",
-    "energy_conjugate_with_forces_per_atom",
-    "energy_conjugate_with_forces_reference",
-    "energy_conjugate_with_forces_reference_unit",
-    "energy_conjugate_with_forces_property_id",
-    "energy_conjugate_with_forces_column",
     "multiplicity",
     "metadata_path",
     "metadata_size",
@@ -632,7 +625,8 @@ class Property(dict):
             self.property_map[key]["units"] = self.instance[edn_key]["source-unit"]
 
     def __hash__(self):
-        return hash(self.name)
+
+        return _hash(self.spark_row, self.unique_identifier_kw)
 
     def __eq__(self, other):
         """
