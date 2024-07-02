@@ -150,7 +150,7 @@ class Dataset:
         co_po_df = co_po_df.withColumn(
             "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
         )
-        row_dict["nsites"] = co_po_df.agg({"nsites": "sum"}).first()[0]
+        row_dict["nsites"] = co_po_df.agg({"nsites_multiple": "sum"}).first()[0]
         row_dict["elements"] = sorted(
             co_po_df.withColumn("exploded_elements", sf.explode("elements"))
             .agg(sf.collect_set("exploded_elements").alias("exploded_elements"))

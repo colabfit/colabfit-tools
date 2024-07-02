@@ -430,7 +430,7 @@ class SparkDataLoader:
             .collect()
         )
         ids = [x["id"] for x in ids]
-        batched_ids = batched(ids, 1000)
+        batched_ids = batched(ids, 10000)
         for id_batch in batched_ids:
             id_batch = list(set(id_batch))
             with self.session.transaction() as tx:
