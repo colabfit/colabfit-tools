@@ -10,6 +10,7 @@ from multiprocessing import Pool
 from time import time
 from types import GeneratorType
 
+import dateutil.parser
 import findspark
 import psycopg
 import pyarrow as pa
@@ -26,9 +27,8 @@ from pyspark.sql.types import (
     TimestampType,
 )
 from tqdm import tqdm
-from unidecode import unidecode
 from vastdb.session import Session
-import dateutil.parser
+
 from colabfit import (
     ID_FORMAT_STRING,
 )  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,; _CONFIGS_COLLECTION,; _CONFIGSETS_COLLECTION,; _DATASETS_COLLECTION,; _PROPOBJECT_COLLECTION,
@@ -47,12 +47,8 @@ from colabfit.tools.schema import (
     property_object_schema,
 )
 from colabfit.tools.utilities import (
-    add_elem_to_row_dict,
     get_spark_field_type,
     spark_schema_to_arrow_schema,
-    split_size_n_arrs_to_cols,
-    stringify_lists,
-    stringify_rows_to_dict,
     stringify_df_val,
     unstring_df_val,
 )
@@ -149,15 +145,12 @@ class SparkDataLoader:
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
         ]
-        print(string_cols)
         string_col_udf = sf.udf(stringify_df_val, StringType())
         for col in string_cols:
             spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
         if ids_filter is not None:
             spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
-            print(spark_df.first())
         print("length of df to write to table: ", spark_df.count())
-        print(check_length_col)
         ids = [x["id"] for x in spark_df.select("id").collect()]
         all_unique = self.check_unique_ids(table_name, ids)
         if all_unique:
@@ -261,7 +254,6 @@ class SparkDataLoader:
             existing_ids_batch = [x["id"] for x in duplicate_df.select("id").collect()]
             new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
             string_udf = sf.udf(stringify_df_val, StringType())
-            print(arr_cols)
             for col_name in duplicate_df.columns:
                 if col_name in arr_cols:
                     duplicate_df = duplicate_df.withColumn(
@@ -762,6 +754,28 @@ class DataManager:
             )
 
     def load_co_po_to_vastdb(self, loader):
+        if loader.spark.catalog.tableExists(loader.config_table):
+            pos_with_mult = (
+                loader.read_table(loader.prop_object_table)
+                .filter(sf.col("dataset_id") == self.dataset_id)
+                .filter(sf.col("multiplicity") > 0)
+                .limit(1)
+            )
+            if pos_with_mult.count() > 0:
+                print(
+                    f"POs for dataset with ID {self.dataset_id} already exist in "
+                    "database with multiplicity > 0.\nTo continue, set multiplicities "
+                    f'to 0 with loader.zero_multiplicity("{self.dataset_id}")'
+                )
+                return
+        if loader.spark.catalog.tableExists(loader.dataset_table):
+            dataset_exists = loader.read_table(loader.dataset_table).filter(
+                sf.col("id") == self.dataset_id
+            )
+            if dataset_exists.count() > 0:
+                print(f"Dataset with ID {self.dataset_id} already exists in database.")
+
+                return
         co_po_rows = self.gather_co_po_in_batches_no_pool()
         for co_po_batch in tqdm(
             co_po_rows,
@@ -961,20 +975,19 @@ class DataManager:
                 config_df=config_set_query,
                 dataset_id=self.dataset_id,
             )
-            t_end = time() - t
-            print(f"Time to create config set: {t_end}")
+
             co_ids = [
                 x["id"] for x in config_set_query.select("id").distinct().collect()
             ]
             print(f"Num config ids in config set: {len(co_ids)}")
-            t = time()
+
             loader.find_existing_co_rows_append_elem(
                 co_df=config_set_query,
-                cols="configuration_set_ids",
+                cols=["configuration_set_ids"],
                 elems=config_set.spark_row["id"],
             )
             t_end = time() - t
-            print(f"Time to update co-ids: {t_end}")
+            print(f"Time to create CS and update COs with CS-ID: {t_end}")
 
             config_set_rows.append(config_set.spark_row)
         config_set_df = loader.spark.createDataFrame(

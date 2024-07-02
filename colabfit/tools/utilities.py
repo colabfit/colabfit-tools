@@ -15,6 +15,7 @@ from pyspark.sql.types import (
     StringType,
     StructType,
     TimestampType,
+    StructField,
 )
 
 BUCKET_DIR = "/vast/gw2338/METADATA"
@@ -94,6 +95,16 @@ def get_spark_field_type(schema, field_name):
         if field.name == field_name:
             return field.dataType
     raise ValueError(f"Field name {field_name} not found in schema")
+
+
+def get_stringified_schema(schema):
+    new_fields = []
+    for field in schema:
+        if field.dataType.typeName() == "array":
+            new_fields.append(StructField(field.name, StringType(), field.nullable))
+        else:
+            new_fields.append(field)
+    return StructType(new_fields)
 
 
 def spark_to_arrow_type(spark_type):

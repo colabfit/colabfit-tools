@@ -632,8 +632,7 @@ class Property(dict):
             self.property_map[key]["units"] = self.instance[edn_key]["source-unit"]
 
     def __hash__(self):
-
-        return _hash(self.spark_row, self.unique_identifier_kw)
+        return hash(self.name)
 
     def __eq__(self, other):
         """

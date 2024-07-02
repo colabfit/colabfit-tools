@@ -2,10 +2,10 @@ import datetime
 import warnings
 
 import dateutil
-import numpy as np
 import pyspark.sql.functions as sf
 from pyspark.sql.types import StringType
 from unidecode import unidecode
+from hashlib import sha512
 
 from colabfit import MAX_STRING_LENGTH
 from colabfit.tools.schema import dataset_schema
@@ -103,7 +103,7 @@ class Dataset:
         self.dataset_id = dataset_id
         self.configuration_set_ids = configuration_set_ids
         self.spark_row = self.to_spark_row(config_df=config_df, prop_df=prop_df)
-        self._hash = hash(self)
+        self._hash = hash(dataset_id)
         self.spark_row["hash"] = self._hash
         self.spark_row["id"] = self.dataset_id
         if dataset_id is None:
@@ -131,12 +131,22 @@ class Dataset:
             )
         )
         row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
-        config_df = config_df.withColumnRenamed("id", "config_id").withColumnRenamed(
-            "hash", "config_hash"
+        config_df = (
+            config_df.withColumnRenamed("id", "configuration_id")
+            .withColumnRenamed("hash", "config_hash")
+            .select(
+                "configuration_id",
+                "elements",
+                "atomic_numbers",
+                "nsites",
+                "nelements",
+                "nperiodic_dimensions",
+                "cell",
+                "dimension_types",
+                # "labels",
+            )
         )
-        co_po_df = prop_df.join(
-            config_df, prop_df["configuration_id"] == config_df["config_id"], "inner"
-        )
+        co_po_df = prop_df.join(config_df, on="configuration_id", how="inner")
         co_po_df = co_po_df.withColumn(
             "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
         )
@@ -148,22 +158,32 @@ class Dataset:
             .take(1)[0][0]
         )
         row_dict["nelements"] = len(row_dict["elements"])
-        atomic_ratios_df = (
-            co_po_df.select("atomic_numbers")
-            .withColumn("exploded_atom", sf.explode("atomic_numbers"))
-            .groupBy(sf.col("exploded_atom").alias("atomic_number"))
-            .count()
-            .withColumn("ratio", sf.col("count") / row_dict["nsites"])
-            .select("ratio", "atomic_number")
+
+        atomic_ratios_df = co_po_df.withColumn(
+            "repeated_numbers",
+            sf.expr("transform(atomic_numbers, x -> array_repeat(x, multiplicity))"),
+        ).withColumn("single_element", sf.explode(sf.flatten("repeated_numbers")))
+        total_elements = atomic_ratios_df.count()
+        print(total_elements, row_dict["nsites"])
+        assert total_elements == row_dict["nsites"]
+        atomic_ratios_df = atomic_ratios_df.groupBy("single_element").count()
+        atomic_ratios_df = atomic_ratios_df.withColumn(
+            "ratio", sf.col("count") / total_elements
+        )
+
+        atomic_ratios_coll = (
+            atomic_ratios_df.select("ratio", "single_element")
             .withColumn(
                 "element",
-                sf.udf(lambda x: ELEMENT_MAP[x], StringType())(sf.col("atomic_number")),
+                sf.udf(lambda x: ELEMENT_MAP[x], StringType())(
+                    sf.col("single_element")
+                ),
             )
             .select("element", "ratio")
             .collect()
         )
         row_dict["total_elements_ratios"] = [
-            x[1] for x in sorted(atomic_ratios_df, key=lambda x: x["element"])
+            x[1] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
         ]
 
         row_dict["nperiodic_dimensions"] = co_po_df.agg(
@@ -183,14 +203,21 @@ class Dataset:
             "electronic_band_gap",
             "cauchy_stress",
             "formation_energy",
-            "electronic_free_energy",
-            "energy_conjugate_with_atomic_forces_per_atom",
-            "potential_energy",
-            "potential_energy_extrapolated_to_zero",
+            "energy_conjugate_with_atomic_forces",
         ]:
             row_dict[f"{prop}_count"] = (
                 prop_df.select(prop).where(f"{prop} is not null").count()
             )
+        row_dict["energy_conjugate_with_atomic_forces_variance"] = (
+            prop_df.select(prop)
+            .where("energy_conjugate_with_atomic_forces is not null")
+            .agg(sf.variance(prop))
+        ).first()[0]
+        row_dict["energy_conjugate_with_atomic_forces_mean"] = (
+            prop_df.select(prop)
+            .where("energy_conjugate_with_atomic_forces is not null")
+            .agg(sf.mean(prop))
+        ).first()[0]
         row_dict["nproperty_objects"] = prop_df.count()
         row_dict["nconfigurations"] = co_po_df.count()
         row_dict["authors"] = str(self.authors)
@@ -203,25 +230,17 @@ class Dataset:
         row_dict["name"] = self.name
         return row_dict
 
-    @staticmethod
-    def _format_for_hash(v):
-        if isinstance(v, list):
-            return np.array(v).data.tobytes()
-        elif isinstance(v, str):
-            return v.encode("utf-8")
-        elif isinstance(v, (int, float)):
-            return np.array(v).data.tobytes()
-        else:
-            return v
-
-    def __hash__(self):
-        return hash(self.name)
+    # @staticmethod
+    # def __hash__(self):
+    #     sha = sha512()
+    #     sha.update(self.name.encode("utf-8"))
+    #     return int(sha.hexdigest(), 16)
 
     def __str__(self):
         return (
             f"Dataset(description='{self.description}', "
             f"nconfiguration_sets={len(self.spark_row['configuration_sets'])}, "
-            f"nproperties={self.spark_row['nproperties']})"
+            f"nproperties={self.spark_row['nproperties']}, "
             f"nconfigurations={self.spark_row['nconfigurations']}"
         )
 
