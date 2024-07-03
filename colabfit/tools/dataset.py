@@ -208,6 +208,7 @@ class Dataset:
             row_dict[f"{prop}_count"] = (
                 prop_df.select(prop).where(f"{prop} is not null").count()
             )
+        row_dict["atomic_forces_count"] = row_dict.pop("atomic_forces_00_count")
         row_dict["energy_conjugate_with_atomic_forces_variance"] = (
             prop_df.select(prop)
             .where("energy_conjugate_with_atomic_forces is not null")
