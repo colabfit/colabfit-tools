@@ -546,7 +546,6 @@ class Property(dict):
         )
         row_dict["chemical_formula_hill"] = self.chemical_formula_hill
         row_dict["multiplicity"] = 1
-        print(row_dict)
         return row_dict
 
     def convert_units(self):
