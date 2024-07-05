@@ -71,15 +71,6 @@ property_object_df_schema = StructType(
         StructField("energy_conjugate_with_atomic_forces", DoubleType(), True),
         StructField("energy_conjugate_with_atomic_forces_unit", StringType(), True),
         StructField(
-            "energy_conjugate_with_atomic_forces_per_atom", BooleanType(), True
-        ),
-        StructField(
-            "energy_conjugate_with_atomic_forces_reference", DoubleType(), True
-        ),
-        StructField(
-            "energy_conjugate_with_atomic_forces_reference_unit", StringType(), True
-        ),
-        StructField(
             "energy_conjugate_with_atomic_forces_property_id", StringType(), True
         ),
     ]
@@ -101,21 +92,12 @@ property_object_df_schema = StructType(
         StructField("electronic_band_gap_property_id", StringType(), True),
         StructField("formation_energy", DoubleType(), True),
         StructField("formation_energy_unit", StringType(), True),
-        StructField("formation_energy_per_atom", BooleanType(), True),
-        StructField("formation_energy_reference", DoubleType(), True),
-        StructField("formation_energy_reference_unit", StringType(), True),
         StructField("formation_energy_property_id", StringType(), True),
         StructField("adsorption_energy", DoubleType(), True),
         StructField("adsorption_energy_unit", StringType(), True),
-        StructField("adsorption_energy_per_atom", BooleanType(), True),
-        StructField("adsorption_energy_reference", DoubleType(), True),
-        StructField("adsorption_energy_reference_unit", StringType(), True),
         StructField("adsorption_energy_property_id", StringType(), True),
         StructField("atomization_energy", DoubleType(), True),
         StructField("atomization_energy_unit", StringType(), True),
-        StructField("atomization_energy_per_atom", BooleanType(), True),
-        StructField("atomization_energy_reference", DoubleType(), True),
-        StructField("atomization_energy_reference_unit", StringType(), True),
         StructField("atomization_energy_property_id", StringType(), True),
     ]
 )

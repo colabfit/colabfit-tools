@@ -548,9 +548,9 @@ class Property(dict):
                         raise RuntimeError(
                             "nsites must be provided to convert per-atom"
                         )
-                    print(f"multiplying {prop_val} by {self.nsites}")
+                    # print(f"multiplying {prop_val} by {self.nsites}")
                     prop_val *= self.nsites
-                    print(f"New prop_val: {prop_val}")
+                    # print(f"New prop_val: {prop_val}")
 
             if units != p_info.unit:
                 split_units = list(

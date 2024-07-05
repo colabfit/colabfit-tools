@@ -149,7 +149,6 @@ class SparkDataLoader:
             spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
         if ids_filter is not None:
             spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
-        print("length of df to write to table: ", spark_df.count())
         ids = [x["id"] for x in spark_df.select("id").collect()]
         all_unique = self.check_unique_ids(table_name, ids)
         if all_unique:
