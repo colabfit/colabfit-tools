@@ -129,8 +129,7 @@ class SparkDataLoader:
             df = self.spark.read.table(table_name)
             dupes_exist = df.filter(sf.col("id").isin(broadcast_ids.value)).limit(1)
             if len(dupes_exist.collect()) > 0:
-                print(f"Duplicate IDs found in table {table_name}")
-                return False
+                raise ValueError(f"Duplicate IDs found in table {table_name}")
         return True
 
     def write_table(
@@ -155,8 +154,7 @@ class SparkDataLoader:
         if all_unique:
             spark_df.write.mode("append").saveAsTable(table_name)
         else:
-            print("Duplicate IDs found in table. Not writing.")
-            return False
+            raise ValueError("Duplicate IDs found in table. Not writing.")
 
     def find_existing_co_rows_append_elem(
         self,
@@ -759,20 +757,17 @@ class DataManager:
                 .limit(1)
             )
             if pos_with_mult.count() > 0:
-                print(
+                raise ValueError(
                     f"POs for dataset with ID {self.dataset_id} already exist in "
                     "database with multiplicity > 0.\nTo continue, set multiplicities "
                     f'to 0 with loader.zero_multiplicity("{self.dataset_id}")'
                 )
-                return
         if loader.spark.catalog.tableExists(loader.dataset_table):
             dataset_exists = loader.read_table(loader.dataset_table).filter(
                 sf.col("id") == self.dataset_id
             )
             if dataset_exists.count() > 0:
-                print(f"Dataset with ID {self.dataset_id} already exists in database.")
-
-                return
+                raise ValueError(f"Dataset with ID {self.dataset_id} already exists.")
         co_po_rows = self.gather_co_po_in_batches_no_pool()
         for co_po_batch in tqdm(
             co_po_rows,
@@ -821,7 +816,6 @@ class DataManager:
                             elems=[self.dataset_id],
                         )
                     )
-                    print(f"Config ids in batch: {len(update_co_ids)}")
                     if len(new_co_ids) > 0:
                         print(f"Writing {len(new_co_ids)} new rows to table")
                         loader.write_table(

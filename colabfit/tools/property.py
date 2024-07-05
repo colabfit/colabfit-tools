@@ -45,6 +45,8 @@ UNITS = create_units("2014")
 UNITS["angstrom"] = UNITS["Ang"]
 UNITS["bohr"] = UNITS["Bohr"]
 UNITS["hartree"] = UNITS["Hartree"]
+UNITS["rydberg"] = UNITS["Rydberg"]
+UNITS["debye"] = UNITS["Debye"]
 
 prop_info = namedtuple("prop_info", ["key", "unit", "dtype"])
 energy_info = prop_info("energy", "eV", float)
@@ -514,12 +516,12 @@ class Property(dict):
         For each key in :attr:`self.property_map`, convert :attr:`self.edn[key]`
         from its original units to the expected ColabFit-compliant units.
         """
-        print(self.instance.items())
+        # print(self.instance.items())
         for prop_name, prop_dict in self.instance.items():
             if prop_name not in MAIN_KEY_MAP.keys():
                 continue
             p_info = MAIN_KEY_MAP[prop_name]
-            print(prop_dict[p_info.key])
+            # print(prop_dict[p_info.key])
             units = prop_dict[p_info.key]["source-unit"]
             if p_info.dtype == list:
                 prop_val = np.array(
@@ -528,17 +530,17 @@ class Property(dict):
             else:
                 prop_val = prop_dict[p_info.key]["source-value"]
             if "reference-energy" in prop_dict:
-                print(units, prop_dict["reference-energy"]["source-unit"])
+                # print(units, prop_dict["reference-energy"]["source-unit"])
                 if prop_dict["reference-energy"]["source-unit"] != units:
                     raise RuntimeError(
                         "Units of the reference energy and energy must be the same"
                     )
                 else:
-                    print(
-                        f"adding {prop_dict['reference-energy']['source-value']} to {prop_val}"
-                    )
+                    # print(
+                    #     f"adding {prop_dict['reference-energy']['source-value']} to {prop_val}"
+                    # )
                     prop_val += prop_dict["reference-energy"]["source-value"]
-                    print(f"New prop_val: {prop_val}")
+                    # print(f"New prop_val: {prop_val}")
 
             if "per-atom" in prop_dict:
                 if prop_dict["per-atom"]["source-value"] is True:
@@ -556,7 +558,6 @@ class Property(dict):
                         [sp.split("/") for sp in units.split("*")]
                     )
                 )
-                print(p_info.key, " :  ", units)
 
                 prop_val *= float(UNITS[split_units[0]])
                 for u in split_units[1:]:
@@ -574,7 +575,6 @@ class Property(dict):
                 "source-value": prop_val,
                 "source-unit": p_info.unit,
             }
-            print(self.property_map[prop_name])
 
     def __hash__(self):
 
