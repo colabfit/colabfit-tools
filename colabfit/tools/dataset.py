@@ -5,7 +5,6 @@ import dateutil
 import pyspark.sql.functions as sf
 from pyspark.sql.types import StringType
 from unidecode import unidecode
-from hashlib import sha512
 
 from colabfit import MAX_STRING_LENGTH
 from colabfit.tools.schema import dataset_schema
@@ -221,13 +220,13 @@ class Dataset:
         ).first()[0]
         row_dict["nproperty_objects"] = prop_df.count()
         row_dict["nconfigurations"] = co_po_df.count()
-        row_dict["authors"] = str(self.authors)
+        row_dict["authors"] = self.authors
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license
         row_dict["publication_link"] = self.publication_link
         row_dict["data_link"] = self.data_link
         if self.other_links is not None:
-            row_dict["other_links"] = str(self.other_links)
+            row_dict["other_links"] = self.other_links
         row_dict["name"] = self.name
         return row_dict
 

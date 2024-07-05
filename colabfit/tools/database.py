@@ -3,7 +3,6 @@ import itertools
 import multiprocessing
 import os
 import string
-import warnings
 from functools import partial
 from itertools import islice
 from multiprocessing import Pool
@@ -656,7 +655,7 @@ class DataManager:
         prop_defs: list[dict] = None,
         prop_map: dict = None,
         dataset_id=None,
-        energy_conjugate=None,
+        standardize_energy: bool = True,
     ):
         self.configs = configs
         if isinstance(prop_defs, dict):
@@ -665,22 +664,10 @@ class DataManager:
         self.prop_map = prop_map
         self.nprocs = nprocs
         self.dataset_id = dataset_id
+        self.standardize_energy = standardize_energy
         if self.dataset_id is None:
             self.dataset_id = self.generate_ds_id()
         print("Dataset ID:", self.dataset_id)
-        if (
-            any(["energy" in x for x in self.prop_defs])
-            and "atomic_forces_pd" in self.prop_defs
-        ):
-            if energy_conjugate is None:
-                raise warnings.warn(
-                    "No energy conjugate column provided for atomic forces.\n"
-                    'Please set with i.e. energy_conjugate="electronic_free_energy" '
-                    "when initializing DataManager\nChoices: 'potential_energy', "
-                    "'electronic_free_energy'"
-                )
-            else:
-                self.energy_conjugate = energy_conjugate
 
     @staticmethod
     def _gather_co_po_rows(
@@ -688,6 +675,7 @@ class DataManager:
         prop_map: dict,
         dataset_id,
         configs: list[AtomicConfiguration],
+        standardize_energy: bool = True,
     ):
         """Convert COs and DOs to Spark rows."""
         co_po_rows = []
@@ -697,6 +685,7 @@ class DataManager:
                 definitions=prop_defs,
                 configuration=config,
                 property_map=prop_map,
+                standardize_energy=standardize_energy,
             )
             co_po_rows.append(
                 (
@@ -716,7 +705,11 @@ class DataManager:
         """
 
         part_gather = partial(
-            self._gather_co_po_rows, self.prop_defs, self.prop_map, self.dataset_id
+            self._gather_co_po_rows,
+            self.prop_defs,
+            self.prop_map,
+            self.dataset_id,
+            self.standardize_energy,
         )
         return itertools.chain.from_iterable(pool.map(part_gather, list(config_chunks)))
 
@@ -749,12 +742,16 @@ class DataManager:
         for chunk in config_chunks:
             yield list(
                 self._gather_co_po_rows(
-                    self.prop_defs, self.prop_map, self.dataset_id, chunk
+                    self.prop_defs,
+                    self.prop_map,
+                    self.dataset_id,
+                    chunk,
+                    standardize_energy=self.standardize_energy,
                 )
             )
 
     def load_co_po_to_vastdb(self, loader):
-        if loader.spark.catalog.tableExists(loader.config_table):
+        if loader.spark.catalog.tableExists(loader.prop_object_table):
             pos_with_mult = (
                 loader.read_table(loader.prop_object_table)
                 .filter(sf.col("dataset_id") == self.dataset_id)
@@ -853,19 +850,6 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                     if len(new_po_ids) > 0:
-                        # if self.energy_conjugate is not None:
-                        #     po_df = po_df.withColumn(
-                        #         "energy_conjugate_with_forces",
-                        #         sf.col(self.energy_conjugate),
-                        #     )
-                        #     po_df = po_df.withColumn(
-                        #         "energy_conjugate_with_forces_units", sf.lit("eV")
-                        #     )
-                        #     po_df = po_df.withColumn(
-                        #         "energy_conjugate_with_forces_column",
-                        #         sf.lit(self.energy_conjugate),
-                        #     )
-                        # Add the conjugate function here
                         loader.write_table(
                             po_df,
                             loader.prop_object_table,
@@ -877,19 +861,6 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                 else:
-                    # # Add the conjugate function here
-                    # if self.energy_conjugate is not None:
-                    #     po_df = po_df.withColumn(
-                    #         "energy_conjugate_with_forces",
-                    #         sf.col(self.energy_conjugate),
-                    #     )
-                    #     po_df = po_df.withColumn(
-                    #         "energy_conjugate_with_forces_units", sf.lit("eV")
-                    #     )
-                    #     po_df = po_df.withColumn(
-                    #         "energy_conjugate_with_forces_column",
-                    #         sf.lit(self.energy_conjugate),
-                    #     )
                     loader.write_table(
                         po_df,
                         loader.prop_object_table,
@@ -991,7 +962,7 @@ class DataManager:
 
             config_set_rows.append(config_set.spark_row)
         config_set_df = loader.spark.createDataFrame(
-            config_set_rows, schema=configuration_set_schema
+            config_set_rows, schema=configuration_set_df_schema
         )
         loader.write_table(config_set_df, loader.config_set_table)
         return config_set_rows
@@ -1037,7 +1008,7 @@ class DataManager:
             data_license=data_license,
             configuration_set_ids=cs_ids,
         )
-        ds_df = loader.spark.createDataFrame([ds.spark_row], schema=dataset_schema)
+        ds_df = loader.spark.createDataFrame([ds.spark_row], schema=dataset_df_schema)
         loader.write_table(ds_df, loader.dataset_table)
 
     @staticmethod
