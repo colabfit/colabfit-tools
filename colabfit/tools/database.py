@@ -129,7 +129,8 @@ class SparkDataLoader:
             df = self.spark.read.table(table_name)
             dupes_exist = df.filter(sf.col("id").isin(broadcast_ids.value)).limit(1)
             if len(dupes_exist.collect()) > 0:
-                raise ValueError(f"Duplicate IDs found in table {table_name}")
+                print(f"Duplicate IDs found in table {table_name}")
+                return False
         return True
 
     def write_table(
