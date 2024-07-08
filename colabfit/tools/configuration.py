@@ -270,9 +270,9 @@ class AtomicConfiguration(Atoms):
                 if not isinstance(v, set):
                     if not isinstance(v, list):
                         v = [v]
-                    info[k] = set(v)
+                    info[k] = list(set(v))
                 else:
-                    info[k] = v
+                    info[k] = list(v)
             else:
                 info[k] = v
         config = self(

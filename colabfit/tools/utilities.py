@@ -39,6 +39,8 @@ def _format_for_hash(v):
         return v.encode("utf-8")
     elif isinstance(v, (int, float)):
         return np.array(v).data.tobytes()
+    elif isinstance(v, tuple):
+        return np.array(v).data.tobytes()
     else:
         return v
 
