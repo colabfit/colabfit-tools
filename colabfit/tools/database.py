@@ -126,7 +126,10 @@ class SparkDataLoader:
             desc=f"Checking for duplicate ids in {table_name.split('.')[-1]}",
         ):
             broadcast_ids = self.spark.sparkContext.broadcast(batch)
-            df = self.spark.read.table(table_name)
+            df = self.read_table(table_name)
+            if df.count() == 0:
+                print(f"Table {table_name} is empty.")
+                return True
             dupes_exist = df.filter(sf.col("id").isin(broadcast_ids.value)).limit(1)
             if len(dupes_exist.collect()) > 0:
                 print(f"Duplicate IDs found in table {table_name}")
@@ -141,20 +144,35 @@ class SparkDataLoader:
         check_length_col: str = None,
     ):
         """Include self.table_prefix in the table name when passed to this function"""
+        if ids_filter is not None:
+            spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
+        ids = [x["id"] for x in spark_df.select("id").collect()]
+        all_unique = self.check_unique_ids(table_name, ids)
+        if not all_unique:
+            raise ValueError("Duplicate IDs found in table. Not writing.")
+        table_split = table_name.split(".")
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
         ]
         string_col_udf = sf.udf(stringify_df_val, StringType())
         for col in string_cols:
             spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
-        if ids_filter is not None:
-            spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
-        ids = [x["id"] for x in spark_df.select("id").collect()]
-        all_unique = self.check_unique_ids(table_name, ids)
-        if all_unique:
-            spark_df.write.mode("append").saveAsTable(table_name)
-        else:
-            raise ValueError("Duplicate IDs found in table. Not writing.")
+        arrow_schema = spark_schema_to_arrow_schema(spark_df.schema)
+        if not self.spark.catalog.tableExists(table_name):
+            print(f"Creating table {table_name}")
+            with self.session.transaction() as tx:
+                schema = tx.bucket(table_split[1]).schema(table_split[2])
+                schema.create_table(table_split[3], arrow_schema)
+        arrow_rec_batch = pa.table(
+            [pa.array(col) for col in zip(*spark_df.collect())],
+            schema=arrow_schema,
+        ).to_batches()[0]
+        with self.session.transaction() as tx:
+            table = (
+                tx.bucket(table_split[1]).schema(table_split[2]).table(table_split[3])
+            )
+            table.insert(arrow_rec_batch)
+        # spark_df.write.mode("append").saveAsTable(table_name)
 
     def find_existing_co_rows_append_elem(
         self,
@@ -216,7 +234,11 @@ class SparkDataLoader:
                 duplicate_df = self.spark.createDataFrame(
                     rec_batch.to_pylist(), schema=spark_schema
                 )
+
                 print(f"length of df: {duplicate_df.count()}")
+            if duplicate_df.count() == 0:
+                new_ids.extend(id_batch)
+                continue
             unstring_udf = sf.udf(unstring_df_val, ArrayType(StringType()))
             for col_name, col_type in col_types.items():
                 if col_name in arr_cols:
@@ -305,7 +327,7 @@ class SparkDataLoader:
             [
                 pa.field("id", pa.string()),
                 pa.field("multiplicity", pa.int32()),
-                pa.field("last_modified", pa.timestamp("ns")),
+                pa.field("last_modified", pa.timestamp("us")),
                 pa.field("$row_id", pa.int32()),
             ]
         )
@@ -465,7 +487,7 @@ class SparkDataLoader:
                 [
                     pa.field("id", pa.string()),
                     pa.field("multiplicity", pa.int32()),
-                    pa.field("last_modified", pa.timestamp("ns")),
+                    pa.field("last_modified", pa.timestamp("us")),
                     pa.field("$row_id", pa.int32()),
                 ]
             )
@@ -750,12 +772,11 @@ class DataManager:
 
     def load_co_po_to_vastdb(self, loader):
         if loader.spark.catalog.tableExists(loader.prop_object_table):
-            pos_with_mult = (
-                loader.read_table(loader.prop_object_table)
-                .filter(sf.col("dataset_id") == self.dataset_id)
-                .filter(sf.col("multiplicity") > 0)
-                .limit(1)
+            pos_with_mult = loader.read_table(loader.prop_object_table)
+            pos_with_mult = pos_with_mult.filter(
+                sf.col("dataset_id") == self.dataset_id
             )
+            pos_with_mult = pos_with_mult.filter(sf.col("multiplicity") > 0).limit(1)
             if pos_with_mult.count() > 0:
                 raise ValueError(
                     f"POs for dataset with ID {self.dataset_id} already exist in "

@@ -537,7 +537,8 @@ class Property(dict):
                     )
                 else:
                     # print(
-                    #     f"adding {prop_dict['reference-energy']['source-value']} to {prop_val}"
+                    #     f"adding {prop_dict['reference-energy']"
+                    #     f"['source-value']} to {prop_val}"
                     # )
                     prop_val += prop_dict["reference-energy"]["source-value"]
                     # print(f"New prop_val: {prop_val}")

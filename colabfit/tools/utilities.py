@@ -5,18 +5,21 @@ from ast import literal_eval
 from functools import partial
 from hashlib import sha512
 from pathlib import Path
-from types import NoneType
 
 import numpy as np
 import pyarrow as pa
 from pyspark.sql import Row
 from pyspark.sql.types import (
+    BooleanType,
+    DoubleType,
     IntegerType,
+    LongType,
     StringType,
     StructType,
     TimestampType,
     StructField,
 )
+
 
 BUCKET_DIR = "/vast/gw2338/METADATA"
 
@@ -116,10 +119,16 @@ def spark_to_arrow_type(spark_type):
     """
     if isinstance(spark_type, IntegerType):
         return pa.int32()
+    elif isinstance(spark_type, LongType):
+        return pa.int64()
+    elif isinstance(spark_type, DoubleType):
+        return pa.float64()
     elif isinstance(spark_type, StringType):
         return pa.string()
     elif isinstance(spark_type, TimestampType):
-        return pa.timestamp("ns")
+        return pa.timestamp("us")
+    elif isinstance(spark_type, BooleanType):
+        return pa.bool_()
     elif isinstance(spark_type, StructType):
         return pa.schema(
             [
@@ -331,7 +340,9 @@ def split_arr_map(column, row_dict):
             np.array(row_dict[column]), threshold=np.inf, separator=","
         ).replace("\n", "")
     )
-    row_dict[column] = [col_string[i : i + n] for i in range(0, len(col_string), n)]
+    row_dict[column] = [
+        col_string[i : i + n] for i in range(0, len(col_string), n)  # noqa E203
+    ]
     return row_dict
 
 
