@@ -114,7 +114,18 @@ class SparkDataLoader:
         return df_added_elem
 
     def delete_from_table(self, table_name: str, ids: list[str]):
-        self.spark.sql(f"delete from {table_name} where id in {tuple(ids)}")
+        if isinstance(ids, str):
+            ids = [ids]
+        table_split = table_name.split(".")
+        with self.session.transaction() as tx:
+            table = (
+                tx.bucket(table_split[1]).schema(table_split[2]).table(table_split[3])
+            )
+            rec_batch = table.select(
+                predicate=table["id"].isin(ids), internal_row_id=True
+            )
+            for batch in rec_batch:
+                table.delete(rows=batch)
 
     def check_unique_ids(self, table_name: str, df: DataFrame):
         if not self.spark.catalog.tableExists(table_name):
@@ -151,9 +162,9 @@ class SparkDataLoader:
         print(f"length of spark_df: {spark_df.count()}")
         print("spark df schema", spark_df.schema)
 
-        # all_unique = self.check_unique_ids(table_name, spark_df)
-        # if not all_unique:
-        #     raise ValueError("Duplicate IDs found in table. Not writing.")
+        all_unique = self.check_unique_ids(table_name, spark_df)
+        if not all_unique:
+            raise ValueError("Duplicate IDs found in table. Not writing.")
         table_split = table_name.split(".")
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
@@ -163,30 +174,30 @@ class SparkDataLoader:
         for col in string_cols:
             spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
         print(f"new spark schema: {spark_df.schema}")
-        # arrow_schema = spark_schema_to_arrow_schema(spark_df.schema)
-        # print(f"Arrow schema: {arrow_schema}")
-        # for field in arrow_schema:
-        #     field = field.with_nullable(True)
-        # if not self.spark.catalog.tableExists(table_name):
-        #     print(f"Creating table {table_name}")
-        #     with self.session.transaction() as tx:
-        #         schema = tx.bucket(table_split[1]).schema(table_split[2])
-        #         schema.create_table(table_split[3], arrow_schema)
-        #
+        arrow_schema = spark_schema_to_arrow_schema(spark_df.schema)
+        print(f"Arrow schema: {arrow_schema}")
+        for field in arrow_schema:
+            field = field.with_nullable(True)
+        if not self.spark.catalog.tableExists(table_name):
+            print(f"Creating table {table_name}")
+            with self.session.transaction() as tx:
+                schema = tx.bucket(table_split[1]).schema(table_split[2])
+                schema.create_table(table_split[3], arrow_schema)
 
-        # with self.session.transaction() as tx:
+        with self.session.transaction() as tx:
 
-        #     table = (
-        #         tx.bucket(table_split[1]).schema(table_split[2]).table(table_split[3])
-        #     )
-        # arrow_schema = table.arrow_schema
-        # arrow_rec_batch = pa.table(
-        #     [pa.array(col) for col in zip(*spark_df.collect())],
-        #     schema=arrow_schema,
-        # ).to_batches()
-        #     for rec_batch in arrow_rec_batch:
-        #         table.insert(rec_batch)
-        spark_df.write.mode("append").saveAsTable(table_name)
+            table = (
+                tx.bucket(table_split[1]).schema(table_split[2]).table(table_split[3])
+            )
+            arrow_schema = table.arrow_schema
+            arrow_rec_batch = pa.table(
+                [pa.array(col) for col in zip(*spark_df.collect())],
+                schema=arrow_schema,
+            ).to_batches()
+            for rec_batch in arrow_rec_batch:
+                table.insert(rec_batch)
+                print(rec_batch)
+        # spark_df.write.mode("append").saveAsTable(table_name)
 
     def find_existing_co_rows_append_elem(
         self,
@@ -800,8 +811,8 @@ class DataManager:
                     po_rows, schema=property_object_df_schema
                 )
                 first_count = co_df.count()
+                print("Dropping duplicates from CO dataframe")
                 co_df = co_df.dropDuplicates(["id"])
-                # .cache()
                 second_count = co_df.count()
                 print(f"{first_count -second_count} duplicates found in CO dataframe")
                 count = po_df.count()
@@ -816,7 +827,6 @@ class DataManager:
                         .drop("count")
                     )
                 po_df = po_df
-                # .cache()
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
                 all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
                 if not all_unique_co:
