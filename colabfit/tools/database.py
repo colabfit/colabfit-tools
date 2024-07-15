@@ -989,12 +989,17 @@ class DataManager:
         data_link: str,
         description: str,
         other_links: list[str] = None,
-        dataset_id: str = None,
+        # dataset_id: str = None,
         labels: list[str] = None,
         data_license: str = "CC-BY-ND-4.0",
     ):
         if loader.spark.catalog.tableExists(loader.config_set_table):
-            cs_ids = loader.read_table(loader.config_set_table).select("id").collect()
+            cs_ids = (
+                loader.read_table(loader.config_set_table)
+                .filter(sf.col("dataset_id") == self.dataset_id)
+                .select("id")
+                .collect()
+            )
             if len(cs_ids) == 0:
                 cs_ids = None
             else:
@@ -1003,10 +1008,10 @@ class DataManager:
             cs_ids = None
         config_df = loader.read_table(loader.config_table, unstring=True)
         config_df = config_df.filter(
-            sf.array_contains(sf.col("dataset_ids"), dataset_id)
+            sf.array_contains(sf.col("dataset_ids"), self.dataset_id)
         )
         prop_df = loader.read_table(loader.prop_object_table, unstring=True)
-        prop_df = prop_df.filter(sf.col("dataset_id") == dataset_id)
+        prop_df = prop_df.filter(sf.col("dataset_id") == self.dataset_id)
         ds = Dataset(
             name=name,
             authors=authors,
@@ -1016,7 +1021,7 @@ class DataManager:
             data_link=data_link,
             description=description,
             other_links=other_links,
-            dataset_id=dataset_id,
+            dataset_id=self.dataset_id,
             labels=labels,
             data_license=data_license,
             configuration_set_ids=cs_ids,

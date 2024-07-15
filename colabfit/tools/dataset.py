@@ -101,12 +101,14 @@ class Dataset:
         self.data_license = data_license
         self.dataset_id = dataset_id
         self.configuration_set_ids = configuration_set_ids
+        if self.configuration_set_ids is None:
+            self.configuration_set_ids = []
         self.spark_row = self.to_spark_row(config_df=config_df, prop_df=prop_df)
         self._hash = hash(dataset_id)
         self.spark_row["hash"] = self._hash
         self.spark_row["id"] = self.dataset_id
-        if dataset_id is None:
-            raise ValueError("Dataset ID must be provided")
+        # if dataset_id is None:
+        #     raise ValueError("Dataset ID must be provided")
         id_prefix = "_".join(
             [
                 self.name,
@@ -146,6 +148,9 @@ class Dataset:
             )
         )
         co_po_df = prop_df.join(config_df, on="configuration_id", how="inner")
+        print(co_po_df.columns)
+        print(co_po_df.count())
+        print(co_po_df.first())
         co_po_df = co_po_df.withColumn(
             "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
         )

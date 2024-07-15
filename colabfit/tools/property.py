@@ -269,14 +269,13 @@ class Property(dict):
         self.chemical_formula_hill = instance.pop("chemical_formula_hill")
         if standardize_energy:
             self.standardize_energy()
-
+        if dataset_id is not None:
+            self.dataset_id = dataset_id
         self.spark_row = self.to_spark_row()
         self._hash = hash(self)
         self.spark_row["hash"] = self._hash
         self._id = f"PO_{self._hash}"
         self.spark_row["id"] = self._id
-        if dataset_id is not None:
-            self.spark_row["dataset_id"] = dataset_id
 
     @property
     def instance(self):
@@ -510,6 +509,7 @@ class Property(dict):
         )
         row_dict["chemical_formula_hill"] = self.chemical_formula_hill
         row_dict["multiplicity"] = 1
+        row_dict["dataset_id"] = self.dataset_id
         return row_dict
 
     def standardize_energy(self):
