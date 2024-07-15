@@ -47,6 +47,7 @@ UNITS["bohr"] = UNITS["Bohr"]
 UNITS["hartree"] = UNITS["Hartree"]
 UNITS["rydberg"] = UNITS["Rydberg"]
 UNITS["debye"] = UNITS["Debye"]
+UNITS["kbar"] = UNITS["bar"] * 1000
 
 prop_info = namedtuple("prop_info", ["key", "unit", "dtype"])
 energy_info = prop_info("energy", "eV", float)
