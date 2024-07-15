@@ -50,6 +50,7 @@ from colabfit.tools.utilities import (
     spark_schema_to_arrow_schema,
     stringify_df_val,
     unstring_df_val,
+    split_long_string_cols,
 )
 
 NSITES_COL_SPLITS = 20
@@ -75,12 +76,12 @@ class SparkDataLoader:
         endpoint=None,
         access_key=None,
         access_secret=None,
-        check_ids_batch_size=500,
+        # check_ids_batch_size=500,
     ):
         self.table_prefix = table_prefix
         self.spark = SparkSession.builder.appName("ColabfitDataLoader").getOrCreate()
         self.spark.sparkContext.setLogLevel("ERROR")
-        self.check_unique_ids_batch_size = check_ids_batch_size
+        # self.check_unique_ids_batch_size = check_ids_batch_size
         if endpoint and access_key and access_secret:
             self.endpoint = endpoint
             self.access_key = access_key
@@ -127,25 +128,29 @@ class SparkDataLoader:
             for batch in rec_batch:
                 table.delete(rows=batch)
 
-    def check_unique_ids(self, table_name: str, df: DataFrame):
+    def check_unique_ids(self, table_name: str, df):
         if not self.spark.catalog.tableExists(table_name):
             print(f"Table {table_name} does not yet exist.")
             return True
-        ids = [x["id"] for x in df.select("id").collect()]
-        batched_ids = batched(ids, self.check_unique_ids_batch_size)
-        for i, batch in tqdm(
-            enumerate(batched_ids),
-            desc=f"Checking for duplicate ids in {table_name.split('.')[-1]}",
-        ):
-            broadcast_ids = self.spark.sparkContext.broadcast(batch)
-            df = self.read_table(table_name)
-            if df.count() == 0:
-                print(f"Table {table_name} is empty.")
-                return True
-            dupes_exist = df.filter(sf.col("id").isin(broadcast_ids.value)).limit(1)
-            if len(dupes_exist.collect()) > 0:
-                print(f"Duplicate IDs found in table {table_name}")
-                return False
+        # ids = [x["id"] for x in df.select("id").collect()]
+        # batched_ids = batched(ids, self.check_unique_ids_batch_size)
+        id_df = df.select("id")
+        # for i, batch in tqdm(
+        #     enumerate(batched_ids),
+        #     desc=f"Checking for duplicate ids in {table_name.split('.')[-1]}",
+        # ):
+        # broadcast_ids = self.spark.sparkContext.broadcast(batch)
+        df = self.read_table(table_name)
+        df = df.select("id")
+        dupes_exist = id_df.join(df, on="id", how="inner")
+        # if df.count() == 0:
+        #     print(f"Table {table_name} is empty.")
+        #     return True
+        # dupes_exist = df.filter(sf.col("id").isin(broadcast_ids.value)).limit(1)
+        # dupes_exist = dupes_exist.limit(1)
+        if len(dupes_exist.take(1)) > 0:
+            print(f"Duplicate IDs found in table {table_name}")
+            return False
         return True
 
     def write_table(
@@ -159,9 +164,6 @@ class SparkDataLoader:
 
         if ids_filter is not None:
             spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
-        print(f"length of spark_df: {spark_df.count()}")
-        print("spark df schema", spark_df.schema)
-
         all_unique = self.check_unique_ids(table_name, spark_df)
         if not all_unique:
             raise ValueError("Duplicate IDs found in table. Not writing.")
@@ -169,13 +171,14 @@ class SparkDataLoader:
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
         ]
-        print(f"string_cols: {string_cols}")
         string_col_udf = sf.udf(stringify_df_val, StringType())
         for col in string_cols:
             spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
-        print(f"new spark schema: {spark_df.schema}")
+        if check_length_col is not None:
+            spark_df = split_long_string_cols(
+                spark_df, check_length_col, _MAX_STRING_LEN
+            )
         arrow_schema = spark_schema_to_arrow_schema(spark_df.schema)
-        print(f"Arrow schema: {arrow_schema}")
         for field in arrow_schema:
             field = field.with_nullable(True)
         if not self.spark.catalog.tableExists(table_name):
@@ -183,20 +186,17 @@ class SparkDataLoader:
             with self.session.transaction() as tx:
                 schema = tx.bucket(table_split[1]).schema(table_split[2])
                 schema.create_table(table_split[3], arrow_schema)
-
+        arrow_rec_batch = pa.table(
+            [pa.array(col) for col in zip(*spark_df.collect())],
+            schema=arrow_schema,
+        ).to_batches()
         with self.session.transaction() as tx:
-
             table = (
                 tx.bucket(table_split[1]).schema(table_split[2]).table(table_split[3])
             )
-            arrow_schema = table.arrow_schema
-            arrow_rec_batch = pa.table(
-                [pa.array(col) for col in zip(*spark_df.collect())],
-                schema=arrow_schema,
-            ).to_batches()
+            # arrow_schema = table.arrow_schema
             for rec_batch in arrow_rec_batch:
                 table.insert(rec_batch)
-                print(rec_batch)
         # spark_df.write.mode("append").saveAsTable(table_name)
 
     def find_existing_co_rows_append_elem(
@@ -777,6 +777,7 @@ class DataManager:
 
     def load_co_po_to_vastdb(self, loader):
         if loader.spark.catalog.tableExists(loader.prop_object_table):
+            print("loader.prop_object_table exists")
             pos_with_mult = loader.read_table(loader.prop_object_table)
             pos_with_mult = pos_with_mult.filter(
                 sf.col("dataset_id") == self.dataset_id
@@ -826,11 +827,10 @@ class DataManager:
                         .withColumn("multiplicity", sf.col("count"))
                         .drop("count")
                     )
-                po_df = po_df
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
                 all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
                 if not all_unique_co:
-                    print("updating old rows")
+                    print("Updating old rows")
                     new_co_ids, update_co_ids = (
                         loader.find_existing_co_rows_append_elem(
                             co_df=co_df,

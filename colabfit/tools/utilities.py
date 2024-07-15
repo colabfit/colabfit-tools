@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 from pyspark.sql import Row
+from pyspark.sql import functions as sf
 from pyspark.sql.types import (
     BooleanType,
     DoubleType,
@@ -19,7 +20,6 @@ from pyspark.sql.types import (
     TimestampType,
     StructField,
 )
-
 
 BUCKET_DIR = "/vast/gw2338/METADATA"
 
@@ -331,37 +331,56 @@ def add_elem_to_row_dict(col, elem, row_dict):
 ##########################################################
 # Functions for splitting oversize arrays to columns
 ##########################################################
+def get_max_string_length(df, column_name):
 
-
-def split_arr_map(column, row_dict):
-    n = 60000
-    col_string = "".join(
-        np.array2string(
-            np.array(row_dict[column]), threshold=np.inf, separator=","
-        ).replace("\n", "")
+    max_len = (
+        df.select(column_name)
+        .select(sf.length(column_name).alias("string_length"))
+        .agg(sf.max("string_length"))
+        .collect()[0][0]
     )
-    row_dict[column] = [
-        col_string[i : i + n] for i in range(0, len(col_string), n)  # noqa E203
+    if max_len is None:
+        return 0
+    return max_len
+
+
+def split_long_string_cols(df, column_name: str, max_string_length: int):
+    """
+    Splits a long string column into multiple columns based on a maximum string length.
+    :param df: Input DataFrame with array cols already stringified
+    :param column_name: Name of the column containing the long string
+    :param max_string_length: Maximum length for each split string
+    :return: DataFrame with the long string split across multiple columns
+    """
+    if get_max_string_length(df, column_name) <= max_string_length:
+        print("no columns truncated")
+        return df
+    print("columns truncated")
+    overflow_columns = [
+        f"{'_'.join(column_name.split('_')[:-1])}_{i+1:02}" for i in range(19)
     ]
-    return row_dict
-
-
-def stacked_arrays_to_columns(column, max_chunks, row_dict):
-    empty = max_chunks - len(row_dict[column])
-    full = len(row_dict[column])
-    for i, force_arr in enumerate(row_dict[column]):
-        row_dict[f"{column}_{i:02d}"] = force_arr
-    # row_dict[column] = row_dict.pop(f"{column}_1")
-    for i in range(empty):
-        row_dict[f"{column}_{(full+i+1):02d}"] = None
-    return row_dict
-
-
-def split_size_n_arrs_to_cols(rdd, column):
-    rdd = rdd.map(partial(split_arr_map, column))
-    max_chunks = rdd.map(lambda x: len(x[column])).max()
-    rdd = rdd.map(partial(stacked_arrays_to_columns, column, max_chunks))
-    return rdd
+    if not all([col in df.columns for col in overflow_columns]):
+        raise ValueError("Overflow columns not found in target DataFrame schema")
+    all_columns = [column_name] + overflow_columns
+    tmp_columns = [f"{col_name}_tmp" for col_name in all_columns]
+    df = df.withColumn("total_length", sf.length(sf.col(column_name)))
+    max_string_length = 35000 // 15
+    substring_exprs = [
+        sf.when(
+            sf.length(sf.col(column_name)) - (i * max_string_length) > 0,
+            sf.substring(
+                sf.col(column_name), (i * max_string_length + 1), max_string_length
+            ),
+        )
+        .otherwise(sf.lit(None))
+        .alias(col_name)
+        for i, col_name in enumerate(tmp_columns)
+    ]
+    df = df.select("*", *substring_exprs)
+    for tmp_col, col in zip(tmp_columns, all_columns):
+        df = df.drop(col).withColumnRenamed(f"{tmp_col}", col)
+    df = df.drop("total_length")
+    return df
 
 
 ##########################################################
