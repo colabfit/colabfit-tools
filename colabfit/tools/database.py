@@ -25,6 +25,7 @@ from pyspark.sql.types import (
     StructType,
     TimestampType,
 )
+from pyspark.storagelevel import StorageLevel
 from tqdm import tqdm
 from vastdb.session import Session
 
@@ -48,9 +49,9 @@ from colabfit.tools.schema import (
 from colabfit.tools.utilities import (
     get_spark_field_type,
     spark_schema_to_arrow_schema,
+    split_long_string_cols,
     stringify_df_val,
     unstring_df_val,
-    split_long_string_cols,
 )
 
 NSITES_COL_SPLITS = 20
@@ -131,10 +132,11 @@ class SparkDataLoader:
             print(f"Table {table_name} does not yet exist.")
             return True
         id_df = df.select("id")
-        df = self.read_table(table_name)
-        df = df.select("id")
-        dupes_exist = id_df.join(df, on="id", how="inner")
-        if len(dupes_exist.take(1)) > 0:
+        table_df = self.read_table(table_name)
+        table_df = table_df.select("id")
+        dupes_exist = id_df.join(table_df, on="id", how="inner")
+        if not dupes_exist.rdd.isEmpty():
+            # if len(dupes_exist.take(1)) > 0:
             print(f"Duplicate IDs found in table {table_name}")
             return False
         return True
@@ -204,8 +206,10 @@ class SparkDataLoader:
         for col in cols:
             col_type = get_spark_field_type(config_schema, col)
             col_types[col] = col_type
-            if col_type.typeName() == "array":
+            is_arr = get_spark_field_type(config_df_schema, col).typeName() == "array"
+            if is_arr:
                 arr_cols.append(col)
+
         update_cols = [col for col in col_types if col not in ["id", "$row_id"]]
         spark_schema = StructType(
             [
@@ -218,7 +222,11 @@ class SparkDataLoader:
             ]
         )
         total_write_cols = update_cols + ["$row_id"]
-        ids = [x["id"] for x in co_df.select("id").collect()]
+        co_db_df = self.read_table(self.config_table)
+        existing_rows = co_df.select("id").join(
+            co_db_df.select("id"), on="id", how="inner"
+        )
+        ids = [x["id"] for x in existing_rows.select("id").collect()]
         batched_ids = batched(ids, 10000)
         new_ids = []
         existing_ids = []
@@ -448,6 +456,9 @@ class SparkDataLoader:
 
     def zero_multiplicity(self, dataset_id):
         """Use to return multiplicity of POs for a given dataset to zero"""
+        table_exists = self.spark.catalog.tableExists(self.prop_object_table)
+        if not table_exists:
+            print(f"Table {self.prop_object_table} does not exist")
         spark_schema = StructType(
             [
                 StructField("id", StringType(), False),
@@ -813,6 +824,10 @@ class DataManager:
                         .withColumn("multiplicity", sf.col("count"))
                         .drop("count")
                     )
+
+                po_df = po_df.persist(StorageLevel.MEMORY_AND_DISK)
+                co_df = co_df.persist(StorageLevel.MEMORY_AND_DISK)
+
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
                 all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
                 if not all_unique_co:

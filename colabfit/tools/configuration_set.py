@@ -55,7 +55,7 @@ class ConfigurationSet:
         self.id = f"CS_{self.name}_{self.dataset_id}"
         self._hash = hash(self)
         self.spark_row["id"] = self.id
-        self.spark_row["hash"] = self._hash
+        self.spark_row["hash"] = str(self._hash)
 
     def to_spark_row(self, config_df):
         row_dict = _empty_dict_from_schema(configuration_set_schema)

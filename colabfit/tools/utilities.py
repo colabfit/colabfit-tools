@@ -66,8 +66,7 @@ def _hash(row, indentifying_key_list, include_keys_in_hash=False):
             if include_keys_in_hash:
                 _hash.update(bytes(_format_for_hash(k)))
             _hash.update(bytes(_format_for_hash(v)))
-    # return str(int(_hash.hexdigest(), 16))
-    return str(int(_hash.hexdigest(), 16))
+    return int(_hash.hexdigest(), 16)
 
 
 # def _hash(row, indentifying_fields_list):
@@ -365,9 +364,8 @@ def split_long_string_cols(df, column_name: str, max_string_length: int):
     :return: DataFrame with the long string split across multiple columns
     """
     if get_max_string_length(df, column_name) <= max_string_length:
-        print("no columns truncated")
         return df
-    print("columns truncated")
+    print(f"Column split: {column_name}")
     overflow_columns = [
         f"{'_'.join(column_name.split('_')[:-1])}_{i+1:02}" for i in range(19)
     ]

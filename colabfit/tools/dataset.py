@@ -119,8 +119,8 @@ class Dataset:
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
         extended_id = f"{id_prefix}__{dataset_id}"
         self.spark_row["extended_id"] = extended_id
-        self._hash = _hash(extended_id)
-        self.spark_row["hash"] = self._hash
+        self._hash = _hash(extended_id, ["extended_id"])
+        self.spark_row["hash"] = str(self._hash)
         self.spark_row["labels"] = labels
         print(self.spark_row)
 
@@ -141,14 +141,22 @@ class Dataset:
                 "elements",
                 "atomic_numbers",
                 "nsites",
-                "nelements",
                 "nperiodic_dimensions",
-                "cell",
                 "dimension_types",
                 # "labels",
             )
         )
-        co_po_df = prop_df.join(config_df, on="configuration_id", how="inner")
+        co_po_df = prop_df.select(
+            "configuration_id",
+            "multiplicity",
+            "atomization_energy",
+            "atomic_forces_00",
+            "adsorption_energy",
+            "electronic_band_gap",
+            "cauchy_stress",
+            "formation_energy",
+            "energy_conjugate_with_atomic_forces",
+        ).join(config_df, on="configuration_id", how="inner")
         print(co_po_df.columns)
         print(co_po_df.count())
         print(co_po_df.first())
@@ -164,10 +172,16 @@ class Dataset:
         )
         row_dict["nelements"] = len(row_dict["elements"])
 
-        atomic_ratios_df = co_po_df.withColumn(
-            "repeated_numbers",
-            sf.expr("transform(atomic_numbers, x -> array_repeat(x, multiplicity))"),
-        ).withColumn("single_element", sf.explode(sf.flatten("repeated_numbers")))
+        atomic_ratios_df = (
+            co_po_df.select("atomic_numbers", "multiplicity")
+            .withColumn(
+                "repeated_numbers",
+                sf.expr(
+                    "transform(atomic_numbers, x -> array_repeat(x, multiplicity))"
+                ),
+            )
+            .withColumn("single_element", sf.explode(sf.flatten("repeated_numbers")))
+        )
         total_elements = atomic_ratios_df.count()
         print(total_elements, row_dict["nsites"])
         assert total_elements == row_dict["nsites"]
@@ -177,8 +191,7 @@ class Dataset:
         )
 
         atomic_ratios_coll = (
-            atomic_ratios_df.select("ratio", "single_element")
-            .withColumn(
+            atomic_ratios_df.withColumn(
                 "element",
                 sf.udf(lambda x: ELEMENT_MAP[x], StringType())(
                     sf.col("single_element")
@@ -195,11 +208,9 @@ class Dataset:
             sf.collect_set("nperiodic_dimensions")
         ).collect()[0][0]
 
-        row_dict["dimension_types"] = (
-            co_po_df.select("dimension_types")
-            .agg(sf.collect_set("dimension_types"))
-            .collect()[0][0]
-        )
+        row_dict["dimension_types"] = co_po_df.agg(
+            sf.collect_set("dimension_types")
+        ).collect()[0][0]
 
         for prop in [
             "atomization_energy",
@@ -214,17 +225,15 @@ class Dataset:
                 prop_df.select(prop).where(f"{prop} is not null").count()
             )
         row_dict["atomic_forces_count"] = row_dict.pop("atomic_forces_00_count")
-        row_dict["energy_conjugate_with_atomic_forces_variance"] = (
-            prop_df.select(prop)
-            .where("energy_conjugate_with_atomic_forces is not null")
-            .agg(sf.variance(prop))
+
+        prop = "energy_conjugate_with_atomic_forces"
+        row_dict[f"{prop}_variance"] = (
+            prop_df.select(prop).where(f"{prop} is not null").agg(sf.variance(prop))
         ).first()[0]
-        row_dict["energy_conjugate_with_atomic_forces_mean"] = (
-            prop_df.select(prop)
-            .where("energy_conjugate_with_atomic_forces is not null")
-            .agg(sf.mean(prop))
+        row_dict[f"{prop}_mean"] = (
+            prop_df.select(prop).where(f"{prop} is not null").agg(sf.mean(prop))
         ).first()[0]
-        row_dict["nproperty_objects"] = prop_df.count()
+
         row_dict["nconfigurations"] = co_po_df.count()
         row_dict["authors"] = self.authors
         row_dict["description"] = self.description

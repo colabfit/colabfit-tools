@@ -273,7 +273,7 @@ class Property(dict):
             self.dataset_id = dataset_id
         self.spark_row = self.to_spark_row()
         self._hash = hash(self)
-        self.spark_row["hash"] = self._hash
+        self.spark_row["hash"] = str(self._hash)
         self._id = f"PO_{self._hash}"
         self.spark_row["id"] = self._id
 

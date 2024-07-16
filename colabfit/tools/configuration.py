@@ -81,7 +81,7 @@ class AtomicConfiguration(Atoms):
         self.id = f"CO_{self._hash}"
 
         self.spark_row["id"] = self.id
-        self.spark_row["hash"] = self._hash
+        self.spark_row["hash"] = str(self._hash)
         # self.spark_row["dataset_ids"] = [self.dataset_id]
         self.spark_row = self.spark_row
         # Check for name conflicts in info/arrays; would cause bug in parsing
