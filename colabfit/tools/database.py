@@ -459,6 +459,7 @@ class SparkDataLoader:
         table_exists = self.spark.catalog.tableExists(self.prop_object_table)
         if not table_exists:
             print(f"Table {self.prop_object_table} does not exist")
+            return
         spark_schema = StructType(
             [
                 StructField("id", StringType(), False),
