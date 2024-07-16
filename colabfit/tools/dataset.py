@@ -8,7 +8,7 @@ from unidecode import unidecode
 
 from colabfit import MAX_STRING_LENGTH
 from colabfit.tools.schema import dataset_schema
-from colabfit.tools.utilities import ELEMENT_MAP, _empty_dict_from_schema
+from colabfit.tools.utilities import ELEMENT_MAP, _empty_dict_from_schema, _hash
 
 
 class Dataset:
@@ -104,15 +104,14 @@ class Dataset:
         if self.configuration_set_ids is None:
             self.configuration_set_ids = []
         self.spark_row = self.to_spark_row(config_df=config_df, prop_df=prop_df)
-        self._hash = hash(dataset_id)
-        self.spark_row["hash"] = self._hash
+
         self.spark_row["id"] = self.dataset_id
         # if dataset_id is None:
         #     raise ValueError("Dataset ID must be provided")
-        id_prefix = "_".join(
+        id_prefix = "__".join(
             [
                 self.name,
-                "".join([unidecode(auth.split()[-1]) for auth in authors]),
+                "-".join([unidecode(auth.split()[-1]) for auth in authors]),
             ]
         )
         if len(id_prefix) > (MAX_STRING_LENGTH - len(dataset_id) - 2):
@@ -120,6 +119,8 @@ class Dataset:
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
         extended_id = f"{id_prefix}__{dataset_id}"
         self.spark_row["extended_id"] = extended_id
+        self._hash = _hash(extended_id)
+        self.spark_row["hash"] = self._hash
         self.spark_row["labels"] = labels
         print(self.spark_row)
 
@@ -228,10 +229,15 @@ class Dataset:
         row_dict["authors"] = self.authors
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license
-        row_dict["publication_link"] = self.publication_link
-        row_dict["data_link"] = self.data_link
-        if self.other_links is not None:
-            row_dict["other_links"] = self.other_links
+        row_dict["links"] = {
+            "source-publication": self.publication_link,
+            "source-data": self.data_link,
+            "other": self.other_links,
+        }
+        # row_dict["publication_link"] = self.publication_link
+        # row_dict["data_link"] = self.data_link
+        # if self.other_links is not None:
+        #     row_dict["other_links"] = self.other_links
         row_dict["name"] = self.name
         return row_dict
 

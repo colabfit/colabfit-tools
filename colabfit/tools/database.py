@@ -76,12 +76,10 @@ class SparkDataLoader:
         endpoint=None,
         access_key=None,
         access_secret=None,
-        # check_ids_batch_size=500,
     ):
         self.table_prefix = table_prefix
         self.spark = SparkSession.builder.appName("ColabfitDataLoader").getOrCreate()
         self.spark.sparkContext.setLogLevel("ERROR")
-        # self.check_unique_ids_batch_size = check_ids_batch_size
         if endpoint and access_key and access_secret:
             self.endpoint = endpoint
             self.access_key = access_key
@@ -132,22 +130,10 @@ class SparkDataLoader:
         if not self.spark.catalog.tableExists(table_name):
             print(f"Table {table_name} does not yet exist.")
             return True
-        # ids = [x["id"] for x in df.select("id").collect()]
-        # batched_ids = batched(ids, self.check_unique_ids_batch_size)
         id_df = df.select("id")
-        # for i, batch in tqdm(
-        #     enumerate(batched_ids),
-        #     desc=f"Checking for duplicate ids in {table_name.split('.')[-1]}",
-        # ):
-        # broadcast_ids = self.spark.sparkContext.broadcast(batch)
         df = self.read_table(table_name)
         df = df.select("id")
         dupes_exist = id_df.join(df, on="id", how="inner")
-        # if df.count() == 0:
-        #     print(f"Table {table_name} is empty.")
-        #     return True
-        # dupes_exist = df.filter(sf.col("id").isin(broadcast_ids.value)).limit(1)
-        # dupes_exist = dupes_exist.limit(1)
         if len(dupes_exist.take(1)) > 0:
             print(f"Duplicate IDs found in table {table_name}")
             return False
@@ -216,9 +202,9 @@ class SparkDataLoader:
         }
         arr_cols = []
         for col in cols:
-            col_types[col] = get_spark_field_type(config_schema, col)
-            is_arr = get_spark_field_type(config_df_schema, col)
-            if is_arr.typeName() == "array":
+            col_type = get_spark_field_type(config_schema, col)
+            col_types[col] = col_type
+            if col_type.typeName() == "array":
                 arr_cols.append(col)
         update_cols = [col for col in col_types if col not in ["id", "$row_id"]]
         spark_schema = StructType(

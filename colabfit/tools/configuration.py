@@ -1,16 +1,9 @@
 import datetime
-import json
-import re
-import time
-from collections import defaultdict
-from functools import partial
-from hashlib import sha512
 from string import ascii_lowercase, ascii_uppercase
 
 import dateutil
 import numpy as np
 from ase import Atoms
-from tqdm import tqdm
 
 from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
 from colabfit.tools.schema import config_schema

@@ -67,7 +67,7 @@ def _hash(row, indentifying_key_list, include_keys_in_hash=False):
                 _hash.update(bytes(_format_for_hash(k)))
             _hash.update(bytes(_format_for_hash(v)))
     # return str(int(_hash.hexdigest(), 16))
-    return int(_hash.hexdigest(), 16)
+    return str(int(_hash.hexdigest(), 16))
 
 
 # def _hash(row, indentifying_fields_list):
