@@ -161,7 +161,9 @@ class SparkDataLoader:
         ]
         string_col_udf = sf.udf(stringify_df_val, StringType())
         for col in string_cols:
-            spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
+            spark_df = spark_df.withColumn(
+                col, string_col_udf(sf.col(col)).cast("string")
+            )
         if check_length_col is not None:
             spark_df = split_long_string_cols(
                 spark_df, check_length_col, _MAX_STRING_LEN
@@ -169,6 +171,9 @@ class SparkDataLoader:
         arrow_schema = spark_schema_to_arrow_schema(spark_df.schema)
         for field in arrow_schema:
             field = field.with_nullable(True)
+        print(arrow_schema)
+        print(spark_df.schema)
+        print(spark_df.printSchema())
         if not self.spark.catalog.tableExists(table_name):
             print(f"Creating table {table_name}")
             with self.session.transaction() as tx:
@@ -182,7 +187,7 @@ class SparkDataLoader:
             table = (
                 tx.bucket(table_split[1]).schema(table_split[2]).table(table_split[3])
             )
-            # arrow_schema = table.arrow_schema
+            print(table.arrow_schema)
             for rec_batch in arrow_rec_batch:
                 table.insert(rec_batch)
         # spark_df.write.mode("append").saveAsTable(table_name)
@@ -481,7 +486,7 @@ class SparkDataLoader:
                 df = self.spark.createDataFrame(
                     rec_batch.to_struct_array().to_pandas(), schema=spark_schema
                 )
-                print(f"length of df: {df.count()}")
+                print(f"Zeroed {df.count()} property objects")
                 df = df.withColumn("multiplicity", sf.lit(0))
                 update_time = dateutil.parser.parse(
                     datetime.datetime.now(tz=datetime.timezone.utc).strftime(
@@ -867,6 +872,8 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                     if len(new_po_ids) > 0:
+                        print(po_df.printSchema())
+                        print(po_df.first())
                         loader.write_table(
                             po_df,
                             loader.prop_object_table,
