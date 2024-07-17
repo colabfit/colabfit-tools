@@ -119,7 +119,7 @@ class Dataset:
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
         extended_id = f"{id_prefix}__{dataset_id}"
         self.spark_row["extended_id"] = extended_id
-        self._hash = _hash(extended_id, ["extended_id"])
+        self._hash = _hash(self.spark_row, ["extended_id"])
         self.spark_row["hash"] = str(self._hash)
         self.spark_row["labels"] = labels
         print(self.spark_row)
@@ -146,6 +146,7 @@ class Dataset:
                 # "labels",
             )
         )
+        nproperty_objects = prop_df.count()
         co_po_df = prop_df.select(
             "configuration_id",
             "multiplicity",
@@ -164,6 +165,7 @@ class Dataset:
             "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
         )
         row_dict["nsites"] = co_po_df.agg({"nsites_multiple": "sum"}).first()[0]
+        row_dict["nproperty_objects"] = nproperty_objects
         row_dict["elements"] = sorted(
             co_po_df.withColumn("exploded_elements", sf.explode("elements"))
             .agg(sf.collect_set("exploded_elements").alias("exploded_elements"))
@@ -238,11 +240,13 @@ class Dataset:
         row_dict["authors"] = self.authors
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license
-        row_dict["links"] = {
-            "source-publication": self.publication_link,
-            "source-data": self.data_link,
-            "other": self.other_links,
-        }
+        row_dict["links"] = str(
+            {
+                "source-publication": self.publication_link,
+                "source-data": self.data_link,
+                "other": self.other_links,
+            }
+        )
         # row_dict["publication_link"] = self.publication_link
         # row_dict["data_link"] = self.data_link
         # if self.other_links is not None:
@@ -260,7 +264,7 @@ class Dataset:
         return (
             f"Dataset(description='{self.description}', "
             f"nconfiguration_sets={len(self.spark_row['configuration_sets'])}, "
-            f"nproperties={self.spark_row['nproperties']}, "
+            f"nproperty_objects={self.spark_row['nproperty_objects']}, "
             f"nconfigurations={self.spark_row['nconfigurations']}"
         )
 

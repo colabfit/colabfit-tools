@@ -690,7 +690,7 @@ class DataManager:
         self.dataset_id = dataset_id
         self.standardize_energy = standardize_energy
         if self.dataset_id is None:
-            self.dataset_id = self.generate_ds_id()
+            self.dataset_id = generate_ds_id()
         print("Dataset ID:", self.dataset_id)
 
     @staticmethod
@@ -826,8 +826,8 @@ class DataManager:
                         .drop("count")
                     )
 
-                po_df = po_df.persist(StorageLevel.MEMORY_AND_DISK)
-                co_df = co_df.persist(StorageLevel.MEMORY_AND_DISK)
+                # po_df = po_df.persist(StorageLevel.MEMORY_AND_DISK)
+                # co_df = co_df.persist(StorageLevel.MEMORY_AND_DISK)
 
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
                 all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
@@ -1031,9 +1031,9 @@ class DataManager:
         ds_df = loader.spark.createDataFrame([ds.spark_row], schema=dataset_df_schema)
         loader.write_table(ds_df, loader.dataset_table)
 
-    @staticmethod
-    def generate_ds_id():
-        # Maybe check to see whether the DS ID already exists?
-        ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
-        print("Generated new DS ID:", ds_id)
-        return ds_id
+
+def generate_ds_id():
+    # Maybe check to see whether the DS ID already exists?
+    ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
+    print("Generated new DS ID:", ds_id)
+    return ds_id

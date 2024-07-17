@@ -10,7 +10,6 @@ from pyspark.sql.types import (
     BooleanType,
     DoubleType,
     IntegerType,
-    LongType,
     StringType,
     StructField,
     StructType,
@@ -70,9 +69,9 @@ property_object_df_schema = StructType(
         StructField("chemical_formula_hill", StringType(), True),
         StructField("energy_conjugate_with_atomic_forces", DoubleType(), True),
         StructField("energy_conjugate_with_atomic_forces_unit", StringType(), True),
-        StructField(
-            "energy_conjugate_with_atomic_forces_property_id", StringType(), True
-        ),
+        # StructField(
+        # "energy_conjugate_with_atomic_forces_property_id", StringType(), True
+        # ),
     ]
     + [
         StructField(f"atomic_forces_{i:02d}", ArrayType(ArrayType(DoubleType())), True)
@@ -80,24 +79,24 @@ property_object_df_schema = StructType(
     ]
     + [
         StructField("atomic_forces_unit", StringType(), True),
-        StructField("atomic_forces_property_id", StringType(), True),
+        # StructField("atomic_forces_property_id", StringType(), True),
         StructField("cauchy_stress", ArrayType(ArrayType(DoubleType())), True),
         StructField("cauchy_stress_unit", StringType(), True),
         StructField("cauchy_stress_volume_normalized", BooleanType(), True),
-        StructField("cauchy_stress_property_id", StringType(), True),
+        # StructField("cauchy_stress_property_id", StringType(), True),
         StructField("electronic_band_gap", DoubleType(), True),
         StructField("electronic_band_gap_unit", StringType(), True),
         StructField("electronic_band_gap_type", StringType(), True),
-        StructField("electronic_band_gap_property_id", StringType(), True),
+        # StructField("electronic_band_gap_property_id", StringType(), True),
         StructField("formation_energy", DoubleType(), True),
         StructField("formation_energy_unit", StringType(), True),
-        StructField("formation_energy_property_id", StringType(), True),
+        # StructField("formation_energy_property_id", StringType(), True),
         StructField("adsorption_energy", DoubleType(), True),
         StructField("adsorption_energy_unit", StringType(), True),
-        StructField("adsorption_energy_property_id", StringType(), True),
+        # StructField("adsorption_energy_property_id", StringType(), True),
         StructField("atomization_energy", DoubleType(), True),
         StructField("atomization_energy_unit", StringType(), True),
-        StructField("atomization_energy_property_id", StringType(), True),
+        # StructField("atomization_energy_property_id", StringType(), True),
     ]
 )
 
@@ -108,9 +107,10 @@ dataset_df_schema = StructType(
     [
         StructField("id", StringType(), False),
         StructField("hash", StringType(), False),
+        StructField("name", StringType(), True),
         StructField("last_modified", TimestampType(), False),
         StructField("nconfigurations", IntegerType(), True),
-        # StructField("nproperty_objects", IntegerType(), True),
+        StructField("nproperty_objects", IntegerType(), True),
         StructField("nsites", IntegerType(), True),
         StructField("nelements", IntegerType(), True),
         StructField("elements", ArrayType(StringType()), True),
@@ -130,11 +130,11 @@ dataset_df_schema = StructType(
         StructField("description", StringType(), True),
         StructField("extended_id", StringType(), True),
         StructField("license", StringType(), True),
-        StructField("publication_link", StringType(), True),
-        StructField("data_link", StringType(), True),
-        StructField("other_links", ArrayType(StringType()), True),
+        StructField("links", StringType(), True),
+        # StructField("publication_link", StringType(), True),
+        # StructField("data_link", StringType(), True),
+        # StructField("other_links", ArrayType(StringType()), True),
         StructField("labels", ArrayType(StringType()), True),
-        StructField("name", StringType(), True),
     ]
 )
 
@@ -144,9 +144,11 @@ dataset_schema = get_stringified_schema(dataset_df_schema)
 configuration_set_df_schema = StructType(
     [
         StructField("id", StringType(), False),
-        StructField("hash", LongType(), False),
+        StructField("hash", StringType(), False),
         StructField("last_modified", TimestampType(), False),
         StructField("nconfigurations", IntegerType(), True),
+        StructField("nperiodic_dimensions", ArrayType(IntegerType()), True),
+        StructField("dimension_types", ArrayType(ArrayType(IntegerType())), True),
         StructField("nsites", IntegerType(), True),
         StructField("nelements", IntegerType(), True),
         StructField("elements", ArrayType(StringType()), True),

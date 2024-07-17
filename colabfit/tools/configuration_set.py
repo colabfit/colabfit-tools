@@ -72,6 +72,12 @@ class ConfigurationSet:
             .select("exploded_elements")
             .take(1)[0][0]
         )
+        row_dict["nperiodic_dimensions"] = config_df.agg(
+            sf.collect_set("nperiodic_dimensions")
+        ).collect()[0][0]
+        row_dict["dimension_types"] = config_df.agg(
+            sf.collect_set("dimension_types")
+        ).collect()[0][0]
         atomic_ratios_df = (
             config_df.select("atomic_numbers")
             .withColumn("exploded_atom", sf.explode("atomic_numbers"))

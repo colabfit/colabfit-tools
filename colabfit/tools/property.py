@@ -36,12 +36,6 @@ EDN_KEY_MAP = {
 
 UNITS = create_units("2014")
 
-# # Make GPa the base unit
-# UNITS["bar"] = 1e-4  # bar to GPa
-# UNITS["kilobar"] = 1e-1  # kilobar to GPa
-# UNITS["pascal"] = 1e-9  # pascal to GPa
-# UNITS["GPa"] = 1
-
 UNITS["angstrom"] = UNITS["Ang"]
 UNITS["bohr"] = UNITS["Bohr"]
 UNITS["hartree"] = UNITS["Hartree"]
@@ -87,7 +81,7 @@ _hash_ignored_fields = [
 def energy_to_schema(prop_name, en_prop: dict):
     new_name = prop_name.replace("-", "_")
     en_dict = {
-        f"{new_name}_property_id": en_prop["property-id"],
+        # f"{new_name}_property_id": en_prop["property-id"],
         f"{new_name}": en_prop["energy"]["source-value"],
         f"{new_name}_unit": en_prop["energy"]["source-unit"],
         f"{new_name}_per_atom": en_prop["per-atom"]["source-value"],
@@ -104,7 +98,7 @@ def energy_to_schema(prop_name, en_prop: dict):
 
 def atomic_forces_to_schema(af_prop: dict):
     af_dict = {
-        "atomic_forces_property_id": af_prop["property-id"],
+        # "atomic_forces_property_id": af_prop["property-id"],
         "atomic_forces_00": af_prop["forces"]["source-value"],
         "atomic_forces_unit": af_prop["forces"]["source-unit"],
     }
@@ -113,7 +107,7 @@ def atomic_forces_to_schema(af_prop: dict):
 
 def cauchy_stress_to_schema(cs_prop: dict):
     cs_dict = {
-        "cauchy_stress_property_id": cs_prop["property-id"],
+        # "cauchy_stress_property_id": cs_prop["property-id"],
         "cauchy_stress": cs_prop["stress"]["source-value"],
         "cauchy_stress_unit": cs_prop["stress"]["source-unit"],
         "cauchy_stress_volume_normalized": cs_prop["volume-normalized"]["source-value"],
@@ -123,9 +117,12 @@ def cauchy_stress_to_schema(cs_prop: dict):
 
 def band_gap_to_schema(bg_prop: dict):
     bg_dict = {
-        "band_gap_property_id": bg_prop["property-id"],
-        "band_gap": bg_prop["band-gap"]["source-value"],
-        "band_gap_unit": bg_prop["band-gap"]["source-unit"],
+        # "band_gap_property_id": bg_prop["property-id"],
+        "band_gap": bg_prop["energy"]["source-value"],
+        "band_gap_unit": bg_prop["energy"]["source-unit"],
+        "band_gap_type": bg_prop["band-gap"].get("type", {"source-value": "direct"})[
+            "source-value"
+        ],
     }
     return bg_dict
 
@@ -134,7 +131,7 @@ prop_to_row_mapper = {
     "energy": energy_to_schema,
     "atomic-forces": atomic_forces_to_schema,
     "cauchy-stress": cauchy_stress_to_schema,
-    "band-gap": band_gap_to_schema,
+    "electronic-band-gap": band_gap_to_schema,
 }
 
 
@@ -176,12 +173,6 @@ def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
 
 class PropertyParsingError(Exception):
     pass
-
-
-class MissingPropertyFieldWarning(Warning):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
 
 
 class InvalidPropertyDefinition(Exception):
@@ -405,7 +396,6 @@ class Property(dict):
         A function for constructing a Property given a property setting hash, a property
         definition, and a property map.
 
-
         Args:
 
             definition (dict):
@@ -517,12 +507,10 @@ class Property(dict):
         For each key in :attr:`self.property_map`, convert :attr:`self.edn[key]`
         from its original units to the expected ColabFit-compliant units.
         """
-        # print(self.instance.items())
         for prop_name, prop_dict in self.instance.items():
             if prop_name not in MAIN_KEY_MAP.keys():
                 continue
             p_info = MAIN_KEY_MAP[prop_name]
-            # print(prop_dict[p_info.key])
             units = prop_dict[p_info.key]["source-unit"]
             if p_info.dtype == list:
                 prop_val = np.array(
@@ -531,18 +519,12 @@ class Property(dict):
             else:
                 prop_val = prop_dict[p_info.key]["source-value"]
             if "reference-energy" in prop_dict:
-                # print(units, prop_dict["reference-energy"]["source-unit"])
                 if prop_dict["reference-energy"]["source-unit"] != units:
                     raise RuntimeError(
                         "Units of the reference energy and energy must be the same"
                     )
                 else:
-                    # print(
-                    #     f"adding {prop_dict['reference-energy']"
-                    #     f"['source-value']} to {prop_val}"
-                    # )
                     prop_val += prop_dict["reference-energy"]["source-value"]
-                    # print(f"New prop_val: {prop_val}")
 
             if "per-atom" in prop_dict:
                 if prop_dict["per-atom"]["source-value"] is True:
@@ -550,9 +532,7 @@ class Property(dict):
                         raise RuntimeError(
                             "nsites must be provided to convert per-atom"
                         )
-                    # print(f"multiplying {prop_val} by {self.nsites}")
                     prop_val *= self.nsites
-                    # print(f"New prop_val: {prop_val}")
 
             if units != p_info.unit:
                 split_units = list(
