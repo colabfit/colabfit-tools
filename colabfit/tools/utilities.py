@@ -211,6 +211,8 @@ def _parse_unstructured_metadata(md_json):
                 val = val["source-value"]
         if isinstance(val, list) and len(val) == 1:
             val = val[0]
+        if isinstance(val, np.ndarray):
+            val = val.tolist()
         if isinstance(val, dict):
             val = _sort_dict(val)
         if isinstance(val, bytes):

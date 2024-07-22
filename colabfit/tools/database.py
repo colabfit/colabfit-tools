@@ -171,9 +171,8 @@ class SparkDataLoader:
         arrow_schema = spark_schema_to_arrow_schema(spark_df.schema)
         for field in arrow_schema:
             field = field.with_nullable(True)
-        print(arrow_schema)
-        print(spark_df.schema)
-        print(spark_df.printSchema())
+        # print(arrow_schema)
+        # print(spark_df.printSchema())
         if not self.spark.catalog.tableExists(table_name):
             print(f"Creating table {table_name}")
             with self.session.transaction() as tx:
@@ -187,7 +186,7 @@ class SparkDataLoader:
             table = (
                 tx.bucket(table_split[1]).schema(table_split[2]).table(table_split[3])
             )
-            print(table.arrow_schema)
+            # print(table.arrow_schema)
             for rec_batch in arrow_rec_batch:
                 table.insert(rec_batch)
         # spark_df.write.mode("append").saveAsTable(table_name)
