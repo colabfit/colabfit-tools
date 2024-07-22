@@ -171,6 +171,36 @@ def _sort_dict(dictionary):
     return {k: dictionary[k] for k in keys}
 
 
+# def _parse_unstructured_metadata(md_json):
+#     md = {}
+#     for key, val in md_json.items():
+#         if key in ["_id", "hash", "colabfit-id", "last_modified", "software", "method"]:
+#             continue
+#         if isinstance(val, dict):
+#             if "source-value" in val.keys():
+#                 val = val["source-value"]
+#         if isinstance(val, list) and len(val) == 1:
+#             val = val[0]
+#         if isinstance(val, dict):
+#             val = _sort_dict(val)
+#         if isinstance(val, bytes):
+#             val = val.decode("utf-8")
+#         md[key] = val
+#     md = _sort_dict(md)
+#     md_hash = str(_hash(md, md.keys(), include_keys_in_hash=True))
+#     md["hash"] = md_hash
+#     md["id"] = f"MD_{md_hash[:25]}"
+#     split = md["id"][-4:]
+#     filename = f"{md['id']}.json"
+#     full_path = str(Path(BUCKET_DIR) / "MD" / split / filename)
+#     md_str = json.dumps(md)
+#     return {
+#         "metadata_id": md["id"] + "COLABFIT_MD_SPLIT" + md_str,
+#         "metadata_path": full_path,
+#         "metadata_size": sys.getsizeof(json.dumps(md)),
+#     }
+
+
 def _parse_unstructured_metadata(md_json):
     md = {}
     for key, val in md_json.items():
@@ -367,7 +397,7 @@ def split_long_string_cols(df, column_name: str, max_string_length: int):
         return df
     print(f"Column split: {column_name}")
     overflow_columns = [
-        f"{'_'.join(column_name.split('_')[:-1])}_{i+1:02}" for i in range(19)
+        f"{'_'.join(column_name.split('_')[:-1])}_{i + 1:02}" for i in range(19)
     ]
     if not all([col in df.columns for col in overflow_columns]):
         raise ValueError("Overflow columns not found in target DataFrame schema")
@@ -393,68 +423,68 @@ def split_long_string_cols(df, column_name: str, max_string_length: int):
     return df
 
 
-##########################################################
-# Functions for writing values to files
-##########################################################
+# ##########################################################
+# # Functions for writing values to files
+# ##########################################################
 
 
-def _write_value(path_prefix, id_str, filetype, BUCKET_DIR, value):
-    """i.e.: _write_value(
-    value=co['positions'],
-    'CO/positions', co['id'],
-    'txt', '/save/here'
-    )
-    """
-    # Use the final 4 digits of the id for an ~1000-way split
-    split = id_str[-4:]
-    filename = f"{id_str}.{filetype}"
-    full_path = Path(BUCKET_DIR) / path_prefix / split / filename
-    full_path.parent.mkdir(parents=True, exist_ok=True)
-    full_path.write_text(str(value))
-    return full_path
+# def _write_value(path_prefix, id_str, filetype, BUCKET_DIR, value):
+#     """i.e.: _write_value(
+#     value=co['positions'],
+#     'CO/positions', co['id'],
+#     'txt', '/save/here'
+#     )
+#     """
+#     # Use the final 4 digits of the id for an ~1000-way split
+#     split = id_str[-4:]
+#     filename = f"{id_str}.{filetype}"
+#     full_path = Path(BUCKET_DIR) / path_prefix / split / filename
+#     full_path.parent.mkdir(parents=True, exist_ok=True)
+#     full_path.write_text(str(value))
+#     return full_path
 
 
-def write_value_to_file(path_prefix, extension, BUCKET_DIR, write_column, row):
-    """i.e.: partial(_write_value(
-    'CO/positions',
-    'txt',
-    '/save/here'
-    'positions',
-    )
-    """
-    id = row["id"]
-    # Use the final 4 digits of the id for an ~1000-way split
-    value = row[write_column]
-    split = id[-4:]
-    filename = f"{id}.{extension}"
-    full_path = Path(BUCKET_DIR) / path_prefix / split / filename
-    full_path.parent.mkdir(parents=True, exist_ok=True)
-    full_path.write_text(str(value))
-    row_dict = row.asDict()
-    row_dict[write_column] = str(full_path)
-    return Row(**row_dict)
+# def write_value_to_file(path_prefix, extension, BUCKET_DIR, write_column, row):
+#     """i.e.: partial(_write_value(
+#     'CO/positions',
+#     'txt',
+#     '/save/here'
+#     'positions',
+#     )
+#     """
+#     id = row["id"]
+#     # Use the final 4 digits of the id for an ~1000-way split
+#     value = row[write_column]
+#     split = id[-4:]
+#     filename = f"{id}.{extension}"
+#     full_path = Path(BUCKET_DIR) / path_prefix / split / filename
+#     full_path.parent.mkdir(parents=True, exist_ok=True)
+#     full_path.write_text(str(value))
+#     row_dict = row.asDict()
+#     row_dict[write_column] = str(full_path)
+#     return Row(**row_dict)
 
 
-def multi_value_to_file(path_prefixes, extension, BUCKET_DIR, write_columns, row):
-    """i.e.: partial(_write_value(
-    'CO/positions',
-    'txt',
-    '/save/here'
-    'positions',
-    )
-    """
-    id = row["id"]
-    split = id[-4:]
+# def multi_value_to_file(path_prefixes, extension, BUCKET_DIR, write_columns, row):
+#     """i.e.: partial(_write_value(
+#     'CO/positions',
+#     'txt',
+#     '/save/here'
+#     'positions',
+#     )
+#     """
+#     id = row["id"]
+#     split = id[-4:]
 
-    row_dict = row.asDict()
-    for write_column, path_prefix in zip(write_columns, path_prefixes):
-        value = row[write_column]
-        filename = f"{id}.{extension}"
-        full_path = Path(BUCKET_DIR) / path_prefix / split / filename
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-        full_path.write_text(str(value))
-        row_dict[write_column] = str(full_path)
-    return Row(**row_dict)
+#     row_dict = row.asDict()
+#     for write_column, path_prefix in zip(write_columns, path_prefixes):
+#         value = row[write_column]
+#         filename = f"{id}.{extension}"
+#         full_path = Path(BUCKET_DIR) / path_prefix / split / filename
+#         full_path.parent.mkdir(parents=True, exist_ok=True)
+#         full_path.write_text(str(value))
+#         row_dict[write_column] = str(full_path)
+#     return Row(**row_dict)
 
 
 ELEMENT_MAP = {
