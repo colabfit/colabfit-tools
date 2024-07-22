@@ -533,8 +533,6 @@ class SparkDataLoader:
         co_filter_conditions = [("nsites", ">", 15),
                                 ('labels', 'array_contains', 'label1')]
         """
-        po_filter_conditions = [("dataset_id", "==", "DS_rf10ovxd13ne_0")]
-        co_filter_conditions = [("nsites", ">", "10")]
         po_df = self.read_table(self.prop_object_table, unstring=True)
         po_df = self.get_filtered_table(po_df, po_filter_conditions)
         po_df = po_df.drop("chemical_formula_hill")
