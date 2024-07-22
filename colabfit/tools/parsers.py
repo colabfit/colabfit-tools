@@ -70,7 +70,7 @@ def mlip_cfg_reader(symbol_map, filepath):
                 if forces:
                     config.info["forces"] = forces
                 config.info["stress"] = stress  # Stress units appear to be kbar (?)
-                config.info["_name"] = f"{filepath.stem}_{config_count}"
+                config.info["_name"] = f"{filepath.stem}__index__{config_count}"
                 config_count += 1
                 yield AtomicConfiguration.from_ase(config)
                 forces = None

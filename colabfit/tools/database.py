@@ -249,25 +249,25 @@ class SparkDataLoader:
                 )
 
                 rec_batch = rec_batch.read_all()
-                duplicate_df = self.spark.createDataFrame(
+                duplicate_co_df = self.spark.createDataFrame(
                     rec_batch.to_struct_array().to_pandas(), schema=spark_schema
                 )
 
-                print(f"length of df: {duplicate_df.count()}")
-            if duplicate_df.count() == 0:
+                print(f"Length of duplicate CO df: {duplicate_co_df.count()}")
+            if duplicate_co_df.count() == 0:
                 new_ids.extend(id_batch)
                 continue
             unstring_udf = sf.udf(unstring_df_val, ArrayType(StringType()))
             for col_name, col_type in col_types.items():
                 if col_name in arr_cols:
-                    duplicate_df = duplicate_df.withColumn(
+                    duplicate_co_df = duplicate_co_df.withColumn(
                         col_name, unstring_udf(sf.col(col_name))
                     )
             for col, elem in zip(cols, elems):
                 if col == "labels":
                     co_df_labels = co_df.select("id", "labels").collect()
-                    duplicate_df = (
-                        duplicate_df.withColumnRenamed("labels", "labels_dup")
+                    duplicate_co_df = (
+                        duplicate_co_df.withColumnRenamed("labels", "labels_dup")
                         .join(
                             co_df_labels.withColumnRenamed("labels", "labels_co_df"),
                             on="id",
@@ -282,18 +282,20 @@ class SparkDataLoader:
                     )
 
                 else:
-                    duplicate_df = duplicate_df.withColumn(
+                    duplicate_co_df = duplicate_co_df.withColumn(
                         col,
                         sf.array_distinct(
                             sf.array_union(sf.col(col), sf.array(sf.lit(elem)))
                         ),
                     )
-            existing_ids_batch = [x["id"] for x in duplicate_df.select("id").collect()]
+            existing_ids_batch = [
+                x["id"] for x in duplicate_co_df.select("id").collect()
+            ]
             new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
             string_udf = sf.udf(stringify_df_val, StringType())
-            for col_name in duplicate_df.columns:
+            for col_name in duplicate_co_df.columns:
                 if col_name in arr_cols:
-                    duplicate_df = duplicate_df.withColumn(
+                    duplicate_co_df = duplicate_co_df.withColumn(
                         col_name, string_udf(sf.col(col_name))
                     )
             update_time = dateutil.parser.parse(
@@ -301,7 +303,7 @@ class SparkDataLoader:
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
             )
-            duplicate_df = duplicate_df.withColumn(
+            duplicate_co_df = duplicate_co_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
             update_schema = StructType(
@@ -311,7 +313,7 @@ class SparkDataLoader:
             update_table = pa.table(
                 [
                     pa.array(col)
-                    for col in zip(*duplicate_df.select(total_write_cols).collect())
+                    for col in zip(*duplicate_co_df.select(total_write_cols).collect())
                 ],
                 schema=arrow_schema,
             )
@@ -348,7 +350,11 @@ class SparkDataLoader:
                 pa.field("$row_id", pa.int32()),
             ]
         )
-        ids = [x["id"] for x in po_df.select("id").collect()]
+        po_db_df = self.read_table(self.config_table)
+        existing_rows = po_df.select("id").join(
+            po_db_df.select("id"), on="id", how="inner"
+        )
+        ids = [x["id"] for x in existing_rows.select("id").collect()]
         batched_ids = batched(ids, 10000)
         new_ids = []
         existing_ids = []
@@ -362,7 +368,7 @@ class SparkDataLoader:
             # We only have to use vastdb-sdk here bc we need the '$row_id' column
             with self.session.transaction() as tx:
                 table_name = self.prop_object_table
-                # string would be 'ndb.colabfit.dev.[table name]'
+                # Dev string would be 'ndb.colabfit.dev.[table name]'
                 table_path = table_name.split(".")
                 table = (
                     tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
@@ -373,31 +379,33 @@ class SparkDataLoader:
                     internal_row_id=True,
                 )
                 rec_batch = rec_batch.read_all()
-                duplicate_df = self.spark.createDataFrame(
+                duplicate_po_df = self.spark.createDataFrame(
                     rec_batch.to_struct_array().to_pandas(), schema=schema
                 )
-                print(f"length of df: {duplicate_df.count()}")
+                print(f"Length of duplicate PO df: {duplicate_po_df.count()}")
 
             update_time = dateutil.parser.parse(
                 datetime.datetime.now(tz=datetime.timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
             )
-            duplicate_df = (
-                duplicate_df.join(po_update_df, on="id")
+            duplicate_po_df = (
+                duplicate_po_df.join(po_update_df, on="id")
                 .withColumn(
                     "multiplicity",
                     sf.col("multiplicity") + sf.col("multiplicity_update"),
                 )
                 .drop("multiplicity_update")
             )
-            duplicate_df = duplicate_df.withColumn(
+            duplicate_po_df = duplicate_po_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
-            existing_ids_batch = [x["id"] for x in duplicate_df.select("id").collect()]
+            existing_ids_batch = [
+                x["id"] for x in duplicate_po_df.select("id").collect()
+            ]
             new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
             update_table = pa.table(
-                [pa.array(col) for col in zip(*duplicate_df.collect())],
+                [pa.array(col) for col in zip(*duplicate_po_df.collect())],
                 schema=arrow_schema,
             )
             with self.session.transaction() as tx:
@@ -513,7 +521,7 @@ class SparkDataLoader:
 
     def get_pos_cos_by_filter(
         self,
-        po_filter_conditions: list[tuple[str, str, str | int | float | list]],
+        po_filter_conditions: list[tuple[str, str, str | int | float | list]] = None,
         co_filter_conditions: list[
             tuple[str, str, str | int | float | list | None]
         ] = None,
@@ -525,28 +533,47 @@ class SparkDataLoader:
         co_filter_conditions = [("nsites", ">", 15),
                                 ('labels', 'array_contains', 'label1')]
         """
-        po_df = self.read_table(
-            self.prop_object_table, unstring=True
-        ).withColumnRenamed("id", "po_id")
-        po_df = po_df.withColumn(
-            "configuration_id", sf.explode(sf.col("configuration_ids"))
-        ).drop("configuration_ids")
-        co_df = self.read_table(self.config_table, unstring=True).withColumnRenamed(
-            "id", "co_id"
-        )
+        po_filter_conditions = [("dataset_id", "==", "DS_rf10ovxd13ne_0")]
+        co_filter_conditions = [("nsites", ">", "10")]
+        po_df = self.read_table(self.prop_object_table, unstring=True)
         po_df = self.get_filtered_table(po_df, po_filter_conditions)
-        if co_filter_conditions is not None:
-            co_df = self.get_filtered_table(co_df, co_filter_conditions)
-        co_po_df = co_df.join(
-            po_df, co_df["co_id"] == po_df["configuration_id"], "inner"
+        po_df = po_df.drop("chemical_formula_hill")
+
+        co_df = self.read_table(self.config_table, unstring=True)
+        overlap_cols = [col for col in po_df.columns if col in co_df.columns]
+        po_df = po_df.select(
+            [
+                (
+                    col
+                    if col not in overlap_cols
+                    else sf.col(col).alias(f"prop_object_{col}")
+                )
+                for col in po_df.columns
+            ]
         )
+        co_df = co_df.select(
+            [
+                (
+                    col
+                    if col not in overlap_cols
+                    else sf.col(col).alias(f"configuration_{col}")
+                )
+                for col in co_df.columns
+            ]
+        )
+        co_df = self.get_filtered_table(co_df, co_filter_conditions)
+        co_po_df = co_df.join(po_df, on="configuration_id", how="inner")
         return co_po_df
 
     def get_filtered_table(
         self,
-        df: DataFrame,
-        filter_conditions: list[tuple[str, str, str | int | float | list]],
+        df,
+        filter_conditions: (
+            list[tuple[str, str, str | int | float | list]] | None
+        ) = None,
     ):
+        if filter_conditions is None:
+            return df
         for i, (column, operand, condition) in enumerate(filter_conditions):
             if operand == "in":
                 df = df.filter(sf.col(column).isin(condition))
@@ -871,8 +898,6 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                     if len(new_po_ids) > 0:
-                        print(po_df.printSchema())
-                        print(po_df.first())
                         loader.write_table(
                             po_df,
                             loader.prop_object_table,
