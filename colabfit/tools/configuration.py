@@ -43,7 +43,7 @@ class AtomicConfiguration(Atoms):
                 Other keyword arguments that can be passed to
                 :meth:`ase.Atoms.__init__()`
         """
-
+        names = info[ATOMS_NAME_FIELD]
         if "atomic_numbers" in list(kwargs.keys()):
             kwargs["numbers"] = kwargs.pop("atomic_numbers")
 
@@ -64,8 +64,6 @@ class AtomicConfiguration(Atoms):
         ]
         self.info = info
         self.metadata = self.set_metadata(co_md_map)
-
-        names = self.info[ATOMS_NAME_FIELD]
         if isinstance(names, str):
             self.names = [names]
         else:

@@ -537,7 +537,12 @@ class Property(dict):
             if units != p_info.unit:
                 split_units = list(
                     itertools.chain.from_iterable(
-                        [sp.split("/") for sp in units.split("*")]
+                        [
+                            sp.split("^")
+                            for sp in itertools.chain.from_iterable(
+                                [sp.split("/") for sp in units.split("*")]
+                            )
+                        ]
                     )
                 )
 
@@ -547,6 +552,14 @@ class Property(dict):
                         prop_val *= UNITS[u]
                     elif units[units.find(u) - 1] == "/":
                         prop_val /= UNITS[u]
+                    elif units[units.find(u) - 1] == "^":
+                        try:
+                            prop_val = np.power(prop_val, int(u))
+                        except Exception:
+                            raise RuntimeError(
+                                f"There may be something wrong with the units: {u}"
+                            )
+
                     else:
                         raise RuntimeError(
                             f"There may be something wrong with the units: {u}"
