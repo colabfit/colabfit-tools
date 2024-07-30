@@ -777,6 +777,7 @@ class MongoDatabase(MongoClient):
                             SHORT_ID_STRING_NAME: "PI_" + p_hash,
                             "type": pname,
                             pname: setOnInsert,
+                            "relationships": [],
                         },
                         "$set": {
                             "last_modified": datetime.datetime.now().strftime(
@@ -1129,6 +1130,7 @@ class MongoDatabase(MongoClient):
                         if "source-unit" in prop[k]:
                             setOnInsert[k]["source-unit"] = prop[k]["source-unit"]
                         # TODO: Look at: can probably safely move out one level
+                    # TODO: look at not making _metadata required
                     pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
                     p_update_doc = {
                         "$setOnInsert": {
@@ -2609,9 +2611,9 @@ class MongoDatabase(MongoClient):
                 i['relationships'].append(new)
             update_docs.append(UpdateOne({'hash':i['hash']},{'$set':{'relationships':i['relationships']}},hint='hash'))
             for j in i['relationships']:
-                update_co.append(UpdateOne({'colabfit-id':j['configuration']},{'$set':{'relationships.dataset':ds_id}},hint='colabfit-id'))
+                update_co.append(UpdateOne({'colabfit-id':j['configuration']},{'$addToSet':{'relationships' :{'dataset':ds_id}}},hint='colabfit-id'))
                 for k in j['property_instance']:
-                   update_pi.append(UpdateOne({'colabfit-id':k},{'$set':{'relationships.dataset':ds_id}},hint='colabfit-id'))
+                   update_pi.append(UpdateOne({'colabfit-id':k},{'$addToSet':{'relationships':{'dataset':ds_id}}},hint='colabfit-id'))
         if update_docs:      
            res = self.data_objects.bulk_write(update_docs, ordered=False)
         if update_co:
@@ -2667,9 +2669,12 @@ class MongoDatabase(MongoClient):
                 aggregated_info=ds_doc["aggregated_info"],
             ),
         }
-    # TODO: Flag to delete associated data if not attached to another dataset 
-    def delete_dataset(self, ds_id,):
+    def delete_dataset(self, ds_id, delete_children=False):
         self.datasets.delete_one({'colabfit-id':ds_id})
+        if delete_children:
+            self.data_objects.delete_many({'relationships.dataset':ds_id,'relationships':{'$size':1}})
+            self.configurations.delete_many({'relationships.dataset':ds_id,'relationships':{'$size':1}})
+            self.property_instances.delete_many({'relationships.dataset':ds_id,'relationships':{'$size':1}})
     	
     # TODO: Handle properties somewhere->should we allow for only properties to be update?
     # TODO: Allow for metadata updating
@@ -4148,6 +4153,7 @@ def _build_c_update_doc(configuration, external_file=None, group_permission_name
         with lmdb_env.begin(write=True) as txn:
             txn.put(('CO_' + c_hash).encode("ascii"), value=pickle.dumps({'atomic_numbers':large_nums,'positions':large_pos},protocol=-1))
     c_update_doc["$setOnInsert"].update({k: v for k, v in processed_fields.items()})
+    c_update_doc["$setOnInsert"].update({"relationships":[]})
     return c_update_doc, c_hash, write_to_file
 
 
