@@ -879,7 +879,6 @@ class MongoDatabase(MongoClient):
 
         client.close()
         return insertions
-    # TODO: have an overwrite property flag to replace previously named definition with new one 
     def insert_property_definition(self, definition, overwrite_old=False):
         """
         Inserts a new property definition into the database. Checks that
@@ -1536,23 +1535,25 @@ class MongoDatabase(MongoClient):
         l = []
         for pi_doc in pi_docs:
             property_type = pi_doc['type']
-            # TODO: Change below to account for arbitrary name
-            property_name = property_type.split('-')[-1]
-            pi_v = pi_doc[property_type][property_name]["source-value"]
-            if isinstance(pi_v,dict):
-               if 'external-file' in pi_v:
-                   external_file = pi_v['external-file']
-                   print ('Loading Property from %s' %external_file)
-                   lmdb_env = lmdb.open(
-                       external_file,
-                       map_size = 1099511627776 * 2,
-                       subdir = False,
-                       meminit = False,
-                       max_dbs = 10,
-                       )
-                   with lmdb_env.begin() as txn:
-                       pi_f = pickle.loads(txn.get((pi_doc['colabfit-id']).encode("ascii")))[property_name]
-                   pi_doc[property_type][property_name]["source-value"] = pi_f
+            for k,v in pi_doc.items():
+                if isinstance(v,dict):
+                    for k2, v2 in v.items():
+                        if isinstance(v2,dict):
+                         for k3, v3 in v2.items():
+                            if 'external-file' in v3:
+                                property_name = k2
+                                external_file = pi_doc[k][k2][k3]['external-file']
+                                print ('Loading Property from %s' %external_file)
+                                lmdb_env = lmdb.open(
+                                    external_file,
+                                    map_size = 1099511627776 * 2,
+                                    subdir = False,
+                                    meminit = False,
+                                    max_dbs = 10,
+                                 )
+                                with lmdb_env.begin() as txn:
+                                     pi_f = pickle.loads(txn.get((pi_doc['colabfit-id']).encode("ascii")))[property_name]
+                                pi_doc[property_type][property_name]["source-value"] = pi_f
             l.append(pi_doc) 
         return l
 
