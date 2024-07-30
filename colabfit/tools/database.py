@@ -4137,6 +4137,7 @@ def _build_c_update_doc(configuration, external_file=None, group_permission_name
                     )
         if group_permission_name is not None:
             os.system("chown :iap %s" %external_file)
+            os.system("chown :iap %s-lock" %external_file)
         with lmdb_env.begin(write=True) as txn:
             txn.put(('CO_' + c_hash).encode("ascii"), value=pickle.dumps({'atomic_numbers':large_nums,'positions':large_pos},protocol=-1))
     c_update_doc["$setOnInsert"].update({k: v for k, v in processed_fields.items()})
