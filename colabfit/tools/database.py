@@ -769,8 +769,8 @@ class MongoDatabase(MongoClient):
                         if "source-unit" in prop[k]:
                             setOnInsert[k]["source-unit"] = prop[k]["source-unit"]
                         # TODO: Look at: can probably safely move out one level
-                    # TODO: Make it so _metadata doesn't need to be specified
-                    pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
+                    if metadata_hashes:
+                        pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
                     p_update_doc = {
                         "$setOnInsert": {
                             "hash": p_hash,
@@ -804,9 +804,6 @@ class MongoDatabase(MongoClient):
                         "relationships": {
                             "configuration": "CO_" + calc_lists["CO"],
                             "property_instance": ["PI_" + j for j in calc_lists["PI"]],
-                            "metadata": list(
-                                set([j["metadata"] for j in pi_relationships_list])
-                            ),
                         },
                     },
                 # '$inc': {
@@ -818,6 +815,8 @@ class MongoDatabase(MongoClient):
                      )
                     },
                 }
+                if metadata_hashes:
+                    ca_update_doc['$addToSet']['relationships'].update({"metadata": list(set([j["metadata"] for j in pi_relationships_list]))})
                 calc_docs.append(
                     UpdateOne(
                         {"hash": ca_hash},
@@ -1130,8 +1129,8 @@ class MongoDatabase(MongoClient):
                         if "source-unit" in prop[k]:
                             setOnInsert[k]["source-unit"] = prop[k]["source-unit"]
                         # TODO: Look at: can probably safely move out one level
-                    # TODO: look at not making _metadata required
-                    pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
+                    if metadata_hashes:
+                        pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
                     p_update_doc = {
                         "$setOnInsert": {
                             "hash": p_hash,
@@ -1164,9 +1163,6 @@ class MongoDatabase(MongoClient):
                         "relationships": {
                             "configuration": calc_lists["CO"],
                             "property_instance": ["PI_" + j for j in calc_lists["PI"]],
-                            "metadata": list(
-                                set([j["metadata"] for j in pi_relationships_list])
-                            ),
                         },
                     },
                 # '$inc': {
@@ -1178,6 +1174,8 @@ class MongoDatabase(MongoClient):
                      )
                     },
                 }
+                if metadata_hashes: 
+                    ca_update_doc['$addToSet']['relationships'].update({"metadata": list(set([j["metadata"] for j in pi_relationships_list]))})
                 calc_docs.append(
                     UpdateOne(
                         {"hash": ca_hash},
