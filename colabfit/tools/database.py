@@ -599,6 +599,7 @@ class MongoDatabase(MongoClient):
                     if property_definitions[pname][f]["required"] and "field" in pmap[f]
                 )
                 for pmap in property_map[pname]
+            ]
             for pname in property_map
         }
 
