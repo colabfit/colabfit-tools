@@ -188,7 +188,7 @@ class MongoDatabase(MongoClient):
         nprocs=1,
         uri=None,
         external_file=None,
-	group_permission_name=None,
+        group_permission_name=None,
         user=None,
         pwrd=None,
         port=27017,
@@ -234,7 +234,7 @@ class MongoDatabase(MongoClient):
         self.pwrd = pwrd
         self.port = port
         self.external_file = external_file
-	self.group_permission_name = group_permission_name
+        self.group_permission_name = group_permission_name
         if self.uri is not None:
             super().__init__(self.uri, *args, **kwargs)
         else:
@@ -528,7 +528,7 @@ class MongoDatabase(MongoClient):
                 property_map=property_map,
                 co_md_map=co_md_map,
                 external_file=self.external_file,
-		group_permission_name=self.group_permission_name,
+                group_permission_name=self.group_permission_name,
                 transform=transform,
                 verbose=verbose,
             )
@@ -544,7 +544,7 @@ class MongoDatabase(MongoClient):
         co_md_map=None,
         property_map=None,
         external_file=None,
-	group_permission_name=None,
+        group_permission_name=None,
         transform=None,
         verbose=False,
     ):
@@ -599,7 +599,6 @@ class MongoDatabase(MongoClient):
                     if property_definitions[pname][f]["required"] and "field" in pmap[f]
                 )
                 for pmap in property_map[pname]
-            ]
             for pname in property_map
         }
 
@@ -631,7 +630,7 @@ class MongoDatabase(MongoClient):
             if transform:
                 transform(atoms)
 
-            c_update_doc, c_hash, write_to_file= _build_c_update_doc(atoms, external_file)
+            c_update_doc, c_hash, write_to_file= _build_c_update_doc(atoms, external_file, group_permission_name)
                    
             calc_lists["CO"] = c_hash
             calc_lists["CO_hill"] = atoms.configuration_summary()[
@@ -756,8 +755,6 @@ class MongoDatabase(MongoClient):
                                     meminit = False,
                                     max_dbs = 10, 
                                     )
-				if group_permission_name is not None:
-				    os.system("chown :iap %s" %external_file)
                         	with lmdb_env.begin(write=True) as txn:
                                     txn.put(('PI_' + p_hash).encode("ascii"), value=pickle.dumps({k:np.atleast_1d(prop[k]["source-value"]).tolist()},protocol=-1))
                             else: 
@@ -4096,7 +4093,7 @@ def load_data(
 
 # Moved out of static method to avoid changing insert_data* methods
 # Could consider changing in the future
-def _build_c_update_doc(configuration, external_file=None):
+def _build_c_update_doc(configuration, external_file=None, group_permission_name=None):
     write_to_file = 0
     processed_fields = configuration.configuration_summary()
     c_hash = str(hash(configuration))
@@ -4136,6 +4133,8 @@ def _build_c_update_doc(configuration, external_file=None):
                     meminit = False,
                     max_dbs = 10,
                     )
+        if group_permission_name is not None:
+            os.system("chown :iap %s" %external_file)
         with lmdb_env.begin(write=True) as txn:
             txn.put(('CO_' + c_hash).encode("ascii"), value=pickle.dumps({'atomic_numbers':large_nums,'positions':large_pos},protocol=-1))
     c_update_doc["$setOnInsert"].update({k: v for k, v in processed_fields.items()})
