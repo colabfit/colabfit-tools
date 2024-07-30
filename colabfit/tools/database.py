@@ -188,6 +188,7 @@ class MongoDatabase(MongoClient):
         nprocs=1,
         uri=None,
         external_file=None,
+	group_permission_name=None,
         user=None,
         pwrd=None,
         port=27017,
@@ -233,6 +234,7 @@ class MongoDatabase(MongoClient):
         self.pwrd = pwrd
         self.port = port
         self.external_file = external_file
+	self.group_permission_name = group_permission_name
         if self.uri is not None:
             super().__init__(self.uri, *args, **kwargs)
         else:
@@ -526,6 +528,7 @@ class MongoDatabase(MongoClient):
                 property_map=property_map,
                 co_md_map=co_md_map,
                 external_file=self.external_file,
+		group_permission_name=self.group_permission_name,
                 transform=transform,
                 verbose=verbose,
             )
@@ -541,6 +544,7 @@ class MongoDatabase(MongoClient):
         co_md_map=None,
         property_map=None,
         external_file=None,
+	group_permission_name=None,
         transform=None,
         verbose=False,
     ):
@@ -752,7 +756,9 @@ class MongoDatabase(MongoClient):
                                     meminit = False,
                                     max_dbs = 10, 
                                     )
-                                with lmdb_env.begin(write=True) as txn:
+				if group_permission_name is not None:
+				    os.system("chown :iap %s" %external_file)
+                        	with lmdb_env.begin(write=True) as txn:
                                     txn.put(('PI_' + p_hash).encode("ascii"), value=pickle.dumps({k:np.atleast_1d(prop[k]["source-value"]).tolist()},protocol=-1))
                             else: 
                                 setOnInsert[k] = {
