@@ -769,6 +769,7 @@ class MongoDatabase(MongoClient):
                         if "source-unit" in prop[k]:
                             setOnInsert[k]["source-unit"] = prop[k]["source-unit"]
                         # TODO: Look at: can probably safely move out one level
+                    # TODO: Make it so _metadata doesn't need to be specified
                     pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
                     p_update_doc = {
                         "$setOnInsert": {
@@ -878,8 +879,8 @@ class MongoDatabase(MongoClient):
 
         client.close()
         return insertions
-
-    def insert_property_definition(self, definition):
+    # TODO: have an overwrite property flag to replace previously named definition with new one 
+    def insert_property_definition(self, definition, overwrite_old=False):
         """
         Inserts a new property definition into the database. Checks that
         definition is valid, then builds all necessary groups in
@@ -921,10 +922,14 @@ class MongoDatabase(MongoClient):
         if self.property_definitions.count_documents(
             {"definition.property-name": definition["property-name"]}
         ):
-            warnings.warn(
-                "Property definition with name '{}' already exists. "
-                "Using existing definition.".format(definition["property-name"])
-            )
+            if overwrite_old:
+                print ("This property already exists, but since you have set overwrite_old=True, it will be overwritten to reflect the current definition.")
+
+            else:
+                warnings.warn(
+                    "Property definition with name '{}' already exists. "
+                    "Using existing definition.".format(definition["property-name"])
+                )
 
         dummy_dict = deepcopy(definition)
 
@@ -955,7 +960,7 @@ class MongoDatabase(MongoClient):
 
         self.property_definitions.update_one(
             {"definition.property-name": definition["property-name"]},
-            {"$setOnInsert": {"definition": dummy_dict}},
+            {"$set": {"definition": dummy_dict}},
             upsert=True,
             hint="definition.property-name",
         )
@@ -1531,6 +1536,7 @@ class MongoDatabase(MongoClient):
         l = []
         for pi_doc in pi_docs:
             property_type = pi_doc['type']
+            # TODO: Change below to account for arbitrary name
             property_name = property_type.split('-')[-1]
             pi_v = pi_doc[property_type][property_name]["source-value"]
             if isinstance(pi_v,dict):
@@ -2660,7 +2666,7 @@ class MongoDatabase(MongoClient):
                 aggregated_info=ds_doc["aggregated_info"],
             ),
         }
-
+    # TODO: Flag to delete associated data if not attached to another dataset 
     def delete_dataset(self, ds_id,):
         self.datasets.delete_one({'colabfit-id':ds_id})
     	
