@@ -2512,6 +2512,7 @@ class MongoDatabase(MongoClient):
 		
         ds_hash = int(ds_hash_r.hexdigest(), 16)
         # Check for duplicates
+        old_ds = None
         try:
             old_ds = self.datasets.find_one({"hash": str(ds_hash)})[SHORT_ID_STRING_NAME]
             if fork:
@@ -2568,7 +2569,7 @@ class MongoDatabase(MongoClient):
                     "hash": str(ds_hash),
                     "license": data_license,
                 }
-        if fork:
+        if fork and old_ds is not None:
             soi['forked_from']= old_ds
         self.datasets.update_one(
             {"hash": str(ds_hash)},
