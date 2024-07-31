@@ -1541,6 +1541,7 @@ class MongoDatabase(MongoClient):
                     for k2, v2 in v.items():
                         if isinstance(v2,dict):
                          for k3, v3 in v2.items():
+                          try:
                             if 'external-file' in v3:
                                 property_name = k2
                                 external_file = pi_doc[k][k2][k3]['external-file']
@@ -1555,6 +1556,8 @@ class MongoDatabase(MongoClient):
                                 with lmdb_env.begin() as txn:
                                      pi_f = pickle.loads(txn.get((pi_doc['colabfit-id']).encode("ascii")))[property_name]
                                 pi_doc[property_type][property_name]["source-value"] = pi_f
+                          except:
+                            pass
             l.append(pi_doc) 
         return l
 
