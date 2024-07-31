@@ -234,7 +234,8 @@ class MongoDatabase(MongoClient):
         self.user = user
         self.pwrd = pwrd
         self.port = port
-        self.external_file = os.path.abspath(external_file)
+        if external_file is not None:
+            self.external_file = os.path.abspath(external_file)
         self.group_permission_name = group_permission_name
         if self.uri is not None:
             super().__init__(self.uri, *args, **kwargs)
