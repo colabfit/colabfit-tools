@@ -790,6 +790,7 @@ class DataManager:
         being consumed all at once.
         """
         chunk_size = self.read_write_batch_size
+        print(self.read_write_batch_size)
         config_chunks = batched(self.configs, chunk_size)
         for chunk in config_chunks:
             yield list(

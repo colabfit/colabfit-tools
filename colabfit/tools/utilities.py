@@ -118,7 +118,7 @@ def spark_to_arrow_type(spark_type):
     if isinstance(spark_type, IntegerType):
         return pa.int32()
     elif isinstance(spark_type, LongType):
-        return pa.int32()
+        return pa.int64()
     elif isinstance(spark_type, DoubleType):
         return pa.float64()
     elif isinstance(spark_type, StringType):

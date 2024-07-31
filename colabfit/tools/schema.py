@@ -10,6 +10,7 @@ from pyspark.sql.types import (
     BooleanType,
     DoubleType,
     IntegerType,
+    LongType,
     StringType,
     StructField,
     StructType,
@@ -40,7 +41,7 @@ config_df_schema = StructType(
         StructField("dimension_types", ArrayType(IntegerType()), True),
         StructField("pbc", ArrayType(BooleanType()), True),
         StructField("names", ArrayType(StringType()), True),
-        StructField("labels", ArrayType(StringType()), True),
+        # StructField("labels", ArrayType(StringType()), True),
         StructField("metadata_id", StringType(), True),
         StructField("metadata_path", StringType(), True),
         StructField("metadata_size", IntegerType(), True),
@@ -111,7 +112,7 @@ dataset_df_schema = StructType(
         StructField("last_modified", TimestampType(), False),
         StructField("nconfigurations", IntegerType(), True),
         StructField("nproperty_objects", IntegerType(), True),
-        StructField("nsites", IntegerType(), True),
+        StructField("nsites", LongType(), True),
         StructField("nelements", IntegerType(), True),
         StructField("elements", ArrayType(StringType()), True),
         StructField("total_elements_ratios", ArrayType(DoubleType()), True),
@@ -134,7 +135,7 @@ dataset_df_schema = StructType(
         # StructField("publication_link", StringType(), True),
         # StructField("data_link", StringType(), True),
         # StructField("other_links", ArrayType(StringType()), True),
-        StructField("labels", ArrayType(StringType()), True),
+        # StructField("labels", ArrayType(StringType()), True),
     ]
 )
 
@@ -149,7 +150,7 @@ configuration_set_df_schema = StructType(
         StructField("nconfigurations", IntegerType(), True),
         StructField("nperiodic_dimensions", ArrayType(IntegerType()), True),
         StructField("dimension_types", ArrayType(ArrayType(IntegerType())), True),
-        StructField("nsites", IntegerType(), True),
+        StructField("nsites", LongType(), True),
         StructField("nelements", IntegerType(), True),
         StructField("elements", ArrayType(StringType()), True),
         StructField("total_elements_ratios", ArrayType(DoubleType()), True),
