@@ -23,9 +23,9 @@ NSITES_COL_SPLITS = 20
 
 config_df_schema = StructType(
     [
-        StructField("id", StringType(), False),
-        StructField("hash", StringType(), False),
-        StructField("last_modified", TimestampType(), False),
+        StructField("id", StringType(), True),
+        StructField("hash", StringType(), True),
+        StructField("last_modified", TimestampType(), True),
         StructField("dataset_ids", ArrayType(StringType()), True),
         StructField("configuration_set_ids", ArrayType(StringType()), True),
         StructField("chemical_formula_hill", StringType(), True),
@@ -56,9 +56,9 @@ config_schema = get_stringified_schema(config_df_schema)
 
 property_object_df_schema = StructType(
     [
-        StructField("id", StringType(), False),
-        StructField("hash", StringType(), False),
-        StructField("last_modified", TimestampType(), False),
+        StructField("id", StringType(), True),
+        StructField("hash", StringType(), True),
+        StructField("last_modified", TimestampType(), True),
         StructField("configuration_id", StringType(), True),
         StructField("dataset_id", StringType(), True),
         StructField("multiplicity", IntegerType(), True),
@@ -106,10 +106,10 @@ property_object_schema = get_stringified_schema(property_object_df_schema)
 
 dataset_df_schema = StructType(
     [
-        StructField("id", StringType(), False),
-        StructField("hash", StringType(), False),
+        StructField("id", StringType(), True),
+        StructField("hash", StringType(), True),
         StructField("name", StringType(), True),
-        StructField("last_modified", TimestampType(), False),
+        StructField("last_modified", TimestampType(), True),
         StructField("nconfigurations", IntegerType(), True),
         StructField("nproperty_objects", IntegerType(), True),
         StructField("nsites", LongType(), True),
@@ -144,9 +144,9 @@ dataset_schema = get_stringified_schema(dataset_df_schema)
 
 configuration_set_df_schema = StructType(
     [
-        StructField("id", StringType(), False),
-        StructField("hash", StringType(), False),
-        StructField("last_modified", TimestampType(), False),
+        StructField("id", StringType(), True),
+        StructField("hash", StringType(), True),
+        StructField("last_modified", TimestampType(), True),
         StructField("nconfigurations", IntegerType(), True),
         StructField("nperiodic_dimensions", ArrayType(IntegerType()), True),
         StructField("dimension_types", ArrayType(ArrayType(IntegerType())), True),
@@ -154,8 +154,8 @@ configuration_set_df_schema = StructType(
         StructField("nelements", IntegerType(), True),
         StructField("elements", ArrayType(StringType()), True),
         StructField("total_elements_ratios", ArrayType(DoubleType()), True),
-        StructField("description", StringType(), False),
-        StructField("name", StringType(), False),
+        StructField("description", StringType(), True),
+        StructField("name", StringType(), True),
         StructField("dataset_id", StringType(), True),
     ]
 )
