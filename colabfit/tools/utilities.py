@@ -20,7 +20,7 @@ from pyspark.sql.types import (
     StructField,
 )
 
-BUCKET_DIR = "/vast/gw2338/METADATA"
+BUCKET_DIR = "/vdev/colabfit-data/gpw_METADATA/"
 
 
 def _format_for_hash(v):
