@@ -20,8 +20,6 @@ from pyspark.sql.types import (
     StructField,
 )
 
-BUCKET_DIR = "/vdev/colabfit-data/gpw_METADATA/"
-
 
 def _format_for_hash(v):
     if isinstance(v, np.ndarray):
@@ -224,17 +222,21 @@ def _parse_unstructured_metadata(md_json):
     md["id"] = f"MD_{md_hash[:25]}"
     split = md["id"][-4:]
     filename = f"{md['id']}.json"
-    full_path = os.path.join(BUCKET_DIR, "MD", split, filename)
-    if not os.path.isfile(full_path):
-        # Write iff the ID is new and unique
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        with open(full_path, "w") as f:
-            json.dump(md, f)
+    after_bucket = os.path.join(split, filename)
+    metadata = json.dumps(md)
     return {
+        "metadata": metadata,
         "metadata_id": md["id"],
-        "metadata_path": full_path,
-        "metadata_size": sys.getsizeof(json.dumps(md)),
+        "metadata_path": after_bucket,
+        "metadata_size": sys.getsizeof(metadata),
     }
+
+
+# if not os.path.isfile(full_path):
+#         # Write iff the ID is new and unique
+#         os.makedirs(os.path.dirname(full_path), exist_ok=True)
+#         with open(full_path, "w") as f:
+#             json.dump(md, f)
 
 
 def stringify_lists(row_dict):

@@ -52,6 +52,7 @@ config_df_schema = StructType(
     ]
 )
 config_schema = get_stringified_schema(config_df_schema)
+config_md_schema = config_df_schema.add(StructField("metadata", StringType(), True))
 
 
 property_object_df_schema = StructType(
@@ -102,6 +103,9 @@ property_object_df_schema = StructType(
 )
 
 property_object_schema = get_stringified_schema(property_object_df_schema)
+property_object_md_schema = property_object_df_schema.add(
+    StructField("metadata", StringType(), True)
+)
 
 
 dataset_df_schema = StructType(

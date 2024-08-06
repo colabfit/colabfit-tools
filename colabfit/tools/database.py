@@ -3,23 +3,28 @@ import itertools
 import multiprocessing
 import os
 import string
+import sys
 from functools import partial
 from itertools import islice
 from multiprocessing import Pool
+from pathlib import Path
 from time import time
 from types import GeneratorType
 
+import boto3
 import dateutil.parser
 import findspark
 import psycopg
 import pyarrow as pa
 import pyspark.sql.functions as sf
+from botocore.exceptions import ClientError
 from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import DataFrame, Row, SparkSession
 from pyspark.sql.types import (
     ArrayType,
     IntegerType,
+    LongType,
     StringType,
     StructField,
     StructType,
@@ -38,12 +43,14 @@ from colabfit.tools.dataset import Dataset
 from colabfit.tools.property import Property
 from colabfit.tools.schema import (
     config_df_schema,
+    config_md_schema,
     config_schema,
     configuration_set_df_schema,
     configuration_set_schema,
     dataset_df_schema,
     dataset_schema,
     property_object_df_schema,
+    property_object_md_schema,
     property_object_schema,
 )
 from colabfit.tools.utilities import (
@@ -54,6 +61,8 @@ from colabfit.tools.utilities import (
     unstring_df_val,
 )
 
+VAST_BUCKET_DIR = "colabfit-data"
+VAST_METADATA_DIR = "gpw_METADATA"
 NSITES_COL_SPLITS = 20
 _CONFIGS_COLLECTION = "gpw_test_configs"
 _CONFIGSETS_COLLECTION = "gpw_test_config_sets"
@@ -100,6 +109,9 @@ class SparkDataLoader:
 
     def set_vastdb_session(self, endpoint, access_key: str, access_secret: str):
         self.session = self.get_vastdb_session(endpoint, access_key, access_secret)
+        self.access_key = access_key
+        self.access_secret = access_secret
+        self.endpoint = endpoint
 
     def add_elem_to_col(df, col_name: str, elem: str):
         df_added_elem = df.withColumn(
@@ -126,6 +138,8 @@ class SparkDataLoader:
             )
             for batch in rec_batch:
                 table.delete(rows=batch)
+
+    # def write_metadata()
 
     def check_unique_ids(self, table_name: str, df):
         if not self.spark.catalog.tableExists(table_name):
@@ -171,8 +185,6 @@ class SparkDataLoader:
         arrow_schema = spark_schema_to_arrow_schema(spark_df.schema)
         for field in arrow_schema:
             field = field.with_nullable(True)
-        # print(arrow_schema)
-        # print(spark_df.printSchema())
         if not self.spark.catalog.tableExists(table_name):
             print(f"Creating table {table_name}")
             with self.session.transaction() as tx:
@@ -186,10 +198,36 @@ class SparkDataLoader:
             table = (
                 tx.bucket(table_split[1]).schema(table_split[2]).table(table_split[3])
             )
-            # print(table.arrow_schema)
             for rec_batch in arrow_rec_batch:
                 table.insert(rec_batch)
         # spark_df.write.mode("append").saveAsTable(table_name)
+
+    def write_metadata(self, df):
+        """Writes metadata to files using boto3 for VastDB
+        Returns a DataFrame without metadata column. The returned DataFrame should
+        match table schema (from schema.py)
+        """
+        if df.filter(sf.col("metadata").isNotNull()).count() == 0:
+            df = df.drop("metadata")
+            return df
+        config = {
+            "bucket_dir": VAST_BUCKET_DIR,
+            "access_key": self.access_key,
+            "access_secret": self.access_secret,
+            "endpoint": self.endpoint,
+            "metadata_dir": VAST_METADATA_DIR,
+        }
+        df.rdd.mapPartitions(
+            lambda partition: write_md_partition(partition, config)
+        ).count()
+
+        df = df.drop("metadata")
+        file_base = f"/vdev/{VAST_BUCKET_DIR}/{VAST_METADATA_DIR}/"
+        df = df.withColumn(
+            "metadata_path",
+            prepend_path_udf(sf.lit(str(Path(file_base))), sf.col("metadata_path")),
+        )
+        return df
 
     def find_existing_co_rows_append_elem(
         self,
@@ -204,7 +242,7 @@ class SparkDataLoader:
         col_types = {
             "id": StringType(),
             "last_modified": TimestampType(),
-            "$row_id": IntegerType(),
+            "$row_id": LongType(),
         }
         arr_cols = []
         for col in cols:
@@ -306,16 +344,17 @@ class SparkDataLoader:
             duplicate_co_df = duplicate_co_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
-            update_schema = StructType(
-                [StructField(col, col_types[col]) for col in total_write_cols]
-            )
-            arrow_schema = spark_schema_to_arrow_schema(update_schema)
+            # update_schema = StructType(
+            #     [StructField(col, col_types[col]) for col in total_write_cols]
+            # )
+            # arrow_schema = spark_schema_to_arrow_schema(update_schema)
             update_table = pa.table(
                 [
                     pa.array(col)
                     for col in zip(*duplicate_co_df.select(total_write_cols).collect())
                 ],
-                schema=arrow_schema,
+                names=total_write_cols,
+                # schema=arrow_schema,
             )
             with self.session.transaction() as tx:
                 table = (
@@ -420,7 +459,9 @@ class SparkDataLoader:
 
         return (new_ids, list(set(existing_ids)))
 
-    def read_table(self, table_name: str, unstring: bool = False):
+    def read_table(
+        self, table_name: str, unstring: bool = False, read_metadata: bool = False
+    ):
         """
         Include self.table_prefix in the table name when passed to this function.
         Ex: loader.read_table(loader.config_table, unstring=True)
@@ -428,30 +469,52 @@ class SparkDataLoader:
             table_name {str} -- Name of the table to read from database
         Keyword Arguments:
             unstring {bool} -- Convert stringified lists to lists (default: {False})
+            read_metadata {bool} -- Read metadata from files. If True,
+            lists will be also converted from strings (default: {False})
         Returns:
             DataFrame -- Spark DataFrame
         """
-        unstring_schema_dict = {
-            self.config_table: config_df_schema,
-            self.config_set_table: configuration_set_df_schema,
-            self.dataset_table: dataset_df_schema,
-            self.prop_object_table: property_object_df_schema,
-        }
         string_schema_dict = {
             self.config_table: config_schema,
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.prop_object_table: property_object_schema,
         }
+        unstring_schema_dict = {
+            self.config_table: config_df_schema,
+            self.config_set_table: configuration_set_df_schema,
+            self.dataset_table: dataset_df_schema,
+            self.prop_object_table: property_object_df_schema,
+        }
+        md_schema_dict = {
+            self.config_table: config_md_schema,
+            self.config_set_table: configuration_set_df_schema,
+            self.dataset_table: dataset_df_schema,
+            self.prop_object_table: property_object_md_schema,
+        }
         df = self.spark.read.table(table_name)
-        if unstring:
+        print(table_name)
+        print(df.columns)
+        if unstring or read_metadata:
             schema = unstring_schema_dict[table_name]
             schema_type_dict = {f.name: f.dataType for f in schema}
             string_cols = [f.name for f in schema if f.dataType.typeName() == "array"]
             for col in string_cols:
                 string_col_udf = sf.udf(unstring_df_val, schema_type_dict[col])
                 df = df.withColumn(col, string_col_udf(sf.col(col)))
-        else:
+        if read_metadata:
+            schema = md_schema_dict[table_name]
+            config = {
+                "bucket_dir": VAST_BUCKET_DIR,
+                "access_key": self.access_key,
+                "access_secret": self.access_secret,
+                "endpoint": self.endpoint,
+                "metadata_dir": VAST_METADATA_DIR,
+            }
+            df = df.rdd.mapPartitions(
+                lambda partition: read_md_partition(partition, config)
+            ).toDF(schema)
+        if not read_metadata and not unstring:
             schema = string_schema_dict[table_name]
         mismatched_cols = [
             x
@@ -508,7 +571,7 @@ class SparkDataLoader:
                         pa.field("id", pa.string()),
                         pa.field("multiplicity", pa.int32()),
                         pa.field("last_modified", pa.timestamp("us")),
-                        pa.field("$row_id", pa.int32()),
+                        pa.field("$row_id", pa.uint64()),
                     ]
                 )
                 update_table = pa.table(
@@ -663,28 +726,33 @@ class PGDataLoader:
             properties=self.properties,
         )
 
-    def update_co_rows_cs_id(self, co_ids: list[str], cs_id: str):
-        with psycopg.connect(
-            """dbname=colabfit user=%s password=%s host=localhost port=5432"""
-            % (
-                self.user,
-                self.password,
-            )
-        ) as conn:
-            cur = conn.execute(
-                """UPDATE configurations
-                        SET configuration_set_ids = concat(%s::text, \
-                rtrim(ltrim(replace(configuration_set_ids,%s,''), '['),']'), %s::text)
-                """,
-                (
-                    "[",
-                    f", {cs_id}",
-                    f", {cs_id}]",
-                ),
-                # WHERE id = ANY(%s)""",
-                # (cs_id, co_ids),
-            )
-            conn.commit()
+    def write_metadata(self, df):
+        """Should accept a DataFrame with a metadata column,
+        write metadata to files, return DataFrame without metadata column"""
+        pass
+
+    # def update_co_rows_cs_id(self, co_ids: list[str], cs_id: str):
+    #     with psycopg.connect(
+    #         """dbname=colabfit user=%s password=%s host=localhost port=5432"""
+    #         % (
+    #             self.user,
+    #             self.password,
+    #         )
+    #     ) as conn:
+    #         cur = conn.execute(
+    #             """UPDATE configurations
+    #                     SET configuration_set_ids = concat(%s::text, \
+    #             rtrim(ltrim(replace(configuration_set_ids,%s,''), '['),']'), %s::text)
+    #             """,
+    #             (
+    #                 "[",
+    #                 f", {cs_id}",
+    #                 f", {cs_id}]",
+    #             ),
+    #             # WHERE id = ANY(%s)""",
+    #             # (cs_id, co_ids),
+    #         )
+    #         conn.commit()
 
 
 def batched(configs, n):
@@ -790,7 +858,6 @@ class DataManager:
         being consumed all at once.
         """
         chunk_size = self.read_write_batch_size
-        print(self.read_write_batch_size)
         config_chunks = batched(self.configs, chunk_size)
         for chunk in config_chunks:
             yield list(
@@ -835,9 +902,9 @@ class DataManager:
             if len(co_rows) == 0:
                 continue
             else:
-                co_df = loader.spark.createDataFrame(co_rows, schema=config_df_schema)
+                co_df = loader.spark.createDataFrame(co_rows, schema=config_md_schema)
                 po_df = loader.spark.createDataFrame(
-                    po_rows, schema=property_object_df_schema
+                    po_rows, schema=property_object_md_schema
                 )
                 first_count = co_df.count()
                 print("Dropping duplicates from CO dataframe")
@@ -872,6 +939,7 @@ class DataManager:
                     )
                     if len(new_co_ids) > 0:
                         print(f"Writing {len(new_co_ids)} new rows to table")
+                        co_df = loader.write_metadata(co_df)
                         loader.write_table(
                             co_df,
                             loader.config_table,
@@ -879,6 +947,7 @@ class DataManager:
                             check_length_col="positions_00",
                         )
                 else:
+                    co_df = loader.write_metadata(co_df)
                     loader.write_table(
                         co_df,
                         loader.config_table,
@@ -897,6 +966,7 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                     if len(new_po_ids) > 0:
+                        po_df = loader.write_metadata(po_df)
                         loader.write_table(
                             po_df,
                             loader.prop_object_table,
@@ -908,6 +978,7 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                 else:
+                    po_df = loader.write_metadata(po_df)
                     loader.write_table(
                         po_df,
                         loader.prop_object_table,
@@ -1062,8 +1133,111 @@ class DataManager:
         loader.write_table(ds_df, loader.dataset_table)
 
 
+class S3FileManager:
+    def __init__(self, bucket_name, access_id, secret_key, endpoint_url=None):
+        self.bucket_name = bucket_name
+        self.access_id = access_id
+        self.secret_key = secret_key
+        self.endpoint_url = endpoint_url
+        # self.s3_client = None
+
+    # def __getstate__(self):
+    #     # Don't pickle the client
+    #     state = self.__dict__.copy()
+    #     del state["s3_client"]
+    #     return state
+
+    # def __setstate__(self, state):
+    #     # Reconstruct the client on unpickling
+    #     self.__dict__.update(state)
+    #     self.s3_client = None
+
+    def get_client(self):
+        return boto3.client(
+            "s3",
+            use_ssl=False,
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.access_id,
+            aws_secret_access_key=self.secret_key,
+            region_name="fake-region",
+            config=boto3.session.Config(
+                signature_version="s3v4", s3={"addressing_style": "path"}
+            ),
+        )
+
+    def write_file(self, content, file_key):
+        try:
+            client = self.get_client()
+            client.put_object(Bucket=self.bucket_name, Key=file_key, Body=content)
+            # return (f"/vdev/{self.bucket_name}/{file_key}", sys.getsizeof(content))
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    def read_file(self, file_key):
+        try:
+            client = self.get_client()
+            key = file_key.replace(str(Path("/vdev/colabfit-data")) + "/", "")
+            response = client.get_object(Bucket=self.bucket_name, Key=key)
+            return response["Body"].read().decode("utf-8")
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+
 def generate_ds_id():
     # Maybe check to see whether the DS ID already exists?
     ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
     print("Generated new DS ID:", ds_id)
     return ds_id
+
+
+@sf.udf(returnType=StringType())
+def prepend_path_udf(prefix, md_path):
+    try:
+        full_path = Path(prefix) / Path(md_path).relative_to("/")
+        return str(full_path)
+    except ValueError:
+        full_path = Path(prefix) / md_path
+        return str(full_path)
+
+
+def write_md_partition(partition, config):
+    s3_mgr = S3FileManager(
+        bucket_name=config["bucket_dir"],
+        access_id=config["access_key"],
+        secret_key=config["access_secret"],
+        endpoint_url=config["endpoint"],
+    )
+    for row in partition:
+        md_path = Path(config["metadata_dir"]) / row["metadata_path"]
+        if not md_path.exists():
+            s3_mgr.write_file(
+                row["metadata"],
+                str(md_path),
+            )
+    return iter([])
+
+
+def read_md_partition(partition, config):
+    s3_mgr = S3FileManager(
+        bucket_name=config["bucket_dir"],
+        access_id=config["access_key"],
+        secret_key=config["access_secret"],
+        endpoint_url=config["endpoint"],
+    )
+
+    def process_row(row):
+        rowdict = row.asDict()
+        try:
+            # key = row["metadata_path"].replace(
+            #     str(Path("/vdev/colabfit-data")) + "/", ""
+            # )
+            rowdict["metadata"] = s3_mgr.read_file(row["metadata_path"])
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                rowdict["metadata"] = None
+            else:
+                print(f"Error reading {row['metadata_path']}: {str(e)}")
+                rowdict["metadata"] = None
+        return Row(**rowdict)
+
+    return map(process_row, partition)
