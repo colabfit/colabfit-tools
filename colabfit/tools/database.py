@@ -378,7 +378,7 @@ class SparkDataLoader:
                 StructField("id", StringType(), False),
                 StructField("multiplicity", IntegerType(), True),
                 StructField("last_modified", TimestampType(), False),
-                StructField("$row_id", IntegerType(), False),
+                StructField("$row_id", LongType(), False),
             ]
         )
         arrow_schema = pa.schema(
@@ -386,10 +386,10 @@ class SparkDataLoader:
                 pa.field("id", pa.string()),
                 pa.field("multiplicity", pa.int32()),
                 pa.field("last_modified", pa.timestamp("us")),
-                pa.field("$row_id", pa.int32()),
+                pa.field("$row_id", pa.uint64()),
             ]
         )
-        po_db_df = self.read_table(self.config_table)
+        po_db_df = self.read_table(self.prop_object_table)
         existing_rows = po_df.select("id").join(
             po_db_df.select("id"), on="id", how="inner"
         )
@@ -402,7 +402,6 @@ class SparkDataLoader:
             "multiplicity", "multiplicity_update"
         )
         for id_batch in batched_ids:
-            # broadcast_ids = self.spark.sparkContext.broadcast(id_batch)
             id_batch = list(set(id_batch))
             # We only have to use vastdb-sdk here bc we need the '$row_id' column
             with self.session.transaction() as tx:
@@ -428,6 +427,7 @@ class SparkDataLoader:
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
             )
+            print(update_time)
             duplicate_po_df = (
                 duplicate_po_df.join(po_update_df, on="id")
                 .withColumn(
@@ -436,6 +436,7 @@ class SparkDataLoader:
                 )
                 .drop("multiplicity_update")
             )
+            print(duplicate_po_df.count())
             duplicate_po_df = duplicate_po_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
@@ -492,9 +493,9 @@ class SparkDataLoader:
             self.dataset_table: dataset_df_schema,
             self.prop_object_table: property_object_md_schema,
         }
+        if table_name in [self.config_set_table, self.dataset_table]:
+            read_metadata = False
         df = self.spark.read.table(table_name)
-        print(table_name)
-        print(df.columns)
         if unstring or read_metadata:
             schema = unstring_schema_dict[table_name]
             schema_type_dict = {f.name: f.dataType for f in schema}
@@ -548,16 +549,18 @@ class SparkDataLoader:
             table_path = table_name.split(".")
             table = tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
             rec_batches = table.select(
-                predicate=table["dataset_id"] == dataset_id,
+                predicate=(table["dataset_id"] == dataset_id)
+                & (table["multiplicity"] > 0),
                 columns=["id", "multiplicity", "last_modified"],
                 internal_row_id=True,
             )
+
             for rec_batch in rec_batches:
                 df = self.spark.createDataFrame(
                     rec_batch.to_struct_array().to_pandas(), schema=spark_schema
                 )
-                print(f"Zeroed {df.count()} property objects")
                 df = df.withColumn("multiplicity", sf.lit(0))
+                print(f"Zeroed {df.count()} property objects")
                 update_time = dateutil.parser.parse(
                     datetime.datetime.now(tz=datetime.timezone.utc).strftime(
                         "%Y-%m-%dT%H:%M:%SZ"
