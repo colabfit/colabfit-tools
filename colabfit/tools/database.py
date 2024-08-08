@@ -291,7 +291,7 @@ class SparkDataLoader:
                     rec_batch.to_struct_array().to_pandas(), schema=spark_schema
                 )
 
-                print(f"Length of duplicate CO df: {duplicate_co_df.count()}")
+                # print(f"Length of duplicate CO df: {duplicate_co_df.count()}")
             if duplicate_co_df.count() == 0:
                 new_ids.extend(id_batch)
                 continue
@@ -420,14 +420,13 @@ class SparkDataLoader:
                 duplicate_po_df = self.spark.createDataFrame(
                     rec_batch.to_struct_array().to_pandas(), schema=schema
                 )
-                print(f"Length of duplicate PO df: {duplicate_po_df.count()}")
+                # print(f"Length of duplicate PO df: {duplicate_po_df.count()}")
 
             update_time = dateutil.parser.parse(
                 datetime.datetime.now(tz=datetime.timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
             )
-            print(update_time)
             duplicate_po_df = (
                 duplicate_po_df.join(po_update_df, on="id")
                 .withColumn(
@@ -436,7 +435,6 @@ class SparkDataLoader:
                 )
                 .drop("multiplicity_update")
             )
-            print(duplicate_po_df.count())
             duplicate_po_df = duplicate_po_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
@@ -900,8 +898,6 @@ class DataManager:
             unit="batch",
         ):
             co_rows, po_rows = list(zip(*co_po_batch))
-            print(f"\nNum co_rows in batch at load_co_po_to_vastdb: {len(co_rows)}")
-            print(f"\nNum po_rows in batch at load_co_po_to_vastdb: {len(po_rows)}")
             if len(co_rows) == 0:
                 continue
             else:
@@ -925,14 +921,9 @@ class DataManager:
                         .withColumn("multiplicity", sf.col("count"))
                         .drop("count")
                     )
-
-                # po_df = po_df.persist(StorageLevel.MEMORY_AND_DISK)
-                # co_df = co_df.persist(StorageLevel.MEMORY_AND_DISK)
-
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
                 all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
                 if not all_unique_co:
-                    print("Updating old rows")
                     new_co_ids, update_co_ids = (
                         loader.find_existing_co_rows_append_elem(
                             co_df=co_df,
@@ -940,6 +931,7 @@ class DataManager:
                             elems=[self.dataset_id],
                         )
                     )
+                    print(f"Updated {len(update_co_ids)} rows in {loader.config_table}")
                     if len(new_co_ids) > 0:
                         print(f"Writing {len(new_co_ids)} new rows to table")
                         co_df = loader.write_metadata(co_df)

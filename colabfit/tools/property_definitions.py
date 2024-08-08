@@ -34,9 +34,9 @@ potential_energy_pd = {
     },
 }
 
-energy_conjugate_pd = {
-    "property-id": "tag:staff@noreply.colabfit.org,2024-06-01:property/energy-conjugate-with-atomic-forces",
-    "property-name": "energy-conjugate-with-atomic-forces",
+energy_pd = {
+    "property-id": "tag:staff@noreply.colabfit.org,2024-06-01:property/energy",
+    "property-name": "energy",
     "property-title": "Energy from which atomic forces calculations have been derived",
     "property-description": (
         "The calculated energy property used to derive the value of the atomic forces "

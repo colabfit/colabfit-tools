@@ -69,10 +69,10 @@ property_object_df_schema = StructType(
         StructField("software", StringType(), True),
         StructField("method", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
-        StructField("energy_conjugate_with_atomic_forces", DoubleType(), True),
-        StructField("energy_conjugate_with_atomic_forces_unit", StringType(), True),
+        StructField("energy", DoubleType(), True),
+        StructField("energy_unit", StringType(), True),
         # StructField(
-        # "energy_conjugate_with_atomic_forces_property_id", StringType(), True
+        # "energy_property_id", StringType(), True
         # ),
     ]
     + [
@@ -122,9 +122,9 @@ dataset_df_schema = StructType(
         StructField("total_elements_ratios", ArrayType(DoubleType()), True),
         StructField("nperiodic_dimensions", ArrayType(IntegerType()), True),
         StructField("dimension_types", ArrayType(ArrayType(IntegerType())), True),
-        StructField("energy_conjugate_with_atomic_forces_count", IntegerType(), True),
-        StructField("energy_conjugate_with_atomic_forces_mean", DoubleType(), True),
-        StructField("energy_conjugate_with_atomic_forces_variance", DoubleType(), True),
+        StructField("energy_count", IntegerType(), True),
+        StructField("energy_mean", DoubleType(), True),
+        StructField("energy_variance", DoubleType(), True),
         StructField("atomization_energy_count", IntegerType(), True),
         StructField("adsorption_energy_count", IntegerType(), True),
         StructField("formation_energy_count", IntegerType(), True),
