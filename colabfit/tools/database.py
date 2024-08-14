@@ -4,6 +4,7 @@ import multiprocessing
 import os
 import string
 import sys
+from ast import literal_eval
 from functools import partial
 from itertools import islice
 from multiprocessing import Pool
@@ -54,6 +55,7 @@ from colabfit.tools.schema import (
     property_object_schema,
 )
 from colabfit.tools.utilities import (
+    _hash,
     get_spark_field_type,
     spark_schema_to_arrow_schema,
     split_long_string_cols,
@@ -175,9 +177,7 @@ class SparkDataLoader:
         ]
         string_col_udf = sf.udf(stringify_df_val, StringType())
         for col in string_cols:
-            spark_df = spark_df.withColumn(
-                col, string_col_udf(sf.col(col)).cast("string")
-            )
+            spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
         if check_length_col is not None:
             spark_df = split_long_string_cols(
                 spark_df, check_length_col, _MAX_STRING_LEN
@@ -660,6 +660,57 @@ class SparkDataLoader:
                     f"Operand {operand} not implemented in get_pos_cos_filter"
                 )
         return df
+
+    def rehash_property_objects(spark_row: Row):
+        """
+        Rehash property object row after changing values of one or
+        more of the columns corresponding to hash_keys defined below.
+
+        """
+        hash_keys = [
+            "adsorption_energy",
+            "atomic_forces",
+            "atomization_energy",
+            "cauchy_stress",
+            "cauchy_stress_volume_normalized",
+            "chemical_formula_hill",
+            "configuration_id",
+            "dataset_id",
+            "electronic_band_gap",
+            "electronic_band_gap_type",
+            "energy",
+            "formation_energy",
+            "metadata_id",
+            "method",
+            "software",
+        ]
+        spark_dict = spark_row.asDict()
+        if spark_dict["atomic_forces_01"] is None:
+            spark_dict["atomic_forces"] = literal_eval(spark_dict["atomic_forces_00"])
+        else:
+            spark_dict["atomic_forces"] = list(
+                itertools.chain(
+                    *[
+                        literal_eval(spark_dict[f"atomic_forces_{i:02}"])
+                        for i in range(1, 19)
+                    ]
+                )
+            )
+        if spark_dict["cauchy_stress"] is not None:
+            spark_dict["cauchy_stress"] = literal_eval(spark_dict["cauchy_stress"])
+        spark_dict["last_modified"] = dateutil.parser.parse(
+            datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+        )
+        spark_dict["hash"] = _hash(spark_dict, hash_keys, include_keys_in_hash=False)
+        if spark_dict["cauchy_stress"] is not None:
+            spark_dict["cauchy_stress"] = str(spark_dict["cauchy_stress"])
+        id = f'PO_{spark_dict["hash"]}'
+        if len(id) > 28:
+            id = id[:28]
+        spark_dict["id"] = id
+        return Row(**{k: v for k, v in spark_dict.items() if k != "atomic_forces"})
 
     def stop_spark(self):
         self.spark.stop()

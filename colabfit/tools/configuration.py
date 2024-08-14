@@ -101,7 +101,7 @@ class AtomicConfiguration(Atoms):
 
         """
         if co_md_map is None:
-            return None
+            co_md_map = {}
         gathered_fields = {}
         for md_field in co_md_map.keys():
             if "value" in co_md_map[md_field]:
@@ -326,4 +326,4 @@ class AtomicConfiguration(Atoms):
         )
 
     def __hash__(self):
-        return _hash(self.spark_row, self.unique_identifier_kw)
+        return _hash(self.spark_row, sorted(self.unique_identifier_kw), False)

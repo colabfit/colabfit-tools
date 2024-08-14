@@ -48,7 +48,7 @@ energy_info = prop_info("energy", "eV", float)
 force_info = prop_info("forces", "eV/angstrom", list)
 stress_info = prop_info("stress", "eV/angstrom^3", list)
 MAIN_KEY_MAP = {
-    "energy-conjugate-with-atomic-forces": energy_info,
+    "energy": energy_info,
     "atomic-forces": force_info,
     "cauchy-stress": stress_info,
     "atomization-energy": energy_info,
@@ -244,10 +244,27 @@ class Property(dict):
                 If True, converts units to those expected by ColabFit. Default
                 is True
         """
+        # self.unique_identifier_kw = [
+        #     k
+        #     for k in property_object_schema.fieldNames()
+        #     if k not in _hash_ignored_fields
+        # ]
         self.unique_identifier_kw = [
-            k
-            for k in property_object_schema.fieldNames()
-            if k not in _hash_ignored_fields
+            "adsorption_energy",
+            "atomic_forces_00",
+            "atomization_energy",
+            "cauchy_stress",
+            "cauchy_stress_volume_normalized",
+            "chemical_formula_hill",
+            "configuration_id",
+            "dataset_id",
+            "electronic_band_gap",
+            "electronic_band_gap_type",
+            "energy",
+            "formation_energy",
+            "metadata_id",
+            "method",
+            "software",
         ]
         self.instance = instance
         self.definitions = definitions
@@ -263,9 +280,11 @@ class Property(dict):
         if dataset_id is not None:
             self.dataset_id = dataset_id
         self.spark_row = self.to_spark_row()
-        self._hash = hash(self)
+        self._hash = _hash(self.spark_row, self.unique_identifier_kw, False)
         self.spark_row["hash"] = str(self._hash)
         self._id = f"PO_{self._hash}"
+        if len(self._id) > 28:
+            self._id = self._id[:28]
         self.spark_row["id"] = self._id
 
     @property
@@ -573,7 +592,10 @@ class Property(dict):
 
     def __hash__(self):
 
-        return _hash(self.spark_row, self.unique_identifier_kw)
+        return _hash(
+            self.spark_row,
+            sorted(self.unique_identifier_kw),
+        )
 
     def __eq__(self, other):
         """

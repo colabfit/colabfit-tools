@@ -156,11 +156,11 @@ class Dataset:
             "electronic_band_gap",
             "cauchy_stress",
             "formation_energy",
-            "energy_conjugate_with_atomic_forces",
+            "energy",
         ).join(config_df, on="configuration_id", how="inner")
-        print(co_po_df.columns)
-        print(co_po_df.count())
-        print(co_po_df.first())
+        # print(co_po_df.columns)
+        # print(co_po_df.count())
+        # print(co_po_df.first())
         co_po_df = co_po_df.withColumn(
             "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
         )
@@ -221,14 +221,14 @@ class Dataset:
             "electronic_band_gap",
             "cauchy_stress",
             "formation_energy",
-            "energy_conjugate_with_atomic_forces",
+            "energy",
         ]:
             row_dict[f"{prop}_count"] = (
                 prop_df.select(prop).where(f"{prop} is not null").count()
             )
         row_dict["atomic_forces_count"] = row_dict.pop("atomic_forces_00_count")
 
-        prop = "energy_conjugate_with_atomic_forces"
+        prop = "energy"
         row_dict[f"{prop}_variance"] = (
             prop_df.select(prop).where(f"{prop} is not null").agg(sf.variance(prop))
         ).first()[0]
@@ -247,10 +247,6 @@ class Dataset:
                 "other": self.other_links,
             }
         )
-        # row_dict["publication_link"] = self.publication_link
-        # row_dict["data_link"] = self.data_link
-        # if self.other_links is not None:
-        #     row_dict["other_links"] = self.other_links
         row_dict["name"] = self.name
         return row_dict
 

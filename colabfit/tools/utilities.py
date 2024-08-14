@@ -45,11 +45,12 @@ def _format_for_hash(v):
         return v
 
 
-def _hash(row, indentifying_key_list, include_keys_in_hash=False):
-    identifiers = [row[i] for i in indentifying_key_list]
+def _hash(row, identifying_key_list, include_keys_in_hash=False):
+    identifying_key_list = sorted(identifying_key_list)
+    identifiers = [row[i] for i in identifying_key_list]
     # sort_for_hash = ["positions", "atomic_forces"]
     _hash = sha512()
-    for k, v in zip(indentifying_key_list, identifiers):
+    for k, v in zip(identifying_key_list, identifiers):
         if v is None:
             continue
         # elif k in sort_for_hash:
@@ -65,30 +66,6 @@ def _hash(row, indentifying_key_list, include_keys_in_hash=False):
                 _hash.update(bytes(_format_for_hash(k)))
             _hash.update(bytes(_format_for_hash(v)))
     return int(_hash.hexdigest(), 16)
-
-
-# def _hash(row, indentifying_fields_list):
-#     identifiers = [row[i] for i in indentifying_fields_list]
-#     sort_for_hash = ["positions"]
-#     _hash = sha512()
-#     for k, v in zip(indentifying_fields_list, identifiers):
-#         if v is None:
-#             continue
-#         elif k in sort_for_hash:
-#             v = np.array(v)
-#             sorted_v = v[
-#                 np.lexsort(
-#                     (
-#                         v[:, 2],
-#                         v[:, 1],
-#                         v[:, 0],
-#                     )
-#                 )
-#             ]
-#             _hash.update(bytes(_format_for_hash(sorted_v)))
-#         else:
-#             _hash.update(bytes(_format_for_hash(v)))
-#     return int(_hash.hexdigest(), 16)
 
 
 def get_spark_field_type(schema, field_name):
@@ -200,6 +177,13 @@ def _sort_dict(dictionary):
 
 
 def _parse_unstructured_metadata(md_json):
+    if md_json == {}:
+        return {
+            "metadata": None,
+            "metadata_id": None,
+            "metadata_path": None,
+            "metadata_size": None,
+        }
     md = {}
     for key, val in md_json.items():
         if key in ["_id", "hash", "colabfit-id", "last_modified", "software", "method"]:
