@@ -70,7 +70,7 @@ property_object_df_schema = StructType(
         StructField("method", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
         StructField("energy", DoubleType(), True),
-        StructField("energy_unit", StringType(), True),
+        # StructField("energy_unit", StringType(), True),
         # StructField(
         # "energy_property_id", StringType(), True
         # ),
@@ -80,24 +80,24 @@ property_object_df_schema = StructType(
         for i in range(NSITES_COL_SPLITS)
     ]
     + [
-        StructField("atomic_forces_unit", StringType(), True),
+        # StructField("atomic_forces_unit", StringType(), True),
         # StructField("atomic_forces_property_id", StringType(), True),
         StructField("cauchy_stress", ArrayType(ArrayType(DoubleType())), True),
-        StructField("cauchy_stress_unit", StringType(), True),
+        # StructField("cauchy_stress_unit", StringType(), True),
         StructField("cauchy_stress_volume_normalized", BooleanType(), True),
         # StructField("cauchy_stress_property_id", StringType(), True),
         StructField("electronic_band_gap", DoubleType(), True),
-        StructField("electronic_band_gap_unit", StringType(), True),
+        # StructField("electronic_band_gap_unit", StringType(), True),
         StructField("electronic_band_gap_type", StringType(), True),
         # StructField("electronic_band_gap_property_id", StringType(), True),
         StructField("formation_energy", DoubleType(), True),
-        StructField("formation_energy_unit", StringType(), True),
+        # StructField("formation_energy_unit", StringType(), True),
         # StructField("formation_energy_property_id", StringType(), True),
         StructField("adsorption_energy", DoubleType(), True),
-        StructField("adsorption_energy_unit", StringType(), True),
+        # StructField("adsorption_energy_unit", StringType(), True),
         # StructField("adsorption_energy_property_id", StringType(), True),
         StructField("atomization_energy", DoubleType(), True),
-        StructField("atomization_energy_unit", StringType(), True),
+        # StructField("atomization_energy_unit", StringType(), True),
         # StructField("atomization_energy_property_id", StringType(), True),
     ]
 )
@@ -136,10 +136,6 @@ dataset_df_schema = StructType(
         StructField("extended_id", StringType(), True),
         StructField("license", StringType(), True),
         StructField("links", StringType(), True),
-        # StructField("publication_link", StringType(), True),
-        # StructField("data_link", StringType(), True),
-        # StructField("other_links", ArrayType(StringType()), True),
-        # StructField("labels", ArrayType(StringType()), True),
     ]
 )
 

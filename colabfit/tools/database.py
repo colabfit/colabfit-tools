@@ -3,7 +3,6 @@ import itertools
 import multiprocessing
 import os
 import string
-import sys
 from ast import literal_eval
 from functools import partial
 from itertools import islice
@@ -21,7 +20,7 @@ import pyspark.sql.functions as sf
 from botocore.exceptions import ClientError
 from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
-from pyspark.sql import DataFrame, Row, SparkSession
+from pyspark.sql import Row, SparkSession
 from pyspark.sql.types import (
     ArrayType,
     IntegerType,
@@ -31,7 +30,6 @@ from pyspark.sql.types import (
     StructType,
     TimestampType,
 )
-from pyspark.storagelevel import StorageLevel
 from tqdm import tqdm
 from vastdb.session import Session
 
@@ -869,7 +867,7 @@ class DataManager:
         return co_po_rows
 
     def gather_co_po_rows_pool(
-        self, config_chunks: list[list[AtomicConfiguration]], pool: multiprocessing.Pool
+        self, config_chunks: list[list[AtomicConfiguration]], pool
     ):
         """
         Wrapper for _gather_co_po_rows.
