@@ -55,6 +55,7 @@ class ConfigurationSet:
         self.id = f"CS_{self.name}_{self.dataset_id}"
         self._hash = hash(self)
         self.spark_row["id"] = self.id
+        self.spark_row["extended_id"] = f"{self.name}__{self.id}"
         self.spark_row["hash"] = str(self._hash)
 
     def to_spark_row(self, config_df):
@@ -98,6 +99,7 @@ class ConfigurationSet:
         row_dict["nelements"] = len(row_dict["elements"])
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
         row_dict["dataset_id"] = self.dataset_id
+
         return row_dict
 
     def __hash__(self):

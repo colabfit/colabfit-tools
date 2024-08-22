@@ -142,6 +142,8 @@ configuration_set_df_schema = StructType(
         StructField("description", StringType(), True),
         StructField("name", StringType(), True),
         StructField("dataset_id", StringType(), True),
+        StructField("ordered", BooleanType(), True),
+        StructField("extended_id", StringType(), True),
     ]
 )
 
