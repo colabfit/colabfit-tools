@@ -236,7 +236,7 @@ class MongoDatabase(MongoClient):
         self.port = port
         if external_file is not None:
             self.external_file = os.path.abspath(external_file)
-    else: 
+        else: 
             self.external_file = external_file
         self.group_permission_name = group_permission_name
         if self.uri is not None:
