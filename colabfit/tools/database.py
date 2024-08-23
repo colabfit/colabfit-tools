@@ -236,8 +236,8 @@ class MongoDatabase(MongoClient):
         self.port = port
         if external_file is not None:
             self.external_file = os.path.abspath(external_file)
-	else: 
-	    self.external_file = external_file
+    else: 
+            self.external_file = external_file
         self.group_permission_name = group_permission_name
         if self.uri is not None:
             super().__init__(self.uri, *args, **kwargs)
@@ -2415,7 +2415,7 @@ class MongoDatabase(MongoClient):
         resync=False,
         verbose=False,
         overloaded_ds_id=None,
-	fork=False,
+        fork=False,
     ):
         """
         Inserts a dataset into the database.
@@ -2514,7 +2514,6 @@ class MongoDatabase(MongoClient):
                 ds_hash_r.update(str(ci).encode("utf-8"))
         for pi in sorted(do_hashes):
             ds_hash_r.update(str(pi).encode("utf-8"))
-		
         ds_hash = int(ds_hash_r.hexdigest(), 16)
         # Check for duplicates
         old_ds = None
@@ -2590,9 +2589,9 @@ class MongoDatabase(MongoClient):
             upsert=True,
             hint="hash",
         )
-	# update DO relationships to add DS to group
-	#bulk_write update DO
-	# or do in batches aggregation pipeline ->if relationship list doesn't have dataset key, add dataset key, if it does and is different ds_id pass
+    # update DO relationships to add DS to group
+    #bulk_write update DO
+    # or do in batches aggregation pipeline ->if relationship list doesn't have dataset key, add dataset key, if it does and is different ds_id pass
         # Don't need below anymore since it's assumed that relationship already exists
         self.update_do_relationships(do_hashes, ds_id)
         return ds_id
@@ -2680,7 +2679,6 @@ class MongoDatabase(MongoClient):
             self.data_objects.delete_many({'relationships.dataset':ds_id,'relationships':{'$size':1}})
             self.configurations.delete_many({'relationships.dataset':ds_id,'relationships':{'$size':1}})
             self.property_instances.delete_many({'relationships.dataset':ds_id,'relationships':{'$size':1}})
-    	
     # TODO: Handle properties somewhere->should we allow for only properties to be update?
     # TODO: Allow for metadata updating
     def update_dataset(
