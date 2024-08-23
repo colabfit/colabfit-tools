@@ -161,14 +161,16 @@ class SparkDataLoader:
         table_name: str,
         ids_filter: list[str] = None,
         check_length_col: str = None,
+        check_unique: bool = True,
     ):
         """Include self.table_prefix in the table name when passed to this function"""
 
         if ids_filter is not None:
             spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
-        all_unique = self.check_unique_ids(table_name, spark_df)
-        if not all_unique:
-            raise ValueError("Duplicate IDs found in table. Not writing.")
+        if check_unique:
+            all_unique = self.check_unique_ids(table_name, spark_df)
+            if not all_unique:
+                raise ValueError("Duplicate IDs found in table. Not writing.")
         table_split = table_name.split(".")
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
@@ -989,6 +991,7 @@ class DataManager:
                             loader.config_table,
                             ids_filter=new_co_ids,
                             check_length_col="positions_00",
+                            check_unique=False,
                         )
                 else:
                     co_df = loader.write_metadata(co_df)
@@ -996,6 +999,7 @@ class DataManager:
                         co_df,
                         loader.config_table,
                         check_length_col="positions_00",
+                        check_unique=False,
                     )
                     print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
 
@@ -1016,6 +1020,7 @@ class DataManager:
                             loader.prop_object_table,
                             ids_filter=new_po_ids,
                             check_length_col="atomic_forces_00",
+                            check_unique=False,
                         )
                     print(
                         f"Inserted {len(new_po_ids)} rows into "
@@ -1027,6 +1032,7 @@ class DataManager:
                         po_df,
                         loader.prop_object_table,
                         check_length_col="atomic_forces_00",
+                        check_unique=False,
                     )
                     print(
                         f"Inserted {len(po_rows)} rows into {loader.prop_object_table}"
