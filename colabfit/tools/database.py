@@ -62,7 +62,7 @@ from colabfit.tools.utilities import (
 )
 
 VAST_BUCKET_DIR = "colabfit-data"
-VAST_METADATA_DIR = "gpw_METADATA"
+VAST_METADATA_DIR = "MD"
 NSITES_COL_SPLITS = 20
 _CONFIGS_COLLECTION = "gpw_test_configs"
 _CONFIGSETS_COLLECTION = "gpw_test_config_sets"
@@ -130,9 +130,10 @@ class SparkDataLoader:
             ids = [ids]
         table_split = table_name.split(".")
         with self.session.transaction() as tx:
-            table = (
-                tx.bucket(table_split[1]).schema(table_split[2]).table(table_split[3])
-            )
+            bucket_name = table_split[1].replace("`", "")
+            schema_name = table_split[2].replace("`", "")
+            table_name = table_split[3]
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
             rec_batch = table.select(
                 predicate=table["id"].isin(ids), internal_row_id=True
             )
@@ -188,16 +189,20 @@ class SparkDataLoader:
         if not self.spark.catalog.tableExists(table_name):
             print(f"Creating table {table_name}")
             with self.session.transaction() as tx:
-                schema = tx.bucket(table_split[1]).schema(table_split[2])
-                schema.create_table(table_split[3], arrow_schema)
+                bucket_name = table_split[1].replace("`", "")
+                schema_name = table_split[2].replace("`", "")
+                table_name = table_split[3]
+                schema = tx.bucket(bucket_name).schema(schema_name)
+                schema.create_table(table_name, arrow_schema)
         arrow_rec_batch = pa.table(
             [pa.array(col) for col in zip(*spark_df.collect())],
             schema=arrow_schema,
         ).to_batches()
         with self.session.transaction() as tx:
-            table = (
-                tx.bucket(table_split[1]).schema(table_split[2]).table(table_split[3])
-            )
+            bucket_name = table_split[1].replace("`", "")
+            schema_name = table_split[2].replace("`", "")
+            table_name = table_split[3]
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
             for rec_batch in arrow_rec_batch:
                 table.insert(rec_batch)
         # spark_df.write.mode("append").saveAsTable(table_name)
@@ -217,10 +222,12 @@ class SparkDataLoader:
             "endpoint": self.endpoint,
             "metadata_dir": VAST_METADATA_DIR,
         }
-        df.rdd.mapPartitions(
+        beg = time()
+        distinct_metadata = df.select("metadata", "metadata_path").distinct()
+        distinct_metadata.foreachPartition(
             lambda partition: write_md_partition(partition, config)
-        ).count()
-
+        )
+        print(f"Time to write metadata: {time() - beg}")
         df = df.drop("metadata")
         file_base = f"/vdev/{VAST_BUCKET_DIR}/{VAST_METADATA_DIR}/"
         df = df.withColumn(
@@ -272,14 +279,17 @@ class SparkDataLoader:
         batched_ids = batched(ids, 10000)
         new_ids = []
         existing_ids = []
+        table_split = self.config_table.split(".")
+        bucket_name = table_split[1].replace("`", "")
+        schema_name = table_split[2].replace("`", "")
+        table_name = table_split[3]
         for id_batch in batched_ids:
             id_batch = list(set(id_batch))
             # We only have to use vastdb-sdk here bc we need the '$row_id' column
             with self.session.transaction() as tx:
-                table_path = self.config_table.split(".")
-                table = (
-                    tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
-                )
+
+                table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
+
                 rec_batch = table.select(
                     predicate=table["id"].isin(id_batch),
                     columns=update_cols + ["id"],
@@ -357,9 +367,8 @@ class SparkDataLoader:
                 # schema=arrow_schema,
             )
             with self.session.transaction() as tx:
-                table = (
-                    tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
-                )
+
+                table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
                 table.update(
                     rows=update_table,
                     columns=update_cols,
@@ -401,16 +410,18 @@ class SparkDataLoader:
         po_update_df = po_df.select("id", "multiplicity").withColumnRenamed(
             "multiplicity", "multiplicity_update"
         )
+        table_name = self.prop_object_table
+        # Dev string would be 'ndb.colabfit.dev.[table name]'
+        table_split = table_name.split(".")
+        bucket_name = table_split[1].replace("`", "")
+        schema_name = table_split[2].replace("`", "")
+        table_name = table_split[3]
         for id_batch in batched_ids:
             id_batch = list(set(id_batch))
             # We only have to use vastdb-sdk here bc we need the '$row_id' column
             with self.session.transaction() as tx:
-                table_name = self.prop_object_table
-                # Dev string would be 'ndb.colabfit.dev.[table name]'
-                table_path = table_name.split(".")
-                table = (
-                    tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
-                )
+
+                table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
                 rec_batch = table.select(
                     predicate=table["id"].isin(id_batch),
                     columns=columns,
@@ -447,9 +458,7 @@ class SparkDataLoader:
                 schema=arrow_schema,
             )
             with self.session.transaction() as tx:
-                table = (
-                    tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
-                )
+                table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
                 table.update(
                     rows=update_table, columns=["multiplicity", "last_modified"]
                 )
@@ -544,8 +553,12 @@ class SparkDataLoader:
         )
         with self.session.transaction() as tx:
             table_name = self.prop_object_table
-            table_path = table_name.split(".")
-            table = tx.bucket(table_path[1]).schema(table_path[2]).table(table_path[3])
+            table_split = table_name.split(".")
+            bucket_name = table_split[1].replace("`", "")
+            schema_name = table_split[2].replace("`", "")
+            table_name = table_split[3]
+
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
             rec_batches = table.select(
                 predicate=(table["dataset_id"] == dataset_id)
                 & (table["multiplicity"] > 0),
@@ -922,20 +935,24 @@ class DataManager:
                 )
             )
 
-    def load_co_po_to_vastdb(self, loader):
+    def load_co_po_to_vastdb(self, loader, batching_ingest=False):
         if loader.spark.catalog.tableExists(loader.prop_object_table):
             print("loader.prop_object_table exists")
-            pos_with_mult = loader.read_table(loader.prop_object_table)
-            pos_with_mult = pos_with_mult.filter(
-                sf.col("dataset_id") == self.dataset_id
-            )
-            pos_with_mult = pos_with_mult.filter(sf.col("multiplicity") > 0).limit(1)
-            if pos_with_mult.count() > 0:
-                raise ValueError(
-                    f"POs for dataset with ID {self.dataset_id} already exist in "
-                    "database with multiplicity > 0.\nTo continue, set multiplicities "
-                    f'to 0 with loader.zero_multiplicity("{self.dataset_id}")'
+            if batching_ingest is False:
+                pos_with_mult = loader.read_table(loader.prop_object_table)
+                pos_with_mult = pos_with_mult.filter(
+                    sf.col("dataset_id") == self.dataset_id
                 )
+                pos_with_mult = pos_with_mult.filter(sf.col("multiplicity") > 0).limit(
+                    1
+                )
+                if pos_with_mult.count() > 0:
+                    raise ValueError(
+                        f"POs for dataset with ID {self.dataset_id} already exist in "
+                        "database with multiplicity > 0.\nTo continue, set "
+                        "multiplicities to 0 with "
+                        f'loader.zero_multiplicity("{self.dataset_id}")'
+                    )
         if loader.spark.catalog.tableExists(loader.dataset_table):
             dataset_exists = loader.read_table(loader.dataset_table).filter(
                 sf.col("id") == self.dataset_id
@@ -1004,6 +1021,7 @@ class DataManager:
                     print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
 
                 if not all_unique_po:
+                    print("Sending to find_existing_po_rows_append_elem")
                     new_po_ids, update_po_ids = (
                         loader.find_existing_po_rows_append_elem(
                             po_df=po_df,
@@ -1014,6 +1032,7 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                     if len(new_po_ids) > 0:
+                        print("Remaining POs unique. Writing new rows to table...")
                         po_df = loader.write_metadata(po_df)
                         loader.write_table(
                             po_df,
@@ -1027,7 +1046,9 @@ class DataManager:
                         f"{loader.prop_object_table}"
                     )
                 else:
+                    print("All POs unique: writing to table...")
                     po_df = loader.write_metadata(po_df)
+                    print("finished writing metadata")
                     loader.write_table(
                         po_df,
                         loader.prop_object_table,
