@@ -84,6 +84,7 @@ class Dataset:
         labels: list[str] = None,
         configuration_set_ids: list[str] = [],
         data_license: str = "CC-BY-ND-4.0",
+        publication_year: str = None,
     ):
         for auth in authors:
             if not "".join(auth.split(" ")[-1].replace("-", "")).isalpha():
@@ -100,6 +101,7 @@ class Dataset:
         self.description = description
         self.data_license = data_license
         self.dataset_id = dataset_id
+        self.publication_year = publication_year
         self.configuration_set_ids = configuration_set_ids
         if self.configuration_set_ids is None:
             self.configuration_set_ids = []
@@ -248,6 +250,8 @@ class Dataset:
             }
         )
         row_dict["name"] = self.name
+        row_dict["publication_year"] = self.publication_year
+
         return row_dict
 
     # @staticmethod

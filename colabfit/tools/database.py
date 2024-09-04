@@ -1163,6 +1163,7 @@ class DataManager:
         data_link: str,
         description: str,
         other_links: list[str] = None,
+        publication_year: str = None,
         # dataset_id: str = None,
         labels: list[str] = None,
         data_license: str = "CC-BY-ND-4.0",
@@ -1199,6 +1200,7 @@ class DataManager:
             labels=labels,
             data_license=data_license,
             configuration_set_ids=cs_ids,
+            publication_year=publication_year,
         )
         ds_df = loader.spark.createDataFrame([ds.spark_row], schema=dataset_df_schema)
         loader.write_table(ds_df, loader.dataset_table)
