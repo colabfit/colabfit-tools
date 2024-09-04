@@ -120,6 +120,8 @@ dataset_df_schema = StructType(
         StructField("extended_id", StringType(), True),
         StructField("license", StringType(), True),
         StructField("links", StringType(), True),
+        StructField("publication_year", StringType(), True),
+        StructField("doi", StringType(), True),
         # StructField("labels", ArrayType(StringType()), True),
     ]
 )
