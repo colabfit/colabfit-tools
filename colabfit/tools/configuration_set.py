@@ -80,21 +80,34 @@ class ConfigurationSet:
             sf.collect_set("dimension_types")
         ).collect()[0][0]
         atomic_ratios_df = (
-            config_df.select("atomic_numbers")
-            .withColumn("exploded_atom", sf.explode("atomic_numbers"))
-            .groupBy(sf.col("exploded_atom").alias("atomic_number"))
-            .count()
-            .withColumn("ratio", sf.col("count") / row_dict["nsites"])
-            .select("ratio", "atomic_number")
+            config_df.select("atomic_numbers", "multiplicity")
             .withColumn(
+                "repeated_numbers",
+                sf.expr(
+                    "transform(atomic_numbers, x -> array_repeat(x, multiplicity))"
+                ),
+            )
+            .withColumn("single_element", sf.explode(sf.flatten("repeated_numbers")))
+        )
+        total_elements = atomic_ratios_df.count()
+        print(total_elements, row_dict["nsites"])
+        assert total_elements == row_dict["nsites"]
+        atomic_ratios_df = atomic_ratios_df.groupBy("single_element").count()
+        atomic_ratios_df = atomic_ratios_df.withColumn(
+            "ratio", sf.col("count") / total_elements
+        )
+        atomic_ratios_coll = (
+            atomic_ratios_df.withColumn(
                 "element",
-                sf.udf(lambda x: ELEMENT_MAP[x], StringType())(sf.col("atomic_number")),
+                sf.udf(lambda x: ELEMENT_MAP[x], StringType())(
+                    sf.col("single_element")
+                ),
             )
             .select("element", "ratio")
             .collect()
         )
         row_dict["total_elements_ratios"] = [
-            x[1] for x in sorted(atomic_ratios_df, key=lambda x: x["element"])
+            x[1] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
         ]
         row_dict["nelements"] = len(row_dict["elements"])
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]

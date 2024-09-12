@@ -350,7 +350,6 @@ def split_long_string_cols(df, column_name: str, max_string_length: int):
     :param max_string_length: Maximum length for each split string
     :return: DataFrame with the long string split across multiple columns
     """
-    print(f"Column split: {column_name}")
     overflow_columns = [
         f"{'_'.join(column_name.split('_')[:-1])}_{i + 1:02}" for i in range(19)
     ]
@@ -360,6 +359,7 @@ def split_long_string_cols(df, column_name: str, max_string_length: int):
         for col in overflow_columns:
             df = df.withColumn(col, sf.lit("[]").cast(StringType()))
         return df
+    print(f"Column split: {column_name}")
     all_columns = [column_name] + overflow_columns
     tmp_columns = [f"{col_name}_tmp" for col_name in all_columns]
     df = df.withColumn("total_length", sf.length(sf.col(column_name)))

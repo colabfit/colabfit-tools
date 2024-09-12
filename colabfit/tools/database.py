@@ -1130,10 +1130,8 @@ class DataManager:
                 config_df=config_set_query,
                 dataset_id=self.dataset_id,
             )
-            co_ids = [
-                x["id"] for x in config_set_query.select("id").distinct().collect()
-            ]
-            print(f"Num config ids in config set: {len(co_ids)}")
+            co_ids = [x["id"] for x in config_set_query.select("id").distinct()]
+            print(f"Num config ids in config set: {co_ids.count()}")
 
             loader.find_existing_co_rows_append_elem(
                 co_df=config_set_query,

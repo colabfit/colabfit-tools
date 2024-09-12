@@ -102,7 +102,7 @@ class Dataset:
         self.description = description
         self.data_license = data_license
         self.dataset_id = dataset_id
-        self.doi = doi,
+        self.doi = doi
         self.publication_year = publication_year
         self.configuration_set_ids = configuration_set_ids
         if self.configuration_set_ids is None:
