@@ -3,7 +3,6 @@ import os
 import sys
 from ast import literal_eval
 from hashlib import sha512
-from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
@@ -15,9 +14,9 @@ from pyspark.sql.types import (
     IntegerType,
     LongType,
     StringType,
+    StructField,
     StructType,
     TimestampType,
-    StructField,
 )
 
 
@@ -144,36 +143,6 @@ def _sort_dict(dictionary):
     keys = list(dictionary.keys())
     keys.sort()
     return {k: dictionary[k] for k in keys}
-
-
-# def _parse_unstructured_metadata(md_json):
-#     md = {}
-#     for key, val in md_json.items():
-#         if key in ["_id", "hash", "colabfit-id", "last_modified", "software", "method"]:
-#             continue
-#         if isinstance(val, dict):
-#             if "source-value" in val.keys():
-#                 val = val["source-value"]
-#         if isinstance(val, list) and len(val) == 1:
-#             val = val[0]
-#         if isinstance(val, dict):
-#             val = _sort_dict(val)
-#         if isinstance(val, bytes):
-#             val = val.decode("utf-8")
-#         md[key] = val
-#     md = _sort_dict(md)
-#     md_hash = str(_hash(md, md.keys(), include_keys_in_hash=True))
-#     md["hash"] = md_hash
-#     md["id"] = f"MD_{md_hash[:25]}"
-#     split = md["id"][-4:]
-#     filename = f"{md['id']}.json"
-#     full_path = str(Path(BUCKET_DIR) / "MD" / split / filename)
-#     md_str = json.dumps(md)
-#     return {
-#         "metadata_id": md["id"] + "COLABFIT_MD_SPLIT" + md_str,
-#         "metadata_path": full_path,
-#         "metadata_size": sys.getsizeof(json.dumps(md)),
-#     }
 
 
 def _parse_unstructured_metadata(md_json):
@@ -381,14 +350,16 @@ def split_long_string_cols(df, column_name: str, max_string_length: int):
     :param max_string_length: Maximum length for each split string
     :return: DataFrame with the long string split across multiple columns
     """
-    if get_max_string_length(df, column_name) <= max_string_length:
-        return df
     print(f"Column split: {column_name}")
     overflow_columns = [
         f"{'_'.join(column_name.split('_')[:-1])}_{i + 1:02}" for i in range(19)
     ]
     if not all([col in df.columns for col in overflow_columns]):
         raise ValueError("Overflow columns not found in target DataFrame schema")
+    if get_max_string_length(df, column_name) <= max_string_length:
+        for col in overflow_columns:
+            df = df.withColumn(col, sf.lit("[]").cast(StringType()))
+        return df
     all_columns = [column_name] + overflow_columns
     tmp_columns = [f"{col_name}_tmp" for col_name in all_columns]
     df = df.withColumn("total_length", sf.length(sf.col(column_name)))
@@ -400,7 +371,7 @@ def split_long_string_cols(df, column_name: str, max_string_length: int):
                 sf.col(column_name), (i * max_string_length + 1), max_string_length
             ),
         )
-        .otherwise(sf.lit(None))
+        .otherwise(sf.lit("[]"))
         .alias(col_name)
         for i, col_name in enumerate(tmp_columns)
     ]

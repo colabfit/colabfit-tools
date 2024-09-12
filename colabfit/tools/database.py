@@ -1,6 +1,5 @@
 import datetime
 import itertools
-import multiprocessing
 import os
 import string
 from ast import literal_eval
@@ -140,8 +139,6 @@ class SparkDataLoader:
             for batch in rec_batch:
                 table.delete(rows=batch)
 
-    # def write_metadata()
-
     def check_unique_ids(self, table_name: str, df):
         if not self.spark.catalog.tableExists(table_name):
             print(f"Table {table_name} does not yet exist.")
@@ -205,7 +202,6 @@ class SparkDataLoader:
             table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
             for rec_batch in arrow_rec_batch:
                 table.insert(rec_batch)
-        # spark_df.write.mode("append").saveAsTable(table_name)
 
     def write_metadata(self, df):
         """Writes metadata to files using boto3 for VastDB
@@ -1164,6 +1160,7 @@ class DataManager:
         description: str,
         other_links: list[str] = None,
         publication_year: str = None,
+        doi: str = None,
         # dataset_id: str = None,
         labels: list[str] = None,
         data_license: str = "CC-BY-ND-4.0",
@@ -1198,6 +1195,7 @@ class DataManager:
             other_links=other_links,
             dataset_id=self.dataset_id,
             labels=labels,
+            doi=doi,
             data_license=data_license,
             configuration_set_ids=cs_ids,
             publication_year=publication_year,
@@ -1212,18 +1210,6 @@ class S3FileManager:
         self.access_id = access_id
         self.secret_key = secret_key
         self.endpoint_url = endpoint_url
-        # self.s3_client = None
-
-    # def __getstate__(self):
-    #     # Don't pickle the client
-    #     state = self.__dict__.copy()
-    #     del state["s3_client"]
-    #     return state
-
-    # def __setstate__(self, state):
-    #     # Reconstruct the client on unpickling
-    #     self.__dict__.update(state)
-    #     self.s3_client = None
 
     def get_client(self):
         return boto3.client(
@@ -1301,9 +1287,6 @@ def read_md_partition(partition, config):
     def process_row(row):
         rowdict = row.asDict()
         try:
-            # key = row["metadata_path"].replace(
-            #     str(Path("/vdev/colabfit-data")) + "/", ""
-            # )
             rowdict["metadata"] = s3_mgr.read_file(row["metadata_path"])
         except ClientError as e:
             if e.response["Error"]["Code"] == "404":

@@ -82,6 +82,7 @@ class Dataset:
         other_links: list[str] = None,
         dataset_id: str = None,
         labels: list[str] = None,
+        doi: str = None,
         configuration_set_ids: list[str] = [],
         data_license: str = "CC-BY-ND-4.0",
         publication_year: str = None,
@@ -101,6 +102,7 @@ class Dataset:
         self.description = description
         self.data_license = data_license
         self.dataset_id = dataset_id
+        self.doi = doi,
         self.publication_year = publication_year
         self.configuration_set_ids = configuration_set_ids
         if self.configuration_set_ids is None:
@@ -251,6 +253,7 @@ class Dataset:
         )
         row_dict["name"] = self.name
         row_dict["publication_year"] = self.publication_year
+        row_dict["doi"] = self.doi
 
         return row_dict
 
