@@ -62,10 +62,13 @@ class ConfigurationSet:
         row_dict = _empty_dict_from_schema(configuration_set_schema)
         row_dict["name"] = self.name
         row_dict["description"] = self.description
-        row_dict["nconfigurations"] = config_df.count()
+        row_dict["nconfigurations"] = config_df.select("id").distinct().count()
         row_dict["last_modified"] = dateutil.parser.parse(
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
+        # config_df = config_df.withColumn(
+        #     "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
+        # )
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
         row_dict["elements"] = sorted(
             config_df.withColumn("exploded_elements", sf.explode("elements"))
@@ -80,14 +83,16 @@ class ConfigurationSet:
             sf.collect_set("dimension_types")
         ).collect()[0][0]
         atomic_ratios_df = (
-            config_df.select("atomic_numbers", "multiplicity")
-            .withColumn(
-                "repeated_numbers",
-                sf.expr(
-                    "transform(atomic_numbers, x -> array_repeat(x, multiplicity))"
-                ),
-            )
-            .withColumn("single_element", sf.explode(sf.flatten("repeated_numbers")))
+            config_df.select("atomic_numbers")
+            #     config_df.select("atomic_numbers", "multiplicity")
+            #     .withColumn(
+            #         "repeated_numbers",
+            #         sf.expr(
+            #            "transform(atomic_numbers, x -> array_repeat(x, multiplicity))"
+            #         ),
+            #     )
+            # .withColumn("single_element", sf.explode(sf.flatten("repeated_numbers")))
+            .withColumn("single_element", sf.explode("atomic_numbers"))
         )
         total_elements = atomic_ratios_df.count()
         print(total_elements, row_dict["nsites"])
@@ -99,7 +104,7 @@ class ConfigurationSet:
         atomic_ratios_coll = (
             atomic_ratios_df.withColumn(
                 "element",
-                sf.udf(lambda x: ELEMENT_MAP[x], StringType())(
+                sf.udf(lambda x: ELEMENT_MAP[int(x)], StringType())(
                     sf.col("single_element")
                 ),
             )

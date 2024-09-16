@@ -151,42 +151,44 @@ class Dataset:
             )
         )
         nproperty_objects = prop_df.count()
-        co_po_df = prop_df.select(
-            "configuration_id",
-            "multiplicity",
-            "atomization_energy",
-            "atomic_forces_00",
-            "adsorption_energy",
-            "electronic_band_gap",
-            "cauchy_stress",
-            "formation_energy",
-            "energy",
-        ).join(config_df, on="configuration_id", how="inner")
+        # co_po_df = prop_df.select(
+        #     "configuration_id",
+        #     # "multiplicity",
+        #     "atomization_energy",
+        #     "atomic_forces_00",
+        #     "adsorption_energy",
+        #     "electronic_band_gap",
+        #     "cauchy_stress",
+        #     "formation_energy",
+        #     "energy",
+        # ).join(config_df, on="configuration_id", how="inner")
         # print(co_po_df.columns)
         # print(co_po_df.count())
         # print(co_po_df.first())
-        co_po_df = co_po_df.withColumn(
-            "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
-        )
-        row_dict["nsites"] = co_po_df.agg({"nsites_multiple": "sum"}).first()[0]
+        # co_po_df = co_po_df.withColumn(
+        #     "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
+        # )
+        # row_dict["nsites"] = co_po_df.agg({"nsites_multiple": "sum"}).first()[0]
+        row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
         row_dict["nproperty_objects"] = nproperty_objects
         row_dict["elements"] = sorted(
-            co_po_df.withColumn("exploded_elements", sf.explode("elements"))
+            config_df.withColumn("exploded_elements", sf.explode("elements"))
             .agg(sf.collect_set("exploded_elements").alias("exploded_elements"))
             .select("exploded_elements")
             .take(1)[0][0]
         )
         row_dict["nelements"] = len(row_dict["elements"])
-
         atomic_ratios_df = (
-            co_po_df.select("atomic_numbers", "multiplicity")
-            .withColumn(
-                "repeated_numbers",
-                sf.expr(
-                    "transform(atomic_numbers, x -> array_repeat(x, multiplicity))"
-                ),
-            )
-            .withColumn("single_element", sf.explode(sf.flatten("repeated_numbers")))
+            config_df.select("atomic_numbers")
+            #     co_po_df.select("atomic_numbers", "multiplicity")
+            #     .withColumn(
+            #         "repeated_numbers",
+            #         sf.expr(
+            #            "transform(atomic_numbers, x -> array_repeat(x, multiplicity))"
+            #         ),
+            #     )
+            # .withColumn("single_element", sf.explode(sf.flatten("repeated_numbers")))
+            .withColumn("single_element", sf.explode("atomic_numbers"))
         )
         total_elements = atomic_ratios_df.count()
         print(total_elements, row_dict["nsites"])
@@ -210,11 +212,11 @@ class Dataset:
             x[1] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
         ]
 
-        row_dict["nperiodic_dimensions"] = co_po_df.agg(
+        row_dict["nperiodic_dimensions"] = config_df.agg(
             sf.collect_set("nperiodic_dimensions")
         ).collect()[0][0]
 
-        row_dict["dimension_types"] = co_po_df.agg(
+        row_dict["dimension_types"] = config_df.agg(
             sf.collect_set("dimension_types")
         ).collect()[0][0]
 
@@ -240,7 +242,7 @@ class Dataset:
             prop_df.select(prop).where(f"{prop} is not null").agg(sf.mean(prop))
         ).first()[0]
 
-        row_dict["nconfigurations"] = co_po_df.count()
+        row_dict["nconfigurations"] = config_df.count()
         row_dict["authors"] = self.authors
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license

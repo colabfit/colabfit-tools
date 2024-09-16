@@ -19,6 +19,7 @@ import pyspark.sql.functions as sf
 from botocore.exceptions import ClientError
 from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
+from ibis import _
 from pyspark.sql import Row, SparkSession
 from pyspark.sql.types import (
     ArrayType,
@@ -162,7 +163,13 @@ class SparkDataLoader:
         check_unique: bool = True,
     ):
         """Include self.table_prefix in the table name when passed to this function"""
-
+        string_schema_dict = {
+            self.config_table: config_schema,
+            self.config_set_table: configuration_set_schema,
+            self.dataset_table: dataset_schema,
+            self.prop_object_table: property_object_schema,
+        }
+        table_schema = string_schema_dict[table_name]
         if ids_filter is not None:
             spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
         if check_unique:
@@ -180,7 +187,7 @@ class SparkDataLoader:
             spark_df = split_long_string_cols(
                 spark_df, check_length_col, _MAX_STRING_LEN
             )
-        arrow_schema = spark_schema_to_arrow_schema(spark_df.schema)
+        arrow_schema = spark_schema_to_arrow_schema(table_schema)
         for field in arrow_schema:
             field = field.with_nullable(True)
         if not self.spark.catalog.tableExists(table_name):
@@ -238,6 +245,8 @@ class SparkDataLoader:
         cols: list[str],
         elems: list[str],
     ):
+        print("updating these columns: ", cols)
+        print("with these elements: ", elems)
         if isinstance(cols, str):
             cols = [cols]
         if isinstance(elems, str):
@@ -267,11 +276,12 @@ class SparkDataLoader:
             ]
         )
         total_write_cols = update_cols + ["$row_id"]
-        co_db_df = self.read_table(self.config_table)
-        existing_rows = co_df.select("id").join(
-            co_db_df.select("id"), on="id", how="inner"
-        )
-        ids = [x["id"] for x in existing_rows.select("id").collect()]
+        # co_db_df = self.read_table(self.config_table)
+        # existing_rows = co_df.select("id").join(
+        #     co_db_df.select("id"), on="id", how="inner"
+        # )
+        # ids = [x["id"] for x in existing_rows.select("id").collect()]
+        ids = [x["id"] for x in co_df.select("id").collect()]
         batched_ids = batched(ids, 10000)
         new_ids = []
         existing_ids = []
@@ -327,11 +337,16 @@ class SparkDataLoader:
 
                 else:
                     duplicate_co_df = duplicate_co_df.withColumn(
+                        col, sf.coalesce(sf.col(col), sf.array())
+                    )
+                    duplicate_co_df = duplicate_co_df.withColumn(
                         col,
                         sf.array_distinct(
                             sf.array_union(sf.col(col), sf.array(sf.lit(elem)))
                         ),
                     )
+                    duplicate_co_df.select(col).show(1, False)
+
             existing_ids_batch = [
                 x["id"] for x in duplicate_co_df.select("id").collect()
             ]
@@ -363,7 +378,9 @@ class SparkDataLoader:
                 # schema=arrow_schema,
             )
             with self.session.transaction() as tx:
-
+                print("updating table")
+                print(update_table.column_names)
+                print("update_cols", update_cols)
                 table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
                 table.update(
                     rows=update_table,
@@ -636,6 +653,116 @@ class SparkDataLoader:
         co_po_df = co_df.join(po_df, on="configuration_id", how="inner")
         return co_po_df
 
+    def simple_sdk_query(self, query_table, predicate, schema):
+        table_split = query_table.split(".")
+        bucket_name = table_split[1].replace("`", "")
+        schema_name = table_split[2].replace("`", "")
+        table_name = table_split[3]
+        with self.session.transaction() as tx:
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
+            rec_batch_reader = table.select(predicate=predicate)
+            rec_batch = rec_batch_reader.read_all()
+            if rec_batch.num_rows == 0:
+                raise ValueError(f"No records found for given query {predicate}")
+            spark_df = self.spark.createDataFrame(
+                rec_batch.to_struct_array().to_pandas(), schema=schema
+            )
+        return spark_df
+
+    def dataset_query(
+        self,
+        dataset_id=None,
+        table_name=None,
+    ):
+        if dataset_id is None:
+            raise ValueError("dataset_id must be provided")
+        string_schema_dict = {
+            self.config_table: config_schema,
+            self.config_set_table: configuration_set_schema,
+            self.dataset_table: dataset_schema,
+            self.prop_object_table: property_object_schema,
+        }
+        df_schema = string_schema_dict[table_name]
+        if table_name == self.config_table:
+            predicate = _.dataset_ids.contains(dataset_id)
+        elif (
+            table_name == self.prop_object_table or table_name == self.config_set_table
+        ):
+            predicate = _.dataset_id == dataset_id
+        spark_df = self.simple_sdk_query(table_name, predicate, df_schema)
+        unstring_schema_dict = {
+            self.config_table: config_df_schema,
+            self.config_set_table: configuration_set_df_schema,
+            self.dataset_table: dataset_df_schema,
+            self.prop_object_table: property_object_df_schema,
+        }
+        schema = unstring_schema_dict[table_name]
+        schema_type_dict = {f.name: f.dataType for f in schema}
+        string_cols = [f.name for f in schema if f.dataType.typeName() == "array"]
+        for col in string_cols:
+            string_col_udf = sf.udf(unstring_df_val, schema_type_dict[col])
+            spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
+        return spark_df
+
+    def config_set_query(
+        self,
+        query_table,
+        dataset_id=None,
+        name_match=None,
+        label_match=None,
+        configuration_ids=None,
+    ):
+
+        if dataset_id is None:
+            raise ValueError("dataset_id must be provided")
+        string_schema_dict = {
+            self.config_table: config_schema,
+            self.config_set_table: configuration_set_schema,
+            self.dataset_table: dataset_schema,
+            self.prop_object_table: property_object_schema,
+        }
+        df_schema = string_schema_dict[query_table]
+        if query_table == self.config_table:
+            if name_match is None and label_match is None:
+                predicate = _.dataset_ids.contains(dataset_id)
+            if name_match is not None and label_match is not None:
+                predicate = (
+                    (_.dataset_ids.contains(dataset_id))
+                    & (_.names.contains(name_match))
+                    & (_.labels.contains(label_match))
+                )
+            elif name_match is not None:
+                predicate = (_.dataset_ids.contains(dataset_id)) & (
+                    _.names.contains(name_match)
+                )
+            else:
+                predicate = (_.dataset_ids.contains(dataset_id)) & (
+                    _.labels.contains(label_match)
+                )
+            spark_df = self.simple_sdk_query(query_table, predicate, df_schema)
+            return spark_df
+        elif query_table == self.prop_object_table:
+            if configuration_ids is None:
+                predicate = _.dataset_id == dataset_id
+                spark_df = self.simple_sdk_query(query_table, predicate, df_schema)
+            if configuration_ids is not None and len(configuration_ids) < 10000:
+                predicate = (_.dataset_id == dataset_id) & (
+                    _.configuration_id.isin(configuration_ids)
+                )
+                spark_df = self.simple_sdk_query(query_table, predicate, df_schema)
+            else:
+                config_id_batches = batched(configuration_ids, 10000)
+                spark_df = self.spark.createDataFrame([], schema=df_schema)
+                for batch in config_id_batches:
+                    predicate = (_.dataset_id == dataset_id) & (
+                        _.configuration_id.isin(batch)
+                    )
+                    batch_spark_df = self.simple_sdk_query(
+                        query_table, predicate, df_schema
+                    )
+                    spark_df = spark_df.union(batch_spark_df)
+            return spark_df
+
     def get_filtered_table(
         self,
         df,
@@ -830,7 +957,7 @@ def batched(configs, n):
 class DataManager:
     def __init__(
         self,
-        nprocs: int = 2,
+        nprocs: int = 1,
         configs: list[AtomicConfiguration] = None,
         prop_defs: list[dict] = None,
         prop_map: dict = None,
@@ -1091,14 +1218,15 @@ class DataManager:
         3. Name for configuration set
         4. Description for configuration set
         """
+        dataset_id = self.dataset_id
         config_set_rows = []
-        config_df = loader.read_table(table_name=loader.config_table, unstring=True)
-        config_df = config_df.filter(
-            sf.array_contains(sf.col("dataset_ids"), self.dataset_id)
-        )
+        # config_df = loader.read_table(table_name=loader.config_table, unstring=True)
+        # config_df = config_df.filter(
+        #     sf.array_contains(sf.col("dataset_ids"), self.dataset_id)
+        # )
         # .cache()
-        prop_df = loader.read_table(loader.prop_object_table, unstring=True)
-        prop_df = prop_df.filter(sf.col("dataset_id") == self.dataset_id)
+        # prop_df = loader.read_table(loader.prop_object_table, unstring=True)
+        # prop_df = prop_df.filter(sf.col("dataset_id") == self.dataset_id)
         # .cache()
         for i, (names_match, label_match, cs_name, cs_desc) in tqdm(
             enumerate(name_label_match), desc="Creating Configuration Sets"
@@ -1107,34 +1235,75 @@ class DataManager:
                 f"names match: {names_match}, label: {label_match}, "
                 f"cs_name: {cs_name}, cs_desc: {cs_desc}"
             )
-            if names_match:
-                config_set_query = config_df.withColumn(
-                    "names_exploded", sf.explode(sf.col("names"))
-                ).filter(sf.col("names_exploded").rlike(names_match))
+            if names_match and not label_match:
+                # config_set_query = config_df.withColumn(
+                #     "names_exploded", sf.explode(sf.col("names"))
+                # ).filter(sf.col("names_exploded").rlike(names_match))
+                config_set_query_df = loader.config_set_query(
+                    query_table=loader.config_table,
+                    dataset_id=dataset_id,
+                    name_match=names_match,
+                )
             # Currently an AND operation on labels: labels col contains x AND y
-            if label_match is not None:
-                if isinstance(label_match, str):
-                    label_match = [label_match]
-                for label in label_match:
-                    config_set_query = config_set_query.filter(
-                        sf.array_contains(sf.col("labels"), label)
-                    )
-            prop_df_cs = prop_df.select(
-                "configuration_id", "multiplicity"
-            ).withColumnRenamed("configuration_id", "id")
-            config_set_query = config_set_query.join(prop_df_cs, on="id", how="inner")
+            if label_match and not names_match:
+                # if isinstance(label_match, str):
+                #     label_match = [label_match]
+                # for label in label_match:
+                #     config_set_query = config_set_query.filter(
+                #         sf.array_contains(sf.col("labels"), label)
+                #     )
+                config_set_query_df = loader.config_set_query(
+                    query_table=loader.config_table,
+                    dataset_id=dataset_id,
+                    label_match=label_match,
+                )
+            if names_match and label_match:
+                config_set_query_df = loader.config_set_query(
+                    query_table=loader.config_table,
+                    dataset_id=dataset_id,
+                    name_match=names_match,
+                    label_match=label_match,
+                )
+            # co_ids = [
+            #     x["id"] for x in config_set_query_df.select("id").distinct().collect()
+            # ]
+            # prop_df_cs = loader.config_set_query(
+            #     query_table=loader.prop_object_table,
+            #     dataset_id=dataset_id,
+            #     configuration_ids=co_ids,
+            # )
+            # prop_df_cs = prop_df_cs.select(
+            #     "configuration_id", "multiplicity"
+            # ).withColumnRenamed("configuration_id", "id")
+            # config_set_query_df = config_set_query_df.join(
+            #     prop_df_cs, on="id", how="inner"
+            # )
+            string_cols = [
+                "elements",
+            ]
+            unstring_col_udf = sf.udf(unstring_df_val, ArrayType(StringType()))
+            for col in string_cols:
+                config_set_query_df = config_set_query_df.withColumn(
+                    col, unstring_col_udf(sf.col(col))
+                )
+            unstring_col_udf = sf.udf(unstring_df_val, ArrayType(IntegerType()))
+            int_cols = [
+                "atomic_numbers",
+                "dimension_types",
+            ]
+            for col in int_cols:
+                config_set_query_df = config_set_query_df.withColumn(
+                    col, unstring_col_udf(sf.col(col))
+                )
             t = time()
             config_set = ConfigurationSet(
                 name=cs_name,
                 description=cs_desc,
-                config_df=config_set_query,
+                config_df=config_set_query_df,
                 dataset_id=self.dataset_id,
             )
-            co_ids = [x["id"] for x in config_set_query.select("id").distinct()]
-            print(f"Num config ids in config set: {co_ids.count()}")
-
             loader.find_existing_co_rows_append_elem(
-                co_df=config_set_query,
+                co_df=config_set_query_df,
                 cols=["configuration_set_ids"],
                 elems=config_set.spark_row["id"],
             )
@@ -1165,23 +1334,36 @@ class DataManager:
     ):
         if loader.spark.catalog.tableExists(loader.config_set_table):
             cs_ids = (
-                loader.read_table(loader.config_set_table)
-                .filter(sf.col("dataset_id") == self.dataset_id)
+                loader.dataset_query(
+                    dataset_id=self.dataset_id, table_name=loader.config_set_table
+                )
                 .select("id")
                 .collect()
             )
+            # cs_ids = (
+            #     loader.read_table(loader.config_set_table)
+            #     .filter(sf.col("dataset_id") == self.dataset_id)
+            #     .select("id")
+            #     .collect()
+            # )
             if len(cs_ids) == 0:
                 cs_ids = None
             else:
                 cs_ids = [x["id"] for x in cs_ids]
         else:
             cs_ids = None
-        config_df = loader.read_table(loader.config_table, unstring=True)
-        config_df = config_df.filter(
-            sf.array_contains(sf.col("dataset_ids"), self.dataset_id)
+        config_df = loader.dataset_query(
+            dataset_id=self.dataset_id, table_name=loader.config_table
         )
-        prop_df = loader.read_table(loader.prop_object_table, unstring=True)
-        prop_df = prop_df.filter(sf.col("dataset_id") == self.dataset_id)
+        # config_df = loader.read_table(loader.config_table, unstring=True)
+        # config_df = config_df.filter(
+        #     sf.array_contains(sf.col("dataset_ids"), self.dataset_id)
+        # )
+        prop_df = loader.dataset_query(
+            dataset_id=self.dataset_id, table_name=loader.prop_object_table
+        )
+        # prop_df = loader.read_table(loader.prop_object_table, unstring=True)
+        # prop_df = prop_df.filter(sf.col("dataset_id") == self.dataset_id)
         ds = Dataset(
             name=name,
             authors=authors,
