@@ -663,7 +663,8 @@ class SparkDataLoader:
             rec_batch_reader = table.select(predicate=predicate)
             rec_batch = rec_batch_reader.read_all()
             if rec_batch.num_rows == 0:
-                raise ValueError(f"No records found for given query {predicate}")
+                print(f"No records found for given query {predicate}")
+                return self.spark.createDataFrame([], schema=schema)
             spark_df = self.spark.createDataFrame(
                 rec_batch.to_struct_array().to_pandas(), schema=schema
             )

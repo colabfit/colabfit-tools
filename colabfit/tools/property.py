@@ -81,7 +81,6 @@ _hash_ignored_fields = [
 def energy_to_schema(prop_name, en_prop: dict):
     new_name = prop_name.replace("-", "_")
     en_dict = {
-        # f"{new_name}_property_id": en_prop["property-id"],
         f"{new_name}": en_prop["energy"]["source-value"],
         f"{new_name}_unit": en_prop["energy"]["source-unit"],
         f"{new_name}_per_atom": en_prop["per-atom"]["source-value"],
@@ -98,7 +97,6 @@ def energy_to_schema(prop_name, en_prop: dict):
 
 def atomic_forces_to_schema(af_prop: dict):
     af_dict = {
-        # "atomic_forces_property_id": af_prop["property-id"],
         "atomic_forces_00": af_prop["forces"]["source-value"],
         "atomic_forces_unit": af_prop["forces"]["source-unit"],
     }
@@ -107,7 +105,6 @@ def atomic_forces_to_schema(af_prop: dict):
 
 def cauchy_stress_to_schema(cs_prop: dict):
     cs_dict = {
-        # "cauchy_stress_property_id": cs_prop["property-id"],
         "cauchy_stress": cs_prop["stress"]["source-value"],
         "cauchy_stress_unit": cs_prop["stress"]["source-unit"],
         "cauchy_stress_volume_normalized": cs_prop["volume-normalized"]["source-value"],
@@ -117,10 +114,9 @@ def cauchy_stress_to_schema(cs_prop: dict):
 
 def band_gap_to_schema(bg_prop: dict):
     bg_dict = {
-        # "band_gap_property_id": bg_prop["property-id"],
         "band_gap": bg_prop["energy"]["source-value"],
         "band_gap_unit": bg_prop["energy"]["source-unit"],
-        "band_gap_type": bg_prop["band-gap"].get("type", {"source-value": "direct"})[
+        "band_gap_type": bg_prop.get("type", {"source-value": "direct"})[
             "source-value"
         ],
     }
@@ -131,7 +127,7 @@ prop_to_row_mapper = {
     "energy": energy_to_schema,
     "atomic-forces": atomic_forces_to_schema,
     "cauchy-stress": cauchy_stress_to_schema,
-    "electronic-band-gap": band_gap_to_schema,
+    "band-gap": band_gap_to_schema,
 }
 
 
