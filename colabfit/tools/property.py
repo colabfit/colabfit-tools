@@ -79,6 +79,8 @@ _hash_ignored_fields = [
 
 
 def energy_to_schema(prop_name, en_prop: dict):
+    if en_prop.get("energy") is None:
+        return {}
     new_name = prop_name.replace("-", "_")
     en_dict = {
         f"{new_name}": en_prop["energy"]["source-value"],
@@ -96,6 +98,8 @@ def energy_to_schema(prop_name, en_prop: dict):
 
 
 def atomic_forces_to_schema(af_prop: dict):
+    if af_prop.get("forces") is None:
+        return {}
     af_dict = {
         "atomic_forces_00": af_prop["forces"]["source-value"],
         "atomic_forces_unit": af_prop["forces"]["source-unit"],
@@ -104,6 +108,8 @@ def atomic_forces_to_schema(af_prop: dict):
 
 
 def cauchy_stress_to_schema(cs_prop: dict):
+    if cs_prop.get("stress") is None:
+        return {}
     cs_dict = {
         "cauchy_stress": cs_prop["stress"]["source-value"],
         "cauchy_stress_unit": cs_prop["stress"]["source-unit"],
@@ -113,10 +119,12 @@ def cauchy_stress_to_schema(cs_prop: dict):
 
 
 def band_gap_to_schema(bg_prop: dict):
+    if bg_prop.get("energy") is None:
+        return {}
     bg_dict = {
-        "band_gap": bg_prop["energy"]["source-value"],
-        "band_gap_unit": bg_prop["energy"]["source-unit"],
-        "band_gap_type": bg_prop.get("type", {"source-value": "direct"})[
+        "electronic_band_gap": bg_prop["energy"]["source-value"],
+        "electronic_band_gap_unit": bg_prop["energy"]["source-unit"],
+        "electronic_band_gap_type": bg_prop.get("type", {"source-value": "direct"})[
             "source-value"
         ],
     }
@@ -439,8 +447,15 @@ class Property(dict):
             elif instance is None:
                 raise PropertyParsingError(f"Property {pname} not found in definitions")
             else:
+                p_info = MAIN_KEY_MAP.get(pname, None)
+                if p_info is None:
+                    print(f"property {pname} not found in MAIN_KEY_MAP")
+                    continue
                 instance = instance.copy()
                 for pmap_i, pmap in enumerate(pmap_list):
+                    print(pmap)
+                    print(p_info.key)
+
                     for key, val in pmap.items():
                         if "value" in val:
                             # Default value provided
@@ -467,6 +482,10 @@ class Property(dict):
 
                         if (val["units"] != "None") and (val["units"] is not None):
                             instance[key]["source-unit"] = val["units"]
+                if p_info.key not in instance:
+                    print(f"Property {p_info.key} not found in {pname}")
+                    pdef_dict.pop(pname)
+                    continue
                 # hack to get around OpenKIM requiring the property-name be a dict
                 prop_name_tmp = pdef_dict[pname].pop("property-name")
 
@@ -526,6 +545,9 @@ class Property(dict):
             if prop_name not in MAIN_KEY_MAP.keys():
                 continue
             p_info = MAIN_KEY_MAP[prop_name]
+            if p_info.key not in prop_dict:
+                print(f"Property {p_info.key} not found in {prop_name}")
+                continue
             units = prop_dict[p_info.key]["source-unit"]
             if p_info.dtype == list:
                 prop_val = np.array(
