@@ -191,4 +191,11 @@ band_gap_pd = {
         "required": False,
         "description": "The band gap energy of the system.",
     },
+    "type": {
+        "type": "string",
+        "has-unit": False,
+        "extent": [],
+        "required": True,
+        "description": "The type of band gap calculation: [direct, indirect, unknown].",
+    },
 }

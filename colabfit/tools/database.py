@@ -62,7 +62,7 @@ from colabfit.tools.utilities import (
 )
 
 VAST_BUCKET_DIR = "colabfit-data"
-VAST_METADATA_DIR = "MD"
+VAST_METADATA_DIR = "data/MD"
 NSITES_COL_SPLITS = 20
 _CONFIGS_COLLECTION = "gpw_test_configs"
 _CONFIGSETS_COLLECTION = "gpw_test_config_sets"
@@ -232,7 +232,8 @@ class SparkDataLoader:
         )
         print(f"Time to write metadata: {time() - beg}")
         df = df.drop("metadata")
-        file_base = f"/vdev/{VAST_BUCKET_DIR}/{VAST_METADATA_DIR}/"
+        # file_base = f"/vdev/{VAST_BUCKET_DIR}/{VAST_METADATA_DIR}/"
+        file_base = f"{VAST_METADATA_DIR}/"
         df = df.withColumn(
             "metadata_path",
             prepend_path_udf(sf.lit(str(Path(file_base))), sf.col("metadata_path")),
@@ -378,9 +379,9 @@ class SparkDataLoader:
                 # schema=arrow_schema,
             )
             with self.session.transaction() as tx:
-                print("updating table")
-                print(update_table.column_names)
-                print("update_cols", update_cols)
+                # print("updating table")
+                # print(update_table.column_names)
+                # print("update_cols", update_cols)
                 table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
                 table.update(
                     rows=update_table,
@@ -1145,7 +1146,7 @@ class DataManager:
                     print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
 
                 if not all_unique_po:
-                    print("Sending to find_existing_po_rows_append_elem")
+                    # print("Sending to find_existing_po_rows_append_elem")
                     new_po_ids, update_po_ids = (
                         loader.find_existing_po_rows_append_elem(
                             po_df=po_df,
@@ -1172,7 +1173,7 @@ class DataManager:
                 else:
                     print("All POs unique: writing to table...")
                     po_df = loader.write_metadata(po_df)
-                    print("finished writing metadata")
+                    # print("finished writing metadata")
                     loader.write_table(
                         po_df,
                         loader.prop_object_table,
@@ -1416,8 +1417,8 @@ class S3FileManager:
     def read_file(self, file_key):
         try:
             client = self.get_client()
-            key = file_key.replace(str(Path("/vdev/colabfit-data")) + "/", "")
-            response = client.get_object(Bucket=self.bucket_name, Key=key)
+            # key = file_key.replace(str(Path("/vdev/colabfit-data")) + "/", "")
+            response = client.get_object(Bucket=self.bucket_name, Key=file_key)
             return response["Body"].read().decode("utf-8")
         except Exception as e:
             return f"Error: {str(e)}"

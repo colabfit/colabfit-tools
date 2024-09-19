@@ -453,9 +453,6 @@ class Property(dict):
                     continue
                 instance = instance.copy()
                 for pmap_i, pmap in enumerate(pmap_list):
-                    print(pmap)
-                    print(p_info.key)
-
                     for key, val in pmap.items():
                         if "value" in val:
                             # Default value provided
