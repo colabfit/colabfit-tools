@@ -319,21 +319,19 @@ class SparkDataLoader:
                         col_name, unstring_udf(sf.col(col_name))
                     )
             for col, elem in zip(cols, elems):
-                if col == "labels":
-                    co_df_labels = co_df.select("id", "labels").collect()
+                if col == "labels" or col == "names":
+                    co_df_add = co_df.select("id", col)
                     duplicate_co_df = (
-                        duplicate_co_df.withColumnRenamed("labels", "labels_dup")
+                        duplicate_co_df.withColumnRenamed(col, f"{col}_dup")
                         .join(
-                            co_df_labels.withColumnRenamed("labels", "labels_co_df"),
+                            co_df_add,
                             on="id",
                         )
                         .withColumn(
-                            "labels",
-                            sf.array_distinct(
-                                sf.array_union("labels_dup", "labels_co_df")
-                            ),
+                            col,
+                            sf.array_distinct(sf.array_union(f"{col}_dup", col)),
                         )
-                        .drop("labels_dup", "labels_co_df")
+                        .drop(f"{col}_dup")
                     )
 
                 else:
@@ -1120,8 +1118,8 @@ class DataManager:
                     new_co_ids, update_co_ids = (
                         loader.find_existing_co_rows_append_elem(
                             co_df=co_df,
-                            cols=["dataset_ids"],
-                            elems=[self.dataset_id],
+                            cols=["dataset_ids", "names"],
+                            elems=[self.dataset_id, None],
                         )
                     )
                     print(f"Updated {len(update_co_ids)} rows in {loader.config_table}")
