@@ -162,7 +162,7 @@ class SparkDataLoader:
         check_length_col: str = None,
         check_unique: bool = True,
     ):
-        print(spark_df.first())
+        # print(spark_df.first())
         """Include self.table_prefix in the table name when passed to this function"""
         string_schema_dict = {
             self.config_table: config_schema,
@@ -189,7 +189,7 @@ class SparkDataLoader:
                 spark_df, check_length_col, _MAX_STRING_LEN
             )
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
-        print(arrow_schema)
+        # print(arrow_schema)
         for field in arrow_schema:
             field = field.with_nullable(True)
         if not self.spark.catalog.tableExists(table_name):
