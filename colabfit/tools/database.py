@@ -162,6 +162,7 @@ class SparkDataLoader:
         check_length_col: str = None,
         check_unique: bool = True,
     ):
+        print(spark_df.first())
         """Include self.table_prefix in the table name when passed to this function"""
         string_schema_dict = {
             self.config_table: config_schema,
@@ -188,6 +189,7 @@ class SparkDataLoader:
                 spark_df, check_length_col, _MAX_STRING_LEN
             )
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
+        print(arrow_schema)
         for field in arrow_schema:
             field = field.with_nullable(True)
         if not self.spark.catalog.tableExists(table_name):
@@ -200,6 +202,7 @@ class SparkDataLoader:
                 schema.create_table(table_name, arrow_schema)
         arrow_rec_batch = pa.table(
             [pa.array(col) for col in zip(*spark_df.collect())],
+            # names=spark_df.columns,
             schema=arrow_schema,
         ).to_batches()
         with self.session.transaction() as tx:
@@ -246,8 +249,8 @@ class SparkDataLoader:
         cols: list[str],
         elems: list[str],
     ):
-        print("updating these columns: ", cols)
-        print("with these elements: ", elems)
+        # print("updating these columns: ", cols)
+        # print("with these elements: ", elems)
         if isinstance(cols, str):
             cols = [cols]
         if isinstance(elems, str):
@@ -414,10 +417,10 @@ class SparkDataLoader:
         existing_rows = po_df.select("id").join(
             po_db_df.select("id"), on="id", how="inner"
         )
-        ids = [x["id"] for x in existing_rows.select("id").collect()]
-        batched_ids = batched(ids, 10000)
-        new_ids = []
-        existing_ids = []
+        new_ids = po_df.select("id").subtract(existing_rows.select("id"))
+        new_ids = [x["id"] for x in new_ids.collect()]
+        existing_ids = [x["id"] for x in existing_rows.select("id").collect()]
+        batched_ids = batched(existing_ids, 10000)
         columns = ["id", "multiplicity", "last_modified"]
         po_update_df = po_df.select("id", "multiplicity").withColumnRenamed(
             "multiplicity", "multiplicity_update"
@@ -432,7 +435,6 @@ class SparkDataLoader:
             id_batch = list(set(id_batch))
             # We only have to use vastdb-sdk here bc we need the '$row_id' column
             with self.session.transaction() as tx:
-
                 table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
                 rec_batch = table.select(
                     predicate=table["id"].isin(id_batch),
@@ -461,10 +463,6 @@ class SparkDataLoader:
             duplicate_po_df = duplicate_po_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
-            existing_ids_batch = [
-                x["id"] for x in duplicate_po_df.select("id").collect()
-            ]
-            new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
             update_table = pa.table(
                 [pa.array(col) for col in zip(*duplicate_po_df.collect())],
                 schema=arrow_schema,
@@ -474,9 +472,8 @@ class SparkDataLoader:
                 table.update(
                     rows=update_table, columns=["multiplicity", "last_modified"]
                 )
-            new_ids.extend(new_ids_batch)
-            existing_ids.extend(existing_ids_batch)
-
+        # print("len new_ids", len(new_ids))
+        # print("len existing_ids", len(existing_ids))
         return (new_ids, list(set(existing_ids)))
 
     def read_table(
@@ -1098,8 +1095,19 @@ class DataManager:
                 )
                 first_count = co_df.count()
                 print("Dropping duplicates from CO dataframe")
+                merged_names = co_df.groupBy("id").agg(
+                    sf.array_distinct(sf.flatten(sf.collect_list("names"))).alias(
+                        "names"
+                    )
+                )
                 co_df = co_df.dropDuplicates(["id"])
                 second_count = co_df.count()
+                if second_count < first_count:
+                    co_df = (
+                        co_df.drop("names")
+                        .join(merged_names, on="id", how="inner")
+                        .select(config_md_schema.fieldNames())
+                    )
                 print(f"{first_count -second_count} duplicates found in CO dataframe")
                 count = po_df.count()
                 count_distinct = po_df.agg(sf.countDistinct(po_df.id)).collect()[0][0]
