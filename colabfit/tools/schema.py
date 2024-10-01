@@ -41,7 +41,7 @@ config_df_schema = StructType(
         StructField("dimension_types", ArrayType(IntegerType()), True),
         StructField("pbc", ArrayType(BooleanType()), True),
         StructField("names", ArrayType(StringType()), True),
-        # StructField("labels", ArrayType(StringType()), True),
+        StructField("labels", ArrayType(StringType()), True),
         StructField("metadata_id", StringType(), True),
         StructField("metadata_path", StringType(), True),
         StructField("metadata_size", IntegerType(), True),
@@ -150,3 +150,9 @@ configuration_set_df_schema = StructType(
 )
 
 configuration_set_schema = get_stringified_schema(configuration_set_df_schema)
+
+configuration_configuration_set_df_schema = StructType(
+    [
+        StructField("configuration_id", StringType(), True),
+        StructField("configuration_set_id", StringType(), True),]
+)

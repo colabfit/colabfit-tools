@@ -1221,8 +1221,8 @@ class DataManager:
     ):
         """
         Args for name_label_match in order:
-        1. Regex pattern for matching CONFIGURATION NAMES
-        2. Regex pattern for matching CONFIGURATION LABELS
+        1. String pattern for matching CONFIGURATION NAMES
+        2. String pattern for matching CONFIGURATION LABELS
         3. Name for configuration set
         4. Description for configuration set
         """
@@ -1338,7 +1338,7 @@ class DataManager:
         doi: str = None,
         # dataset_id: str = None,
         labels: list[str] = None,
-        data_license: str = "CC-BY-ND-4.0",
+        data_license: str = "CC-BY-4.0",
     ):
         if loader.spark.catalog.tableExists(loader.config_set_table):
             cs_ids = (

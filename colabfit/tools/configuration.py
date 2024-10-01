@@ -72,6 +72,8 @@ class AtomicConfiguration(Atoms):
         labels = self.info.pop(ATOMS_LABELS_FIELD, None)
         if isinstance(labels, str):
             self.labels = [labels]
+        elif not isinstance(labels, list):
+            raise TypeError("Labels must be a string or a list of strings or None")
         else:
             self.labels = labels
         self.spark_row = self.to_spark_row()
