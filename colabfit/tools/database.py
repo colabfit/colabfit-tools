@@ -51,6 +51,7 @@ from colabfit.tools.schema import (
     property_object_df_schema,
     property_object_md_schema,
     property_object_schema,
+    co_cs_mapping_schema,
 )
 from colabfit.tools.utilities import (
     _hash,
@@ -64,10 +65,11 @@ from colabfit.tools.utilities import (
 VAST_BUCKET_DIR = "colabfit-data"
 VAST_METADATA_DIR = "data/MD"
 NSITES_COL_SPLITS = 20
-_CONFIGS_COLLECTION = "gpw_test_configs"
-_CONFIGSETS_COLLECTION = "gpw_test_config_sets"
-_DATASETS_COLLECTION = "gpw_test_datasets"
-_PROPOBJECT_COLLECTION = "gpw_test_prop_objects"
+_CONFIGS_COLLECTION = "test_configs"
+_CONFIGSETS_COLLECTION = "test_config_sets"
+_DATASETS_COLLECTION = "test_datasets"
+_PROPOBJECT_COLLECTION = "test_prop_objects"
+_CO_CS_MAP_COLLECTION = "test_co_cs_map"
 _MAX_STRING_LEN = 60000
 
 # from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
@@ -103,6 +105,7 @@ class SparkDataLoader:
         self.config_set_table = f"{self.table_prefix}.{_CONFIGSETS_COLLECTION}"
         self.dataset_table = f"{self.table_prefix}.{_DATASETS_COLLECTION}"
         self.prop_object_table = f"{self.table_prefix}.{_PROPOBJECT_COLLECTION}"
+        self.co_cs_map_table = f"{self.table_prefix}.{_CO_CS_MAP_COLLECTION}"
 
     def get_vastdb_session(self, endpoint, access_key: str, access_secret: str):
         return Session(endpoint=endpoint, access=access_key, secret=access_secret)
@@ -112,6 +115,14 @@ class SparkDataLoader:
         self.access_key = access_key
         self.access_secret = access_secret
         self.endpoint = endpoint
+
+    def _get_table_split(self, table_name_str: str):
+        """Get bucket, schema and table names for VastDB SDK, with no backticks"""
+        table_split = table_name_str.split(".")
+        bucket_name = table_split[1].replace("`", "")
+        schema_name = table_split[2].replace("`", "")
+        table_name = table_split[3].replace("`", "")
+        return (bucket_name, schema_name, table_name)
 
     def add_elem_to_col(df, col_name: str, elem: str):
         df_added_elem = df.withColumn(
@@ -128,12 +139,9 @@ class SparkDataLoader:
     def delete_from_table(self, table_name: str, ids: list[str]):
         if isinstance(ids, str):
             ids = [ids]
-        table_split = table_name.split(".")
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
         with self.session.transaction() as tx:
-            bucket_name = table_split[1].replace("`", "")
-            schema_name = table_split[2].replace("`", "")
-            table_name = table_split[3]
-            table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
             rec_batch = table.select(
                 predicate=table["id"].isin(ids), internal_row_id=True
             )
@@ -169,6 +177,7 @@ class SparkDataLoader:
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.prop_object_table: property_object_schema,
+            self.co_cs_map_table: co_cs_mapping_schema,
         }
         table_schema = string_schema_dict[table_name]
         if ids_filter is not None:
@@ -177,7 +186,7 @@ class SparkDataLoader:
             all_unique = self.check_unique_ids(table_name, spark_df)
             if not all_unique:
                 raise ValueError("Duplicate IDs found in table. Not writing.")
-        table_split = table_name.split(".")
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
         ]
@@ -194,24 +203,25 @@ class SparkDataLoader:
             field = field.with_nullable(True)
         if not self.spark.catalog.tableExists(table_name):
             print(f"Creating table {table_name}")
+
             with self.session.transaction() as tx:
-                bucket_name = table_split[1].replace("`", "")
-                schema_name = table_split[2].replace("`", "")
-                table_name = table_split[3]
                 schema = tx.bucket(bucket_name).schema(schema_name)
-                schema.create_table(table_name, arrow_schema)
+                schema.create_table(table_n, arrow_schema)
         arrow_rec_batch = pa.table(
             [pa.array(col) for col in zip(*spark_df.collect())],
             # names=spark_df.columns,
             schema=arrow_schema,
         ).to_batches()
         with self.session.transaction() as tx:
-            bucket_name = table_split[1].replace("`", "")
-            schema_name = table_split[2].replace("`", "")
-            table_name = table_split[3]
-            table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
             for rec_batch in arrow_rec_batch:
                 table.insert(rec_batch)
+
+    def get_only_new_rows(self, spark_df, table):
+        table_df = self.read_table(table)
+        table_df = table_df.select("id")
+        new_rows = spark_df.filter(~sf.col("id").isin(table_df.select("id")))
+        return new_rows
 
     def write_metadata(self, df):
         """Writes metadata to files using boto3 for VastDB
@@ -289,28 +299,21 @@ class SparkDataLoader:
         batched_ids = batched(ids, 10000)
         new_ids = []
         existing_ids = []
-        table_split = self.config_table.split(".")
-        bucket_name = table_split[1].replace("`", "")
-        schema_name = table_split[2].replace("`", "")
-        table_name = table_split[3]
+        bucket_name, schema_name, table_n = self._get_table_split(self.config_table)
         for id_batch in batched_ids:
             id_batch = list(set(id_batch))
             # We only have to use vastdb-sdk here bc we need the '$row_id' column
             with self.session.transaction() as tx:
-
-                table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
-
+                table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
                 rec_batch = table.select(
                     predicate=table["id"].isin(id_batch),
                     columns=update_cols + ["id"],
                     internal_row_id=True,
                 )
-
                 rec_batch = rec_batch.read_all()
                 duplicate_co_df = self.spark.createDataFrame(
                     rec_batch.to_struct_array().to_pandas(), schema=spark_schema
                 )
-
                 # print(f"Length of duplicate CO df: {duplicate_co_df.count()}")
             if duplicate_co_df.count() == 0:
                 new_ids.extend(id_batch)
@@ -383,7 +386,7 @@ class SparkDataLoader:
                 # print("updating table")
                 # print(update_table.column_names)
                 # print("update_cols", update_cols)
-                table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
+                table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
                 table.update(
                     rows=update_table,
                     columns=update_cols,
@@ -427,15 +430,12 @@ class SparkDataLoader:
         )
         table_name = self.prop_object_table
         # Dev string would be 'ndb.colabfit.dev.[table name]'
-        table_split = table_name.split(".")
-        bucket_name = table_split[1].replace("`", "")
-        schema_name = table_split[2].replace("`", "")
-        table_name = table_split[3]
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
         for id_batch in batched_ids:
             id_batch = list(set(id_batch))
             # We only have to use vastdb-sdk here bc we need the '$row_id' column
             with self.session.transaction() as tx:
-                table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
+                table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
                 rec_batch = table.select(
                     predicate=table["id"].isin(id_batch),
                     columns=columns,
@@ -468,7 +468,7 @@ class SparkDataLoader:
                 schema=arrow_schema,
             )
             with self.session.transaction() as tx:
-                table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
+                table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
                 table.update(
                     rows=update_table, columns=["multiplicity", "last_modified"]
                 )
@@ -496,6 +496,7 @@ class SparkDataLoader:
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.prop_object_table: property_object_schema,
+            self.co_cs_map_table: co_cs_mapping_schema,
         }
         unstring_schema_dict = {
             self.config_table: config_df_schema,
@@ -562,19 +563,14 @@ class SparkDataLoader:
         )
         with self.session.transaction() as tx:
             table_name = self.prop_object_table
-            table_split = table_name.split(".")
-            bucket_name = table_split[1].replace("`", "")
-            schema_name = table_split[2].replace("`", "")
-            table_name = table_split[3]
-
-            table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
+            bucket_name, schema_name, table_n = self._get_table_split(table_name)
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
             rec_batches = table.select(
                 predicate=(table["dataset_id"] == dataset_id)
                 & (table["multiplicity"] > 0),
                 columns=["id", "multiplicity", "last_modified"],
                 internal_row_id=True,
             )
-
             for rec_batch in rec_batches:
                 df = self.spark.createDataFrame(
                     rec_batch.to_struct_array().to_pandas(), schema=spark_schema
@@ -650,12 +646,9 @@ class SparkDataLoader:
         return co_po_df
 
     def simple_sdk_query(self, query_table, predicate, schema):
-        table_split = query_table.split(".")
-        bucket_name = table_split[1].replace("`", "")
-        schema_name = table_split[2].replace("`", "")
-        table_name = table_split[3]
+        bucket_name, schema_name, table_n = self._get_table_split(query_table)
         with self.session.transaction() as tx:
-            table = tx.bucket(bucket_name).schema(schema_name).table(table_name)
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
             rec_batch_reader = table.select(predicate=predicate)
             rec_batch = rec_batch_reader.read_all()
             if rec_batch.num_rows == 0:
@@ -665,6 +658,17 @@ class SparkDataLoader:
                 rec_batch.to_struct_array().to_pandas(), schema=schema
             )
         return spark_df
+
+    def get_co_cs_mapping(self, cs_id: str):
+        bucket_name, schema_name, table_n = self._get_table_split(self.co_cs_map_table)
+        predicate = _.configuration_set_id == cs_id
+        co_cs_map = self.simple_sdk_query(
+            self.co_cs_map_table, predicate, co_cs_mapping_schema
+        )
+        if co_cs_map.count() == 0:
+            print(f"No records found for given configuration set id {cs_id}")
+            return None
+        return co_cs_map
 
     def dataset_query(
         self,
@@ -709,7 +713,6 @@ class SparkDataLoader:
         label_match=None,
         configuration_ids=None,
     ):
-
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
         string_schema_dict = {
@@ -1272,9 +1275,11 @@ class DataManager:
                     name_match=names_match,
                     label_match=label_match,
                 )
-            # co_ids = [
-            #     x["id"] for x in config_set_query_df.select("id").distinct().collect()
-            # ]
+            co_id_df = (
+                config_set_query_df.select("id")
+                .distinct()
+                .withColumnRenamed("id", "configuration_id")
+            )
             # prop_df_cs = loader.config_set_query(
             #     query_table=loader.prop_object_table,
             #     dataset_id=dataset_id,
@@ -1304,16 +1309,28 @@ class DataManager:
                     col, unstring_col_udf(sf.col(col))
                 )
             t = time()
+            prelim_cs_id = f"CS_{cs_name}_{self.dataset_id}"
+            co_cs_df = loader.get_co_cs_mapping(prelim_cs_id)
+            if co_cs_df is not None:
+                print(
+                    f"Configuration Set {cs_name} already exists.\nRemove rows matching "  # noqa E501
+                    f"'configuration_set_id == {prelim_cs_id} from table {loader.co_cs_map_table} to recreate.\n"  # noqa E501
+                )
+                continue
             config_set = ConfigurationSet(
                 name=cs_name,
                 description=cs_desc,
                 config_df=config_set_query_df,
                 dataset_id=self.dataset_id,
             )
+            co_cs_df = co_id_df.withColumn(
+                "configuration_set_id", sf.lit(config_set.id)
+            )
+            loader.write_table(co_cs_df, loader.co_cs_map_table)
             loader.find_existing_co_rows_append_elem(
                 co_df=config_set_query_df,
                 cols=["configuration_set_ids"],
-                elems=config_set.spark_row["id"],
+                elems=config_set.id,
             )
             t_end = time() - t
             print(f"Time to create CS and update COs with CS-ID: {t_end}")
@@ -1336,7 +1353,6 @@ class DataManager:
         other_links: list[str] = None,
         publication_year: str = None,
         doi: str = None,
-        # dataset_id: str = None,
         labels: list[str] = None,
         data_license: str = "CC-BY-4.0",
     ):

@@ -151,8 +151,9 @@ configuration_set_df_schema = StructType(
 
 configuration_set_schema = get_stringified_schema(configuration_set_df_schema)
 
-configuration_configuration_set_df_schema = StructType(
+co_cs_mapping_schema = StructType(
     [
         StructField("configuration_id", StringType(), True),
-        StructField("configuration_set_id", StringType(), True),]
+        StructField("configuration_set_id", StringType(), True),
+    ]
 )
