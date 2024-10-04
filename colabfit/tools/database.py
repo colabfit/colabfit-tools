@@ -35,7 +35,7 @@ from vastdb.session import Session
 
 from colabfit import (
     ID_FORMAT_STRING,
-)  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,; _CONFIGS_COLLECTION,; _CONFIGSETS_COLLECTION,; _DATASETS_COLLECTION,; _PROPOBJECT_COLLECTION,
+)  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,; _CONFIGS_COLLECTION,; _CONFIGSETS_COLLECTION,; _DATASETS_COLLECTION,; _PROPOBJECT_COLLECTION, # noqa
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.dataset import Dataset
@@ -326,6 +326,11 @@ class SparkDataLoader:
                     )
             for col, elem in zip(cols, elems):
                 if col == "labels" or col == "names":
+                    if (
+                        col == "labels"
+                        and co_df.filter(sf.col("labels").isNotNull()).count() == 0
+                    ):
+                        continue
                     co_df_add = co_df.select("id", col)
                     duplicate_co_df = (
                         duplicate_co_df.withColumnRenamed(col, f"{col}_dup")
@@ -1129,8 +1134,8 @@ class DataManager:
                     new_co_ids, update_co_ids = (
                         loader.find_existing_co_rows_append_elem(
                             co_df=co_df,
-                            cols=["dataset_ids", "names"],
-                            elems=[self.dataset_id, None],
+                            cols=["dataset_ids", "names", "labels"],
+                            elems=[self.dataset_id, None, None],
                         )
                     )
                     print(f"Updated {len(update_co_ids)} rows in {loader.config_table}")
