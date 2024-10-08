@@ -107,6 +107,9 @@ class SparkDataLoader:
         self.prop_object_table = f"{self.table_prefix}.{_PROPOBJECT_COLLECTION}"
         self.co_cs_map_table = f"{self.table_prefix}.{_CO_CS_MAP_COLLECTION}"
 
+        self.bucket_dir = VAST_BUCKET_DIR
+        self.metadata_dir = VAST_METADATA_DIR
+
     def get_vastdb_session(self, endpoint, access_key: str, access_secret: str):
         return Session(endpoint=endpoint, access=access_key, secret=access_secret)
 
@@ -232,11 +235,11 @@ class SparkDataLoader:
             df = df.drop("metadata")
             return df
         config = {
-            "bucket_dir": VAST_BUCKET_DIR,
+            "bucket_dir": self.bucket_dir,
             "access_key": self.access_key,
             "access_secret": self.access_secret,
             "endpoint": self.endpoint,
-            "metadata_dir": VAST_METADATA_DIR,
+            "metadata_dir": self.metadata_dir,
         }
         beg = time()
         distinct_metadata = df.select("metadata", "metadata_path").distinct()
@@ -246,7 +249,7 @@ class SparkDataLoader:
         print(f"Time to write metadata: {time() - beg}")
         df = df.drop("metadata")
         # file_base = f"/vdev/{VAST_BUCKET_DIR}/{VAST_METADATA_DIR}/"
-        file_base = f"{VAST_METADATA_DIR}/"
+        file_base = f"{self.metadata_dir}/"
         df = df.withColumn(
             "metadata_path",
             prepend_path_udf(sf.lit(str(Path(file_base))), sf.col("metadata_path")),
@@ -528,11 +531,11 @@ class SparkDataLoader:
         if read_metadata:
             schema = md_schema_dict[table_name]
             config = {
-                "bucket_dir": VAST_BUCKET_DIR,
+                "bucket_dir": self.bucket_dir,
                 "access_key": self.access_key,
                 "access_secret": self.access_secret,
                 "endpoint": self.endpoint,
-                "metadata_dir": VAST_METADATA_DIR,
+                "metadata_dir": self.metadata_dir,
             }
             df = df.rdd.mapPartitions(
                 lambda partition: read_md_partition(partition, config)
@@ -1331,7 +1334,7 @@ class DataManager:
             co_cs_df = co_id_df.withColumn(
                 "configuration_set_id", sf.lit(config_set.id)
             )
-            loader.write_table(co_cs_df, loader.co_cs_map_table)
+            loader.write_table(co_cs_df, loader.co_cs_map_table, check_unique=False)
             loader.find_existing_co_rows_append_elem(
                 co_df=config_set_query_df,
                 cols=["configuration_set_ids"],
