@@ -669,6 +669,9 @@ class SparkDataLoader:
 
     def get_co_cs_mapping(self, cs_id: str):
         bucket_name, schema_name, table_n = self._get_table_split(self.co_cs_map_table)
+        if not self.spark.catalog.tableExists(self.co_cs_map_table):
+            print(f"Table {self.co_cs_map_table} does not exist")
+            return None
         predicate = _.configuration_set_id == cs_id
         co_cs_map = self.simple_sdk_query(
             self.co_cs_map_table, predicate, co_cs_mapping_schema
