@@ -155,15 +155,30 @@ class SparkDataLoader:
         if not self.spark.catalog.tableExists(table_name):
             print(f"Table {table_name} does not yet exist.")
             return True
-        id_df = df.select("id")
-        table_df = self.read_table(table_name)
-        table_df = table_df.select("id")
-        dupes_exist = id_df.join(table_df, on="id", how="inner")
-        if not dupes_exist.rdd.isEmpty():
-            # if len(dupes_exist.take(1)) > 0:
-            print(f"Duplicate IDs found in table {table_name}")
-            return False
+        ids = [x["id"] for x in df.select("id").collect()]
+        # table_df = self.read_table(table_name)
+        # table_df = table_df.select("id")
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        with self.session.transaction() as tx:
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
+            for id_batch in tqdm(
+                batched(ids, 10000), desc=f"Checking for duplicates in {table_name}"
+            ):
+                rec_batch_reader = table.select(
+                    predicate=table["id"].isin(id_batch), columns=["id"]
+                )
+                for batch in rec_batch_reader:
+                    if batch.num_rows > 0:
+                        print(f"Duplicate IDs found in table {table_name}")
+                        return False
         return True
+
+        # dupes_exist = id_df.join(table_df, on="id", how="inner")
+        # if not dupes_exist.rdd.isEmpty():
+        #     # if len(dupes_exist.take(1)) > 0:
+        #     print(f"Duplicate IDs found in table {table_name}")
+        #     return False
+        # return True
 
     def write_table(
         self,
@@ -1124,7 +1139,7 @@ class DataManager:
                     )
                 print(f"{first_count -second_count} duplicates found in CO dataframe")
                 count = po_df.count()
-                count_distinct = po_df.agg(sf.countDistinct(po_df.id)).collect()[0][0]
+                count_distinct = po_df.select("id").distinct().count()
                 if count_distinct < count:
                     print(f"{count - count_distinct} duplicates found in PO dataframe")
                     multiplicity = po_df.groupBy("id").agg(sf.count("*").alias("count"))
@@ -1419,6 +1434,59 @@ class DataManager:
         loader.write_table(ds_df, loader.dataset_table)
 
 
+class S3BatchManager:
+    def __init__(self, bucket_name, access_id, secret_key, endpoint_url=None):
+        self.bucket_name = bucket_name
+        self.access_id = access_id
+        self.secret_key = secret_key
+        self.endpoint_url = endpoint_url
+        self.client = self.get_client()
+        self.MAX_BATCH_SIZE = 100
+
+    def get_client(self):
+        return boto3.client(
+            "s3",
+            use_ssl=False,
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.access_id,
+            aws_secret_access_key=self.secret_key,
+            region_name="fake-region",
+            config=boto3.session.Config(
+                signature_version="s3v4", s3={"addressing_style": "path"}
+            ),
+        )
+
+    def batch_write(self, file_batch):
+        results = []
+        for key, content in file_batch:
+            try:
+                self.client.put_object(Bucket=self.bucket_name, Key=key, Body=content)
+                results.append((key, None))
+            except Exception as e:
+                results.append((key, str(e)))
+        return results
+
+
+def write_md_partition(partition, config):
+    s3_mgr = S3BatchManager(
+        bucket_name=config["bucket_dir"],
+        access_id=config["access_key"],
+        secret_key=config["access_secret"],
+        endpoint_url=config["endpoint"],
+    )
+    file_batch = []
+    for row in partition:
+        md_path = Path(config["metadata_dir"]) / row["metadata_path"]
+        file_batch.append((str(md_path), row["metadata"]))
+
+        if len(file_batch) >= s3_mgr.MAX_BATCH_SIZE:
+            _ = s3_mgr.batch_write(file_batch)
+            file_batch = []
+    if file_batch:
+        _ = s3_mgr.batch_write(file_batch)
+    return iter([])
+
+
 class S3FileManager:
     def __init__(self, bucket_name, access_id, secret_key, endpoint_url=None):
         self.bucket_name = bucket_name
@@ -1474,21 +1542,21 @@ def prepend_path_udf(prefix, md_path):
         return str(full_path)
 
 
-def write_md_partition(partition, config):
-    s3_mgr = S3FileManager(
-        bucket_name=config["bucket_dir"],
-        access_id=config["access_key"],
-        secret_key=config["access_secret"],
-        endpoint_url=config["endpoint"],
-    )
-    for row in partition:
-        md_path = Path(config["metadata_dir"]) / row["metadata_path"]
-        if not md_path.exists():
-            s3_mgr.write_file(
-                row["metadata"],
-                str(md_path),
-            )
-    return iter([])
+# def write_md_partition(partition, config):
+#     s3_mgr = S3FileManager(
+#         bucket_name=config["bucket_dir"],
+#         access_id=config["access_key"],
+#         secret_key=config["access_secret"],
+#         endpoint_url=config["endpoint"],
+#     )
+#     for row in partition:
+#         md_path = Path(config["metadata_dir"]) / row["metadata_path"]
+#         if not md_path.exists():
+#             s3_mgr.write_file(
+#                 row["metadata"],
+#                 str(md_path),
+#             )
+#     return iter([])
 
 
 def read_md_partition(partition, config):
