@@ -62,6 +62,7 @@ class AtomicConfiguration(Atoms):
             "pbc",
             "metadata_id",
         ]
+        self.unique_identifier_kw.extend([f"positions_{i:02d}" for i in range(1, 20)])
         self.info = info
         self.metadata = self.set_metadata(co_md_map)
         if isinstance(names, str):

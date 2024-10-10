@@ -50,7 +50,7 @@ def _hash(row, identifying_key_list, include_keys_in_hash=False):
     # sort_for_hash = ["positions", "atomic_forces"]
     _hash = sha512()
     for k, v in zip(identifying_key_list, identifiers):
-        if v is None:
+        if v is None or v == "[]":
             continue
         # elif k in sort_for_hash:
         #     v = np.array(v)

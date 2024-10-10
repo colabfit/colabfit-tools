@@ -40,6 +40,8 @@ from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.dataset import Dataset
 from colabfit.tools.property import Property
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType
 from colabfit.tools.schema import (
     config_df_schema,
     config_md_schema,
@@ -814,6 +816,33 @@ class VastDataLoader:
             id = id[:28]
         spark_dict["id"] = id
         return Row(**{k: v for k, v in spark_dict.items() if k != "atomic_forces"})
+
+    @udf(returnType=StringType())
+    def config_structure_hash(spark_row: Row, hash_keys: list[str]):
+        """
+        Rehash configuration object row after changing values of one or
+        more of the columns corresponding to hash_keys defined below.
+
+        """
+        spark_dict = spark_row.asDict()
+        if spark_dict["positions_01"] is None:
+            spark_dict["positions"] = literal_eval(spark_dict["positions_00"])
+        else:
+            spark_dict["positions"] = list(
+                itertools.chain(
+                    *[
+                        literal_eval(spark_dict[f"positions_{i:02}"])
+                        for i in range(1, 19)
+                    ]
+                )
+            )
+        spark_dict["last_modified"] = dateutil.parser.parse(
+            datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+        )
+        spark_dict["hash"] = _hash(spark_dict, hash_keys, include_keys_in_hash=False)
+        return spark_dict["hash"]
 
     def stop_spark(self):
         self.spark.stop()

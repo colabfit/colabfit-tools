@@ -270,6 +270,9 @@ class Property(dict):
             "method",
             "software",
         ]
+        self.unique_identifier_kw.extend(
+            [f"atomic_forces_{i:02d}" for i in range(1, 20)]
+        )
         self.instance = instance
         self.definitions = definitions
         self.nsites = nsites
@@ -563,9 +566,7 @@ class Property(dict):
             if "per-atom" in prop_dict:
                 if prop_dict["per-atom"]["source-value"] is True:
                     if self.nsites is None:
-                        raise RuntimeError(
-                            "nsites must be provided to convert per-atom"
-                        )
+                        raise RuntimeError("nsites must be provided to convert per-atom")
                     prop_val *= self.nsites
 
             if units != p_info.unit:
