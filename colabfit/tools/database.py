@@ -245,12 +245,6 @@ class VastDataLoader:
             for rec_batch in arrow_rec_batch:
                 table.insert(rec_batch)
 
-    def get_only_new_rows(self, spark_df, table):
-        table_df = self.read_table(table)
-        table_df = table_df.select("id")
-        new_rows = spark_df.filter(~sf.col("id").isin(table_df.select("id")))
-        return new_rows
-
     def write_metadata(self, df):
         """Writes metadata to files using boto3 for VastDB
         Returns a DataFrame without metadata column. The returned DataFrame should
@@ -281,56 +275,44 @@ class VastDataLoader:
         )
         return df
 
-    def find_existing_co_rows_append_elem(
+    def update_existing_rows_append_elem(
         self,
-        co_df,
+        df,
+        table_name,
         cols: list[str],
         elems: list[str],
+        schema,
+        arrow_schema,
+        update_cols,
+        arr_cols,
     ):
-        # print("updating these columns: ", cols)
-        # print("with these elements: ", elems)
         if isinstance(cols, str):
             cols = [cols]
         if isinstance(elems, str):
             elems = [elems]
-        col_types = {
-            "id": StringType(),
-            "last_modified": TimestampType(),
-            "$row_id": LongType(),
-        }
-        arr_cols = []
-        for col in cols:
-            col_type = get_spark_field_type(config_schema, col)
-            col_types[col] = col_type
-            is_arr = get_spark_field_type(config_df_schema, col).typeName() == "array"
-            if is_arr:
-                arr_cols.append(col)
-
-        update_cols = [col for col in col_types if col not in ["id", "$row_id"]]
+        col_types = {col: get_spark_field_type(schema, col) for col in update_cols}
+        col_types.update(
+            {
+                "id": StringType(),
+                "last_modified": TimestampType(),
+                "$row_id": LongType(),
+            }
+        )
         spark_schema = StructType(
-            [
-                StructField(col, col_types[col], True)
-                for i, col in enumerate(update_cols)
-            ]
+            [StructField(col, col_types[col], True) for col in update_cols]
             + [
                 StructField("id", StringType(), False),
                 StructField("$row_id", IntegerType(), False),
             ]
         )
         total_write_cols = update_cols + ["$row_id"]
-        # co_db_df = self.read_table(self.config_table)
-        # existing_rows = co_df.select("id").join(
-        #     co_db_df.select("id"), on="id", how="inner"
-        # )
-        # ids = [x["id"] for x in existing_rows.select("id").collect()]
-        ids = [x["id"] for x in co_df.select("id").collect()]
+        ids = [x["id"] for x in df.select("id").collect()]
         batched_ids = batched(ids, 10000)
         new_ids = []
         existing_ids = []
-        bucket_name, schema_name, table_n = self._get_table_split(self.config_table)
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
         for id_batch in batched_ids:
             id_batch = list(set(id_batch))
-            # We only have to use vastdb-sdk here bc we need the '$row_id' column
             with self.session.transaction() as tx:
                 table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
                 rec_batch = table.select(
@@ -339,175 +321,114 @@ class VastDataLoader:
                     internal_row_id=True,
                 )
                 rec_batch = rec_batch.read_all()
-                duplicate_co_df = self.spark.createDataFrame(
+                duplicate_df = self.spark.createDataFrame(
                     rec_batch.to_struct_array().to_pandas(), schema=spark_schema
                 )
-                # print(f"Length of duplicate CO df: {duplicate_co_df.count()}")
-            if duplicate_co_df.count() == 0:
+            if duplicate_df.count() == 0:
                 new_ids.extend(id_batch)
                 continue
             unstring_udf = sf.udf(unstring_df_val, ArrayType(StringType()))
-            for col_name, col_type in col_types.items():
-                if col_name in arr_cols:
-                    duplicate_co_df = duplicate_co_df.withColumn(
-                        col_name, unstring_udf(sf.col(col_name))
-                    )
+            for col_name in arr_cols:
+                duplicate_df = duplicate_df.withColumn(
+                    col_name, unstring_udf(sf.col(col_name))
+                )
             for col, elem in zip(cols, elems):
-                if col == "labels" or col == "names":
+                if col in ["labels", "names"]:
                     if (
                         col == "labels"
-                        and co_df.filter(sf.col("labels").isNotNull()).count() == 0
+                        and df.filter(sf.col("labels").isNotNull()).count() == 0
                     ):
                         continue
-                    co_df_add = co_df.select("id", col)
-                    duplicate_co_df = (
-                        duplicate_co_df.withColumnRenamed(col, f"{col}_dup")
-                        .join(
-                            co_df_add,
-                            on="id",
-                        )
+                    df_add = df.select("id", col)
+                    duplicate_df = (
+                        duplicate_df.withColumnRenamed(col, f"{col}_dup")
+                        .join(df_add, on="id")
                         .withColumn(
-                            col,
-                            sf.array_distinct(sf.array_union(f"{col}_dup", col)),
+                            col, sf.array_distinct(sf.array_union(f"{col}_dup", col))
                         )
                         .drop(f"{col}_dup")
                     )
-
                 else:
-                    duplicate_co_df = duplicate_co_df.withColumn(
+                    duplicate_df = duplicate_df.withColumn(
                         col, sf.coalesce(sf.col(col), sf.array())
                     )
-                    duplicate_co_df = duplicate_co_df.withColumn(
+                    duplicate_df = duplicate_df.withColumn(
                         col,
                         sf.array_distinct(
                             sf.array_union(sf.col(col), sf.array(sf.lit(elem)))
                         ),
                     )
-                    duplicate_co_df.select(col).show(1, False)
-
-            existing_ids_batch = [
-                x["id"] for x in duplicate_co_df.select("id").collect()
-            ]
+            existing_ids_batch = [x["id"] for x in duplicate_df.select("id").collect()]
             new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
             string_udf = sf.udf(stringify_df_val, StringType())
-            for col_name in duplicate_co_df.columns:
-                if col_name in arr_cols:
-                    duplicate_co_df = duplicate_co_df.withColumn(
-                        col_name, string_udf(sf.col(col_name))
-                    )
+            for col_name in arr_cols:
+                duplicate_df = duplicate_df.withColumn(
+                    col_name, string_udf(sf.col(col_name))
+                )
             update_time = dateutil.parser.parse(
                 datetime.datetime.now(tz=datetime.timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
             )
-            duplicate_co_df = duplicate_co_df.withColumn(
+            duplicate_df = duplicate_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
-            # update_schema = StructType(
-            #     [StructField(col, col_types[col]) for col in total_write_cols]
-            # )
-            # arrow_schema = spark_schema_to_arrow_schema(update_schema)
             update_table = pa.table(
                 [
                     pa.array(col)
-                    for col in zip(*duplicate_co_df.select(total_write_cols).collect())
+                    for col in zip(*duplicate_df.select(total_write_cols).collect())
                 ],
-                names=total_write_cols,
-                # schema=arrow_schema,
-            )
-            with self.session.transaction() as tx:
-                # print("updating table")
-                # print(update_table.column_names)
-                # print("update_cols", update_cols)
-                table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
-                table.update(
-                    rows=update_table,
-                    columns=update_cols,
-                )
-            new_ids.extend(new_ids_batch)
-            existing_ids.extend(existing_ids_batch)
-
-        return (new_ids, list(set(existing_ids)))
-
-    def find_existing_po_rows_append_elem(
-        self,
-        po_df=None,
-    ):
-        schema = StructType(
-            [
-                StructField("id", StringType(), False),
-                StructField("multiplicity", IntegerType(), True),
-                StructField("last_modified", TimestampType(), False),
-                StructField("$row_id", LongType(), False),
-            ]
-        )
-        arrow_schema = pa.schema(
-            [
-                pa.field("id", pa.string()),
-                pa.field("multiplicity", pa.int32()),
-                pa.field("last_modified", pa.timestamp("us")),
-                pa.field("$row_id", pa.uint64()),
-            ]
-        )
-        po_db_df = self.read_table(self.prop_object_table)
-        existing_rows = po_df.select("id").join(
-            po_db_df.select("id"), on="id", how="inner"
-        )
-        new_ids = po_df.select("id").subtract(existing_rows.select("id"))
-        new_ids = [x["id"] for x in new_ids.collect()]
-        existing_ids = [x["id"] for x in existing_rows.select("id").collect()]
-        batched_ids = batched(existing_ids, 10000)
-        columns = ["id", "multiplicity", "last_modified"]
-        po_update_df = po_df.select("id", "multiplicity").withColumnRenamed(
-            "multiplicity", "multiplicity_update"
-        )
-        table_name = self.prop_object_table
-        # Dev string would be 'ndb.colabfit.dev.[table name]'
-        bucket_name, schema_name, table_n = self._get_table_split(table_name)
-        for id_batch in batched_ids:
-            id_batch = list(set(id_batch))
-            # We only have to use vastdb-sdk here bc we need the '$row_id' column
-            with self.session.transaction() as tx:
-                table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
-                rec_batch = table.select(
-                    predicate=table["id"].isin(id_batch),
-                    columns=columns,
-                    internal_row_id=True,
-                )
-                rec_batch = rec_batch.read_all()
-                duplicate_po_df = self.spark.createDataFrame(
-                    rec_batch.to_struct_array().to_pandas(), schema=schema
-                )
-                # print(f"Length of duplicate PO df: {duplicate_po_df.count()}")
-
-            update_time = dateutil.parser.parse(
-                datetime.datetime.now(tz=datetime.timezone.utc).strftime(
-                    "%Y-%m-%dT%H:%M:%SZ"
-                )
-            )
-            duplicate_po_df = (
-                duplicate_po_df.join(po_update_df, on="id")
-                .withColumn(
-                    "multiplicity",
-                    sf.col("multiplicity") + sf.col("multiplicity_update"),
-                )
-                .drop("multiplicity_update")
-            )
-            duplicate_po_df = duplicate_po_df.withColumn(
-                "last_modified", sf.lit(update_time).cast("timestamp")
-            )
-            update_table = pa.table(
-                [pa.array(col) for col in zip(*duplicate_po_df.collect())],
                 schema=arrow_schema,
             )
             with self.session.transaction() as tx:
                 table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
-                table.update(
-                    rows=update_table, columns=["multiplicity", "last_modified"]
-                )
-        # print("len new_ids", len(new_ids))
-        # print("len existing_ids", len(existing_ids))
+                table.update(rows=update_table, columns=update_cols)
+            new_ids.extend(new_ids_batch)
+            existing_ids.extend(existing_ids_batch)
         return (new_ids, list(set(existing_ids)))
+
+    def find_existing_co_rows_append_elem(
+        self, co_df, cols: list[str], elems: list[str]
+    ):
+        update_cols = [
+            col for col in config_schema.fieldNames() if col not in ["id", "$row_id"]
+        ]
+        arr_cols = [
+            col
+            for col in update_cols
+            if get_spark_field_type(config_df_schema, col).typeName() == "array"
+        ]
+        return self.update_existing_rows_append_elem(
+            co_df,
+            self.config_table,
+            cols,
+            elems,
+            config_schema,
+            spark_schema_to_arrow_schema(config_schema),
+            update_cols,
+            arr_cols,
+        )
+
+    def find_existing_po_rows_append_elem(self, po_df):
+        update_cols = ["multiplicity", "last_modified"]
+        arr_cols = []
+        return self.update_existing_rows_append_elem(
+            po_df,
+            self.prop_object_table,
+            [],
+            [],
+            property_object_schema,
+            pa.schema(
+                [
+                    pa.field("id", pa.string()),
+                    pa.field("multiplicity", pa.int32()),
+                    pa.field("last_modified", pa.timestamp("us")),
+                    pa.field("$row_id", pa.uint64()),
+                ]
+            ),
+            update_cols,
+            arr_cols,
+        )
 
     def read_table(
         self, table_name: str, unstring: bool = False, read_metadata: bool = False
@@ -678,11 +599,13 @@ class VastDataLoader:
         co_po_df = co_df.join(po_df, on="configuration_id", how="inner")
         return co_po_df
 
-    def simple_sdk_query(self, query_table, predicate, schema):
+    def simple_sdk_query(self, query_table, predicate, schema, internal_row_id=False):
         bucket_name, schema_name, table_n = self._get_table_split(query_table)
         with self.session.transaction() as tx:
             table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
-            rec_batch_reader = table.select(predicate=predicate)
+            rec_batch_reader = table.select(
+                predicate=predicate, internal_row_id=internal_row_id
+            )
             rec_batch = rec_batch_reader.read_all()
             if rec_batch.num_rows == 0:
                 print(f"No records found for given query {predicate}")
@@ -693,7 +616,19 @@ class VastDataLoader:
         return spark_df
 
     def get_co_cs_mapping(self, cs_id: str):
-        bucket_name, schema_name, table_n = self._get_table_split(self.co_cs_map_table)
+        """
+        Get configuration to configuration set mapping for a given ID.
+
+        Args:
+            cs_id (str): Configuration set ID.
+
+        Returns:
+            DataFrame or None: Mapping DataFrame if found, else None.
+
+        Notes:
+            - Prints message and returns None if mapping table doesn't exist.
+            - Prints message and returns None if no records found for the given ID.
+        """
         if not self.spark.catalog.tableExists(self.co_cs_map_table):
             print(f"Table {self.co_cs_map_table} does not exist")
             return None
@@ -722,9 +657,7 @@ class VastDataLoader:
         df_schema = string_schema_dict[table_name]
         if table_name == self.config_table:
             predicate = _.dataset_ids.contains(dataset_id)
-        elif (
-            table_name == self.prop_object_table or table_name == self.config_set_table
-        ):
+        elif table_name == self.prop_object_table or table_name == self.config_set_table:
             predicate = _.dataset_id == dataset_id
         spark_df = self.simple_sdk_query(table_name, predicate, df_schema)
         unstring_schema_dict = {
@@ -802,9 +735,7 @@ class VastDataLoader:
     def get_filtered_table(
         self,
         df,
-        filter_conditions: (
-            list[tuple[str, str, str | int | float | list]] | None
-        ) = None,
+        filter_conditions: list[tuple[str, str, str | int | float | list]] | None = None,
     ):
         if filter_conditions is None:
             return df
@@ -1102,9 +1033,7 @@ class DataManager:
                 pos_with_mult = pos_with_mult.filter(
                     sf.col("dataset_id") == self.dataset_id
                 )
-                pos_with_mult = pos_with_mult.filter(sf.col("multiplicity") > 0).limit(
-                    1
-                )
+                pos_with_mult = pos_with_mult.filter(sf.col("multiplicity") > 0).limit(1)
                 if pos_with_mult.count() > 0:
                     raise ValueError(
                         f"POs for dataset with ID {self.dataset_id} already exist in "
@@ -1162,12 +1091,10 @@ class DataManager:
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
                 all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
                 if not all_unique_co:
-                    new_co_ids, update_co_ids = (
-                        loader.find_existing_co_rows_append_elem(
-                            co_df=co_df,
-                            cols=["dataset_ids", "names", "labels"],
-                            elems=[self.dataset_id, None, None],
-                        )
+                    new_co_ids, update_co_ids = loader.find_existing_co_rows_append_elem(
+                        co_df=co_df,
+                        cols=["dataset_ids", "names", "labels"],
+                        elems=[self.dataset_id, None, None],
                     )
                     print(f"Updated {len(update_co_ids)} rows in {loader.config_table}")
                     if len(new_co_ids) > 0:
@@ -1192,10 +1119,8 @@ class DataManager:
 
                 if not all_unique_po:
                     # print("Sending to find_existing_po_rows_append_elem")
-                    new_po_ids, update_po_ids = (
-                        loader.find_existing_po_rows_append_elem(
-                            po_df=po_df,
-                        )
+                    new_po_ids, update_po_ids = loader.find_existing_po_rows_append_elem(
+                        po_df=po_df,
                     )
                     print(
                         f"Updated {len(update_po_ids)} rows in "
@@ -1359,9 +1284,7 @@ class DataManager:
                 config_df=config_set_query_df,
                 dataset_id=self.dataset_id,
             )
-            co_cs_df = co_id_df.withColumn(
-                "configuration_set_id", sf.lit(config_set.id)
-            )
+            co_cs_df = co_id_df.withColumn("configuration_set_id", sf.lit(config_set.id))
             loader.write_table(co_cs_df, loader.co_cs_map_table, check_unique=False)
             loader.find_existing_co_rows_append_elem(
                 co_df=config_set_query_df,
