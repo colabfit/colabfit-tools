@@ -81,7 +81,7 @@ def generate_string():
     return get_random_string(12, allowed_chars=string.ascii_lowercase + "1234567890")
 
 
-class SparkDataLoader:
+class VastDataLoader:
     def __init__(
         self,
         table_prefix: str = "ndb.colabfit.dev",
@@ -90,7 +90,17 @@ class SparkDataLoader:
         access_secret=None,
     ):
         self.table_prefix = table_prefix
-        self.spark = SparkSession.builder.appName("ColabfitDataLoader").getOrCreate()
+        self.spark = (
+            SparkSession.builder.appName("ColabFitDataLoader")
+            .config("spark.dynamicAllocation.enabled", "true")
+            .config("spark.dynamicAllocation.minExecutors", "1")
+            .config("spark.dynamicAllocation.maxExecutors", "10")
+            .config("spark.task.maxFailures", "4")
+            .config("spark.network.timeout", "300s")
+            .config("spark.speculation", "true")
+            .config("spark.executor.memory", "4g")
+            .getOrCreate()
+        )
         self.spark.sparkContext.setLogLevel("ERROR")
         if endpoint and access_key and access_secret:
             self.endpoint = endpoint
