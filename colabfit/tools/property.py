@@ -333,15 +333,11 @@ class Property(dict):
                 A property map as described in the Property attributes section.
 
         """
-
         # global KIM_PROPERTIES
-
         load_from_existing = False
-
         if isinstance(definition, dict):
             # TODO: this is probably slowing things down a bit
             dummy_dict = deepcopy(definition)
-
             # Spoof if necessary
             if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
                 # Invalid ID. Try spoofing it
@@ -354,7 +350,6 @@ class Property(dict):
         elif isinstance(definition, str):
             if os.path.isfile(definition):
                 dummy_dict = kim_edn.load(definition)
-
                 # Check if you need to spoof the property ID to trick OpenKIM
                 if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
                     # Invalid ID. Try spoofing it
@@ -365,25 +360,20 @@ class Property(dict):
                         "Invalid KIM property-id; Temporarily "
                         f"renaming to {dummy_dict['property-id']}"
                     )
-
                 load_from_existing = dummy_dict["property-id"] in KIM_PROPERTIES
                 definition_name = dummy_dict["property-id"]
-
             else:
                 # Then this has to be an existing (or added) KIM Property Definition
                 load_from_existing = True
-
                 # It may have been added previously, but spoofed
                 if VALID_KIM_ID.match(definition) is None:
                     # Invalid ID. Try spoofing it
                     definition_name = "tag:@,0000-00-00:property/" + definition
-
         else:
             raise InvalidPropertyDefinition(
                 "Property definition must either be a dictionary "
                 "or a path to an EDN file"
             )
-
         if load_from_existing:
             instance = kim_edn.loads(
                 kim_property_create(
@@ -398,10 +388,8 @@ class Property(dict):
 
                 if "property-name" in dummy_dict:
                     del dummy_dict["property-name"]
-
                 tmp.write(json.dumps(dummy_dict))
                 tmp.flush()
-
                 instance = kim_edn.loads(
                     kim_property_create(
                         instance_id=1,
