@@ -277,7 +277,7 @@ class VastDataLoader:
         )
         return df
 
-    def update_existing_rows_append_elem(
+    def update_existing_co_po_rows(
         self,
         df,
         table_name,
@@ -288,6 +288,35 @@ class VastDataLoader:
         update_cols,
         arr_cols,
     ):
+        """
+        Updates existing rows in CO or PO table with data from new ingest.
+
+        Parameters:
+        -----------
+        df : DataFrame
+            The DataFrame containing the new data to be updated.
+        table_name : str
+            The name of the table to be updated.
+        cols : list[str]
+            List of column names to be updated.
+        elems : list[str]
+            List of elements corresponding to the columns to be updated.
+        schema : Schema
+            The schema of the table.
+        arrow_schema : Schema
+            The Arrow schema of the columns to be updated.
+        update_cols : list[str]
+            List of columns to be updated.
+        arr_cols : list[str]
+            List of columns that contain array data.
+
+        Returns:
+        --------
+        tuple
+            A tuple containing two lists:
+            - new_ids: List of IDs that were newly added.
+            - existing_ids: List of IDs that were updated.
+        """
         if isinstance(cols, str):
             cols = [cols]
         if isinstance(elems, str):
@@ -351,14 +380,14 @@ class VastDataLoader:
                         .drop(f"{col}_dup")
                     )
                 elif col == "multiplicity":
-                    df_add = df.select("id", "multiplicity")
-                    duplicate_df = duplicate_df.withColumnRenamed(
-                        col, "multiplicity_old"
-                    ).join(df_add, on="id")
+                    df_add = df.select(
+                        "id", sf.col("multiplicity").alias("multiplicity_add")
+                    )
+                    duplicate_df = duplicate_df.join(df_add, on="id", how="left")
                     duplicate_df = duplicate_df.withColumn(
                         "multiplicity",
-                        sf.col("multiplicity_old") + sf.col("multiplicity"),
-                    )
+                        sf.col("multiplicity") + sf.col("multiplicity_add"),
+                    ).drop("multiplicity_add")
                 else:
                     duplicate_df = duplicate_df.withColumn(
                         col, sf.coalesce(sf.col(col), sf.array())
@@ -401,9 +430,7 @@ class VastDataLoader:
             existing_ids.extend(existing_ids_batch)
         return (new_ids, list(set(existing_ids)))
 
-    def find_existing_co_rows_append_elem(
-        self, co_df, cols: list[str], elems: list[str]
-    ):
+    def update_existing_co_rows(self, co_df, cols: list[str], elems: list[str]):
         update_cols = [
             col for col in config_schema.fieldNames() if col not in ["id", "$row_id"]
         ]
@@ -414,7 +441,7 @@ class VastDataLoader:
         ]
         arrow_schema = spark_schema_to_arrow_schema(config_schema)
         arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
-        return self.update_existing_rows_append_elem(
+        return self.update_existing_co_po_rows(
             co_df,
             self.config_table,
             cols,
@@ -425,16 +452,16 @@ class VastDataLoader:
             arr_cols,
         )
 
-    def find_existing_po_rows_append_elem(self, po_df):
+    def update_existing_po_rows(self, po_df):
         update_cols = ["multiplicity", "last_modified"]
         arr_cols = []
-        return self.update_existing_rows_append_elem(
-            po_df,
-            self.prop_object_table,
-            [],
-            [],
-            property_object_schema,
-            pa.schema(
+        return self.update_existing_co_po_rows(
+            df=po_df,
+            table_name=self.prop_object_table,
+            cols=["multiplicity"],
+            elems=[None],
+            schema=property_object_schema,
+            arrow_schema=pa.schema(
                 [
                     pa.field("id", pa.string()),
                     pa.field("multiplicity", pa.int32()),
@@ -442,8 +469,8 @@ class VastDataLoader:
                     pa.field("$row_id", pa.uint64()),
                 ]
             ),
-            update_cols,
-            arr_cols,
+            update_cols=update_cols,
+            arr_cols=arr_cols,
         )
 
     def read_table(
@@ -1134,7 +1161,7 @@ class DataManager:
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
                 all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
                 if not all_unique_co:
-                    new_co_ids, update_co_ids = loader.find_existing_co_rows_append_elem(
+                    new_co_ids, update_co_ids = loader.update_existing_co_rows(
                         co_df=co_df,
                         cols=["dataset_ids", "names", "labels"],
                         elems=[self.dataset_id, None, None],
@@ -1161,8 +1188,8 @@ class DataManager:
                     print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
 
                 if not all_unique_po:
-                    # print("Sending to find_existing_po_rows_append_elem")
-                    new_po_ids, update_po_ids = loader.find_existing_po_rows_append_elem(
+                    # print("Sending to update_existing_po_rows")
+                    new_po_ids, update_po_ids = loader.update_existing_po_rows(
                         po_df=po_df,
                     )
                     print(
@@ -1329,7 +1356,7 @@ class DataManager:
             )
             co_cs_df = co_id_df.withColumn("configuration_set_id", sf.lit(config_set.id))
             loader.write_table(co_cs_df, loader.co_cs_map_table, check_unique=False)
-            loader.find_existing_co_rows_append_elem(
+            loader.update_existing_co_rows(
                 co_df=config_set_query_df,
                 cols=["configuration_set_ids"],
                 elems=config_set.id,
