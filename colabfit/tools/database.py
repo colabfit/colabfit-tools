@@ -283,7 +283,8 @@ class VastDataLoader:
         table_name,
         cols: list[str],
         elems: list[str],
-        schema,
+        str_schema,
+        unstr_schema,
         arrow_schema,
         update_cols,
         arr_cols,
@@ -301,8 +302,10 @@ class VastDataLoader:
             List of column names to be updated.
         elems : list[str]
             List of elements corresponding to the columns to be updated.
-        schema : Schema
-            The schema of the table.
+        str_schema : Schema
+            The stringed schema of the table.
+        unstr_schema : Schema
+            The unstringed schema of the table.
         arrow_schema : Schema
             The Arrow schema of the columns to be updated.
         update_cols : list[str]
@@ -321,16 +324,20 @@ class VastDataLoader:
             cols = [cols]
         if isinstance(elems, str):
             elems = [elems]
-        col_types = {col: get_spark_field_type(schema, col) for col in update_cols}
-        col_types.update(
-            {
-                "id": StringType(),
-                "last_modified": TimestampType(),
-                "$row_id": LongType(),
-            }
-        )
-        spark_schema = StructType(
-            [StructField(col, col_types[col], True) for col in update_cols]
+
+        str_col_types = {
+            col: get_spark_field_type(str_schema, col) for col in update_cols
+        }
+        unstr_col_types = {col: get_spark_field_type(unstr_schema, col) for col in cols}
+        addtl_fields = {
+            "id": StringType(),
+            "last_modified": TimestampType(),
+            "$row_id": LongType(),
+        }
+        str_col_types.update(addtl_fields)
+        unstr_col_types.update(addtl_fields)
+        str_spark_schema = StructType(
+            [StructField(col, str_col_types[col], True) for col in update_cols]
             + [
                 StructField("id", StringType(), False),
                 StructField("$row_id", IntegerType(), False),
@@ -353,13 +360,13 @@ class VastDataLoader:
                 )
                 rec_batch = rec_batch.read_all()
                 duplicate_df = self.spark.createDataFrame(
-                    rec_batch.to_struct_array().to_pandas(), schema=spark_schema
+                    rec_batch.to_struct_array().to_pandas(), schema=str_spark_schema
                 )
             if duplicate_df.count() == 0:
                 new_ids.extend(id_batch)
                 continue
-            unstring_udf = sf.udf(unstring_df_val, ArrayType(StringType()))
             for col_name in arr_cols:
+                unstring_udf = sf.udf(unstring_df_val, unstr_col_types[col_name])
                 duplicate_df = duplicate_df.withColumn(
                     col_name, unstring_udf(sf.col(col_name))
                 )
@@ -389,6 +396,7 @@ class VastDataLoader:
                         sf.col("multiplicity") + sf.col("multiplicity_add"),
                     ).drop("multiplicity_add")
                 else:
+                    print(col, unstr_col_types[col])
                     duplicate_df = duplicate_df.withColumn(
                         col, sf.coalesce(sf.col(col), sf.array())
                     )
@@ -434,22 +442,32 @@ class VastDataLoader:
         update_cols = [
             col for col in config_schema.fieldNames() if col not in ["id", "$row_id"]
         ]
+        # cols_types = [
+        #     (col, dtype)
+        #     for col, dtype in zip(
+        #         cols, [get_spark_field_type(config_df_schema, col) for col in cols]
+        #     )
+        # ]
+        # arr_cols = [
+        #     (col, dtype) for col, dtype in cols_types if dtype.typeName() == "array"
+        # ]
         arr_cols = [
             col
-            for col in update_cols
+            for col in cols
             if get_spark_field_type(config_df_schema, col).typeName() == "array"
         ]
         arrow_schema = spark_schema_to_arrow_schema(config_schema)
         arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
         return self.update_existing_co_po_rows(
-            co_df,
-            self.config_table,
-            cols,
-            elems,
-            config_schema,
-            arrow_schema,
-            update_cols,
-            arr_cols,
+            df=co_df,
+            table_name=self.config_table,
+            cols=cols,
+            elems=elems,
+            str_schema=config_schema,
+            unstr_schema=config_df_schema,
+            arrow_schema=arrow_schema,
+            update_cols=update_cols,
+            arr_cols=arr_cols,
         )
 
     def update_existing_po_rows(self, po_df):
@@ -460,7 +478,8 @@ class VastDataLoader:
             table_name=self.prop_object_table,
             cols=["multiplicity"],
             elems=[None],
-            schema=property_object_schema,
+            str_schema=property_object_schema,
+            unstr_schema=property_object_df_schema,
             arrow_schema=pa.schema(
                 [
                     pa.field("id", pa.string()),
