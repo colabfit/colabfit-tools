@@ -373,6 +373,10 @@ class VastDataLoader:
             duplicate_df = duplicate_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
+            arrow_schema = pa.schema(
+                [arrow_schema.field(col) for col in total_write_cols]
+            )
+            print(arrow_schema)
             update_table = pa.table(
                 [
                     pa.array(col)
@@ -398,13 +402,15 @@ class VastDataLoader:
             for col in update_cols
             if get_spark_field_type(config_df_schema, col).typeName() == "array"
         ]
+        arrow_schema = spark_schema_to_arrow_schema(config_schema)
+        arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
         return self.update_existing_rows_append_elem(
             co_df,
             self.config_table,
             cols,
             elems,
             config_schema,
-            spark_schema_to_arrow_schema(config_schema),
+            arrow_schema,
             update_cols,
             arr_cols,
         )
