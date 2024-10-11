@@ -350,6 +350,15 @@ class VastDataLoader:
                         )
                         .drop(f"{col}_dup")
                     )
+                elif col == "multiplicity":
+                    df_add = df.select("id", "multiplicity")
+                    duplicate_df = duplicate_df.withColumnRenamed(
+                        col, "multiplicity_old"
+                    ).join(df_add, on="id")
+                    duplicate_df = duplicate_df.withColumn(
+                        "multiplicity",
+                        sf.col("multiplicity_old") + sf.col("multiplicity"),
+                    )
                 else:
                     duplicate_df = duplicate_df.withColumn(
                         col, sf.coalesce(sf.col(col), sf.array())
@@ -374,6 +383,9 @@ class VastDataLoader:
             )
             duplicate_df = duplicate_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
+            )
+            arrow_schema = pa.schema(
+                [arrow_schema.field(col) for col in total_write_cols]
             )
             update_table = pa.table(
                 [
@@ -400,13 +412,15 @@ class VastDataLoader:
             for col in update_cols
             if get_spark_field_type(config_df_schema, col).typeName() == "array"
         ]
+        arrow_schema = spark_schema_to_arrow_schema(config_schema)
+        arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
         return self.update_existing_rows_append_elem(
             co_df,
             self.config_table,
             cols,
             elems,
             config_schema,
-            spark_schema_to_arrow_schema(config_schema),
+            arrow_schema,
             update_cols,
             arr_cols,
         )
