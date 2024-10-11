@@ -348,6 +348,15 @@ class VastDataLoader:
                         )
                         .drop(f"{col}_dup")
                     )
+                elif col == "multiplicity":
+                    df_add = df.select("id", "multiplicity")
+                    duplicate_df = duplicate_df.withColumnRenamed(
+                        col, "multiplicity_old"
+                    ).join(df_add, on="id")
+                    duplicate_df = duplicate_df.withColumn(
+                        "multiplicity",
+                        sf.col("multiplicity_old") + sf.col("multiplicity"),
+                    )
                 else:
                     duplicate_df = duplicate_df.withColumn(
                         col, sf.coalesce(sf.col(col), sf.array())
@@ -376,7 +385,6 @@ class VastDataLoader:
             arrow_schema = pa.schema(
                 [arrow_schema.field(col) for col in total_write_cols]
             )
-            print(arrow_schema)
             update_table = pa.table(
                 [
                     pa.array(col)
