@@ -242,10 +242,14 @@ class VastDataLoader:
             # names=spark_df.columns,
             schema=arrow_schema,
         ).to_batches()
+        total_rows = 0
         with self.session.transaction() as tx:
             table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
             for rec_batch in arrow_rec_batch:
+                len_batch = rec_batch.num_rows
                 table.insert(rec_batch)
+                total_rows += len_batch
+        print(f"Inserted {total_rows} rows into table {table_name}")
 
     def write_metadata(self, df):
         """Writes metadata to files using boto3 for VastDB
@@ -1204,7 +1208,7 @@ class DataManager:
                         check_length_col="positions_00",
                         check_unique=False,
                     )
-                    print(f"Inserted {len(co_rows)} rows into {loader.config_table}")
+                    # print(f"Inserted {co_df.count()} rows into {loader.config_table}")
 
                 if not all_unique_po:
                     # print("Sending to update_existing_po_rows")
@@ -1225,10 +1229,10 @@ class DataManager:
                             check_length_col="atomic_forces_00",
                             check_unique=False,
                         )
-                    print(
-                        f"Inserted {len(new_po_ids)} rows into "
-                        f"{loader.prop_object_table}"
-                    )
+                    # print(
+                    #     f"Inserted {len(new_po_ids)} rows into "
+                    #     f"{loader.prop_object_table}"
+                    # )
                 else:
                     print("All POs unique: writing to table...")
                     po_df = loader.write_metadata(po_df)

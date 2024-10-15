@@ -560,29 +560,29 @@ class Property(dict):
             if units != p_info.unit:
                 split_units = list(
                     itertools.chain.from_iterable(
-                        [
-                            sp.split("^")
-                            for sp in itertools.chain.from_iterable(
-                                [sp.split("/") for sp in units.split("*")]
-                            )
-                        ]
+                        [sp.split("/") for sp in units.split("*")]
                     )
                 )
-
-                prop_val *= float(UNITS[split_units[0]])
-                for u in split_units[1:]:
+                powers = []
+                for i, sp_un in enumerate(split_units):
+                    if "^" in sp_un:
+                        split = sp_un.split("^")
+                        powers.append(int(split[1]))
+                        split_units[i] = split[0]
+                    else:
+                        powers.append(1)
+                if powers[0] != 1:
+                    prop_val *= np.power(float(UNITS[split_units[0]]), powers[0])
+                else:
+                    prop_val *= float(UNITS[split_units[0]])
+                for u, power in zip(split_units[1:], powers[1:]):
+                    un = UNITS[u]
+                    if power != 1:
+                        un = np.power(un, power)
                     if units[units.find(u) - 1] == "*":
-                        prop_val *= UNITS[u]
+                        prop_val *= un
                     elif units[units.find(u) - 1] == "/":
-                        prop_val /= UNITS[u]
-                    elif units[units.find(u) - 1] == "^":
-                        try:
-                            prop_val = np.power(prop_val, int(u))
-                        except Exception:
-                            raise RuntimeError(
-                                f"There may be something wrong with the units: {u}"
-                            )
-
+                        prop_val /= un
                     else:
                         raise RuntimeError(
                             f"There may be something wrong with the units: {u}"

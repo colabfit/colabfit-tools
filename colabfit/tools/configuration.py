@@ -1,5 +1,6 @@
 import datetime
 from string import ascii_lowercase, ascii_uppercase
+from types import NoneType
 
 import dateutil
 import numpy as np
@@ -73,7 +74,7 @@ class AtomicConfiguration(Atoms):
         labels = self.info.pop(ATOMS_LABELS_FIELD, None)
         if isinstance(labels, str):
             self.labels = [labels]
-        elif not isinstance(labels, list):
+        elif not isinstance(labels, (list, NoneType)):
             raise TypeError("Labels must be a string or a list of strings or None")
         else:
             self.labels = labels
