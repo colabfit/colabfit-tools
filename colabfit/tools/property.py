@@ -168,6 +168,10 @@ def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
             gathered_fields[md_field] = {"source-value": v}
     method = gathered_fields.pop("method", None)
     software = gathered_fields.pop("software", None)
+    if "property_key" not in gathered_fields:
+        raise RuntimeError(
+            "'property_keys' must be provided in the property map. If defined, check that property_keys is formatted as {'property_keys': {'value': {'key1 : value1}}}"  # noqa E501
+        )
     if method is not None:
         method = method["source-value"]
     if software is not None:

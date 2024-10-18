@@ -21,6 +21,7 @@ from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
 from ibis import _
 from pyspark.sql import Row, SparkSession
+from pyspark.sql.functions import udf
 from pyspark.sql.types import (
     ArrayType,
     IntegerType,
@@ -40,9 +41,8 @@ from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.dataset import Dataset
 from colabfit.tools.property import Property
-from pyspark.sql.functions import udf
-from pyspark.sql.types import StringType
 from colabfit.tools.schema import (
+    co_cs_mapping_schema,
     config_df_schema,
     config_md_schema,
     config_schema,
@@ -53,7 +53,6 @@ from colabfit.tools.schema import (
     property_object_df_schema,
     property_object_md_schema,
     property_object_schema,
-    co_cs_mapping_schema,
 )
 from colabfit.tools.utilities import (
     _hash,
@@ -132,7 +131,7 @@ class VastDataLoader:
         self.endpoint = endpoint
 
     def _get_table_split(self, table_name_str: str):
-        """Get bucket, schema and table names for VastDB SDK, with no backticks"""
+        """Get bucket, schema and table names for VastDB SDK with no backticks"""
         table_split = table_name_str.split(".")
         bucket_name = table_split[1].replace("`", "")
         schema_name = table_split[2].replace("`", "")
@@ -1201,6 +1200,7 @@ class DataManager:
                             check_unique=False,
                         )
                 else:
+                    print("All COs unique: writing to table...")
                     co_df = loader.write_metadata(co_df)
                     loader.write_table(
                         co_df,
@@ -1208,7 +1208,6 @@ class DataManager:
                         check_length_col="positions_00",
                         check_unique=False,
                     )
-                    # print(f"Inserted {co_df.count()} rows into {loader.config_table}")
 
                 if not all_unique_po:
                     # print("Sending to update_existing_po_rows")
@@ -1229,10 +1228,6 @@ class DataManager:
                             check_length_col="atomic_forces_00",
                             check_unique=False,
                         )
-                    # print(
-                    #     f"Inserted {len(new_po_ids)} rows into "
-                    #     f"{loader.prop_object_table}"
-                    # )
                 else:
                     print("All POs unique: writing to table...")
                     po_df = loader.write_metadata(po_df)
@@ -1242,9 +1237,6 @@ class DataManager:
                         loader.prop_object_table,
                         check_length_col="atomic_forces_00",
                         check_unique=False,
-                    )
-                    print(
-                        f"Inserted {len(po_rows)} rows into {loader.prop_object_table}"
                     )
 
     def load_data_to_pg_in_batches(self, loader):
@@ -1285,14 +1277,6 @@ class DataManager:
         """
         dataset_id = self.dataset_id
         config_set_rows = []
-        # config_df = loader.read_table(table_name=loader.config_table, unstring=True)
-        # config_df = config_df.filter(
-        #     sf.array_contains(sf.col("dataset_ids"), self.dataset_id)
-        # )
-        # .cache()
-        # prop_df = loader.read_table(loader.prop_object_table, unstring=True)
-        # prop_df = prop_df.filter(sf.col("dataset_id") == self.dataset_id)
-        # .cache()
         for i, (names_match, label_match, cs_name, cs_desc) in tqdm(
             enumerate(name_label_match), desc="Creating Configuration Sets"
         ):
@@ -1301,9 +1285,6 @@ class DataManager:
                 f"cs_name: {cs_name}, cs_desc: {cs_desc}"
             )
             if names_match and not label_match:
-                # config_set_query = config_df.withColumn(
-                #     "names_exploded", sf.explode(sf.col("names"))
-                # ).filter(sf.col("names_exploded").rlike(names_match))
                 config_set_query_df = loader.config_set_query(
                     query_table=loader.config_table,
                     dataset_id=dataset_id,
@@ -1311,12 +1292,6 @@ class DataManager:
                 )
             # Currently an AND operation on labels: labels col contains x AND y
             if label_match and not names_match:
-                # if isinstance(label_match, str):
-                #     label_match = [label_match]
-                # for label in label_match:
-                #     config_set_query = config_set_query.filter(
-                #         sf.array_contains(sf.col("labels"), label)
-                #     )
                 config_set_query_df = loader.config_set_query(
                     query_table=loader.config_table,
                     dataset_id=dataset_id,
@@ -1334,17 +1309,6 @@ class DataManager:
                 .distinct()
                 .withColumnRenamed("id", "configuration_id")
             )
-            # prop_df_cs = loader.config_set_query(
-            #     query_table=loader.prop_object_table,
-            #     dataset_id=dataset_id,
-            #     configuration_ids=co_ids,
-            # )
-            # prop_df_cs = prop_df_cs.select(
-            #     "configuration_id", "multiplicity"
-            # ).withColumnRenamed("configuration_id", "id")
-            # config_set_query_df = config_set_query_df.join(
-            #     prop_df_cs, on="id", how="inner"
-            # )
             string_cols = [
                 "elements",
             ]
@@ -1386,7 +1350,6 @@ class DataManager:
             )
             t_end = time() - t
             print(f"Time to create CS and update COs with CS-ID: {t_end}")
-
             config_set_rows.append(config_set.spark_row)
         config_set_df = loader.spark.createDataFrame(
             config_set_rows, schema=configuration_set_df_schema
@@ -1416,12 +1379,6 @@ class DataManager:
                 .select("id")
                 .collect()
             )
-            # cs_ids = (
-            #     loader.read_table(loader.config_set_table)
-            #     .filter(sf.col("dataset_id") == self.dataset_id)
-            #     .select("id")
-            #     .collect()
-            # )
             if len(cs_ids) == 0:
                 cs_ids = None
             else:
@@ -1431,15 +1388,10 @@ class DataManager:
         config_df = loader.dataset_query(
             dataset_id=self.dataset_id, table_name=loader.config_table
         )
-        # config_df = loader.read_table(loader.config_table, unstring=True)
-        # config_df = config_df.filter(
-        #     sf.array_contains(sf.col("dataset_ids"), self.dataset_id)
-        # )
         prop_df = loader.dataset_query(
             dataset_id=self.dataset_id, table_name=loader.prop_object_table
         )
-        # prop_df = loader.read_table(loader.prop_object_table, unstring=True)
-        # prop_df = prop_df.filter(sf.col("dataset_id") == self.dataset_id)
+        prop_df.persist()
         ds = Dataset(
             name=name,
             authors=authors,
@@ -1566,23 +1518,6 @@ def prepend_path_udf(prefix, md_path):
     except ValueError:
         full_path = Path(prefix) / md_path
         return str(full_path)
-
-
-# def write_md_partition(partition, config):
-#     s3_mgr = S3FileManager(
-#         bucket_name=config["bucket_dir"],
-#         access_id=config["access_key"],
-#         secret_key=config["access_secret"],
-#         endpoint_url=config["endpoint"],
-#     )
-#     for row in partition:
-#         md_path = Path(config["metadata_dir"]) / row["metadata_path"]
-#         if not md_path.exists():
-#             s3_mgr.write_file(
-#                 row["metadata"],
-#                 str(md_path),
-#             )
-#     return iter([])
 
 
 def read_md_partition(partition, config):

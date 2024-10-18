@@ -45,6 +45,7 @@ config_df_schema = StructType(
         StructField("metadata_id", StringType(), True),
         StructField("metadata_path", StringType(), True),
         StructField("metadata_size", IntegerType(), True),
+        StructField("structure_hash", StringType(), True),
     ]
     + [
         StructField(f"positions_{i:02d}", ArrayType(ArrayType(DoubleType())), True)

@@ -12,6 +12,7 @@ from colabfit.tools.utilities import (
     _empty_dict_from_schema,
     _hash,
     _parse_unstructured_metadata,
+    config_struct_hash,
 )
 
 
@@ -63,7 +64,14 @@ class AtomicConfiguration(Atoms):
             "pbc",
             "metadata_id",
         ]
+        self.struct_identifier_kw = [
+            "atomic_numbers",
+            "positions_00",
+            "cell",
+            "pbc",
+        ]
         self.unique_identifier_kw.extend([f"positions_{i:02d}" for i in range(1, 20)])
+        self.struct_identifier_kw.extend([f"positions_{i:02d}" for i in range(1, 20)])
         self.info = info
         self.metadata = self.set_metadata(co_md_map)
         if isinstance(names, str):
@@ -79,11 +87,12 @@ class AtomicConfiguration(Atoms):
         else:
             self.labels = labels
         self.spark_row = self.to_spark_row()
-        self._hash = hash(self)
+        self._hash = str(_hash(self.spark_row, self.unique_identifier_kw, False))
         self.id = f"CO_{self._hash}"
-
+        if len(self.id) > 28:
+            self.id = self.id[:28]
         self.spark_row["id"] = self.id
-        self.spark_row["hash"] = str(self._hash)
+        self.spark_row["hash"] = self._hash
         # self.spark_row["dataset_ids"] = [self.dataset_id]
         self.spark_row = self.spark_row
         # Check for name conflicts in info/arrays; would cause bug in parsing
@@ -238,6 +247,12 @@ class AtomicConfiguration(Atoms):
             datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
         co_dict["atomic_numbers"] = self.numbers.astype(int).tolist()
+        co_dict["structure_hash"] = config_struct_hash(
+            co_dict["atomic_numbers"],
+            co_dict["cell"],
+            co_dict["pbc"],
+            co_dict["positions_00"],
+        )
         if self.metadata is not None:
             co_dict.update(self.metadata)
         co_dict.update(self.configuration_summary())
@@ -330,4 +345,5 @@ class AtomicConfiguration(Atoms):
         )
 
     def __hash__(self):
+        """This is not used as the hash for the spark row, as Python may truncate"""
         return _hash(self.spark_row, sorted(self.unique_identifier_kw), False)

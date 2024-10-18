@@ -23,7 +23,7 @@ from pyspark.sql.types import (
 def _format_for_hash(v):
     if isinstance(v, np.ndarray):
         if np.issubdtype(v.dtype, np.floating):
-            return np.round_(v.astype(np.float64), decimals=16)
+            return np.round(v.astype(np.float64), decimals=16)
         elif np.issubdtype(v.dtype, np.integer):
             return v.astype(np.int64)
         elif np.issubdtype(v.dtype, bool):
@@ -65,6 +65,61 @@ def _hash(row, identifying_key_list, include_keys_in_hash=False):
                 _hash.update(bytes(_format_for_hash(k)))
             _hash.update(bytes(_format_for_hash(v)))
     return int(_hash.hexdigest(), 16)
+
+
+def config_struct_hash(atomic_numbers, cell, pbc, positions):
+    """Structure hashing for configuration creation"""
+    _hash = sha512()
+    positions = np.array(positions)
+    sort_ixs = np.lexsort(
+        (
+            positions[:, 2],
+            positions[:, 1],
+            positions[:, 0],
+        )
+    )
+    sorted_positions = positions[sort_ixs]
+    atomic_numbers = np.array(atomic_numbers)
+    sorted_atomic_numbers = atomic_numbers[sort_ixs]
+    _hash.update(bytes(_format_for_hash(sorted_atomic_numbers)))
+    _hash.update(bytes(_format_for_hash(cell)))
+    _hash.update(bytes(_format_for_hash(pbc)))
+    _hash.update(bytes(_format_for_hash(sorted_positions)))
+    return int(_hash.hexdigest(), 16)
+
+
+@sf.udf(returnType=StringType())
+def config_struct_hash_udf(atomic_numbers, cell, pbc, *positions):
+    """
+    Will hash in the following order: atomic_numbers, cell, pbc, positions
+
+    Position columns will be concatenated and sorted by x, y, z
+    Atomic numbers will be sorted by the position sorting
+    Perform on existing rows in written tables (will unstring)
+    """
+    _hash = sha512()
+    positions = []
+    for v in positions:
+        if v is None or v == "[]":
+            continue
+        else:
+            positions.extend(literal_eval(v))
+    positions = np.array(positions)
+    sort_ixs = np.lexsort(
+        (
+            positions[:, 2],
+            positions[:, 1],
+            positions[:, 0],
+        )
+    )
+    sorted_positions = positions[sort_ixs]
+    atomic_numbers = np.array(literal_eval(atomic_numbers))
+    sorted_atomic_numbers = atomic_numbers[sort_ixs]
+    _hash.update(bytes(_format_for_hash(sorted_atomic_numbers)))
+    _hash.update(bytes(_format_for_hash(literal_eval(cell))))
+    _hash.update(bytes(_format_for_hash(literal_eval(pbc))))
+    _hash.update(bytes(_format_for_hash(sorted_positions)))
+    return str(int(_hash.hexdigest(), 16))
 
 
 def get_spark_field_type(schema, field_name):

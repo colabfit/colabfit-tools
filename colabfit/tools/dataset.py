@@ -201,9 +201,7 @@ class Dataset:
         atomic_ratios_coll = (
             atomic_ratios_df.withColumn(
                 "element",
-                sf.udf(lambda x: ELEMENT_MAP[x], StringType())(
-                    sf.col("single_element")
-                ),
+                sf.udf(lambda x: ELEMENT_MAP[x], StringType())(sf.col("single_element")),
             )
             .select("element", "ratio")
             .collect()
