@@ -89,20 +89,13 @@ class VastDataLoader:
         endpoint=None,
         access_key=None,
         access_secret=None,
+        spark_session=None,
     ):
         self.table_prefix = table_prefix
-        self.spark = (
-            SparkSession.builder.appName("ColabFitDataLoader")
-            # .config("spark.dynamicAllocation.enabled", "true")
-            # .config("spark.dynamicAllocation.minExecutors", "1")
-            # .config("spark.dynamicAllocation.maxExecutors", "10")
-            # .config("spark.task.maxFailures", "4")
-            # .config("spark.network.timeout", "300s")
-            # .config("spark.speculation", "true")
-            # .config("spark.executor.memory", "4g")
-            .getOrCreate()
-        )
-        self.spark.sparkContext.setLogLevel("ERROR")
+        self.spark = SparkSession.builder.appName("ColabFitDataLoader").getOrCreate()
+        if spark_session is not None:
+            self.spark = spark_session
+            self.spark.sparkContext.setLogLevel("ERROR")
         if endpoint and access_key and access_secret:
             self.endpoint = endpoint
             self.access_key = access_key
@@ -120,6 +113,14 @@ class VastDataLoader:
 
         self.bucket_dir = VAST_BUCKET_DIR
         self.metadata_dir = VAST_METADATA_DIR
+
+    def set_spark_session(self, spark_session):
+        self.spark = spark_session
+        self.spark.sparkContext.setLogLevel("ERROR")
+
+    def get_spark_session(self, spark_conf):
+        if spark_conf is None:
+            return SparkSession.builder.appName("VastDataLoader").getOrCreate()
 
     def get_vastdb_session(self, endpoint, access_key: str, access_secret: str):
         return Session(endpoint=endpoint, access=access_key, secret=access_secret)
@@ -713,30 +714,18 @@ class VastDataLoader:
     ):
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
-        string_schema_dict = {
+        schema_dict = {
             self.config_table: config_schema,
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.prop_object_table: property_object_schema,
         }
-        df_schema = string_schema_dict[table_name]
+        df_schema = schema_dict[table_name]
         if table_name == self.config_table:
             predicate = _.dataset_ids.contains(dataset_id)
         elif table_name == self.prop_object_table or table_name == self.config_set_table:
             predicate = _.dataset_id == dataset_id
         spark_df = self.simple_sdk_query(table_name, predicate, df_schema)
-        unstring_schema_dict = {
-            self.config_table: config_df_schema,
-            self.config_set_table: configuration_set_df_schema,
-            self.dataset_table: dataset_df_schema,
-            self.prop_object_table: property_object_df_schema,
-        }
-        schema = unstring_schema_dict[table_name]
-        schema_type_dict = {f.name: f.dataType for f in schema}
-        string_cols = [f.name for f in schema if f.dataType.typeName() == "array"]
-        for col in string_cols:
-            string_col_udf = sf.udf(unstring_df_val, schema_type_dict[col])
-            spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
         return spark_df
 
     def config_set_query(
@@ -1391,7 +1380,6 @@ class DataManager:
         prop_df = loader.dataset_query(
             dataset_id=self.dataset_id, table_name=loader.prop_object_table
         )
-        prop_df.persist()
         ds = Dataset(
             name=name,
             authors=authors,

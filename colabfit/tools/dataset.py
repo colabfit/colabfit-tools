@@ -7,8 +7,13 @@ from pyspark.sql.types import StringType
 from unidecode import unidecode
 
 from colabfit import MAX_STRING_LENGTH
-from colabfit.tools.schema import dataset_schema
-from colabfit.tools.utilities import ELEMENT_MAP, _empty_dict_from_schema, _hash
+from colabfit.tools.schema import dataset_schema, config_df_schema
+from colabfit.tools.utilities import (
+    ELEMENT_MAP,
+    _empty_dict_from_schema,
+    _hash,
+    unstring_df_val,
+)
 
 
 class Dataset:
@@ -108,7 +113,6 @@ class Dataset:
         if self.configuration_set_ids is None:
             self.configuration_set_ids = []
         self.spark_row = self.to_spark_row(config_df=config_df, prop_df=prop_df)
-
         self.spark_row["id"] = self.dataset_id
         # if dataset_id is None:
         #     raise ValueError("Dataset ID must be provided")
@@ -137,58 +141,42 @@ class Dataset:
             )
         )
         row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
-        config_df = (
-            config_df.withColumnRenamed("id", "configuration_id")
-            .withColumnRenamed("hash", "config_hash")
-            .select(
-                "configuration_id",
-                "elements",
-                "atomic_numbers",
-                "nsites",
-                "nperiodic_dimensions",
-                "dimension_types",
-                # "labels",
-            )
+        config_df = config_df.select(
+            "id",
+            "elements",
+            "atomic_numbers",
+            "nsites",
+            "nperiodic_dimensions",
+            "dimension_types",
+            # "labels",
         )
-        nproperty_objects = prop_df.count()
-        # co_po_df = prop_df.select(
-        #     "configuration_id",
-        #     # "multiplicity",
-        #     "atomization_energy",
-        #     "atomic_forces_00",
-        #     "adsorption_energy",
-        #     "electronic_band_gap",
-        #     "cauchy_stress",
-        #     "formation_energy",
-        #     "energy",
-        # ).join(config_df, on="configuration_id", how="inner")
-        # print(co_po_df.columns)
-        # print(co_po_df.count())
-        # print(co_po_df.first())
-        # co_po_df = co_po_df.withColumn(
-        #     "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
-        # )
-        # row_dict["nsites"] = co_po_df.agg({"nsites_multiple": "sum"}).first()[0]
+        prop_df = prop_df.select(
+            "atomization_energy",
+            "atomic_forces_00",
+            "adsorption_energy",
+            "electronic_band_gap",
+            "cauchy_stress",
+            "formation_energy",
+            "energy",
+        )
+        carray_cols = ["atomic_numbers", "elements", "dimension_types"]
+        carray_types = {
+            col.name: col.dataType for col in config_df_schema if col.name in carray_cols
+        }
+        for col in carray_cols:
+            unstr_udf = sf.udf(unstring_df_val, carray_types[col])
+            config_df = config_df.withColumn(col, unstr_udf(sf.col(col)))
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
-        row_dict["nproperty_objects"] = nproperty_objects
         row_dict["elements"] = sorted(
-            config_df.withColumn("exploded_elements", sf.explode("elements"))
+            config_df.select("elements")
+            .withColumn("exploded_elements", sf.explode("elements"))
             .agg(sf.collect_set("exploded_elements").alias("exploded_elements"))
             .select("exploded_elements")
             .take(1)[0][0]
         )
         row_dict["nelements"] = len(row_dict["elements"])
-        atomic_ratios_df = (
-            config_df.select("atomic_numbers")
-            #     co_po_df.select("atomic_numbers", "multiplicity")
-            #     .withColumn(
-            #         "repeated_numbers",
-            #         sf.expr(
-            #            "transform(atomic_numbers, x -> array_repeat(x, multiplicity))"
-            #         ),
-            #     )
-            # .withColumn("single_element", sf.explode(sf.flatten("repeated_numbers")))
-            .withColumn("single_element", sf.explode("atomic_numbers"))
+        atomic_ratios_df = config_df.select("atomic_numbers").withColumn(
+            "single_element", sf.explode("atomic_numbers")
         )
         total_elements = atomic_ratios_df.count()
         print(total_elements, row_dict["nsites"])
@@ -197,7 +185,6 @@ class Dataset:
         atomic_ratios_df = atomic_ratios_df.withColumn(
             "ratio", sf.col("count") / total_elements
         )
-
         atomic_ratios_coll = (
             atomic_ratios_df.withColumn(
                 "element",
@@ -209,18 +196,18 @@ class Dataset:
         row_dict["total_elements_ratios"] = [
             x[1] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
         ]
-
         row_dict["nperiodic_dimensions"] = config_df.agg(
             sf.collect_set("nperiodic_dimensions")
         ).collect()[0][0]
-
-        row_dict["dimension_types"] = config_df.agg(
-            sf.collect_set("dimension_types")
-        ).collect()[0][0]
-
+        row_dict["dimension_types"] = (
+            config_df.select("dimension_types")
+            .agg(sf.collect_set("dimension_types"))
+            .collect()[0][0]
+        )
+        nproperty_objects = prop_df.count()
+        row_dict["nproperty_objects"] = nproperty_objects
         for prop in [
             "atomization_energy",
-            "atomic_forces_00",
             "adsorption_energy",
             "electronic_band_gap",
             "cauchy_stress",
@@ -230,8 +217,11 @@ class Dataset:
             row_dict[f"{prop}_count"] = (
                 prop_df.select(prop).where(f"{prop} is not null").count()
             )
-        row_dict["atomic_forces_count"] = row_dict.pop("atomic_forces_00_count")
-
+        row_dict["atomic_forces_count"] = (
+            prop_df.select("atomic_forces_00")
+            .filter(sf.col("atomic_forces_00") != "[]")
+            .count()
+        )
         prop = "energy"
         row_dict[f"{prop}_variance"] = (
             prop_df.select(prop).where(f"{prop} is not null").agg(sf.variance(prop))
@@ -239,29 +229,7 @@ class Dataset:
         row_dict[f"{prop}_mean"] = (
             prop_df.select(prop).where(f"{prop} is not null").agg(sf.mean(prop))
         ).first()[0]
-
-        row_dict["nconfigurations"] = config_df.count()
-        row_dict["authors"] = self.authors
-        row_dict["description"] = self.description
-        row_dict["license"] = self.data_license
-        row_dict["links"] = str(
-            {
-                "source-publication": self.publication_link,
-                "source-data": self.data_link,
-                "other": self.other_links,
-            }
-        )
-        row_dict["name"] = self.name
-        row_dict["publication_year"] = self.publication_year
-        row_dict["doi"] = self.doi
-
         return row_dict
-
-    # @staticmethod
-    # def __hash__(self):
-    #     sha = sha512()
-    #     sha.update(self.name.encode("utf-8"))
-    #     return int(sha.hexdigest(), 16)
 
     def __str__(self):
         return (
