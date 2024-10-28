@@ -185,13 +185,6 @@ class VastDataLoader:
                         return False
         return True
 
-        # dupes_exist = id_df.join(table_df, on="id", how="inner")
-        # if not dupes_exist.rdd.isEmpty():
-        #     # if len(dupes_exist.take(1)) > 0:
-        #     print(f"Duplicate IDs found in table {table_name}")
-        #     return False
-        # return True
-
     def write_table(
         self,
         spark_df,
@@ -712,20 +705,30 @@ class VastDataLoader:
         dataset_id=None,
         table_name=None,
     ):
+        print("in dataset query")
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
-        schema_dict = {
-            self.config_table: config_schema,
-            self.config_set_table: configuration_set_schema,
-            self.dataset_table: dataset_schema,
-            self.prop_object_table: property_object_schema,
-        }
-        df_schema = schema_dict[table_name]
+        # schema_dict = {
+        #     self.config_table: config_schema,
+        #     self.config_set_table: configuration_set_schema,
+        #     self.dataset_table: dataset_schema,
+        #     self.prop_object_table: property_object_schema,
+        # }
+        # df_schema = schema_dict[table_name]
         if table_name == self.config_table:
-            predicate = _.dataset_ids.contains(dataset_id)
+            print(f"in config table {table_name}")
+            # predicate = _.dataset_ids.contains(dataset_id)
+            spark_df = self.spark.table(self.config_table).filter(
+                sf.col("dataset_ids").contains(dataset_id)
+            )
         elif table_name == self.prop_object_table or table_name == self.config_set_table:
-            predicate = _.dataset_id == dataset_id
-        spark_df = self.simple_sdk_query(table_name, predicate, df_schema)
+            print(f"in {table_name}")
+            # predicate = _.dataset_id == dataset_id
+            spark_df = self.spark.table(table_name).filter(
+                sf.col("dataset_id") == dataset_id
+            )
+        print("done with dataset query")
+        # spark_df = self.simple_sdk_query(table_name, predicate, df_schema)
         return spark_df
 
     def config_set_query(
@@ -1360,7 +1363,9 @@ class DataManager:
         labels: list[str] = None,
         data_license: str = "CC-BY-4.0",
     ):
+
         if loader.spark.catalog.tableExists(loader.config_set_table):
+
             cs_ids = (
                 loader.dataset_query(
                     dataset_id=self.dataset_id, table_name=loader.config_set_table
@@ -1374,12 +1379,15 @@ class DataManager:
                 cs_ids = [x["id"] for x in cs_ids]
         else:
             cs_ids = None
+
         config_df = loader.dataset_query(
             dataset_id=self.dataset_id, table_name=loader.config_table
         )
+
         prop_df = loader.dataset_query(
             dataset_id=self.dataset_id, table_name=loader.prop_object_table
         )
+
         ds = Dataset(
             name=name,
             authors=authors,

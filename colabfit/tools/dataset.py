@@ -114,8 +114,6 @@ class Dataset:
             self.configuration_set_ids = []
         self.spark_row = self.to_spark_row(config_df=config_df, prop_df=prop_df)
         self.spark_row["id"] = self.dataset_id
-        # if dataset_id is None:
-        #     raise ValueError("Dataset ID must be provided")
         id_prefix = "__".join(
             [
                 self.name,
@@ -134,6 +132,7 @@ class Dataset:
 
     def to_spark_row(self, config_df, prop_df):
         """"""
+
         row_dict = _empty_dict_from_schema(dataset_schema)
         row_dict["last_modified"] = dateutil.parser.parse(
             datetime.datetime.now(tz=datetime.timezone.utc).strftime(
@@ -150,6 +149,7 @@ class Dataset:
             "dimension_types",
             # "labels",
         )
+
         prop_df = prop_df.select(
             "atomization_energy",
             "atomic_forces_00",
@@ -159,6 +159,7 @@ class Dataset:
             "formation_energy",
             "energy",
         )
+        row_dict["nconfigurations"] = config_df.count()
         carray_cols = ["atomic_numbers", "elements", "dimension_types"]
         carray_types = {
             col.name: col.dataType for col in config_df_schema if col.name in carray_cols
@@ -179,12 +180,14 @@ class Dataset:
             "single_element", sf.explode("atomic_numbers")
         )
         total_elements = atomic_ratios_df.count()
+
         print(total_elements, row_dict["nsites"])
         assert total_elements == row_dict["nsites"]
         atomic_ratios_df = atomic_ratios_df.groupBy("single_element").count()
         atomic_ratios_df = atomic_ratios_df.withColumn(
             "ratio", sf.col("count") / total_elements
         )
+
         atomic_ratios_coll = (
             atomic_ratios_df.withColumn(
                 "element",
@@ -193,17 +196,16 @@ class Dataset:
             .select("element", "ratio")
             .collect()
         )
+
         row_dict["total_elements_ratios"] = [
             x[1] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
         ]
         row_dict["nperiodic_dimensions"] = config_df.agg(
             sf.collect_set("nperiodic_dimensions")
         ).collect()[0][0]
-        row_dict["dimension_types"] = (
-            config_df.select("dimension_types")
-            .agg(sf.collect_set("dimension_types"))
-            .collect()[0][0]
-        )
+        row_dict["dimension_types"] = config_df.agg(
+            sf.collect_set("dimension_types")
+        ).collect()[0][0]
         nproperty_objects = prop_df.count()
         row_dict["nproperty_objects"] = nproperty_objects
         for prop in [
@@ -229,6 +231,20 @@ class Dataset:
         row_dict[f"{prop}_mean"] = (
             prop_df.select(prop).where(f"{prop} is not null").agg(sf.mean(prop))
         ).first()[0]
+
+        row_dict["authors"] = self.authors
+        row_dict["description"] = self.description
+        row_dict["license"] = self.data_license
+        row_dict["links"] = str(
+            {
+                "source-publication": self.publication_link,
+                "source-data": self.data_link,
+                "other": self.other_links,
+            }
+        )
+        row_dict["name"] = self.name
+        row_dict["publication_year"] = self.publication_year
+        row_dict["doi"] = self.doi
         return row_dict
 
     def __str__(self):
