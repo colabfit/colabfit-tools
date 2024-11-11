@@ -52,6 +52,7 @@ MAIN_KEY_MAP = {
     "atomic-forces": force_info,
     "cauchy-stress": stress_info,
     "atomization-energy": energy_info,
+    "adsorption-energy": energy_info,
     "formation-energy": energy_info,
     "band-gap": energy_info,
 }

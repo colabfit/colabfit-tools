@@ -708,27 +708,14 @@ class VastDataLoader:
         print("in dataset query")
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
-        # schema_dict = {
-        #     self.config_table: config_schema,
-        #     self.config_set_table: configuration_set_schema,
-        #     self.dataset_table: dataset_schema,
-        #     self.prop_object_table: property_object_schema,
-        # }
-        # df_schema = schema_dict[table_name]
         if table_name == self.config_table:
-            print(f"in config table {table_name}")
-            # predicate = _.dataset_ids.contains(dataset_id)
             spark_df = self.spark.table(self.config_table).filter(
                 sf.col("dataset_ids").contains(dataset_id)
             )
         elif table_name == self.prop_object_table or table_name == self.config_set_table:
-            print(f"in {table_name}")
-            # predicate = _.dataset_id == dataset_id
             spark_df = self.spark.table(table_name).filter(
                 sf.col("dataset_id") == dataset_id
             )
-        print("done with dataset query")
-        # spark_df = self.simple_sdk_query(table_name, predicate, df_schema)
         return spark_df
 
     def config_set_query(
