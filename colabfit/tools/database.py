@@ -43,14 +43,14 @@ from colabfit.tools.dataset import Dataset
 from colabfit.tools.property import Property
 from colabfit.tools.schema import (
     co_cs_mapping_schema,
-    config_df_schema,
+    config_arr_schema,
     config_md_schema,
     config_schema,
-    configuration_set_df_schema,
+    configuration_set_arr_schema,
     configuration_set_schema,
-    dataset_df_schema,
+    dataset_arr_schema,
     dataset_schema,
-    property_object_df_schema,
+    property_object_arr_schema,
     property_object_md_schema,
     property_object_schema,
 )
@@ -281,10 +281,10 @@ class VastDataLoader:
         cols: list[str],
         elems: list[str],
         str_schema,
-        unstr_schema,
-        arrow_schema,
-        update_cols,
-        arr_cols,
+        arr_schema,
+        # arrow_schema,
+        # update_cols,
+        # arr_cols,
     ):
         """
         Updates existing rows in CO or PO table with data from new ingest.
@@ -296,19 +296,13 @@ class VastDataLoader:
         table_name : str
             The name of the table to be updated.
         cols : list[str]
-            List of column names to be updated.
+            List of columns with matching elems to update.
         elems : list[str]
             List of elements corresponding to the columns to be updated.
         str_schema : Schema
             The stringed schema of the table.
-        unstr_schema : Schema
+        arr_schema : Schema
             The unstringed schema of the table.
-        arrow_schema : Schema
-            The Arrow schema of the columns to be updated.
-        update_cols : list[str]
-            List of columns to be updated.
-        arr_cols : list[str]
-            List of columns that contain array data.
 
         Returns:
         --------
@@ -321,26 +315,30 @@ class VastDataLoader:
             cols = [cols]
         if isinstance(elems, str):
             elems = [elems]
-
+        update_cols = cols + ["last_modified"]
+        row_write_cols = update_cols + ["$row_id"]
+        arr_cols = [
+            col
+            for col in cols
+            if get_spark_field_type(arr_schema, col).typeName() == "array"
+        ]
         str_col_types = {
             col: get_spark_field_type(str_schema, col) for col in update_cols
         }
-        unstr_col_types = {col: get_spark_field_type(unstr_schema, col) for col in cols}
+        unstr_col_types = {
+            col: get_spark_field_type(arr_schema, col) for col in update_cols
+        }
         addtl_fields = {
             "id": StringType(),
-            "last_modified": TimestampType(),
             "$row_id": LongType(),
         }
         str_col_types.update(addtl_fields)
         unstr_col_types.update(addtl_fields)
-        str_spark_schema = StructType(
-            [StructField(col, str_col_types[col], True) for col in update_cols]
-            + [
-                StructField("id", StringType(), False),
-                StructField("$row_id", IntegerType(), False),
-            ]
+
+        read_schema = StructType(
+            [StructField(col, col_type, True) for col, col_type in str_col_types.items()]
         )
-        total_write_cols = update_cols + ["$row_id"]
+
         ids = [x["id"] for x in df.select("id").collect()]
         batched_ids = batched(ids, 10000)
         new_ids = []
@@ -357,7 +355,7 @@ class VastDataLoader:
                 )
                 rec_batch = rec_batch.read_all()
                 duplicate_df = self.spark.createDataFrame(
-                    rec_batch.to_struct_array().to_pandas(), schema=str_spark_schema
+                    rec_batch.to_struct_array().to_pandas(), schema=read_schema
                 )
             if duplicate_df.count() == 0:
                 new_ids.extend(id_batch)
@@ -418,13 +416,19 @@ class VastDataLoader:
             duplicate_df = duplicate_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
-            arrow_schema = pa.schema(
-                [arrow_schema.field(col) for col in total_write_cols]
+            arrow_schema = spark_schema_to_arrow_schema(
+                StructType([field for field in str_schema if field.name in update_cols])
             )
+            arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
+
             update_table = pa.table(
                 [
                     pa.array(col)
-                    for col in zip(*duplicate_df.select(total_write_cols).collect())
+                    for col in zip(
+                        *duplicate_df.select(
+                            [field.name for field in arrow_schema]
+                        ).collect()
+                    )
                 ],
                 schema=arrow_schema,
             )
@@ -435,59 +439,25 @@ class VastDataLoader:
             existing_ids.extend(existing_ids_batch)
         return (new_ids, list(set(existing_ids)))
 
-    def update_existing_co_rows(self, co_df, cols: list[str], elems: list[str]):
-        update_cols = [
-            col for col in config_schema.fieldNames() if col not in ["id", "$row_id"]
-        ]
-        # cols_types = [
-        #     (col, dtype)
-        #     for col, dtype in zip(
-        #         cols, [get_spark_field_type(config_df_schema, col) for col in cols]
-        #     )
-        # ]
-        # arr_cols = [
-        #     (col, dtype) for col, dtype in cols_types if dtype.typeName() == "array"
-        # ]
-        arr_cols = [
-            col
-            for col in cols
-            if get_spark_field_type(config_df_schema, col).typeName() == "array"
-        ]
-        arrow_schema = spark_schema_to_arrow_schema(config_schema)
-        arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
-        return self.update_existing_co_po_rows(
-            df=co_df,
-            table_name=self.config_table,
-            cols=cols,
-            elems=elems,
-            str_schema=config_schema,
-            unstr_schema=config_df_schema,
-            arrow_schema=arrow_schema,
-            update_cols=update_cols,
-            arr_cols=arr_cols,
-        )
+    # def update_existing_co_rows(self, co_df, cols: list[str], elems: list[str]):
+    #     return self.update_existing_co_po_rows(
+    #         df=co_df,
+    #         table_name=self.config_table,
+    #         cols=cols,
+    #         elems=elems,
+    #         str_schema=config_schema,
+    #         arr_schema=config_arr_schema,
+    #     )
 
-    def update_existing_po_rows(self, po_df):
-        update_cols = ["multiplicity", "last_modified"]
-        arr_cols = []
-        return self.update_existing_co_po_rows(
-            df=po_df,
-            table_name=self.prop_object_table,
-            cols=["multiplicity"],
-            elems=[None],
-            str_schema=property_object_schema,
-            unstr_schema=property_object_df_schema,
-            arrow_schema=pa.schema(
-                [
-                    pa.field("id", pa.string()),
-                    pa.field("multiplicity", pa.int32()),
-                    pa.field("last_modified", pa.timestamp("us")),
-                    pa.field("$row_id", pa.uint64()),
-                ]
-            ),
-            update_cols=update_cols,
-            arr_cols=arr_cols,
-        )
+    # def update_existing_po_rows(self, po_df):
+    #     return self.update_existing_co_po_rows(
+    #         df=po_df,
+    #         table_name=self.prop_object_table,
+    #         cols=["multiplicity"],
+    #         elems=[None],
+    #         str_schema=property_object_schema,
+    #         arr_schema=property_object_arr_schema,
+    #     )
 
     def read_table(
         self, table_name: str, unstring: bool = False, read_metadata: bool = False
@@ -512,15 +482,15 @@ class VastDataLoader:
             self.co_cs_map_table: co_cs_mapping_schema,
         }
         unstring_schema_dict = {
-            self.config_table: config_df_schema,
-            self.config_set_table: configuration_set_df_schema,
-            self.dataset_table: dataset_df_schema,
-            self.prop_object_table: property_object_df_schema,
+            self.config_table: config_arr_schema,
+            self.config_set_table: configuration_set_arr_schema,
+            self.dataset_table: dataset_arr_schema,
+            self.prop_object_table: property_object_arr_schema,
         }
         md_schema_dict = {
             self.config_table: config_md_schema,
-            self.config_set_table: configuration_set_df_schema,
-            self.dataset_table: dataset_df_schema,
+            self.config_set_table: configuration_set_arr_schema,
+            self.dataset_table: dataset_arr_schema,
             self.prop_object_table: property_object_md_schema,
         }
         if table_name in [self.config_set_table, self.dataset_table]:
@@ -1162,10 +1132,18 @@ class DataManager:
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
                 all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
                 if not all_unique_co:
-                    new_co_ids, update_co_ids = loader.update_existing_co_rows(
-                        co_df=co_df,
+                    # new_co_ids, update_co_ids = loader.update_existing_co_rows(
+                    #     co_df=co_df,
+                    #     cols=["dataset_ids", "names", "labels"],
+                    #     elems=[self.dataset_id, None, None],
+                    # )
+                    new_co_ids, update_co_ids = loader.update_existing_co_po_rows(
+                        df=co_df,
+                        table_name=loader.config_table,
                         cols=["dataset_ids", "names", "labels"],
                         elems=[self.dataset_id, None, None],
+                        str_schema=config_schema,
+                        arr_schema=config_arr_schema,
                     )
                     print(f"Updated {len(update_co_ids)} rows in {loader.config_table}")
                     if len(new_co_ids) > 0:
@@ -1190,8 +1168,16 @@ class DataManager:
 
                 if not all_unique_po:
                     # print("Sending to update_existing_po_rows")
-                    new_po_ids, update_po_ids = loader.update_existing_po_rows(
-                        po_df=po_df,
+                    # new_po_ids, update_po_ids = loader.update_existing_po_rows(
+                    #     po_df=po_df,
+                    # )
+                    new_po_ids, update_po_ids = loader.update_existing_co_po_rows(
+                        df=po_df,
+                        table_name=loader.prop_object_table,
+                        cols=["multiplicity"],
+                        elems=[None],
+                        str_schema=property_object_schema,
+                        arr_schema=property_object_arr_schema,
                     )
                     print(
                         f"Updated {len(update_po_ids)} rows in "
@@ -1327,11 +1313,20 @@ class DataManager:
                 cols=["configuration_set_ids"],
                 elems=config_set.id,
             )
+            loader.update_existing_co_po_rows(
+                df=config_set_query_df,
+                table_name=loader.config_table,
+                cols=["configuration_set_ids"],
+                elems=[config_set.id],
+                str_schema=config_schema,
+                arr_schema=config_arr_schema,
+            )
+
             t_end = time() - t
             print(f"Time to create CS and update COs with CS-ID: {t_end}")
             config_set_rows.append(config_set.spark_row)
         config_set_df = loader.spark.createDataFrame(
-            config_set_rows, schema=configuration_set_df_schema
+            config_set_rows, schema=configuration_set_arr_schema
         )
         loader.write_table(config_set_df, loader.config_set_table)
         return config_set_rows
@@ -1391,7 +1386,7 @@ class DataManager:
             configuration_set_ids=cs_ids,
             publication_year=publication_year,
         )
-        ds_df = loader.spark.createDataFrame([ds.spark_row], schema=dataset_df_schema)
+        ds_df = loader.spark.createDataFrame([ds.spark_row], schema=dataset_arr_schema)
         loader.write_table(ds_df, loader.dataset_table)
 
 

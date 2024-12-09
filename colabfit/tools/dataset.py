@@ -7,7 +7,7 @@ from pyspark.sql.types import StringType
 from unidecode import unidecode
 
 from colabfit import MAX_STRING_LENGTH
-from colabfit.tools.schema import dataset_schema, config_df_schema
+from colabfit.tools.schema import dataset_schema, config_arr_schema
 from colabfit.tools.utilities import (
     ELEMENT_MAP,
     _empty_dict_from_schema,
@@ -162,7 +162,9 @@ class Dataset:
         row_dict["nconfigurations"] = config_df.count()
         carray_cols = ["atomic_numbers", "elements", "dimension_types"]
         carray_types = {
-            col.name: col.dataType for col in config_df_schema if col.name in carray_cols
+            col.name: col.dataType
+            for col in config_arr_schema
+            if col.name in carray_cols
         }
         for col in carray_cols:
             unstr_udf = sf.udf(unstring_df_val, carray_types[col])
