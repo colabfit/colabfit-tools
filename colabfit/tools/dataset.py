@@ -1,4 +1,19 @@
-from hashlib import sha512
+import datetime
+import warnings
+
+import dateutil
+import pyspark.sql.functions as sf
+from pyspark.sql.types import StringType
+from unidecode import unidecode
+
+from colabfit import MAX_STRING_LENGTH
+from colabfit.tools.schema import dataset_schema, config_arr_schema
+from colabfit.tools.utilities import (
+    ELEMENT_MAP,
+    _empty_dict_from_schema,
+    _hash,
+    unstring_df_val,
+)
 
 
 class Dataset:
@@ -62,52 +77,184 @@ class Dataset:
 
     def __init__(
         self,
-        configuration_set_ids,
-        property_ids,
-        name,
-        authors,
-        links,
-        description,
-        aggregated_info,
-        data_license="CC-BY-ND-4.0",
+        name: str,
+        authors: list[str],
+        publication_link: str,
+        data_link: str,
+        description: str,
+        config_df,
+        prop_df,
+        other_links: list[str] = None,
+        dataset_id: str = None,
+        labels: list[str] = None,
+        doi: str = None,
+        configuration_set_ids: list[str] = [],
+        data_license: str = "CC-BY-ND-4.0",
+        publication_year: str = None,
     ):
         for auth in authors:
             if not "".join(auth.split(" ")[-1].replace("-", "")).isalpha():
                 raise RuntimeError(
-                    "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(
-                        auth
-                    )
+                    f"Bad author name '{auth}'. Author names "
+                    "can only contain [a-z][A-Z]"
                 )
 
-        self.configuration_set_ids = configuration_set_ids
-        self.property_ids = property_ids
         self.name = name
         self.authors = authors
-        self.links = links
+        self.publication_link = publication_link
+        self.data_link = data_link
+        self.other_links = other_links
         self.description = description
-        self.aggregated_info = aggregated_info
         self.data_license = data_license
-        self._hash = hash(self)
+        self.dataset_id = dataset_id
+        self.doi = doi
+        self.publication_year = publication_year
+        self.configuration_set_ids = configuration_set_ids
+        if self.configuration_set_ids is None:
+            self.configuration_set_ids = []
+        self.spark_row = self.to_spark_row(config_df=config_df, prop_df=prop_df)
+        self.spark_row["id"] = self.dataset_id
+        id_prefix = "__".join(
+            [
+                self.name,
+                "-".join([unidecode(auth.split()[-1]) for auth in authors]),
+            ]
+        )
+        if len(id_prefix) > (MAX_STRING_LENGTH - len(dataset_id) - 2):
+            id_prefix = id_prefix[: MAX_STRING_LENGTH - len(dataset_id) - 2]
+            warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
+        extended_id = f"{id_prefix}__{dataset_id}"
+        self.spark_row["extended_id"] = extended_id
+        self._hash = _hash(self.spark_row, ["extended_id"])
+        self.spark_row["hash"] = str(self._hash)
+        self.spark_row["labels"] = labels
+        print(self.spark_row)
 
-    def __hash__(self):
-        """Hashes the dataset using its configuration set and property IDs"""
-        ds_hash = sha512()
+    def to_spark_row(self, config_df, prop_df):
+        """"""
 
-        for i in sorted(self.configuration_set_ids):
-            ds_hash.update(str(i).encode("utf-8"))
+        row_dict = _empty_dict_from_schema(dataset_schema)
+        row_dict["last_modified"] = dateutil.parser.parse(
+            datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+        )
+        row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
+        config_df = config_df.select(
+            "id",
+            "elements",
+            "atomic_numbers",
+            "nsites",
+            "nperiodic_dimensions",
+            "dimension_types",
+            # "labels",
+        )
 
-        for i in sorted(self.property_ids):
-            ds_hash.update(str(i).encode("utf-8"))
+        prop_df = prop_df.select(
+            "atomization_energy",
+            "atomic_forces_00",
+            "adsorption_energy",
+            "electronic_band_gap",
+            "cauchy_stress",
+            "formation_energy",
+            "energy",
+        )
+        row_dict["nconfigurations"] = config_df.count()
+        carray_cols = ["atomic_numbers", "elements", "dimension_types"]
+        carray_types = {
+            col.name: col.dataType
+            for col in config_arr_schema
+            if col.name in carray_cols
+        }
+        for col in carray_cols:
+            unstr_udf = sf.udf(unstring_df_val, carray_types[col])
+            config_df = config_df.withColumn(col, unstr_udf(sf.col(col)))
+        row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
+        row_dict["elements"] = sorted(
+            config_df.select("elements")
+            .withColumn("exploded_elements", sf.explode("elements"))
+            .agg(sf.collect_set("exploded_elements").alias("exploded_elements"))
+            .select("exploded_elements")
+            .take(1)[0][0]
+        )
+        row_dict["nelements"] = len(row_dict["elements"])
+        atomic_ratios_df = config_df.select("atomic_numbers").withColumn(
+            "single_element", sf.explode("atomic_numbers")
+        )
+        total_elements = atomic_ratios_df.count()
 
-        return int(ds_hash.hexdigest(), 16)
+        print(total_elements, row_dict["nsites"])
+        assert total_elements == row_dict["nsites"]
+        atomic_ratios_df = atomic_ratios_df.groupBy("single_element").count()
+        atomic_ratios_df = atomic_ratios_df.withColumn(
+            "ratio", sf.col("count") / total_elements
+        )
+
+        atomic_ratios_coll = (
+            atomic_ratios_df.withColumn(
+                "element",
+                sf.udf(lambda x: ELEMENT_MAP[x], StringType())(sf.col("single_element")),
+            )
+            .select("element", "ratio")
+            .collect()
+        )
+
+        row_dict["total_elements_ratios"] = [
+            x[1] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
+        ]
+        row_dict["nperiodic_dimensions"] = config_df.agg(
+            sf.collect_set("nperiodic_dimensions")
+        ).collect()[0][0]
+        row_dict["dimension_types"] = config_df.agg(
+            sf.collect_set("dimension_types")
+        ).collect()[0][0]
+        nproperty_objects = prop_df.count()
+        row_dict["nproperty_objects"] = nproperty_objects
+        for prop in [
+            "atomization_energy",
+            "adsorption_energy",
+            "electronic_band_gap",
+            "cauchy_stress",
+            "formation_energy",
+            "energy",
+        ]:
+            row_dict[f"{prop}_count"] = (
+                prop_df.select(prop).where(f"{prop} is not null").count()
+            )
+        row_dict["atomic_forces_count"] = (
+            prop_df.select("atomic_forces_00")
+            .filter(sf.col("atomic_forces_00") != "[]")
+            .count()
+        )
+        prop = "energy"
+        row_dict[f"{prop}_variance"] = (
+            prop_df.select(prop).where(f"{prop} is not null").agg(sf.variance(prop))
+        ).first()[0]
+        row_dict[f"{prop}_mean"] = (
+            prop_df.select(prop).where(f"{prop} is not null").agg(sf.mean(prop))
+        ).first()[0]
+
+        row_dict["authors"] = self.authors
+        row_dict["description"] = self.description
+        row_dict["license"] = self.data_license
+        row_dict["links"] = str(
+            {
+                "source-publication": self.publication_link,
+                "source-data": self.data_link,
+                "other": self.other_links,
+            }
+        )
+        row_dict["name"] = self.name
+        row_dict["publication_year"] = self.publication_year
+        row_dict["doi"] = self.doi
+        return row_dict
 
     def __str__(self):
         return (
-            "Dataset(description='{}', nconfiguration_sets={}, nproperties={})".format(
-                self.description,
-                len(self.configuration_set_ids),
-                len(self.property_ids),
-            )
+            f"Dataset(description='{self.description}', "
+            f"nconfiguration_sets={len(self.spark_row['configuration_sets'])}, "
+            f"nproperty_objects={self.spark_row['nproperty_objects']}, "
+            f"nconfigurations={self.spark_row['nconfigurations']}"
         )
 
     def __repr__(self):

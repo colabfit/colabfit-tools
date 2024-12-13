@@ -1,3648 +1,1521 @@
-import json
 import datetime
-import warnings
 import itertools
+import os
 import string
-from math import ceil
-
-import numpy as np
-from tqdm import tqdm
-import multiprocessing
-from copy import deepcopy
-from hashlib import sha512
+from ast import literal_eval
 from functools import partial
-from pymongo import MongoClient, UpdateOne
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import matplotlib.pyplot as plt
-from ase.io import write as ase_write
-from ase import Atoms
-from unidecode import unidecode
-import periodictable
-import time
-from kim_property.definition import check_property_definition
-from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
+from itertools import islice
+from multiprocessing import Pool
+from pathlib import Path
+from time import time
+from types import GeneratorType
+
+import boto3
+import dateutil.parser
+import findspark
+import psycopg
+import pyarrow as pa
+import pyspark.sql.functions as sf
+from botocore.exceptions import ClientError
 from django.utils.crypto import get_random_string
+from dotenv import load_dotenv
+from ibis import _
+from pyspark.sql import Row, SparkSession
+from pyspark.sql.functions import udf
+from pyspark.sql.types import (
+    ArrayType,
+    IntegerType,
+    LongType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
+from tqdm import tqdm
+from vastdb.session import Session
+
 from colabfit import (
     ID_FORMAT_STRING,
-    _CONFIGS_COLLECTION,
-    _PROPS_COLLECTION,
-    _METADATA_COLLECTION,
-    _DATAOBJECT_COLLECTION,
-    _CONFIGSETS_COLLECTION,
-    _PROPDEFS_COLLECTION,
-    _DATASETS_COLLECTION,
-    ATOMS_NAME_FIELD,
-    MAX_STRING_LENGTH,
-    SHORT_ID_STRING_NAME,
-    EXTENDED_ID_STRING_NAME,
-    _AGGREGATED_INFO_COLLECTION,
-)
-from colabfit.tools.configuration import BaseConfiguration, AtomicConfiguration
-from colabfit.tools.property import Property
+)  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,; _CONFIGS_COLLECTION,; _CONFIGSETS_COLLECTION,; _DATASETS_COLLECTION,; _PROPOBJECT_COLLECTION, # noqa
+from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.configuration_set import ConfigurationSet
-from colabfit.tools.converters import CFGConverter, EXYZConverter, FolderConverter
 from colabfit.tools.dataset import Dataset
-from colabfit.tools.metadata import Metadata
-from colabfit.tools.data_object import DataObject
-
-
-class MongoDatabase(MongoClient):
-    """
-    A MongoDatabase stores all of the data in Mongo documents, and
-    provides additinal functionality like filtering and optimized queries.
-
-    The Mongo database has the following structure
-
-    .. code-block:: text
-
-        /configurations
-            _id
-            short-id
-            atomic_numbers
-            positions
-            cell
-            pbc
-            names
-            elements
-            nelements
-            elements_ratios
-            chemical_formula_reduced
-            chemical_formula_anonymous
-            chemical_formula_hill
-            nsites
-            dimension_types
-            nperiodic_dimensions
-            latice_vectors
-            last_modified
-            relationships
-                property_instances
-                configuration_sets
-
-        /property_definitions
-            _id
-            short-id
-            definition
-
-        /properties
-            _id
-            short-id
-            type
-            property_name
-                each field in the property definition
-            methods
-            last_modified
-            relationships
-                metadata
-                configurations
-
-        /metadata
-            hash
-            dict
-
-        /configuration_sets
-            _id
-            short-id
-            last_modified
-            aggregated_info
-                (from configurations)
-                nconfigurations
-                nsites
-                nelements
-                chemical_systems
-                elements
-                individual_elements_ratios
-                total_elements_ratios
-                chemical_formula_reduced
-                chemical_formula_anonymous
-                chemical_formula_hill
-                nperiodic_dimensions
-                dimension_types
-            relationships
-                configurations
-                datasets
-
-        /datasets
-            _id
-            short-id
-            extended-id
-            last_modified
-            aggregated_info
-                (from configuration sets)
-                nconfigurations
-                nsites
-                nelements
-                chemical_systems
-                elements
-                individual_elements_ratios
-                total_elements_ratios
-                chemical_formula_reduced
-                chemical_formula_anonymous
-                chemical_formula_hill
-                nperiodic_dimensions
-                dimension_types
-
-                (from properties)
-                property_types
-                property_fields
-                methods
-                methods_counts
-            relationships
-                property_instances
-                configuration_sets
-
-    Attributes:
-
-        database_name (str):
-            The name of the Mongo database
-
-        configurations (Collection):
-            A Mongo collection of configuration documents
-
-        properties (Collection):
-            A Mongo collection of property documents
-
-        property_definitions (Collection):
-            A Mongo collection of property definitions
-
-        metadata (Collection):
-            A Mongo collection of metadata documents
-
-        configuration_sets (Collection):
-            A Mongo collection of configuration set documents
-
-        datasets (Collection):
-            A Mongo collection of dataset documents
-    """
-
-    # TODO: Should database be instantiated with nprocs, or should it be passed in as an
-    #       argument to methods in which this would be relevant
-    def __init__(
-        self,
-        database_name,
-        configuration_type=AtomicConfiguration,
-        nprocs=1,
-        uri=None,
-        drop_database=False,
-        user=None,
-        pwrd=None,
-        port=27017,
-        *args,
-        **kwargs,
-    ):
-        """
-        Args:
-
-            database_name (str):
-                The name of the database
-
-            configuration_type (Configuration, default=BaseConfiguration):
-                The configuration type that will be stored in the database.
-
-            nprocs (int):
-                The size of the processor pool
-
-            uri (str):
-                The full Mongo URI
-
-            drop_database (bool, default=False):
-                If True, deletes the existing Mongo database.
-
-            user (str, default=None):
-                Mongo server username
-
-            pwrd (str, default=None):
-                Mongo server password
-
-            port (int, default=27017):
-                Mongo server port number
-
-            *args, **kwargs (list, dict):
-                All additional arguments will be passed directly to the
-                MongoClient constructor.
-
-
-        """
-        self.configuration_type = configuration_type
-        self.uri = uri
-        self.login_args = args
-        self.login_kwargs = kwargs
-
-        self.user = user
-        self.pwrd = pwrd
-        self.port = port
-
-        if self.uri is not None:
-            super().__init__(self.uri, *args, **kwargs)
-        else:
-            if user is None:
-                super().__init__("localhost", self.port, *args, **kwargs)
-            else:
-                super().__init__(
-                    "mongodb://{}:{}@localhost:{}/".format(
-                        self.user, self.pwrd, self.port, *args, **kwargs
-                    )
-                )
-
-        self.database_name = database_name
-
-        if drop_database:
-            self.drop_database(database_name)
-
-        self.configurations = self[database_name][_CONFIGS_COLLECTION]
-        self.property_instances = self[database_name][_PROPS_COLLECTION]
-        self.property_definitions = self[database_name][_PROPDEFS_COLLECTION]
-        self.data_objects = self[database_name][_DATAOBJECT_COLLECTION]
-        self.metadata = self[database_name][_METADATA_COLLECTION]
-        self.configuration_sets = self[database_name][_CONFIGSETS_COLLECTION]
-        self.datasets = self[database_name][_DATASETS_COLLECTION]
-        self.aggregated_info = self[database_name][_AGGREGATED_INFO_COLLECTION]
-
-        self.property_definitions.create_index(
-            keys="definition.property-name",
-            name="definition.property-name",
-            unique=True,
-        )
-
-        self.configuration_sets.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.datasets.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-
-        self.configurations.create_index(keys="hash", name="hash", unique=True)
-        self.property_instances.create_index(keys="hash", name="hash", unique=True)
-        self.metadata.create_index(keys="hash", name="hash", unique=True)
-        self.data_objects.create_index(keys="hash", name="hash", unique=True)
-        self.configuration_sets.create_index(keys="hash", name="hash", unique=True)
-        self.datasets.create_index(keys="hash", name="hash", unique=True)
-        self.configurations.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.property_instances.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.metadata.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.data_objects.create_index(
-            keys=SHORT_ID_STRING_NAME, name=SHORT_ID_STRING_NAME, unique=True
-        )
-        self.property_instances.create_index(
-            keys="relationships.metadata", name="pi_relationships.metadata"
-        )
-        self.configuration_sets.create_index(
-            keys="relationships.dataset", name="cs_relationships.dataset"
-        )
-        self.configurations.create_index(
-            keys="relationships.metadata", name="co_relationships.metadata"
-        )
-        self.configurations.create_index(
-            keys="relationships.data_object", name="co_relationships.data_object"
-        )
-        self.configurations.create_index(
-            keys="relationships.dataset", name="co_relationships.dataset"
-        )
-        self.property_instances.create_index(
-            keys="relationships.data_object", name="pi_relationships.data_object"
-        )
-        self.property_instances.create_index(
-            keys="relationships.dataset", name="pi_relationships.dataset"
-        )
-        self.data_objects.create_index(
-            keys="relationships.dataset", name="do_relationships.dataset"
-        )
-        self.configurations.create_index(
-            keys="relationships.configuration_set",
-            name="co_relationships.configuration_set",
-        )
-
-        self.aggregated_info.create_index(keys="type", name="type")
-        self.aggregated_info.create_index(keys="formula", name="formula`")
-        self.aggregated_info.create_index(
-            keys="relationships.dataset", name="ai_relationships.dataset"
-        )
-        self.aggregated_info.create_index(
-            keys="relationships.configuration_set",
-            name="ai_relationships.configuration_set",
-        )
-
-        self.nprocs = nprocs
-
-    def insert_data(
-        self,
-        configurations,
-        property_map=None,
-        co_md_map=None,
-        transform=None,
-        verbose=True,
-        ds_id=None,
-        generator=None,
-    ):
-        """
-        A wrapper to Database.insert_data() which also adds important queryable
-        metadata about the configurations into the Client's server.
-
-        Note that when adding the data, the Mongo server will store the
-        bi-directional relationships between the data. For example, a property
-        will point to its configurations, but those configurations will also
-        point back to any linked properties.
-
-        Args:
-
-            configurations (list or Configuration):
-                The list of configurations to be added.
-
-            property_map (dict):
-                A dictionary that is used to specify how to load a defined
-                property off of a configuration. Note that the top-level keys in
-                the map must be the names of properties that have been
-                previously defined using
-                :meth:`~colabfit.tools.database.Database.add_property_definition`.
-
-                Example:
-
-                    .. code-block:: python
-
-                        property_map = {
-                            'energy-forces-stress': {
-                                # ColabFit name: {'field': ASE field name, 'units': str}
-                                'energy':   {'field': 'energy',  'units': 'eV'},
-                                'forces':   {'field': 'forces',  'units': 'eV/Ang'},
-                                'stress':   {'field': 'virial',  'units': 'GPa'},
-                                'per-atom': {'field': 'per-atom', 'units': None},
-
-                                '_settings': {
-                                    'method': 'VASP',
-                                    'description': 'A static VASP calculation',
-                                    'files': None,
-                                    'labels': ['Monkhorst-Pack'],
-
-                                    'xc-functional': {'field': 'xcf', 'units': None}
-                                }
-                            }
-                        }
-
-
-                If None, only loads the configuration information (atomic
-                numbers, positions, lattice vectors, and periodic boundary
-                conditions).
-
-                The '_settings' key is a special key that can be used to specify
-                the contents of a PropertySettings object that will be
-                constructed and linked to each associated property instance.
-
-
-            co_md_map (dict):
-                A dictionary that is used to specify how to load metadata
-                defined for a configuration.
-
-            transform (callable, default=None):
-                If provided, `transform` will be called on each configuration in
-                :code:`configurations` as :code:`transform(configuration)`.
-                Note that this happens before anything else is done. `transform`
-                should modify the Configuration in-place.
-
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
-
-        Returns:
-
-            ids (list):
-                A list of (config_id, property_id) tuples of the inserted data.
-                If no properties were inserted, then property_id will be None.
-
-        """
-        # Generate DS ID here so relationships can be grouped
-        if ds_id is None:
-            ds_ids = [
-                i["colabfit-id"] for i in self.datasets.find({}, {"colabfit-id": 1})
-            ]
-            missing_ids = set()
-            for i in self.configurations.find(
-                {"relationships.$[elem].dataset": {"$nin": ds_ids}},
-                {"relationships": 1},
-            ):
-                for j in i["relationships"]:
-                    if j["dataset"] not in ds_ids:
-                        missing_ids.add(j["dataset"])
-            if len(list(missing_ids)) > 1:
-                raise Exception("DS ID could not be inferred from existing data")
-            elif len(list(missing_ids)) == 1:
-                print("Using existing DS ID", list(missing_ids)[0])
-                ds_id = list(missing_ids)[0]
-            else:
-                ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
-                print("Generated new DS ID:", ds_id)
-        if self.uri is not None:
-            mongo_login = self.uri
-        else:
-            if self.user is None:
-                mongo_login = self.port
-            else:
-                mongo_login = "mongodb://{}:{}@localhost:{}/".format(
-                    self.user, self.pwrd, self.port
-                )
-
-        if property_map is None:
-            property_map = {}
-
-        ignore_keys = {
-            "property-id",
-            "property-title",
-            "property-description",
-            "last_modified",
-            "definition",
-            "_id",
-            SHORT_ID_STRING_NAME,
-            "_settings",
-            "property-name",
-            EXTENDED_ID_STRING_NAME,
-            "_metadata",
-        }
-
-        # Sanity checks for property map
-        for pname, pdict_list in property_map.items():
-            pd_doc = self.property_definitions.find_one(
-                {"definition.property-name": pname}
-            )
-
-            if pd_doc:
-                # property_field_name, {'ase_field': ..., 'units': ...}
-                for pdict in pdict_list:
-                    for k, pd in pdict.items():
-                        if k in ignore_keys:
-                            continue
-                        if k not in pd_doc["definition"]:
-                            warnings.warn(
-                                'Provided field "{}" in property_map does not match '
-                                "property definition".format(k)
-                            )
-                        if "value" in pd:
-                            if "field" in pd and pd["field"] is not None:
-                                raise RuntimeError(
-                                    "Error with key '{}'. property_map must specify exactly ONE of 'field' or 'value'".format(
-                                        k
-                                    )
-                                )
-                        else:
-                            if ("field" not in pd) or (pd["field"] is None):
-                                raise RuntimeError(
-                                    "Error with key '{}'. property_map must specify exactly ONE of 'field' or 'value'".format(
-                                        k
-                                    )
-                                )
-
-                        if "units" not in pd:
-                            raise RuntimeError(
-                                "Must specify all 'units' sections in "
-                                "property_map. Set value to None if no units."
-                            )
-            else:
-                warnings.warn(
-                    'Property name "{}" in property_map does not have an '
-                    "existing definition in the database.".format(pname)
-                )
-
-        if 1:
-            configurations = list(configurations)
-
-            n = len(configurations)
-            k = self.nprocs
-
-            split_configs = [
-                configurations[
-                    i * (n // k)
-                    + min(i, n % k) : (i + 1) * (n // k)
-                    + min(i + 1, n % k)
-                ]
-                for i in range(k)
-            ]
-
-            pfunc = partial(
-                self._insert_data,
-                mongo_login=mongo_login,
-                database_name=self.database_name,
-                ds_id=ds_id,
-                property_map=property_map,
-                co_md_map=co_md_map,
-                transform=transform,
-                verbose=verbose,
-            )
-
-            pool = multiprocessing.Pool(self.nprocs)
-
-            return list(itertools.chain.from_iterable(pool.map(pfunc, split_configs)))
-
-    @staticmethod
-    def _insert_data(
-        configurations,
-        database_name,
-        mongo_login,
-        ds_id,
-        co_md_map=None,
-        property_map=None,
-        transform=None,
-        verbose=False,
-    ):
-        if isinstance(mongo_login, int):
-            client = MongoClient("localhost", mongo_login)
-        else:
-            client = MongoClient(mongo_login)
-        coll_configurations = client[database_name][_CONFIGS_COLLECTION]
-        coll_properties = client[database_name][_PROPS_COLLECTION]
-        coll_data_objects = client[database_name][_DATAOBJECT_COLLECTION]
-        coll_property_definitions = client[database_name][_PROPDEFS_COLLECTION]
-        coll_metadata = client[database_name][_METADATA_COLLECTION]
-
-        if isinstance(configurations, BaseConfiguration):
-            configurations = [configurations]
-
-        if property_map is None:
-            property_map = {}
-
-        property_definitions = {}
-        for pname in property_map:
-            doc = coll_property_definitions.find_one(
-                {"definition.property-name": pname}
-            )
-
-            if doc is None:
-                raise RuntimeError(
-                    "Property definition '{}' does not exist. "
-                    "Use insert_property_definition() first".format(pname)
-                )
-            else:
-                property_definitions[pname] = doc["definition"]
-
-        ignore_keys = {
-            "property-id",
-            "property-title",
-            "property-description",
-            "last_modified",
-            "definition",
-            "_id",
-            SHORT_ID_STRING_NAME,
-            "settings",
-            "property-name",
-        }
-
-        expected_keys = {
-            pname: [
-                set(
-                    # property_map[pname][f]['field']
-                    pmap[f]["field"]
-                    for f in property_definitions[pname].keys() - ignore_keys
-                    if property_definitions[pname][f]["required"] and "field" in pmap[f]
-                )
-                for pmap in property_map[pname]
-            ]
-            for pname in property_map
-        }
-
-        insertions = []
-        ca_ids = set()
-        config_docs = []
-        property_docs = []
-        calc_docs = []
-        meta_docs = []
-        #        co_relationships_dict = {}
-        #        pi_relationships_dict = {}
-        meta_update_dict = {}
-        # Add all of the configurations into the Mongo server
-        ai = 1
-        for atoms in tqdm(
-            configurations,
-            desc="Preparing to add configurations to Database",
-            disable=not verbose,
-        ):
-            co_relationships_dict = {}
-            pi_relationships_list = []
-            property_docs_do = []
-            calc_lists = {}
-            calc_lists["PI"] = []
-            calc_lists["PI_type"] = []
-            if transform:
-                transform(atoms)
-
-            c_update_doc, c_hash = _build_c_update_doc(atoms)
-            calc_lists["CO"] = c_hash
-            calc_lists["CO_hill"] = atoms.configuration_summary()[
-                "chemical_formula_hill"
-            ]
-            if co_md_map:
-                co_md = Metadata.from_map(d=co_md_map, source=atoms)
-                co_md_set_on_insert = _build_md_insert_doc(co_md)
-                co_md_update_doc = {  # update document
-                    "$setOnInsert": co_md_set_on_insert,
-                    "$set": {
-                        "last_modified": datetime.datetime.now().strftime(
-                            "%Y-%m-%dT%H:%M:%SZ"
-                        )
-                    },
-                }
-
-                meta_docs.append(
-                    UpdateOne(
-                        {"hash": str(co_md._hash)},
-                        co_md_update_doc,
-                        upsert=True,
-                        hint="hash",
-                    )
-                )
-                co_relationships_dict["metadata"] = "MD_%s" % str(co_md._hash)
-            available_keys = set().union(atoms.info.keys(), atoms.arrays.keys())
-            p_hash = None
-
-            new_p_hashes = []
-            for pname, pmap_list in property_map.items():
-                for pmap_i, pmap in enumerate(pmap_list):
-                    pi_relationships_dict = {}
-                    pmap_copy = dict(pmap)
-                    if "_metadata" in pmap_copy:
-                        del pmap_copy["_metadata"]
-
-                    # Pre-check to avoid having to delete partially-added properties
-                    missing_keys = expected_keys[pname][pmap_i] - available_keys
-                    if missing_keys:
-                        continue
-                    # checks if property is present in atoms->if not, skip over it
-
-                    available = 0
-                    for k in pmap_copy.keys():
-                        if "value" in pmap_copy[k]:
-                            available += 1
-                        elif pmap_copy[k]["field"] in available_keys:
-                            available += 1
-                    if not available:
-                        continue
-
-                    metadata_hashes = []
-                    # Attach property metadata, if any were given
-                    if "_metadata" in pmap:
-                        pi_md = Metadata.from_map(d=pmap["_metadata"], source=atoms)
-
-                        pi_md_set_on_insert = _build_md_insert_doc(pi_md)
-                        prop = Property.from_definition(
-                            definition=property_definitions[pname],
-                            configuration=atoms,
-                            property_map=pmap_copy,
-                        )
-                        p_hash = str(hash(prop))
-
-                        new_p_hashes.append(p_hash)
-
-                        pi_md_update_doc = {  # update document
-                            "$setOnInsert": pi_md_set_on_insert,
-                            "$set": {
-                                "last_modified": datetime.datetime.now().strftime(
-                                    "%Y-%m-%dT%H:%M:%SZ"
-                                )
-                            },
-                        }
-
-                        meta_docs.append(
-                            UpdateOne(
-                                {"hash": str(pi_md._hash)},
-                                pi_md_update_doc,
-                                upsert=True,
-                                hint="hash",
-                            )
-                        )
-
-                        metadata_hashes.append(str(pi_md._hash))
-
-                    else:
-                        prop = Property.from_definition(
-                            definition=property_definitions[pname],
-                            configuration=atoms,
-                            property_map=pmap_copy,
-                        )
-                        p_hash = str(hash(prop))
-
-                        new_p_hashes.append(p_hash)
-                    calc_lists["PI"].append(p_hash)
-                    calc_lists["PI_type"].append(pname)
-                    # Prepare the property instance EDN document
-                    setOnInsert = {}
-                    # for k in property_map[pname]:
-                    for k in pmap:
-                        if k not in prop.keys():
-                            # To allow for missing non-required keys.
-                            # Required keys checked for in Property.from_definition
-                            continue
-
-                        if isinstance(prop[k]["source-value"], (int, float, str)):
-                            # Add directly
-                            setOnInsert[k] = {"source-value": prop[k]["source-value"]}
-                        else:
-                            # Then it's array-like and should be converted to a list
-                            setOnInsert[k] = {
-                                "source-value": np.atleast_1d(
-                                    prop[k]["source-value"]
-                                ).tolist()
-                            }
-
-                        if "source-unit" in prop[k]:
-                            setOnInsert[k]["source-unit"] = prop[k]["source-unit"]
-                        # TODO: Look at: can probably safely move out one level
-                    pi_relationships_dict["metadata"] = "MD_" + str(pi_md._hash)
-                    p_update_doc = {
-                        "$setOnInsert": {
-                            "hash": p_hash,
-                            SHORT_ID_STRING_NAME: "PI_" + p_hash,
-                            "type": pname,
-                            pname: setOnInsert,
-                        },
-                        "$set": {
-                            "last_modified": datetime.datetime.now().strftime(
-                                "%Y-%m-%dT%H:%M:%SZ"
-                            )
-                        },
-                    }
-
-                    property_docs_do.append(p_update_doc)
-                    pi_relationships_list.append(pi_relationships_dict)
-
-            calc = DataObject(calc_lists["CO"], calc_lists["PI"])
-            ca_hash = str(calc._hash)
-            ca_ids.add(ca_hash)
-            ca_insert_doc = _build_ca_insert_doc(calc)
-            ca_insert_doc["chemical_formula_hill"] = calc_lists["CO_hill"]
-            ca_update_doc = {  # update document
-                "$setOnInsert": ca_insert_doc,
-                # Set MD relationships here
-                "$addToSet": {
-                    "property_types": {"$each": calc_lists["PI_type"]},
-                    "relationships": {
-                        "dataset": ds_id,
-                        "configuration": "CO_" + calc_lists["CO"],
-                        "property_instance": ["PI_" + j for j in calc_lists["PI"]],
-                        "metadata": list(
-                            set([j["metadata"] for j in pi_relationships_list])
-                        ),
-                    },
-                },
-                # '$inc': {
-                #     'ncounts': 1
-                # },
-                "$set": {
-                    "last_modified": datetime.datetime.now().strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    )
-                },
-            }
-            calc_docs.append(
-                UpdateOne(
-                    {"hash": ca_hash},
-                    ca_update_doc,
-                    upsert=True,
-                    hint="hash",
-                )
-            )
-            co_relationships_dict["dataset"] = ds_id
-            for pi_doc_i, pi_doc in enumerate(property_docs_do):
-                pi_relationships_list[pi_doc_i]["dataset"] = ds_id
-                pi_doc["$addToSet"] = {
-                    "relationships": {
-                        "dataset": pi_relationships_list[pi_doc_i].pop("dataset")
-                    }
-                }
-                property_docs.append(
-                    UpdateOne(
-                        {"hash": pi_doc["$setOnInsert"]["hash"]},
-                        pi_doc,
-                        upsert=True,
-                        hint="hash",
-                    )
-                )
-
-            c_update_doc["$addToSet"]["relationships"] = co_relationships_dict
-            config_docs.append(
-                UpdateOne(
-                    {"hash": c_hash},
-                    c_update_doc,
-                    upsert=True,
-                    hint="hash",
-                )
-            )
-
-            insertions.append((c_hash, ca_hash))
-
-            ai += 1
-        if config_docs:
-            res = coll_configurations.bulk_write(config_docs, ordered=False)
-            nmatch = res.bulk_api_result["nMatched"]
-            if nmatch:
-                warnings.warn("{} duplicate configurations detected".format(nmatch))
-        if property_docs:
-            res = coll_properties.bulk_write(property_docs, ordered=False)
-            nmatch = res.bulk_api_result["nMatched"]
-            if nmatch:
-                warnings.warn("{} duplicate properties detected".format(nmatch))
-        if calc_docs:
-            res = coll_data_objects.bulk_write(calc_docs, ordered=False)
-            nmatch = res.bulk_api_result["nMatched"]
-            if nmatch:
-                warnings.warn("{} duplicate data objects detected".format(nmatch))
-
-        if meta_docs:
-            res = coll_metadata.bulk_write(meta_docs, ordered=False)
-            nmatch = res.bulk_api_result["nMatched"]
-            if nmatch:
-                warnings.warn("{} duplicate metadata objects detected".format(nmatch))
-
-        client.close()
-        return insertions
-
-    def insert_property_definition(self, definition):
-        """
-        Inserts a new property definition into the database. Checks that
-        definition is valid, then builds all necessary groups in
-        :code:`/root/properties`. Throws an error if the property already
-        exists.
-
-        Args:
-
-            definition (dict or string):
-                The map defining the property. See the example below, or the
-                `OpenKIM Properties Framework <https://openkim.org/doc/schema/properties-framework/>`_
-                for more details. If a string is provided, it must be the full
-                path to an existing property definition.
-
-        Example definition:
-
-        .. code-block:: python
-
-            property_definition = {
-                'property-id': 'default',
-                'property-title': 'A default property used for testing',
-                'property-description': 'A description of the property',
-                'energy': {'type': 'float', 'has-unit': True, 'extent': [], 'required': True, 'description': 'empty'},
-                'stress': {'type': 'float', 'has-unit': True, 'extent': [6], 'required': True, 'description': 'empty'},
-                'name': {'type': 'string', 'has-unit': False, 'extent': [], 'required': True, 'description': 'empty'},
-                'nd-same-shape': {'type': 'float', 'has-unit': True, 'extent': [2,3,5], 'required': True, 'description': 'empty'},
-                'nd-diff-shape': {'type': 'float', 'has-unit': True, 'extent': [":", ":", ":"], 'required': True, 'description': 'empty'},
-                'forces': {'type': 'float', 'has-unit': True, 'extent': [":", 3], 'required': True, 'description': 'empty'},
-                'nd-same-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', 2, 3], 'required': True, 'description': 'empty'},
-                'nd-diff-shape-arr': {'type': 'float', 'has-unit': True, 'extent': [':', ':', ':'], 'required': True, 'description': 'empty'},
-            }
-
-        """
-
-        if isinstance(definition, str):
-            with open(definition, "r") as f:
-                definition = json.load(f)
-
-        if self.property_definitions.count_documents(
-            {"definition.property-name": definition["property-name"]}
-        ):
-            warnings.warn(
-                "Property definition with name '{}' already exists. "
-                "Using existing definition.".format(definition["property-name"])
-            )
-
-        dummy_dict = deepcopy(definition)
-
-        if "property-id" not in dummy_dict:
-            dummy_dict["property-id"] = "tag:@,0000-00-00:property/"
-            dummy_dict["property-id"] += definition["property-name"]
-        else:
-            # Spoof if necessary
-            if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
-                # Invalid ID. Try spoofing it
-                dummy_dict["property-id"] = "tag:@,0000-00-00:property/"
-                dummy_dict["property-id"] += definition["property-id"]
-                warnings.warn(
-                    "Invalid KIM property-id; "
-                    "Temporarily renaming to {}. "
-                    "See https://openkim.org/doc/schema/properties-framework/ "
-                    "for more details.".format(dummy_dict["property-id"])
-                )
-
-        # Hack to avoid the fact that "property-name" has to be a dictionary
-        # in order for OpenKIM's check_property_definition to work
-        tmp = dummy_dict["property-name"]
-        del dummy_dict["property-name"]
-
-        check_property_definition(dummy_dict)
-
-        dummy_dict["property-name"] = tmp
-
-        self.property_definitions.update_one(
-            {"definition.property-name": definition["property-name"]},
-            {"$setOnInsert": {"definition": dummy_dict}},
-            upsert=True,
-            hint="definition.property-name",
-        )
-
-    def get_property_definition(self, name):
-        """Returns a property definition using its 'definition.property-name' key"""
-        return self.property_definitions.find_one({"definition.property-name": name})
-
-    def insert_property_settings(self, ps_object):
-        """
-        Inserts a new property settings object into the database by creating
-        and populating the necessary groups in :code:`/root/property_settings`.
-
-        Args:
-
-            ps_object (PropertySettings)
-                The :class:`~colabfit.tools.property_settings.PropertySettings`
-                object to insert into the database.
-
-
-        Returns:
-
-            ps_hash (str):
-                The hash of the inserted property settings object.
-        """
-
-        ps_hash = str(ps_object._hash)
-        self.property_settings.update_one(
-            {"hash": ps_hash},
-            {
-                "$addToSet": {"labels": {"$each": list(ps_object.labels)}},
-                "$setOnInsert": {
-                    "hash": str(ps_object._hash),
-                    "method": ps_object.method,
-                    "description": ps_object.description,
-                    "files": [
-                        {
-                            "file_name": ftup[0],
-                            "file_contents": ftup[1],
-                        }
-                        for ftup in ps_object.files
-                    ],
-                },
-            },
-            upsert=True,
-            hint="hash",
-        )
-
-        return ps_hash
-
-    def get_property_settings(self, pso_hash):
-        pso_doc = self.property_settings.find_one({"hash": pso_hash})
-        return PropertySettings(
-            method=pso_doc["method"],
-            description=pso_doc["description"],
-            labels=set(pso_doc["labels"]),
-            files=[(d["file_name"], d["file_contents"]) for d in pso_doc["files"]],
-        )
-
-    def query_in_batches(
-        self,
-        collection_name,
-        query_key,
-        query_list,
-        other_query=None,
-        return_key=None,
-        batch_size=100000,
-        **kwargs,
-    ):
-        """
-        Queries the database in batches and returns results. This should be used for large queries when building CS
-        and DS. Queries are called using '$in' functionality
-
-        Args:
-
-            collection_name (str):
-                The name of a collection in the database.
-
-            query_key (str):
-                Key to use in an '$in' query
-
-            query_list (list):
-                List of values to search over using '$in'
-
-            other_query (dict, default=None):
-                Any other query that should also be performed along with '$in' query
-
-            return_key (str, default=None):
-                If not None, values corresponding to return_key are yielded, otherwise everything is yielded.
-
-            batch_size (int, default=100000):
-                Number of values that the query searches over using $in functionality
-
-           Other arguments in a typical PyMongo 'find'
-
-        Returns:
-
-            data (dict):
-                key = k for k in keys. val = in-memory data
-        """
-
-        nbatches = ceil(len(query_list) / batch_size)
-        collection = self[self.database_name][collection_name]
-        for i in range(nbatches):
-            if i + 1 < nbatches:
-                if other_query is not None:
-                    q = {
-                        query_key: {
-                            "$in": query_list[i * batch_size : (i + 1) * batch_size]
-                        }
-                    }
-                    q.update(other_query)
-                    cursor = collection.find(q, **kwargs)
-                else:
-                    cursor = collection.find(
-                        {
-                            query_key: {
-                                "$in": query_list[i * batch_size : (i + 1) * batch_size]
-                            }
-                        },
-                        **kwargs,
-                    )
-            else:
-                if other_query is not None:
-                    q = {query_key: {"$in": query_list[i * batch_size :]}}
-                    q.update(other_query)
-                    cursor = collection.find(q, **kwargs)
-                else:
-                    cursor = collection.find(
-                        {query_key: {"$in": query_list[i * batch_size :]}}, **kwargs
-                    )
-            for j in cursor:
-                if return_key is not None:
-                    yield j[return_key]
-                else:
-                    yield j
-
-    # @staticmethod
-    def get_data(
-        self,
-        collection_name,
-        fields,
-        query=None,
-        hashes=None,
-        keep_hashes=False,
-        concatenate=False,
-        vstack=False,
-        ravel=False,
-        unpack_properties=True,
-        verbose=False,
-    ):
-        """
-        Queries the database and returns the fields specified by `keys` as a
-        list or an array of values. Returns the results in memory.
-
-        Example:
-
-        .. code-block:: python
-
-            data = database.get_data(
-                collection_name='properties',
-                query={SHORT_ID_STRING_NAME: {'$in': <list_of_property_IDs>}},
-                fields=['property_name_1.energy', 'property_name_1.forces'],
-                cache=True
-            )
-
-        Args:
-
-            collection_name (str):
-                The name of a collection in the database.
-
-            fields (list or str):
-                The fields to return from the documents. Sub-fields can be
-                returned by providing names separated by periods ('.')
-
-            query (dict, default=None):
-                A Mongo query dictionary. If None, returns the data for all of
-                the documents in the collection.
-
-            hashes (list):
-                The list of hashes to return the data for. If None, returns the
-                data for the entire collection. Note that this information can
-                also be provided using the :code:`query` argument.
-
-            keep_hashes (bool, default=False):
-                If True, includes the "hash" field as one of the returned values.
-
-            concatenate (bool, default=False):
-                If True, concatenates the data before returning.
-
-            vstack (bool, default=False):
-                If True, calls np.vstack on data before returning.
-
-            ravel (bool, default=False):
-                If True, concatenates and ravels the data before returning.
-
-            unpack_properties (bool, default=True):
-                If True, returns only the contents of the :code:`'source-value'`
-                key for each field in :attr:`fields` (assuming
-                :code:`'source-value'` exists). Users who wish to return the
-                full dictionaries for fields should set
-                :code:`unpack_properties=False`.
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
-
-        Returns:
-
-            data (dict):
-                key = k for k in keys. val = in-memory data
-        """
-
-        if query is None:
-            query = {}
-
-        if hashes is not None:
-            if isinstance(hashes, str):
-                hashes = [hashes]
-            elif isinstance(hashes, np.ndarray):
-                hashes = hashes.tolist()
-
-            query["hash"] = {"$in": hashes}
-
-        if isinstance(fields, str):
-            fields = [fields]
-
-        retfields = {k: 1 for k in fields}
-
-        if keep_hashes:
-            retfields["hash"] = 1
-
-        collection = self[self.database_name][collection_name]
-
-        cursor = collection.find(query, retfields)
-
-        data = {k: [] for k in retfields}
-
-        for doc in tqdm(cursor, desc="Getting data", disable=not verbose):
-            for k in retfields:
-                # For figuring out if document has the data
-
-                # Handle keys like "property-name.property-field"
-                missing = False
-                v = doc
-                for kk in k.split("."):
-                    if kk in v:
-                        v = v[kk]
-                    else:
-                        # Missing something
-                        missing = True
-
-                if not missing:
-                    if isinstance(v, dict):
-                        if unpack_properties and ("source-value" in v):
-                            v = v["source-value"]
-
-                    data[k].append(v)
-
-        for k, v in data.items():
-            # data[k] = np.array(data[k])
-            # TODO: Standardize=> Currently, output is array if numpy operations are used, otherwise it's list
-            if concatenate or ravel:
-                try:
-                    data[k] = np.concatenate(v)
-                except:
-                    data[k] = np.array(v)
-
-            if vstack:
-                data[k] = np.vstack(v)
-
-        if ravel:
-            for k, v in data.items():
-                data[k] = v.ravel()
-
-        if len(retfields) == 1:
-            return data[list(retfields.keys())[0]]
-        else:
-            return data
-
-    def get_configuration(self, i, property_hashes=None, attach_properties=False):
-        """
-        Returns a single configuration by calling :meth:`get_configurations`
-        """
-        return self.get_configurations(
-            [i], property_hashes=property_hashes, attach_properties=attach_properties
-        )[0]
-
-    def get_configurations(
-        self,
-        configuration_hashes,
-        property_hashes=None,
-        attach_properties=False,
-        attach_settings=False,
-        generator=False,
-        verbose=False,
-    ):
-        """
-        A generator that returns in-memory Configuration objects one at a time
-        by loading the atomic numbers, positions, cells, and PBCs.
-
-        Args:
-
-            configuration_hashes (list or 'all'):
-                A list of string hashes specifying which Configurations to return.
-                If 'all', returns all of the configurations in the database.
-
-            property_hashes (list, default=None):
-                A list of Property hashes. Used for limiting searches when
-                :code:`attach_properties==True`.  If None,
-                :code:`attach_properties` will attach all linked Properties.
-                Note that this only attaches one property per Configuration, so
-                if multiple properties point to the same Configuration, that
-                Configuration will be returned multiple times.
-
-            attach_properties (bool, default=False):
-                If True, attaches all the data of any linked properties from
-                :code:`property_hashes`. The property data will either be added to
-                the :code:`arrays` dictionary on a Configuration (if it can be
-                converted to a matrix where the first dimension is the same
-                as the number of atoms in the Configuration) or the :code:`info`
-                dictionary (if it wasn't added to :code:`arrays`). Property
-                fields in a list to accomodate the possibility of multiple
-                properties of the same type pointing to the same configuration.
-                WARNING: don't use this option if multiple properties of the
-                same type point to the same Configuration, but the properties
-                don't have values for all of their fields.
-
-            attach_settings (bool, default=False):
-                NOT supported yet. If True, attaches all of the fields of the property settings
-                that are linked to the attached property instances. If
-                :code:`attach_settings=True`, must also have
-                :code:`attach_properties=True`.
-
-            generator (bool, default=False):
-                NOT supported yet. If True, this function returns a generator of
-                the configurations. This is useful if the configurations can't
-                all fit in memory at the same time.
-
-            verbose (bool):
-                If True, prints progress bar
-
-        Returns:
-
-            configurations (iterable):
-                A list or generator of the re-constructed configurations
-        """
-
-        if attach_settings:
-            raise NotImplementedError
-
-        if configuration_hashes == "all":
-            query = {"hash": {"$exists": True}}
-        else:
-            if isinstance(configuration_hashes, str):
-                configuration_hashes = [configuration_hashes]
-
-            query = {"hash": {"$in": configuration_hashes}}
-
-        if generator:
-            raise NotImplementedError
-        else:
-            return list(
-                self._get_configurations(
-                    query=query,
-                    property_hashes=property_hashes,
-                    attach_properties=attach_properties,
-                    attach_settings=attach_settings,
-                    verbose=verbose,
-                )
-            )
-
-    def _get_configurations(
-        self, query, property_hashes, attach_properties, attach_settings, verbose=False
-    ):
-        if not attach_properties:
-            for co_doc in tqdm(
-                self.configurations.find(
-                    query,
-                    {
-                        *self.configuration_type.unique_identifier_kw,
-                        "names",
-                        "hash",
-                    },
-                ),
-                desc="Getting configurations",
-                disable=not verbose,
-            ):
-                c = self.configuration_type(
-                    **{
-                        k: v
-                        for k, v in co_doc.items()
-                        if k in self.configuration_type.unique_identifier_kw
-                    }
-                )
-
-                c.info["hash"] = co_doc["hash"]
-                c.info[ATOMS_NAME_FIELD] = co_doc["names"]
-
-                yield c
-        else:
-            config_dict = {}
-            for co_doc in tqdm(
-                self.configurations.find(query),
-                desc="Getting configurations",
-                disable=not verbose,
-            ):
-                c = self.configuration_type(
-                    **{
-                        k: v
-                        for k, v in co_doc.items()
-                        if k in self.configuration_type.unique_identifier_kw
-                    }
-                )
-
-                c.info["hash"] = co_doc["hash"]
-                c.info[ATOMS_NAME_FIELD] = co_doc["names"]
-
-                config_dict[co_doc["hash"]] = c
-
-            all_attached_prs = set(
-                [
-                    _["hash"]
-                    for _ in self.property_instances.find(
-                        {"relationships.configurations": query["hash"]}, {"hash"}
-                    )
-                ]
-            )
-
-            if property_hashes is not None:
-                property_hashes = list(all_attached_prs.union(set(property_hashes)))
-            else:
-                property_hashes = list(all_attached_prs)
-
-            for pr_doc in tqdm(
-                self.property_instances.find({"hash": {"$in": property_hashes}}),
-                desc="Attaching properties",
-                disable=not verbose,
-            ):
-                for co_id in pr_doc["relationships"]["configurations"]:
-                    if co_id not in config_dict:
-                        continue
-
-                    c = config_dict[co_id]
-
-                    n = len(c)
-
-                    for field_name, field in pr_doc[pr_doc["type"]].items():
-                        v = field["source-value"]
-
-                        dct = c.info
-                        if isinstance(v, list):
-                            if len(v) == n:
-                                dct = c.arrays
-
-                        field_name = f'{pr_doc["type"]}.{field_name}'
-
-                        if field_name in dct:
-                            # Then this is a duplicate property
-                            dct[field_name].append(v)
-                        else:
-                            # Then this is the first time
-                            # the property of this type is being added
-                            dct[field_name] = [v]
-
-            for v in config_dict.values():
-                yield v
-
-    def concatenate_configurations(self):
-        """
-        Concatenates the atomic_numbers, positions, cells, and pbcs groups in
-        /configurations.
-        """
-        self.database.concatenate_configurations()
-
-    def insert_configuration_set(
-        self,
-        hashes,
-        name,
-        description="",
-        ordered=False,
-        overloaded_cs_id=None,
-        ds_id=None,
-        verbose=False,
-    ):
-        """
-        Inserts the configuration set of IDs to the database.
-
-        Args:
-
-            hashes (list or str):
-                The hashes of the configurations to include in the configuration
-                set.
-            name (str):
-                Name of CS---used in forming extended-id
-            ordered (bool):
-                Flag specifying if COs in CS should be considered ordered.
-            overloaded_cs_id (str):
-                Used to overload naming convention when updating versions
-            description (str, optional):
-                A human-readable description of the configuration set.
-        """
-        # TODO: Same DS ID approach. Then search for CO/DS relationship pair and insert CS relationship into it
-        if ds_id is None:
-            # Hack so we don't need to modify existing ingestion scripts
-            # Best practice to provide a unique ID for new ingestion scripts
-
-            # Find DS ID that is referenced by CO/PI but is not present in database
-            # Assume that resulting ID is one to use
-            ds_ids = [
-                i["colabfit-id"] for i in self.datasets.find({}, {"colabfit-id": 1})
-            ]
-            missing_ids = set()
-            for i in self.configurations.find(
-                {"relationships.$[elem].dataset": {"$nin": ds_ids}},
-                {"relationships": 1},
-            ):
-                for j in i["relationships"]:
-                    if j["dataset"] not in ds_ids:
-                        missing_ids.add(j["dataset"])
-            if len(missing_ids) != 1:
-                raise Exception("DS ID could not be inferred from existing data")
-            else:
-                ds_id = list(missing_ids)[0]
-        print("DS", ds_id)
-        if isinstance(hashes, str):
-            hashes = [hashes]
-
-        hashes = list(set(hashes))
-
-        # TODO: Look at below
-        cs_hash = sha512()
-        cs_hash.update(description.encode("utf-8"))
-        for i in sorted(hashes):
-            cs_hash.update(str(i).encode("utf-8"))
-
-        cs_hash = int(cs_hash.hexdigest(), 16)
-
-        # Check for duplicates
-        try:
-            return self.configuration_sets.find_one({"hash": str(cs_hash)})[
-                SHORT_ID_STRING_NAME
-            ]
-        except:
-            pass
-
-        if overloaded_cs_id is None:
-            cs_id = ID_FORMAT_STRING.format("CS", generate_string(), 0)
-        else:
-            cs_id = overloaded_cs_id
-
-        aggregated_info = self.configuration_type.aggregate_configuration_summaries(
-            self, hashes, verbose=True
-        )
-        # Insert necessary aggregated info into its collection
-        self.insert_aggregated_info(aggregated_info, "configuration_set", cs_id)
-        for item in [
-            "individual_elements_ratios",
-            "chemical_systems",
-            "chemical_formula_anonymous",
-            "chemical_formula_hill",
-            "chemical_formula_reduced",
-        ]:
-            aggregated_info.pop(item)
-
-        self.configuration_sets.update_one(
-            {"hash": str(cs_hash)},
-            {
-                "$setOnInsert": {
-                    SHORT_ID_STRING_NAME: cs_id,
-                    "name": name,
-                    EXTENDED_ID_STRING_NAME: f"{name}__{cs_id}",
-                    "description": description,
-                    "hash": str(cs_hash),
-                    "ordered": ordered,
-                },
-                "$set": {
-                    "aggregated_info": aggregated_info,
-                    "last_modified": datetime.datetime.now().strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    ),
-                },
-                "$addToSet": {"relationships": {"dataset": ds_id}},
-            },
-            upsert=True,
-            hint="hash",
-        )
-
-        # Add the backwards relationships CO->CS
-        config_docs = []
-        for c_hash in hashes:
-            config_docs.append(
-                UpdateOne(
-                    {"hash": c_hash},
-                    {"$set": {"relationships.$[elem].configuration_set": cs_id}},
-                    array_filters=[
-                        {
-                            "elem.dataset": ds_id,
-                            "elem.configuration_set": {"$exists": False},
-                        }
-                    ],  # If correct dataset and cs relationship isn't already present
-                    # Avoids overwriting other relationships
-                    hint="hash",
-                )
-            )
-
-        self.configurations.bulk_write(config_docs)
-
-        return cs_id
-
-    def query_and_insert_configuration_set(
-        self,
-        co_hashes,
-        query,
-        name,
-        description="",
-        ordered=False,
-        ds_id=None,
-        overloaded_cs_id=None,
-    ):
-        """
-        Finds COs and inserts their grouping as a configuration into the database.
-
-        Args:
-
-            co_hashes (list or str):
-                The hashes of the configurations over which to query
-            query (dict):
-                PyMongo query to filter COs---Will usually be over name field
-            name (str):
-                Name of CS---used in forming extended-id
-            ordered (bool):
-                Flag specifying if COs in CS should be considered ordered.
-            overloaded_cs_id (str):
-                Used to overload naming convention when updating versions
-            description (str, optional):
-                A human-readable description of the configuration set.
-        """
-        filtered_cos = list(
-            self.query_in_batches(
-                "configurations",
-                "hash",
-                co_hashes,
-                other_query=query,
-                return_key="hash",
-                projection={"hash": 1, "_id": 0},
-            )
-        )
-        print(
-            f"Inserting configuration set",
-            f"({name}):".rjust(22),
-            f"{len(filtered_cos)}".rjust(7),
-        )
-        return self.insert_configuration_set(
-            filtered_cos,
-            description=description,
-            name=name,
-            ds_id=ds_id,
-            ordered=ordered,
-            overloaded_cs_id=overloaded_cs_id,
-        )
-
-    def get_configuration_set(self, cs_id, resync=False):
-        """
-        Returns the configuration set with the given ID.
-
-        Args:
-
-            cs_ids (str):
-                The ID of the configuration set to return
-
-            resync (bool):
-                If True, re-aggregates the configuration set information before
-                returning. Default is False.
-
-        Returns:
-
-            A dictionary with two keys:
-                'last_modified': a datetime string
-                'configuration_set': the configuration set object
-        """
-
-        if resync:
-            self.resync_configuration_set(cs_id)
-
-        cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: cs_id})
-
-        return {
-            "last_modified": cs_doc["last_modified"],
-            "configuration_set": ConfigurationSet(
-                configuration_ids=cs_doc["relationships"]["configurations"],
-                name=cs_doc["name"],
-                description=cs_doc["description"],
-                aggregated_info=cs_doc["aggregated_info"],
-            ),
-        }
-
-    # TODO look at this function to change updating to involve hash
-    def resync_configuration_set(self, cs_id, verbose=False):
-        """
-        Re-synchronizes the configuration set by re-aggregating the information
-        from the configurations.
-
-        Args:
-
-            cs_id (str):
-                The ID of the configuration set to update
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
-
-        Returns:
-
-            None; updates the configuration set document in-place
-
-        """
-
-        cs_doc = self.configuration_sets.find_one({SHORT_ID_STRING_NAME: cs_id})
-
-        aggregated_info = self.configuration_type.aggregate_configuration_summaries(
-            self,
-            cs_doc["relationships"]["configurations"],
-            verbose=verbose,
-        )
-
-        self.configuration_sets.update_one(
-            {SHORT_ID_STRING_NAME: cs_id},
-            {"$set": {"aggregated_info": aggregated_info}},
-            upsert=True,
-            hint=SHORT_ID_STRING_NAME,
-        )
-
-    # TODO: need to make sure can't make duplicate CS just with different versions
-    # TODO: Could do this by creating ConfigurationSets for all versioned CS and use a defined equality with hashing
-    def update_configuration_set(self, cs_id, add_ids=None, remove_ids=None):
-        if add_ids is None and remove_ids is None:
-            raise RuntimeError(
-                "Please input configuration IDs to add or remove from the configuration set."
-            )
-
-        # increment version number
-        current_hash, current_version = cs_id.split("_")[1:]
-        cs_doc = self.configuration_sets.find_one(
-            {SHORT_ID_STRING_NAME: {"$eq": cs_id}}
-        )
-        family_ids = cs_doc[SHORT_ID_STRING_NAME]
-        # Remove first -1
-        version = int(family_ids.split("_")[-1]) + 1
-        new_cs_id = "CS_" + current_hash + "_" + str(version)
-        co_docs = list(
-            self.configurations.find(
-                {"relationships.configuration_sets": cs_id}, {"hash": 1, "_id": 0}
-            )
-        )
-        ids = [i["hash"] for i in co_docs]
-        init_len = len(ids)
-
-        if add_ids is not None:
-            if isinstance(add_ids, str):
-                add_ids = [add_ids]
-            ids.extend(add_ids)
-            ids = list(set(ids))
-            if len(ids) == init_len:
-                raise RuntimeError(
-                    "All configurations to be added are already present in CS."
-                )
-            init_len = len(ids)
-
-        if remove_ids is not None:
-            if isinstance(remove_ids, str):
-                remove_ids = [remove_ids]
-            remove_ids = list(set(remove_ids))
-            for r in remove_ids:
-                try:
-                    ids.remove(r)
-                except:
-                    raise UserWarning(
-                        f"A configuration with the ID {r} was not"
-                        f"in the original CS, so it could not be removed."
-                    )
-            if len(ids) == init_len:
-                raise RuntimeError(
-                    "All configurations to be removed are not present in CS."
-                )
-
-        # insert new version of CS
-        self.insert_configuration_set(
-            ids,
-            name=cs_doc["name"],
-            description=cs_doc["description"],
-            overloaded_cs_id=new_cs_id,
-        )
-        return new_cs_id
-
-    # TODO: May need to recompute hash-But when is resyncing necessary?
-    def resync_dataset(self, ds_id, verbose=False):
-        """
-        Re-synchronizes the dataset by aggregating all necessary data from
-        properties and configuration sets. Note that this also calls
-        :meth:`colabfit.tools.client.resync_configuration_set`
-
-        Args:
-
-            ds_id (str):
-                The ID of the dataset to update
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
-
-        Returns:
-
-            None; updates the dataset document in-place
-        """
-
-        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
-
-        cs_ids = ds_doc["relationships"]["configuration_sets"]
-        pr_ids = ds_doc["relationships"]["property_instances"]
-
-        for csid in cs_ids:
-            self.resync_configuration_set(csid, verbose=verbose)
-
-        aggregated_info = {}
-
-        for k, v in self.aggregate_data_object_info(pr_ids, verbose=verbose).items():
-            if k in {"types", "types_counts", "fields", "fields_counts"}:
-                k = "property_" + k
-
-            aggregated_info[k] = v
-
-        self.datasets.update_one(
-            {SHORT_ID_STRING_NAME: ds_id},
-            {"$set": {"aggregated_info": aggregated_info}},
-            upsert=True,
-            hint=SHORT_ID_STRING_NAME,
-        )
-
-    def aggregate_property_info(self, pr_hashes, verbose=False):
-        """
-        Aggregates the following information from a list of properties:
-
-            * types
-            * labels
-            * labels_counts
-
-        Args:
-
-            pr_ids (list or str):
-                The IDs of the configurations to aggregate information from
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
-
-        Returns:
-
-            aggregated_info (dict):
-                All of the aggregated info
-        """
-
-        if isinstance(pr_hashes, str):
-            pr_hashes = [pr_hashes]
-
-        aggregated_info = {
-            "types": [],
-            "types_counts": [],
-            "fields": [],
-            "fields_counts": [],
-            # 'methods': [],
-            # 'methods_counts': [],
-        }
-
-        ignore_keys = {
-            "property-id",
-            "property-title",
-            "property-description",
-            "_id",
-            SHORT_ID_STRING_NAME,
-            "property-name",
-            "hash",
-        }
-
-        for doc in tqdm(
-            self.property_instances.find({"hash": {"$in": pr_hashes}}),
-            desc="Aggregating property info",
-            disable=not verbose,
-            total=len(pr_hashes),
-        ):
-            if doc["type"] not in aggregated_info["types"]:
-                aggregated_info["types"].append(doc["type"])
-                aggregated_info["types_counts"].append(1)
-            else:
-                idx = aggregated_info["types"].index(doc["type"])
-                aggregated_info["types_counts"][idx] += 1
-
-            for l in doc[doc["type"]]:
-                if l in ignore_keys:
-                    continue
-
-                l = ".".join([doc["type"], l])
-
-                if l not in aggregated_info["fields"]:
-                    aggregated_info["fields"].append(l)
-                    aggregated_info["fields_counts"].append(1)
-                else:
-                    idx = aggregated_info["fields"].index(l)
-                    aggregated_info["fields_counts"][idx] += 1
-
-        return aggregated_info
-
-    def aggregate_data_object_info(self, pr_hashes, verbose=False):
-        """
-        Aggregates the following information from a list of data_objects:
-
-            * types
-            * types_counts
-
-        Args:
-
-            pr_ids (list or str):
-                The IDs of the configurations to aggregate information from
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
-
-        Returns:
-
-            aggregated_info (dict):
-                All of the aggregated info
-        """
-
-        if isinstance(pr_hashes, str):
-            pr_hashes = [pr_hashes]
-
-        aggregated_info = {
-            "property_types": [],
-            "property_types_counts": [],
-            # 'fields': [],
-            # 'fields_counts': [],
-            # 'methods': [],
-            # 'methods_counts': [],
-        }
-
-        ignore_keys = {
-            "property-id",
-            "property-title",
-            "property-description",
-            "_id",
-            SHORT_ID_STRING_NAME,
-            "property-name",
-            "hash",
-        }
-
-        co_ids = []
-
-        for doc in tqdm(
-            self.query_in_batches(
-                query_key="hash", query_list=pr_hashes, collection_name="data_objects"
-            ),
-            desc="Aggregating data_object info",
-            disable=not verbose,
-            total=len(pr_hashes),
-        ):
-            for i in range(len(doc["property_types"])):
-                if doc["property_types"][i] not in aggregated_info["property_types"]:
-                    aggregated_info["property_types"].append(doc["property_types"][i])
-                    aggregated_info["property_types_counts"].append(1)
-                else:
-                    idx = aggregated_info["property_types"].index(
-                        doc["property_types"][i]
-                    )
-                    aggregated_info["property_types_counts"][idx] += 1
-            co_ids.append(doc["relationships"][0]["configuration"].replace("CO_", ""))
-        ag_2 = self.configuration_type.aggregate_configuration_summaries(
-            self, co_ids, verbose=verbose
-        )
-        aggregated_info.update(ag_2)
-        return aggregated_info
-
-    # TODO: Make Configuration "type" agnostic (only need to change docstring)
-    def aggregate_configuration_set_info(self, cs_ids, resync=False, verbose=False):
-        """
-        Aggregates the following information from a list of configuration sets:
-
-            * nconfigurations
-            * nsites
-            * chemical_systems
-            * nelements
-            * elements
-            * individual_elements_ratios
-            * total_elements_ratios
-            * chemical_formula_reduced
-            * chemical_formula_anonymous
-            * chemical_formula_hill
-            * nperiodic_dimensions
-            * dimension_types
-
-        Args:
-
-            cs_ids (list or str):
-                The IDs of the configurations to aggregate information from
-
-            resync (bool, default=False):
-                If True, re-synchronizes each configuration set before
-                aggregating the information.
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
-
-        Returns:
-
-            aggregated_info (dict):
-                All of the aggregated info
-        """
-
-        if isinstance(cs_ids, str):
-            cs_ids = [cs_ids]
-
-        if resync:
-            for csid in cs_ids:
-                self.resync_configuration_set(csid, verbose=verbose)
-
-        co_ids = list(
-            set(
-                itertools.chain.from_iterable(
-                    cs_doc["relationships"]["configurations"]
-                    for cs_doc in self.configuration_sets.find(
-                        {SHORT_ID_STRING_NAME: {"$in": cs_ids}}
-                    )
-                )
-            )
-        )
-
-        return self.configuration_type.aggregate_configuration_summaries(
-            self, [i.replace("CO_", "") for i in co_ids], verbose=verbose
-        )
-
-    def insert_dataset(
-        self,
-        do_hashes,
-        name,
-        ds_id=None,
-        authors=None,
-        cs_ids=None,
-        links=None,
-        description="",
-        data_license="CC0",
-        resync=False,
-        verbose=False,
-        overloaded_ds_id=None,
-    ):
-        """
-        Inserts a dataset into the database.
-
-        Args:
-
-            do_hashes (list or str):
-                The hashes of the data objects to link to the dataset
-
-            name (str):
-                The name of the dataset
-
-            authors (list or str or None):
-                The names of the authors of the dataset. If None, then no
-                authors are added.
-
-
-            cs_ids (list or str, default=None):
-                The IDs of the configuration sets to link to the dataset.
-
-            links (list or str or None):
-                External links (e.g., journal articles, Git repositories, ...)
-                to be associated with the dataset. If None, then no links are
-                added.
-
-            description (str or None):
-                A human-readable description of the dataset. If None, then not
-                description is added.
-
-            data_license (str):
-                License associated with the Dataset's data
-
-            resync (bool):
-                If True, re-synchronizes the configuration sets and properties
-                before adding to the dataset. Default is False.
-
-            verbose (bool, default=False):
-                If True, prints a progress bar
-
-        Returns:
-
-            ds_id (str):
-                The ID of the inserted dataset
-        """
-
-        if ds_id is None:
-            # Hack so we don't need to modify existing ingestion scripts
-            # Best practice to provide a unique ID for new ingestion scripts
-
-            # Find DS ID that is referenced by CO/PI but is not present in database
-            # Assume that resulting ID is one to use
-            ds_ids = [
-                i["colabfit-id"] for i in self.datasets.find({}, {"colabfit-id": 1})
-            ]
-            missing_ids = set()
-            for i in self.configurations.find(
-                {"relationships.$[elem].dataset": {"$nin": ds_ids}},
-                {"relationships": 1},
-            ):
-                for j in i["relationships"]:
-                    if j["dataset"] not in ds_ids:
-                        missing_ids.add(j["dataset"])
-            if len(missing_ids) != 1:
-                raise Exception("DS ID could not be inferred from existing data")
-            else:
-                ds_id = list(missing_ids)[0]
-
-        if isinstance(cs_ids, str):
-            cs_ids = [cs_ids]
-
-        if isinstance(do_hashes, str):
-            do_hashes = [do_hashes]
-
-        # Remove possible duplicates
-        if cs_ids is not None:
-            cs_ids = list(set(cs_ids))
-        do_hashes = list(set(do_hashes))
-
-        if isinstance(authors, str):
-            authors = [authors]
-
-        for auth in authors:
-            if not "".join(auth.split(" ")[-1].replace("-", "")).isalpha():
-                raise RuntimeError(
-                    "Bad author name '{}'. Author names can only contain [a-z][A-Z]".format(
-                        auth
-                    )
-                )
-
-        if isinstance(links, str):
-            links = [links]
-
-        ds_hash = sha512()
-        if cs_ids is not None:
-            for ci in sorted(cs_ids):
-                ds_hash.update(str(ci).encode("utf-8"))
-        for pi in sorted(do_hashes):
-            ds_hash.update(str(pi).encode("utf-8"))
-
-        ds_hash = int(ds_hash.hexdigest(), 16)
-        # Check for duplicates
-        try:
-            return self.datasets.find_one({"hash": str(ds_hash)})[SHORT_ID_STRING_NAME]
-        except:
-            pass
-
-        if overloaded_ds_id is not None:
-            # Old
-            # ds_id = ID_FORMAT_STRING.format('DS', generate_string(), 0)
-            ds_id = overloaded_ds_id
-
-        aggregated_info = {}
-
-        for k, v in self.aggregate_data_object_info(do_hashes, verbose=verbose).items():
-            aggregated_info[k] = v
-
-        # Insert necessary aggregated info into its collection
-        self.insert_aggregated_info(aggregated_info, "dataset", ds_id)
-        for item in [
-            "individual_elements_ratios",
-            "chemical_systems",
-            "chemical_formula_anonymous",
-            "chemical_formula_hill",
-            "chemical_formula_reduced",
-        ]:
-            aggregated_info.pop(item)
-
-        id_prefix = "_".join(
-            [
-                name,
-                "".join([unidecode(auth.split()[-1]) for auth in authors]),
-            ]
-        )
-
-        if len(id_prefix) > (MAX_STRING_LENGTH - len(ds_id) - 2):
-            id_prefix = id_prefix[: MAX_STRING_LENGTH - len(ds_id) - 2]
-            warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
-        extended_id = f"{id_prefix}__{ds_id}"
-
-        # TODO: get_dataset should be able to use extended-id; authors can't symbols
-
-        self.datasets.update_one(
-            {"hash": str(ds_hash)},
-            {
-                "$setOnInsert": {
-                    SHORT_ID_STRING_NAME: ds_id,
-                    EXTENDED_ID_STRING_NAME: extended_id,
-                    "name": name,
-                    "authors": authors,
-                    "links": links,
-                    "description": description,
-                    "hash": str(ds_hash),
-                    "license": data_license,
-                },
-                "$set": {
-                    "aggregated_info": aggregated_info,
-                    "last_modified": datetime.datetime.now().strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    ),
-                },
-            },
-            upsert=True,
-            hint="hash",
-        )
-
-        # Don't need below anymore since it's assumed that relationship already exists
-        return ds_id
-
-    def get_dataset(self, ds_id, resync=False, verbose=False):
-        """
-        Returns the dataset with the given ID.
-
-        Args:
-
-            ds_ids (str):
-                Either the 'short-id' or 'extended-id' of a dataset
-
-            resync (bool):
-                If True, re-aggregates the configuration set and property
-                information before returning. Default is False.
-
-            verbose (bool, default=True):
-                If True, prints a progress bar. Only used if
-                :code:`resync=False`.
-
-        Returns:
-
-            A dictionary with two keys:
-                'last_modified': a datetime string
-                'dataset': the dataset object
-        """
-
-        if len(ds_id) > 19:
-            # Then this must be an extended ID
-            ds_id = ds_id.split("__")[-1]
-
-        if resync:
-            self.resync_dataset(ds_id, verbose=verbose)
-
-        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
-
-        return {
-            SHORT_ID_STRING_NAME: ds_id,
-            "last_modified": ds_doc["last_modified"],
-            "dataset": Dataset(
-                configuration_set_ids=ds_doc["relationships"]["configuration_sets"],
-                property_ids=ds_doc["relationships"]["data_objects"],
-                name=ds_doc["name"],
-                authors=ds_doc["authors"],
-                links=ds_doc["links"],
-                description=ds_doc["description"],
-                data_license=ds_doc["license"],
-                aggregated_info=ds_doc["aggregated_info"],
-            ),
-        }
-
-    # TODO: Handle properties somewhere->should we allow for only properties to be update?
-    # TODO: Allow for metadata updating
-    def update_dataset(
-        self,
-        ds_id,
-        add_cs_ids=None,
-        remove_cs_ids=None,
-        add_do_ids=None,
-        remove_do_ids=None,
-    ):
-        # Remove since we shouldn't require CS stuf here
-        # if add_cs_ids is None and remove_cs_ids is None:
-        #    raise RuntimeError('Please input configuration set IDs/properties to add or remove from the dataset.')
-
-        # increment version number
-        current_hash, current_version = ds_id.split("_")[1:]
-        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: {"$eq": ds_id}})
-        family_ids = ds_doc[SHORT_ID_STRING_NAME]
-        version = int(family_ids.split("_")[-1]) + 1
-        new_ds_id = "DS_" + current_hash + "_" + str(version)
-
-        # Get configuration set ids from current version and append and/or remove
-        cs_docs = list(
-            self.configuration_sets.find(
-                {"relationships.dataset": ds_id}, {"colabfit-id": 1}
-            )
-        )
-        do_docs = list(
-            self.data_objects.find({"relationships.dataset": ds_id}, {"hash": 1})
-        )
-        cs_ids = [i["colabfit-id"] for i in cs_docs]
-        do_ids = [i["hash"] for i in do_docs]
-        init_len = len(cs_ids)
-
-        if add_cs_ids is not None:
-            if isinstance(add_cs_ids, str):
-                add_cs_ids = [add_cs_ids]
-            cs_ids.extend(add_cs_ids)
-            cs_ids = list(set(cs_ids))
-            if len(cs_ids) == init_len:
-                raise RuntimeError(
-                    "All configuration sets to be added are already present in DS."
-                )
-            init_len = len(cs_ids)
-
-            # Remove old version of CS if new version is in added
-            for id in add_cs_ids:
-                current_hash, version = id.split("_")[1:]
-                if int(version) > 0:
-                    try:
-                        old_version = self.configuration_sets.find_one(
-                            {SHORT_ID_STRING_NAME: {"$regex": f"CS_{current_hash}_.*"}}
-                        )
-                        cs_ids.remove(old_version)
-                    except:
-                        pass
-
-        if remove_cs_ids is not None:
-            if isinstance(remove_cs_ids, str):
-                remove_cs_ids = [remove_cs_ids]
-            remove_cs_ids = list(set(remove_cs_ids))
-            for r in remove_cs_ids:
-                try:
-                    cs_ids.remove(r)
-                except:
-                    raise UserWarning(
-                        f"A configuration set with the ID {r} was not"
-                        f"in the original DS, so it could not be removed."
-                    )
-            if len(cs_ids) == init_len:
-                raise RuntimeError(
-                    "All configuration sets to be removed are not present in DS."
-                )
-
-        init_len_do = len(do_ids)
-
-        if remove_do_ids is not None:
-            if isinstance(remove_do_ids, str):
-                remove_do_ids = [remove_do_ids]
-            remove_do_ids = list(set(remove_do_ids))
-            for r in remove_do_ids:
-                try:
-                    do_ids.remove(r)
-                except:
-                    raise UserWarning(
-                        f"A data object with the ID {r} was not"
-                        f"in the original DS, so it could not be removed."
-                    )
-            if len(do_ids) == init_len_do:
-                raise RuntimeError(
-                    "All data objects to be removed are not present in DS."
-                )
-
-        init_len_do = len(do_ids)
-
-        # TODO *****
-        # Add new DS relationship to old COs and DOs
-        # co_updates = []
-        # do_updates = []
-        self.data_objects.update_many(
-            {"hash": {"$in": do_ids}},
-            {"$addToSet": {"relationships": {"dataset": new_ds_id}}},
-        )
-
-        if add_do_ids is not None:
-            if isinstance(do_ids, str):
-                add_do_ids = [add_do_ids]
-            do_ids.extend(add_do_ids)
-            do_ids = list(set(do_ids))
-            if len(do_ids) == init_len_do:
-                raise RuntimeError(
-                    "All data objects to be added are already present in DS."
-                )
-
-        # insert new version of DS
-
-        self.insert_dataset(
-            do_ids,
-            name=ds_doc["name"],
-            cs_ids=cs_ids,
-            authors=ds_doc["authors"],
-            links=ds_doc["links"],
-            description=ds_doc["description"],
-            overloaded_ds_id=new_ds_id,
-        )
-        return new_ds_id
-
-    def aggregate_dataset_info(self, ds_ids):
-        """
-        Aggregates information from a list of datasets.
-
-        NOTE: this will face all of the same challenges as
-        aggregate_configuration_set_info()
-
-            * you need to find the overlap of COs and PRs.
-        """
-        pass
-
-    def plot_histograms(
-        self,
-        fields=None,
-        query=None,
-        ids=None,
-        verbose=False,
-        nbins=100,
-        xscale="linear",
-        yscale="linear",
-        method="matplotlib",
-    ):
-        """
-        Generates histograms of the given fields.
-
-        Args:
-
-            fields (list or str):
-                The names of the fields to plot
-
-            query (dict, default=None):
-                A Mongo query dictionary. If None, returns the data for all of
-                the documents in the collection.
-
-            ids (list or str):
-                The IDs of the objects to plot the data for
-
-            verbose (bool, default=False):
-                If True, prints progress bar
-
-            nbins (int):
-                Number of bins per histogram
-
-            xscale (str):
-                Scaling for x-axes. One of ['linear', 'log'].
-
-            yscale (str):
-                Scaling for y-axes. One of ['linear', 'log'].
-
-            method (str, default='plotly')
-                Package to use for plotting. 'plotly' or 'matplotlib'.
-
-        Returns:
-            Returns the figure object.
-        """
-        if fields is None:
-            fields = self.property_fields
-        elif isinstance(fields, str):
-            fields = [fields]
-
-        nfields = len(fields)
-
-        nrows = max(1, int(np.ceil(nfields / 3)))
-        if (nrows > 1) or (nfields % 3 == 0):
-            ncols = 3
-        else:
-            ncols = nfields % 3
-
-        if method == "plotly":
-            fig = make_subplots(rows=nrows, cols=ncols, subplot_titles=fields)
-        elif method == "matplotlib":
-            fig, axes = plt.subplots(
-                nrows=nrows, ncols=ncols, figsize=(4 * ncols, 2 * nrows)
-            )
-            axes = np.atleast_2d(axes)
-        else:
-            raise RuntimeError("Unsupported plotting method")
-
-        for i, prop in enumerate(fields):
-            data = self.get_data(
-                _PROPS_COLLECTION,
-                prop,
-                query=query,
-                hashes=ids,
-                verbose=verbose,
-                ravel=True,
-            )
-
-            c = i % 3
-            r = i // 3
-
-            if nrows > 1:
-                if method == "plotly":
-                    fig.add_trace(
-                        go.Histogram(x=data, nbinsx=nbins, name=prop),
-                        row=r + 1,
-                        col=c + 1,
-                    )
-                else:
-                    _ = axes[r][c].hist(data, bins=nbins)
-                    axes[r][c].set_title(prop)
-                    axes[r][c].set_xscale(xscale)
-                    axes[r][c].set_yscale(yscale)
-            else:
-                if method == "plotly":
-                    fig.add_trace(
-                        go.Histogram(x=data, nbinsx=nbins, name=prop),
-                        row=1,
-                        col=c + 1,
-                    )
-                else:
-                    _ = axes[0][c].hist(data, bins=nbins)
-                    axes[r][c].set_title(prop)
-                    axes[r][c].set_xscale(xscale)
-                    axes[r][c].set_yscale(yscale)
-
-        c += 1
-        while c < ncols:
-            if method == "matplotlib":
-                axes[r][c].axis("off")
-            c += 1
-
-        if method == "plotly":
-            fig.update_layout(
-                showlegend=True,
-            )
-            fig.update_xaxes(type=xscale)
-            fig.update_yaxes(type=yscale)
-            fig.for_each_annotation(lambda a: a.update(text=""))
-        else:
-            plt.tight_layout()
-
-        return fig
-
-    def get_statistics(
-        self,
-        fields,
-        query=None,
-        ids=None,
-        verbose=False,
-    ):
-        """
-        Queries the database and returns the fields specified by `keys` as a
-        list or an array of values. Returns the results in memory.
-
-        Example:
-
-        .. code-block:: python
-
-            data = database.get_data(
-                collection_name='properties',
-                query={SHORT_ID_STRING_NAME: {'$in': <list_of_property_IDs>}},
-                fields=['property_name_1.energy', 'property_name_1.forces'],
-                cache=True
-            )
-
-        Args:
-
-            collection_name (str):
-                The name of a collection in the database.
-
-            fields (list or str):
-                The fields to return from the documents. Sub-fields can be
-                returned by providing names separated by periods ('.')
-
-            query (dict, default=None):
-                A Mongo query dictionary. If None, returns the data for all of
-                the documents in the collection.
-
-            ids (list):
-                The list of IDs to return the data for. If None, returns the
-                data for the entire collection. Note that this information can
-                also be provided using the :code:`query` argument.
-
-            verbose (bool, default=False):
-                If True, prints a progress bar during data extraction
-
-        Returns:
-            results (dict)::
-                .. code-block:: python
-
-                    {
-                        f:  {
-                            'average': np.average(data),
-                            'std': np.std(data),
-                            'min': np.min(data),
-                            'max': np.max(data),
-                            'average_abs': np.average(np.abs(data))
-                        } for f in fields
-                    }
-
-        """
-
-        if isinstance(fields, str):
-            fields = [fields]
-
-        retdict = {}
-
-        for field in fields:
-            data = self.get_data(
-                "properties",
-                field,
-                query=query,
-                hashes=ids,
-                ravel=True,
-                verbose=verbose,
-            )
-
-            retdict[field] = {
-                "average": np.average(data),
-                "std": np.std(data),
-                "min": np.min(data),
-                "max": np.max(data),
-                "average_abs": np.average(np.abs(data)),
-            }
-
-        if len(fields) == 1:
-            return retdict[fields[0]]
-        else:
-            return retdict
-
-    def filter_on_configurations(self, ds_id, query, verbose=False):
-        """
-        Searches the configuration sets of a given dataset, and
-        returns configuration sets and properties that have been filtered based
-        on the given criterion.
-
-            * The returned configuration sets will only include configurations that return True for the filter
-            * The returned property IDs will only include properties that point to a configuration that returned True for the filter.
-
-        Args:
-
-            ds_id (str):
-                The ID of the dataset to filter
-
-            query (dict):
-                A Mongo query that will return the desired objects. Note that
-                the key-value pair :code:`{SHORT_ID_STRING_NAME: {'$in': ...}}` will be
-                included automatically to filter on only the objects that are
-                already linked to the given dataset.
-
-            verbose (bool, default=False):
-                If True, prints progress bars
-
-        Returns:
-
-            configuration_sets (list):
-                A list of configuration sets that have been pruned to only
-                include configurations that satisfy the filter
-
-            property_ids (list):
-                A list of property IDs that satisfy the filter
-        """
-
-        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
-
-        configuration_sets = []
-        property_ids = []
-
-        # Loop over configuration sets
-        cursor = self.configuration_sets.find(
-            {
-                SHORT_ID_STRING_NAME: {
-                    "$in": ds_doc["relationships"]["configuration_sets"]
-                }
-            }
-        )
-
-        for cs_doc in tqdm(
-            cursor, desc="Filtering on configuration sets", disable=not verbose
-        ):
-            query[SHORT_ID_STRING_NAME] = {
-                "$in": cs_doc["relationships"]["configurations"]
-            }
-
-            co_hashes = self.get_data("configurations", fields="hash", query=query)
-
-            # Build the filtered configuration sets
-            configuration_sets.append(
-                ConfigurationSet(
-                    configuration_ids=co_hashes,
-                    description=cs_doc["description"],
-                    aggregated_info=self.configuration_type.aggregate_configuration_summaries(
-                        self,
-                        co_hashes,
-                        verbose=verbose,
-                    ),
-                )
-            )
-
-        # Now get the corresponding properties
-        # TODO: Eric->Check correctness here
-        property_hashes = [
-            _["hash"]
-            for _ in self.property_instances.filter(
-                {
-                    "hash": {
-                        "$in": list(
-                            itertools.chain.from_iterable(
-                                cs.configuration_ids for cs in configuration_sets
-                            )
-                        )
-                    }
-                },
-                {"hash": 1},
-            )
-        ]
-
-        return configuration_sets, property_hashes
-
-    def filter_on_properties(
-        self, ds_id, filter_fxn=None, query=None, fields=None, verbose=False
-    ):
-        """
-        Searches the properties of a given dataset, and returns configuration
-        sets and properties that have been filtered based on the given
-        criterion.
-
-            * The returned configuration sets will only include configurations that are pointed to by a property that returned True for the filter
-            * The returned property IDs will only include properties that returned True for the filter function.
-
-        Example:
-
-        .. code-block:: python
-
-            configuration_sets, property_ids = database.filter_on_properties(
-                ds_id=...,
-                filter_fxn=lambda x: np.max(np.abs(x[']))
-            )
-
-        Args:
-
-            ds_id (str):
-                The ID of the dataset to filter
-
-            filter_fxn (callable, default=None):
-                A callable function to use as :code:`filter(filter_fxn, cursor)`
-                where :code:`cursor` is a Mongo cursor over all of the
-                property documents in the given dataset. If
-                :code:`filter_fxn` is None, must specify :code:`query`.
-
-            query (dict, default=None):
-                A Mongo query that will return the desired objects. Note that
-                the key-value pair :code:`{'_id': {'$in': ...}}` will be
-                included automatically to filter on only the objects that are
-                already linked to the given dataset.
-
-            fields (str or list, default=None):
-                The fields required by :code:`filter_fxn`. Providing the minimum
-                number of necessary fields can improve query performance.
-
-            verbose (bool, default=False):
-                If True, prints progress bars
-
-        Returns:
-
-            configuration_sets (list):
-                A list of configuration sets that have been pruned to only
-                include configurations that satisfy the filter
-
-            property_ids (list):
-                A list of property IDs that satisfy the filter
-        """
-
-        if filter_fxn is None:
-            if query is None:
-                raise RuntimeError("filter_fxn and query cannot both be None")
-            else:
-                filter_fxn = lambda x: True
-
-        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
-
-        configuration_sets = []
-        property_hashes = []
-
-        # Filter the properties
-        retfields = {"hash": 1, "relationships.configurations": 1}
-        if fields is not None:
-            if isinstance(fields, str):
-                fields = [fields]
-
-            for f in fields:
-                retfields[f] = 1
-
-        if query is None:
-            query = {}
-
-        query["hash"] = {"$in": ds_doc["relationships"]["property_instances"]}
-
-        cursor = self.property_instances.find(query, retfields)
-
-        all_co_hashes = []
-        for pr_doc in tqdm(
-            cursor,
-            desc="Filtering on properties",
-            disable=not verbose,
-        ):
-            if filter_fxn(pr_doc):
-                property_hashes.append(pr_doc["hash"])
-                all_co_hashes.append(pr_doc["relationships"]["configurations"])
-
-        all_co_hashes = list(set(itertools.chain.from_iterable(all_co_hashes)))
-
-        # Then filter the configuration sets
-        for cs_doc in self.configuration_sets.find(
-            {
-                SHORT_ID_STRING_NAME: {
-                    "$in": ds_doc["relationships"]["configuration_sets"]
-                }
-            }
-        ):
-            co_hashes = list(
-                set(cs_doc["relationships"]["configurations"]).intersection(
-                    all_co_hashes
-                )
-            )
-
-            configuration_sets.append(
-                ConfigurationSet(
-                    configuration_ids=co_hashes,
-                    description=cs_doc["description"],
-                    aggregated_info=self.configuration_type.aggregate_configuration_summaries(
-                        self, co_hashes, verbose=verbose
-                    ),
-                )
-            )
-
-        return configuration_sets, property_hashes
-
-    def remove_abandoned_data(self):
-        ds_ids = [
-            i["colabfit-id"]
-            for i in self.datasets.find({}, {"colabfit-id": 1}, hint="colabfit-id")
-        ]
-        missing_ids = set()
-        for i in self.configurations.find(
-            {"relationships.$[elem].dataset": {"$nin": ds_ids}}, {"relationships": 1}
-        ):
-            for j in i["relationships"]:
-                if j["dataset"] not in ds_ids:
-                    missing_ids.add(j["dataset"])
-        missing_ids = list(missing_ids)
-        if len(missing_ids) == 0:
-            raise Exception("Could not find abandoned data")
-        else:
-            for kind, index in [
-                (self.configurations, "co_relationships.dataset"),
-                (self.property_instances, "pi_relationships.dataset"),
-                (self.data_objects, "do_relationships.dataset"),
-                (self.configuration_sets, "cs_relationships.dataset"),
-            ]:
-                # pull relationships
-                kind.update_many(
-                    {
-                        "relationships.dataset": {"$in": missing_ids},
-                    },
-                    {"$pull": {"relationships": {"dataset": {"$in": missing_ids}}}},
-                    hint=index,
-                )
-                # kind.delete_many(
-                #    {
-                #        'relationships': {'$size': 0}
-                # })
-
-    def insert_aggregated_info(
-        self,
-        aggregated_info,
-        relationship_collection,
-        relationship_id,
-        batch_size=100000,
-    ):
-        for k in [
-            "chemical_systems",
-            "chemical_formula_reduced",
-            "chemical_formula_anonymous",
-            "chemical_formula_hill",
-        ]:
-            nbatches = ceil(len(aggregated_info[k]) / batch_size)
-            update_list = []
-            for i in range(nbatches):
-                for j in aggregated_info[k][i * batch_size : (i + 1) * batch_size]:
-                    update_list.append(
-                        UpdateOne(
-                            {"type": k, "formula": j},
-                            {
-                                "$setOnInsert": {"type": k, "formula": j},
-                                "$set": {
-                                    "last_modified": datetime.datetime.now().strftime(
-                                        "%Y-%m-%dT%H:%M:%SZ"
-                                    )
-                                },
-                                "$addToSet": {
-                                    "relationships": {
-                                        relationship_collection: relationship_id
-                                    }
-                                },
-                            },
-                            upsert=True,
-                        )
-                    )
-                self.aggregated_info.bulk_write(update_list)
-
-    '''
-    def dataset_to_markdown(
-        self,
-        ds_id,
-        base_folder,
-        html_file_name,
-        data_file_name,
-        data_format,
-        name_field=ATOMS_NAME_FIELD,
-        histogram_fields=None,
-        yscale='linear',
-        ):
-        """
-        Saves a Dataset and writes a properly formatted markdown file. In the
-        case of a Dataset that has child Dataset objects, each child Dataset
-        is written to a separate sub-folder.
-
-        Args:
-
-            ds_id (str):
-                The ID of the dataset.
-
-            base_folder (str):
-                Top-level folder in which to save the markdown and data files
-
-            html_file_name (str):
-                Name of file to save markdown to
-
-            data_file_name (str):
-                Name of file to save configuration and properties to
-
-            data_format (str, default='mongo'):
-                Format to use for data file. If 'mongo', does not save the
-                configurations to a new file, and instead adds the ID of the
-                Dataset in the Mongo Database.
-
-            name_field (str):
-                The name of the field that should be used to generate
-                configuration names
-
-            histogram_fields (list, default=None):
-                The property fields to include in the histogram plot. If None,
-                plots all fields.
-
-            yscale (str, default='linear'):
-                Scaling to use for histogram plotting
-        """
-
-        template = \
-"""
-# Summary
-|Chemical systems|Element ratios|# of properties|# of configurations|# of atoms|
-|---|---|---|---|---|
-|{}|{}|{}|{}|{}|
-
-# Name
-
-{}
-
-# Authors
-
-{}
-
-# Links
-
-{}
-
-# Description
-
-{}
-
-# Storage format
-
-|Elements|File|Format|Name field|
-|---|---|---|---|
-| {} | {} | {} | {} |
-
-# Properties
-
-|Property|KIM field|ASE field|Units
-|---|---|---|---|
-{}
-
-# Property settings
-
-|ID|Method|Description|Labels|Files|
-|---|---|---|---|---|
-{}
-
-# Configuration sets
-
-|ID|Description|# of structures| # of atoms|
-|---|---|---|---|
-{}
-
-# Configuration labels
-
-|Labels|Counts|
-|---|---|
-{}
-
-# Figures
-![The results of plot_histograms](histograms.png)
-"""
-
-        if not os.path.isdir(base_folder):
-            os.mkdir(base_folder)
-
-        html_file_name = os.path.join(base_folder, html_file_name)
-
-        dataset = self.get_dataset(ds_id)['dataset']
-
-        definition_files = {}
-        for pname in dataset.aggregated_info['property_types']:
-            definition = self.get_property_definition(pname)
-
-            def_fpath = os.path.join(base_folder, f'{pname}.edn')
-
-            json.dump(definition, open(def_fpath, 'w'))
-
-            definition_files[pname] = def_fpath
-
-        property_map = {}
-        for pr_doc in self.property_instances.find(
-            {'hash': {'$in': dataset.property_ids}}
-            ):
-            if pr_doc['type'] not in property_map:
-                property_map[pr_doc['type']] = {
-                    f: {
-                        'field': f,
-                        'units': v['source-unit'] if 'source-unit' in v else None
-                    }
-                    for f,v in pr_doc[pr_doc['type']].items()
-                }
-
-        agg_info = dataset.aggregated_info
-
-        # TODO: property settings should populate the MD file table
-
-        # property_settings = {}
-        # for pso_doc in self.property_settings.find(
-        #     {'relationships.properties': {'$in': dataset.property_ids}}
-        #     ):
-        #     property_settings[pso_doc['_id']] = self.get_property_settings(
-        #         pso_doc['_id']
-        #     )
-
-        property_settings = list(
-            self.property_settings.find(
-                {'relationships.property_instances': {'$in': dataset.property_ids}}
-            )
-        )
-
-        # Build Property Settings table
-
-        ps_table_lines = {}
-        for ps_doc in property_settings:
-            ps_tup = ('settings', )
-            ps_table.append('| {} | {} | {} | {} | {} |'.format(
-                pso_id,
-                pso.method,
-                pso.description,
-                ', '.join(pso.labels),
-                ', '.join('[{}]({})'.format(f, f) for f in pso.files)
-            ))
-
-
-        for pr_doc in self.property_instances.aggregate([
-                {'$match': {'$in': dataset.property_ids}},
-                {'$lookup': {
-                    'from': 'property_settings',
-                    'localField': 'relationships.property_settings',
-                    'foreignField': '_id',
-                    'as': 'linked_settings'
-                }},
-            ]):
-
-            for ps_doc in pr_doc['linked_settings']:
-                pass
-
-        # TODO: get the types of the properties linked to the PSs
-
-        configuration_sets = {
-            csid: self.get_configuration_set(csid)['configuration_set']
-            for csid in dataset.configuration_set_ids
-        }
-
-        # Write the markdown file
-        with open(html_file_name, 'w') as html:
-
-            formatting_arguments = []
-
-            # Summary
-            formatting_arguments.append(', '.join(agg_info['chemical_systems']))
-
-            tmp = []
-            for e, er in agg_info['total_elements_ratios'].items():
-                tmp.append('{} ({:.1f}%)'.format(e, er*100))
-
-            formatting_arguments.append(', '.join(tmp))
-
-            formatting_arguments.append(sum(agg_info['property_types_counts']))
-            formatting_arguments.append(agg_info['nconfigurations'])
-            formatting_arguments.append(agg_info['nsites'])
-
-            # Name
-            formatting_arguments.append(dataset.name)
-
-            # Authors
-            formatting_arguments.append('\n\n'.join(dataset.authors))
-
-            # Links
-            formatting_arguments.append('\n\n'.join(dataset.links))
-
-            # Description
-            formatting_arguments.append(dataset.description)
-
-            # Storage format
-            formatting_arguments.append(', '.join(agg_info['elements']))
-
-            if data_format == 'mongo':
-                formatting_arguments.append(ds_id)
-            else:
-                formatting_arguments.append(
-                    '[{}]({})'.format(data_file_name, data_file_name)
-                )
-
-            formatting_arguments.append(data_format)
-
-            formatting_arguments.append(name_field)
-
-            tmp = []
-            for pid, fdict in property_map.items():
-                for f,v in fdict.items():
-                    tmp.append(
-                        '| {} | {} | {} | {}'.format(
-                            '[{}]({})'.format(pid, definition_files[pid]),
-                            f,
-                            v['field'],
-                            v['units']
-                        )
-                    )
-
-            formatting_arguments.append('\n'.join(tmp))
-
-            tmp = []
-            for pso_id, pso in property_settings.items():
-                tmp.append('| {} | {} | {} | {} | {} |'.format(
-                    pso_id,
-                    pso.method,
-                    pso.description,
-                    ', '.join(pso.labels),
-                    ', '.join('[{}]({})'.format(f, f) for f in pso.files)
-                ))
-
-            formatting_arguments.append('\n'.join(tmp))
-
-            tmp = []
-            for cs_id, cs in configuration_sets.items():
-                tmp.append('| {} | {} | {} | {} |'.format(
-                    cs_id,
-                    cs.description,
-                    cs.aggregated_info['nconfigurations'],
-                    cs.aggregated_info['nsites']
-                ))
-
-            formatting_arguments.append('\n'.join(tmp))
-
-            tmp = []
-            for l, lc in zip(
-                dataset.aggregated_info['configuration_labels'], dataset.aggregated_info['configuration_labels_counts']
-                ):
-
-                tmp.append('| {} | {} |'.format(l, lc))
-
-            formatting_arguments.append('\n'.join(tmp))
-
-            html.write(template.format(*formatting_arguments))
-
-
-        # Save figures
-        if histogram_fields is None:
-            histogram_fields = dataset.aggregated_info['property_fields']
-
-        if len(histogram_fields) > 0:
-            fig = self.plot_histograms(
-                histogram_fields,
-                ids=dataset.property_ids,
-                yscale=yscale,
-                method='matplotlib'
-            )
-
-            plt.savefig(os.path.join(base_folder, 'histograms.png'))
-            plt.close()
-
-        # Copy any PSO files
-        all_file_names = []
-        for pso_id, pso in property_settings.items():
-            for fi, f in enumerate(pso.files):
-                new_name = os.path.join(
-                    base_folder,
-                    pso_id + '_' + os.path.split(f)[-1]
-                )
-                shutil.copyfile(f, new_name)
-
-                all_file_names.append(new_name)
-                pso.files[fi] = new_name
-
-        if data_format == 'xyz':
-            data_format = 'extxyz'
-
-        if data_format != 'mongo':
-            data_file_name = os.path.join(base_folder, data_file_name)
-
-            images = self.get_configurations(
-                configuration_hashes=list(set(itertools.chain.from_iterable(
-                    cs.configuration_ids for cs in configuration_sets.values()
-                ))),
-                attach_settings=True,
-                attach_properties=True,
-                generator=True,
-            )
-
-            ase_write(
-                data_file_name,
-                images=images,
-                format=data_format,
-            )
-    '''
-
-    '''
-    def export_dataset(self, ds_id, output_folder, fmt, mode, verbose=False):
-        """
-        Exports the dataset whose :code:`SHORT_ID_STRING_NAME` matches :code:`ds_id` to
-        the given format.
-
-        Args:
-
-            ds_id (str):
-                An ID matching the form DS_XXXXXXXXXXXX_XXX
-
-            output_folder (str):
-                The path to a folder in which to save the dataset. Database
-                contents will be save under
-                :code:`<output_folder>/database.<fmt>`, and all other files
-                (property settings files, property definitions, etc.) will be
-                saved as :code:`<output_folder>/<file_name>`.
-
-            fmt (str):
-                The format to which to export the data. Supported formats:
-                ['hdf5'].
-
-            mode (str):
-                'r', 'w', or 'a'
-
-            verbose (bool, default=True):
-                If True, prints progress bar
-        """
-
-        # Check if folders exist
-        path = os.path.join(output_folder)
-        if not os.path.isdir(path):
-            os.mkdir(path)
-
-        path = os.path.join(output_folder, 'property_definitions')
-        if not os.path.isdir(path):
-            os.mkdir(path)
-
-        path = os.path.join(output_folder, 'property_settings_files')
-        if not os.path.isdir(path):
-            os.mkdir(path)
-
-        supported_formats = ['hdf5']
-        if fmt not in supported_formats:
-            raise RuntimeError(
-                f"The only supported formats are {supported_formats}"
-            )
-
-        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: ds_id})
-
-        configuration_ids = []
-
-        for cs_id in ds_doc['relationships']['configuration_sets']:
-            configuration_ids += self.get_configuration_set(
-                cs_id
-            )['configuration_set'].configuration_ids
-
-        property_ids = ds_doc['relationships']['property_instances']
-
-        # Write the property definitions to files
-        prop_definitions = {}
-        for pd_name in ds_doc['aggregated_info']['property_types']:
-            pd_doc = self.get_property_definition(pd_name)['definition']
-
-            pd_path = os.path.join(
-                output_folder, 'property_definitions', f'{pd_name}.json'
-            )
-
-            prop_definitions[pd_name] = pd_doc
-
-            with open(pd_path, 'w') as pd_file:
-                json.dump(pd_doc, pd_file, indent=4)
-
-        if fmt == 'hdf5':
-
-            hdf5_path = os.path.join(output_folder, f'{ds_id}.hdf5')
-            with h5py.File(hdf5_path, mode) as outfile:
-                # Build all groups
-
-                pi_coll_group = outfile.create_group(_PROPS_COLLECTION)
-                ps_coll_group = outfile.create_group(_PROPSETTINGS_COLLECTION)
-                co_coll_group = outfile.create_group(_CONFIGS_COLLECTION)
-                cs_coll_group = outfile.create_group(_CONFIGSETS_COLLECTION)
-
-                # Write dataset info
-                outfile.attrs['description'] = ds_doc['description']
-
-                outfile.attrs.create(
-                    'authors',
-                    np.array(ds_doc['authors'], dtype=STRING_DTYPE_SPECIFIER)
-                )
-
-                outfile.attrs.create(
-                    'links',
-                    np.array(ds_doc['links'], dtype=STRING_DTYPE_SPECIFIER)
-                )
-
-                # TODO: decide if you want to export aggregated info too
-                # info_group = outfile.create_group('aggregated_info')
-
-                # for k,v in ds_doc['aggregated_info'].items():
-                #     info_group.create_dataset(k, data=v)
-
-                # Write the configurations
-                for co_doc in self.configurations.find(
-                        {'hash': {'$in': configuration_ids}}
-                    ):
-
-                    co_group = co_coll_group.create_group(co_doc['hash'])
-
-                    co_group.create_dataset(
-                        'names',
-                        data=np.array(co_doc['names'], dtype=STRING_DTYPE_SPECIFIER)
-                    )
-
-                    co_group.create_dataset(
-                        'labels',
-                        data=np.array(co_doc['labels'], dtype=STRING_DTYPE_SPECIFIER)
-                    )
-
-                    co_group.create_dataset(
-                        'relationships.property_instances',
-                        data=np.array(co_doc['relationships']['property_instances'], dtype=STRING_DTYPE_SPECIFIER)
-                    )
-
-                    co_group.create_dataset(
-                        'relationships.configuration_sets',
-                        data=np.array(co_doc['relationships']['configuration_sets'], dtype=STRING_DTYPE_SPECIFIER)
-                    )
-
-                    for key in self.configuration_type.unique_identifier_kw:
-                        co_group.create_dataset(
-                            key,
-                            dtype=self.configuration_type.unique_identifier_kw_types[key],
-                            data=co_doc[key]
-                        )
-
-                # Write property instances
-                ps_ids = []
-                for pi_doc in self.property_instances.find(
-                        {'hash': {'$in': property_ids}}
-                    ):
-                    pi_group = pi_coll_group.create_group(pi_doc['hash'])
-
-                    pi_group.create_dataset(
-                        'type',
-                        data=np.array(pi_doc['type'],
-                        dtype=STRING_DTYPE_SPECIFIER),
-                    )
-
-                    pi_group.create_dataset(
-                        'methods',
-                        data=np.array(pi_doc['methods'],
-                        dtype=STRING_DTYPE_SPECIFIER),
-                    )
-
-                    pi_group.create_dataset(
-                        'labels',
-                        data=np.array(pi_doc['labels'],
-                        dtype=STRING_DTYPE_SPECIFIER),
-                    )
-
-                    pi_group.create_dataset(
-                        'relationships.configurations',
-                        data=np.array(pi_doc['relationships']['configurations'],
-                        dtype=STRING_DTYPE_SPECIFIER),
-                    )
-
-                    pi_group.create_dataset(
-                        'relationships.property_settings',
-                        data=np.array(pi_doc['relationships']['property_settings'],
-                        dtype=STRING_DTYPE_SPECIFIER),
-                    )
-
-                    ps_ids += pi_doc['relationships']['property_settings']
-
-                    data_group = pi_group.create_group(pi_doc['type'])
-
-                    for key, value in pi_doc[pi_doc['type']].items():
-                        dtype = prop_definitions[pi_doc['type']][key]['type']
-                        if dtype == 'string':
-                            dtype = STRING_DTYPE_SPECIFIER
-
-                        data_group.create_dataset(
-                            key,
-                            dtype=dtype,
-                            data=value['source-value'],
-                        )
-
-                # Write property settings
-                ps_ids = list(set(ps_ids))
-                for ps_doc in self.property_settings.find(
-                    {'hash': {'$in': ps_ids}}
-                    ):
-
-                    ps_group = ps_coll_group.create_group(ps_doc['hash'])
-
-                    ps_group.attrs['description'] = ps_doc['description']
-                    ps_group.attrs['method'] = ps_doc['method']
-                    ps_group.attrs.create(
-                        'labels',
-                        np.array(ps_doc['labels'], dtype=STRING_DTYPE_SPECIFIER)
-                    )
-
-                    for fname, fcontents in ps_doc['files']:
-                        with open(
-                                os.path.join(
-                                    output_folder, 'property_settings_files', fname
-                                ),
-                                'w'
-                            ) as fpointer:
-
-                            fpointer.write(fcontents)
-
-                # Write configuration sets
-                for cs_doc in self.configuration_sets.find(
-                        {SHORT_ID_STRING_NAME: {
-                                '$in':
-                                ds_doc['relationships']['configuration_sets']
-                            }
-                        },
-                    ):
-
-                    cs_group = cs_coll_group.create_group(cs_doc[SHORT_ID_STRING_NAME])
-
-                    cs_group.attrs['description'] = cs_doc['description']
-                    cs_group.create_dataset(
-                        'relationships.configurations',
-                        data=np.array(cs_doc['relationships']['configurations'],
-                        dtype=STRING_DTYPE_SPECIFIER),
-                    )
-    '''
-
-    def export_ds_to_xyz(self, ds_id, nprocs=1):
-        ds_doc = self.datasets.find_one({SHORT_ID_STRING_NAME: {"$eq": ds_id}})
-        # Old cas = ds_doc['relationships']['data_objects']
-        cas_q = self.data_objects.find(
-            {"relationships.dataset": ds_id}, {"colabfit-id": 1}
-        )
-        cas = [i["colabfit-id"] for i in cas_q]
-        # cos = list(
-        #    self.configurations.find({'relationships.data_objects': {'$in': cas}}).sort('relationships.data_objects',
-        #                                                                                1))
-        # pis = list(self.property_instances.find({'relationships.data_objects': {'$in': cas}}).sort(
-        #    'relationships.data_objects', 1))
-        p = multiprocessing.Pool(nprocs)
-        results = []
-        # results.append(result for result in tqdm(p.imap_unordered(partial(build_do,client_name=self.database_name),cas)))
-        for result in tqdm(
-            p.imap_unordered(
-                partial(build_do, client_name=self.database_name, client_uri=self.uri),
-                cas,
-            ),
-            total=len(cas),
-        ):
-            results.append(result)
-        p.close()
-        p.join()
-        ase_write("%s.xyz" % ds_doc["extended-id"], results)
-
-
-def build_do(ca, client_name, client_uri):
-    client = MongoDatabase(client_name, uri=client_uri)
-    co = client.configurations.find_one({"relationships.data_object": {"$in": [ca]}})
-    pis = list(
-        client.property_instances.find({"relationships.data_object": {"$in": [ca]}})
-    )
-    a = Atoms(
-        numbers=co["atomic_numbers"],
-        positions=co["positions"],
-        cell=co["cell"],
-        pbc=co["pbc"],
-    )
-    a.info["do-colabfit-id"] = co["relationships"][0]["data_object"]
-    for i, pi in enumerate(pis):
-        # print ('pi_type',pi['type'])
-        for k, v in pi.items():
-            if isinstance(v, dict):
-                for k2, v2 in v.items():
-                    if isinstance(v2, dict):
-                        if "source-value" in pi[k][k2]:
-                            # hardcode whether property goes in info or arrays for now
-                            if k2 == "forces":
-                                a.arrays["forces"] = np.array(pi[k][k2]["source-value"])
-                            else:
-                                if (
-                                    k2 == "stress"
-                                ):  # Needed so that ASE formats properly
-                                    a.info["stress"] = np.array(
-                                        pi[k][k2]["source-value"]
-                                    )
-                                else:
-                                    a.info["%s.%s" % (k, k2)] = pi[k][k2][
-                                        "source-value"
-                                    ]
-    return a
-
-
-# TODO: Change labels_field to metadata_fields
-def load_data(
-    file_path,
-    file_format,
-    name_field,
-    elements,
-    default_name="",
-    labels_field=None,
-    reader=None,
-    glob_string=None,
-    generator=True,
-    verbose=False,
-    **kwargs,
-):
-    """
-    Loads a list of Configuration objects.
-
-    Args:
-        file_path (str):
-            Path to the file or folder containing the data
-
-        file_format (str):
-            A string for specifying the type of Converter to use when loading
-            the configurations. Allowed values are 'xyz', 'extxyz', 'cfg', or
-            'folder'.
-
-        name_field (str):
-            Key name to use to access `ase.Atoms.info[<name_field>]` to
-            obtain the name of a configuration one the atoms have been
-            loaded from the data file. Note that if
-            `file_format == 'folder'`, `name_field` will be set to 'name'.
-
-        elements (list):
-            A list of strings of allowed element types. If None, all element
-            types are allowed.
-
-        default_name (list):
-            Default name to be used if `name_field==None`.
-
-        labels_field (str):
-            Key name to use to access `ase.Atoms.info[<labels_field>]` to
-            obtain the labels that should be applied to the configuration. This
-            field should contain a comma-separated list of strings
-
-        reader (callable):
-            An optional function for loading configurations from a file. Only
-            used for `file_format == 'folder'`
-
-        glob_string (str):
-            A string to use with `Path(file_path).rglob(glob_string)` to
-            generate a list of files to be passed to `self.reader`.
-
-        generator (bool, default=True):
-            If True, returns a generator of Configurations. If False, returns a
-            list.
-
-        verbose (bool):
-            If True, prints progress bar.
-
-    All other keyword arguments will be passed with
-    `converter.load(..., **kwargs)`
-    """
-
-    if elements is None:
-        elements = [e.symbol for e in periodictable.elements]
-        elements.remove("n")
-
-    if file_format == "folder":
-        if reader is None:
-            raise RuntimeError(
-                "Must provide a `reader` function when `file_format=='folder'`"
-            )
-
-        if glob_string is None:
-            raise RuntimeError(
-                "Must provide `glob_string` when `file_format=='folder'`"
-            )
-
-        converter = FolderConverter(reader)
-
-        results = converter.load(
-            file_path,
-            name_field=name_field,
-            elements=elements,
-            default_name=default_name,
-            labels_field=labels_field,
-            glob_string=glob_string,
-            verbose=verbose,
-            **kwargs,
-        )
-
-    elif file_format in ["xyz", "extxyz", "cfg"]:
-        if file_format in ["xyz", "extxyz"]:
-            converter = EXYZConverter()
-        elif file_format == "cfg":
-            converter = CFGConverter()
-
-        results = converter.load(
-            file_path,
-            name_field=name_field,
-            elements=elements,
-            default_name=default_name,
-            labels_field=labels_field,
-            glob_string=glob_string,
-            verbose=verbose,
-        )
-    else:
-        raise RuntimeError(
-            "Invalid `file_format`. Must be one of "
-            "['xyz', 'extxyz', 'cfg', 'folder']"
-        )
-
-    return results if generator else list(results)
-
-
-# Moved out of static method to avoid changing insert_data* methods
-# Could consider changing in the future
-def _build_c_update_doc(configuration):
-    processed_fields = configuration.configuration_summary()
-    c_hash = str(hash(configuration))
-    c_update_doc = {
-        "$setOnInsert": {"hash": c_hash, SHORT_ID_STRING_NAME: "CO_" + c_hash},
-        "$set": {
-            "last_modified": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-        },
-        "$addToSet": {
-            "names": {"$each": list(configuration.info[ATOMS_NAME_FIELD])},
-        },
-    }
-    c_update_doc["$setOnInsert"].update(
-        {k: v.tolist() for k, v in configuration.unique_identifiers.items()}
-    )
-    c_update_doc["$setOnInsert"].update({k: v for k, v in processed_fields.items()})
-    return c_update_doc, c_hash
-
-
-def _build_md_insert_doc(metadata):
-    md_set_on_insert = {
-        "hash": str(metadata._hash),
-        SHORT_ID_STRING_NAME: "MD_" + str(metadata._hash),
-    }
-
-    for gf, gf_dict in metadata.metadata.items():
-        if isinstance(gf_dict["source-value"], (int, float, str)):
-            # Add directly
-            md_set_on_insert[gf] = {"source-value": gf_dict["source-value"]}
-        else:
-            # Then it's array-like and should be converted to a list
-            md_set_on_insert[gf] = {
-                "source-value": np.atleast_1d(gf_dict["source-value"]).tolist()
-            }
-
-        if "source-unit" in gf_dict:
-            md_set_on_insert[gf]["source-unit"] = gf_dict["source-unit"]
-    return md_set_on_insert
-
-
-def _build_ca_insert_doc(calculation):
-    ca_set_on_insert = {
-        "hash": str(calculation._hash),
-        SHORT_ID_STRING_NAME: "DO_" + str(calculation._hash),
-        #'relationships.configurations': 'CO_' + calculation.configuration,
-        # '$addToSet': {'relationships.property_instances':  {'$each': calculation.properties}},
-        # 'ncounts': 0,
-    }
-    return ca_set_on_insert
+from colabfit.tools.property import Property
+from colabfit.tools.schema import (
+    co_cs_mapping_schema,
+    config_arr_schema,
+    config_md_schema,
+    config_schema,
+    configuration_set_arr_schema,
+    configuration_set_schema,
+    dataset_arr_schema,
+    dataset_schema,
+    property_object_arr_schema,
+    property_object_md_schema,
+    property_object_schema,
+)
+from colabfit.tools.utilities import (
+    _hash,
+    get_spark_field_type,
+    spark_schema_to_arrow_schema,
+    split_long_string_cols,
+    stringify_df_val,
+    unstring_df_val,
+)
+
+VAST_BUCKET_DIR = "colabfit-data"
+VAST_METADATA_DIR = "data/MD"
+NSITES_COL_SPLITS = 20
+_CONFIGS_COLLECTION = "test_configs"
+_CONFIGSETS_COLLECTION = "test_config_sets"
+_DATASETS_COLLECTION = "test_datasets"
+_PROPOBJECT_COLLECTION = "test_prop_objects"
+_CO_CS_MAP_COLLECTION = "test_co_cs_map"
+_MAX_STRING_LEN = 60000
+
+# from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
+
+# from kim_property.definition import check_property_definition
 
 
 def generate_string():
     return get_random_string(12, allowed_chars=string.ascii_lowercase + "1234567890")
 
 
+class VastDataLoader:
+    def __init__(
+        self,
+        table_prefix: str = "ndb.colabfit.dev",
+        endpoint=None,
+        access_key=None,
+        access_secret=None,
+        spark_session=None,
+    ):
+        self.table_prefix = table_prefix
+        self.spark = SparkSession.builder.appName("ColabFitDataLoader").getOrCreate()
+        if spark_session is not None:
+            self.spark = spark_session
+            self.spark.sparkContext.setLogLevel("ERROR")
+        if endpoint and access_key and access_secret:
+            self.endpoint = endpoint
+            self.access_key = access_key
+            self.access_secret = access_secret
+            self.session = self.get_vastdb_session(
+                endpoint=self.endpoint,
+                access_key=self.access_key,
+                access_secret=self.access_secret,
+            )
+        self.config_table = f"{self.table_prefix}.{_CONFIGS_COLLECTION}"
+        self.config_set_table = f"{self.table_prefix}.{_CONFIGSETS_COLLECTION}"
+        self.dataset_table = f"{self.table_prefix}.{_DATASETS_COLLECTION}"
+        self.prop_object_table = f"{self.table_prefix}.{_PROPOBJECT_COLLECTION}"
+        self.co_cs_map_table = f"{self.table_prefix}.{_CO_CS_MAP_COLLECTION}"
+
+        self.bucket_dir = VAST_BUCKET_DIR
+        self.metadata_dir = VAST_METADATA_DIR
+
+    def set_spark_session(self, spark_session):
+        self.spark = spark_session
+        self.spark.sparkContext.setLogLevel("ERROR")
+
+    def get_spark_session(self, spark_conf):
+        if spark_conf is None:
+            return SparkSession.builder.appName("VastDataLoader").getOrCreate()
+
+    def get_vastdb_session(self, endpoint, access_key: str, access_secret: str):
+        return Session(endpoint=endpoint, access=access_key, secret=access_secret)
+
+    def set_vastdb_session(self, endpoint, access_key: str, access_secret: str):
+        self.session = self.get_vastdb_session(endpoint, access_key, access_secret)
+        self.access_key = access_key
+        self.access_secret = access_secret
+        self.endpoint = endpoint
+
+    def _get_table_split(self, table_name_str: str):
+        """Get bucket, schema and table names for VastDB SDK with no backticks"""
+        table_split = table_name_str.split(".")
+        bucket_name = table_split[1].replace("`", "")
+        schema_name = table_split[2].replace("`", "")
+        table_name = table_split[3].replace("`", "")
+        return (bucket_name, schema_name, table_name)
+
+    def add_elem_to_col(df, col_name: str, elem: str):
+        df_added_elem = df.withColumn(
+            col_name,
+            sf.when(
+                sf.col(col_name).isNull(), sf.array().cast(ArrayType(StringType()))
+            ).otherwise(sf.col(col_name)),
+        )
+        df_added_elem = df_added_elem.withColumn(
+            col_name, sf.array_union(sf.col(col_name), sf.array(sf.lit(elem)))
+        )
+        return df_added_elem
+
+    def delete_from_table(self, table_name: str, ids: list[str]):
+        if isinstance(ids, str):
+            ids = [ids]
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        with self.session.transaction() as tx:
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
+            rec_batch = table.select(
+                predicate=table["id"].isin(ids), internal_row_id=True
+            )
+            for batch in rec_batch:
+                table.delete(rows=batch)
+
+    def check_unique_ids(self, table_name: str, df):
+        if not self.spark.catalog.tableExists(table_name):
+            print(f"Table {table_name} does not yet exist.")
+            return True
+        ids = [x["id"] for x in df.select("id").collect()]
+        # table_df = self.read_table(table_name)
+        # table_df = table_df.select("id")
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        with self.session.transaction() as tx:
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
+            for id_batch in tqdm(
+                batched(ids, 10000), desc=f"Checking for duplicates in {table_name}"
+            ):
+                rec_batch_reader = table.select(
+                    predicate=table["id"].isin(id_batch), columns=["id"]
+                )
+                for batch in rec_batch_reader:
+                    if batch.num_rows > 0:
+                        print(f"Duplicate IDs found in table {table_name}")
+                        return False
+        return True
+
+    def write_table(
+        self,
+        spark_df,
+        table_name: str,
+        ids_filter: list[str] = None,
+        check_length_col: str = None,
+        check_unique: bool = True,
+    ):
+        # print(spark_df.first())
+        """Include self.table_prefix in the table name when passed to this function"""
+        string_schema_dict = {
+            self.config_table: config_schema,
+            self.config_set_table: configuration_set_schema,
+            self.dataset_table: dataset_schema,
+            self.prop_object_table: property_object_schema,
+            self.co_cs_map_table: co_cs_mapping_schema,
+        }
+        table_schema = string_schema_dict[table_name]
+        if ids_filter is not None:
+            spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
+        if check_unique:
+            all_unique = self.check_unique_ids(table_name, spark_df)
+            if not all_unique:
+                raise ValueError("Duplicate IDs found in table. Not writing.")
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        string_cols = [
+            f.name for f in spark_df.schema if f.dataType.typeName() == "array"
+        ]
+        string_col_udf = sf.udf(stringify_df_val, StringType())
+        for col in string_cols:
+            spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
+        if check_length_col is not None:
+            spark_df = split_long_string_cols(
+                spark_df, check_length_col, _MAX_STRING_LEN
+            )
+        arrow_schema = spark_schema_to_arrow_schema(table_schema)
+        # print(arrow_schema)
+        for field in arrow_schema:
+            field = field.with_nullable(True)
+        if not self.spark.catalog.tableExists(table_name):
+            print(f"Creating table {table_name}")
+
+            with self.session.transaction() as tx:
+                schema = tx.bucket(bucket_name).schema(schema_name)
+                schema.create_table(table_n, arrow_schema)
+        arrow_rec_batch = pa.table(
+            [pa.array(col) for col in zip(*spark_df.collect())],
+            # names=spark_df.columns,
+            schema=arrow_schema,
+        ).to_batches()
+        total_rows = 0
+        with self.session.transaction() as tx:
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
+            for rec_batch in arrow_rec_batch:
+                len_batch = rec_batch.num_rows
+                table.insert(rec_batch)
+                total_rows += len_batch
+        print(f"Inserted {total_rows} rows into table {table_name}")
+
+    def write_metadata(self, df):
+        """Writes metadata to files using boto3 for VastDB
+        Returns a DataFrame without metadata column. The returned DataFrame should
+        match table schema (from schema.py)
+        """
+        if df.filter(sf.col("metadata").isNotNull()).count() == 0:
+            df = df.drop("metadata")
+            return df
+        config = {
+            "bucket_dir": self.bucket_dir,
+            "access_key": self.access_key,
+            "access_secret": self.access_secret,
+            "endpoint": self.endpoint,
+            "metadata_dir": self.metadata_dir,
+        }
+        beg = time()
+        distinct_metadata = df.select("metadata", "metadata_path").distinct()
+        distinct_metadata.foreachPartition(
+            lambda partition: write_md_partition(partition, config)
+        )
+        print(f"Time to write metadata: {time() - beg}")
+        df = df.drop("metadata")
+        # file_base = f"/vdev/{VAST_BUCKET_DIR}/{VAST_METADATA_DIR}/"
+        file_base = f"{self.metadata_dir}/"
+        df = df.withColumn(
+            "metadata_path",
+            prepend_path_udf(sf.lit(str(Path(file_base))), sf.col("metadata_path")),
+        )
+        return df
+
+    def update_existing_co_po_rows(
+        self,
+        df,
+        table_name,
+        cols: list[str],
+        elems: list[str],
+        str_schema,
+        arr_schema,
+        # arrow_schema,
+        # update_cols,
+        # arr_cols,
+    ):
+        """
+        Updates existing rows in CO or PO table with data from new ingest.
+
+        Parameters:
+        -----------
+        df : DataFrame
+            The DataFrame containing the new data to be updated.
+        table_name : str
+            The name of the table to be updated.
+        cols : list[str]
+            List of columns with matching elems to update.
+        elems : list[str]
+            List of elements corresponding to the columns to be updated.
+        str_schema : Schema
+            The stringed schema of the table.
+        arr_schema : Schema
+            The unstringed schema of the table.
+
+        Returns:
+        --------
+        tuple
+            A tuple containing two lists:
+            - new_ids: List of IDs that were newly added.
+            - existing_ids: List of IDs that were updated.
+        """
+        if isinstance(cols, str):
+            cols = [cols]
+        if isinstance(elems, str):
+            elems = [elems]
+        update_cols = cols + ["last_modified"]
+        row_write_cols = update_cols + ["$row_id"]
+        arr_cols = [
+            col
+            for col in cols
+            if get_spark_field_type(arr_schema, col).typeName() == "array"
+        ]
+        str_col_types = {
+            col: get_spark_field_type(str_schema, col) for col in update_cols
+        }
+        unstr_col_types = {
+            col: get_spark_field_type(arr_schema, col) for col in update_cols
+        }
+        addtl_fields = {
+            "id": StringType(),
+            "$row_id": LongType(),
+        }
+        str_col_types.update(addtl_fields)
+        unstr_col_types.update(addtl_fields)
+
+        read_schema = StructType(
+            [StructField(col, col_type, True) for col, col_type in str_col_types.items()]
+        )
+
+        ids = [x["id"] for x in df.select("id").collect()]
+        batched_ids = batched(ids, 10000)
+        new_ids = []
+        existing_ids = []
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        for id_batch in batched_ids:
+            id_batch = list(set(id_batch))
+            with self.session.transaction() as tx:
+                table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
+                rec_batch = table.select(
+                    predicate=table["id"].isin(id_batch),
+                    columns=update_cols + ["id"],
+                    internal_row_id=True,
+                )
+                rec_batch = rec_batch.read_all()
+                duplicate_df = self.spark.createDataFrame(
+                    rec_batch.to_struct_array().to_pandas(), schema=read_schema
+                )
+            if duplicate_df.count() == 0:
+                new_ids.extend(id_batch)
+                continue
+            for col_name in arr_cols:
+                unstring_udf = sf.udf(unstring_df_val, unstr_col_types[col_name])
+                duplicate_df = duplicate_df.withColumn(
+                    col_name, unstring_udf(sf.col(col_name))
+                )
+            for col, elem in zip(cols, elems):
+                if col in ["labels", "names"]:
+                    if (
+                        col == "labels"
+                        and df.filter(sf.col("labels").isNotNull()).count() == 0
+                    ):
+                        continue
+                    df_add = df.select("id", col)
+                    duplicate_df = (
+                        duplicate_df.withColumnRenamed(col, f"{col}_dup")
+                        .join(df_add, on="id")
+                        .withColumn(
+                            col, sf.array_distinct(sf.array_union(f"{col}_dup", col))
+                        )
+                        .drop(f"{col}_dup")
+                    )
+                elif col == "multiplicity":
+                    df_add = df.select(
+                        "id", sf.col("multiplicity").alias("multiplicity_add")
+                    )
+                    duplicate_df = duplicate_df.join(df_add, on="id", how="left")
+                    duplicate_df = duplicate_df.withColumn(
+                        "multiplicity",
+                        sf.col("multiplicity") + sf.col("multiplicity_add"),
+                    ).drop("multiplicity_add")
+                else:
+                    print(col, unstr_col_types[col])
+                    duplicate_df = duplicate_df.withColumn(
+                        col, sf.coalesce(sf.col(col), sf.array())
+                    )
+                    duplicate_df = duplicate_df.withColumn(
+                        col,
+                        sf.array_distinct(
+                            sf.array_union(sf.col(col), sf.array(sf.lit(elem)))
+                        ),
+                    )
+            existing_ids_batch = [x["id"] for x in duplicate_df.select("id").collect()]
+            new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
+            string_udf = sf.udf(stringify_df_val, StringType())
+            for col_name in arr_cols:
+                duplicate_df = duplicate_df.withColumn(
+                    col_name, string_udf(sf.col(col_name))
+                )
+            update_time = dateutil.parser.parse(
+                datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+            )
+            duplicate_df = duplicate_df.withColumn(
+                "last_modified", sf.lit(update_time).cast("timestamp")
+            )
+            arrow_schema = spark_schema_to_arrow_schema(
+                StructType([field for field in str_schema if field.name in update_cols])
+            )
+            arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
+
+            update_table = pa.table(
+                [
+                    pa.array(col)
+                    for col in zip(
+                        *duplicate_df.select(
+                            [field.name for field in arrow_schema]
+                        ).collect()
+                    )
+                ],
+                schema=arrow_schema,
+            )
+            with self.session.transaction() as tx:
+                table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
+                table.update(rows=update_table, columns=update_cols)
+            new_ids.extend(new_ids_batch)
+            existing_ids.extend(existing_ids_batch)
+        return (new_ids, list(set(existing_ids)))
+
+    # def update_existing_co_rows(self, co_df, cols: list[str], elems: list[str]):
+    #     return self.update_existing_co_po_rows(
+    #         df=co_df,
+    #         table_name=self.config_table,
+    #         cols=cols,
+    #         elems=elems,
+    #         str_schema=config_schema,
+    #         arr_schema=config_arr_schema,
+    #     )
+
+    # def update_existing_po_rows(self, po_df):
+    #     return self.update_existing_co_po_rows(
+    #         df=po_df,
+    #         table_name=self.prop_object_table,
+    #         cols=["multiplicity"],
+    #         elems=[None],
+    #         str_schema=property_object_schema,
+    #         arr_schema=property_object_arr_schema,
+    #     )
+
+    def read_table(
+        self, table_name: str, unstring: bool = False, read_metadata: bool = False
+    ):
+        """
+        Include self.table_prefix in the table name when passed to this function.
+        Ex: loader.read_table(loader.config_table, unstring=True)
+        Arguments:
+            table_name {str} -- Name of the table to read from database
+        Keyword Arguments:
+            unstring {bool} -- Convert stringified lists to lists (default: {False})
+            read_metadata {bool} -- Read metadata from files. If True,
+            lists will be also converted from strings (default: {False})
+        Returns:
+            DataFrame -- Spark DataFrame
+        """
+        string_schema_dict = {
+            self.config_table: config_schema,
+            self.config_set_table: configuration_set_schema,
+            self.dataset_table: dataset_schema,
+            self.prop_object_table: property_object_schema,
+            self.co_cs_map_table: co_cs_mapping_schema,
+        }
+        unstring_schema_dict = {
+            self.config_table: config_arr_schema,
+            self.config_set_table: configuration_set_arr_schema,
+            self.dataset_table: dataset_arr_schema,
+            self.prop_object_table: property_object_arr_schema,
+        }
+        md_schema_dict = {
+            self.config_table: config_md_schema,
+            self.config_set_table: configuration_set_arr_schema,
+            self.dataset_table: dataset_arr_schema,
+            self.prop_object_table: property_object_md_schema,
+        }
+        if table_name in [self.config_set_table, self.dataset_table]:
+            read_metadata = False
+        df = self.spark.read.table(table_name)
+        if unstring or read_metadata:
+            schema = unstring_schema_dict[table_name]
+            schema_type_dict = {f.name: f.dataType for f in schema}
+            string_cols = [f.name for f in schema if f.dataType.typeName() == "array"]
+            for col in string_cols:
+                string_col_udf = sf.udf(unstring_df_val, schema_type_dict[col])
+                df = df.withColumn(col, string_col_udf(sf.col(col)))
+        if read_metadata:
+            schema = md_schema_dict[table_name]
+            config = {
+                "bucket_dir": self.bucket_dir,
+                "access_key": self.access_key,
+                "access_secret": self.access_secret,
+                "endpoint": self.endpoint,
+                "metadata_dir": self.metadata_dir,
+            }
+            df = df.rdd.mapPartitions(
+                lambda partition: read_md_partition(partition, config)
+            ).toDF(schema)
+        if not read_metadata and not unstring:
+            schema = string_schema_dict[table_name]
+        mismatched_cols = [
+            x
+            for x in [(f.name, f.dataType.typeName()) for f in df.schema]
+            if x not in [(f.name, f.dataType.typeName()) for f in schema]
+        ]
+        if len(mismatched_cols) == 0:
+            return df
+        else:
+            raise ValueError(
+                f"Schema mismatch for table {table_name}. "
+                f"Mismatched column types in DataFrame: {mismatched_cols}"
+            )
+
+    def zero_multiplicity(self, dataset_id):
+        """Use to return multiplicity of POs for a given dataset to zero"""
+        table_exists = self.spark.catalog.tableExists(self.prop_object_table)
+        if not table_exists:
+            print(f"Table {self.prop_object_table} does not exist")
+            return
+        spark_schema = StructType(
+            [
+                StructField("id", StringType(), False),
+                StructField("multiplicity", IntegerType(), True),
+                StructField("last_modified", TimestampType(), False),
+                StructField("$row_id", IntegerType(), False),
+            ]
+        )
+        with self.session.transaction() as tx:
+            table_name = self.prop_object_table
+            bucket_name, schema_name, table_n = self._get_table_split(table_name)
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
+            rec_batches = table.select(
+                predicate=(table["dataset_id"] == dataset_id)
+                & (table["multiplicity"] > 0),
+                columns=["id", "multiplicity", "last_modified"],
+                internal_row_id=True,
+            )
+            for rec_batch in rec_batches:
+                df = self.spark.createDataFrame(
+                    rec_batch.to_struct_array().to_pandas(), schema=spark_schema
+                )
+                df = df.withColumn("multiplicity", sf.lit(0))
+                print(f"Zeroed {df.count()} property objects")
+                update_time = dateutil.parser.parse(
+                    datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    )
+                )
+                df = df.withColumn(
+                    "last_modified", sf.lit(update_time).cast("timestamp")
+                )
+                arrow_schema = pa.schema(
+                    [
+                        pa.field("id", pa.string()),
+                        pa.field("multiplicity", pa.int32()),
+                        pa.field("last_modified", pa.timestamp("us")),
+                        pa.field("$row_id", pa.uint64()),
+                    ]
+                )
+                update_table = pa.table(
+                    [pa.array(col) for col in zip(*df.collect())], schema=arrow_schema
+                )
+                table.update(
+                    rows=update_table,
+                    columns=["multiplicity", "last_modified"],
+                )
+
+    def get_pos_cos_by_filter(
+        self,
+        po_filter_conditions: list[tuple[str, str, str | int | float | list]] = None,
+        co_filter_conditions: list[
+            tuple[str, str, str | int | float | list | None]
+        ] = None,
+    ):
+        """
+        example filter conditions:
+        po_filter_conditions = [("dataset_id", "=", "ds_id1"),
+                                ("method", "like", "DFT%")]
+        co_filter_conditions = [("nsites", ">", 15),
+                                ('labels', 'array_contains', 'label1')]
+        """
+        po_df = self.read_table(self.prop_object_table, unstring=True)
+        po_df = self.get_filtered_table(po_df, po_filter_conditions)
+        po_df = po_df.drop("chemical_formula_hill")
+
+        co_df = self.read_table(self.config_table, unstring=True)
+        overlap_cols = [col for col in po_df.columns if col in co_df.columns]
+        po_df = po_df.select(
+            [
+                (
+                    col
+                    if col not in overlap_cols
+                    else sf.col(col).alias(f"prop_object_{col}")
+                )
+                for col in po_df.columns
+            ]
+        )
+        co_df = co_df.select(
+            [
+                (
+                    col
+                    if col not in overlap_cols
+                    else sf.col(col).alias(f"configuration_{col}")
+                )
+                for col in co_df.columns
+            ]
+        )
+        co_df = self.get_filtered_table(co_df, co_filter_conditions)
+        co_po_df = co_df.join(po_df, on="configuration_id", how="inner")
+        return co_po_df
+
+    def simple_sdk_query(self, query_table, predicate, schema, internal_row_id=False):
+        bucket_name, schema_name, table_n = self._get_table_split(query_table)
+        with self.session.transaction() as tx:
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
+            rec_batch_reader = table.select(
+                predicate=predicate, internal_row_id=internal_row_id
+            )
+            rec_batch = rec_batch_reader.read_all()
+            if rec_batch.num_rows == 0:
+                print(f"No records found for given query {predicate}")
+                return self.spark.createDataFrame([], schema=schema)
+            spark_df = self.spark.createDataFrame(
+                rec_batch.to_struct_array().to_pandas(), schema=schema
+            )
+        return spark_df
+
+    def get_co_cs_mapping(self, cs_id: str):
+        """
+        Get configuration to configuration set mapping for a given ID.
+
+        Args:
+            cs_id (str): Configuration set ID.
+
+        Returns:
+            DataFrame or None: Mapping DataFrame if found, else None.
+
+        Notes:
+            - Prints message and returns None if mapping table doesn't exist.
+            - Prints message and returns None if no records found for the given ID.
+        """
+        if not self.spark.catalog.tableExists(self.co_cs_map_table):
+            print(f"Table {self.co_cs_map_table} does not exist")
+            return None
+        predicate = _.configuration_set_id == cs_id
+        co_cs_map = self.simple_sdk_query(
+            self.co_cs_map_table, predicate, co_cs_mapping_schema
+        )
+        if co_cs_map.count() == 0:
+            print(f"No records found for given configuration set id {cs_id}")
+            return None
+        return co_cs_map
+
+    def dataset_query(
+        self,
+        dataset_id=None,
+        table_name=None,
+    ):
+        print("in dataset query")
+        if dataset_id is None:
+            raise ValueError("dataset_id must be provided")
+        if table_name == self.config_table:
+            spark_df = self.spark.table(self.config_table).filter(
+                sf.col("dataset_ids").contains(dataset_id)
+            )
+        elif table_name == self.prop_object_table or table_name == self.config_set_table:
+            spark_df = self.spark.table(table_name).filter(
+                sf.col("dataset_id") == dataset_id
+            )
+        return spark_df
+
+    def config_set_query(
+        self,
+        query_table,
+        dataset_id=None,
+        name_match=None,
+        label_match=None,
+        configuration_ids=None,
+    ):
+        if dataset_id is None:
+            raise ValueError("dataset_id must be provided")
+        string_schema_dict = {
+            self.config_table: config_schema,
+            self.config_set_table: configuration_set_schema,
+            self.dataset_table: dataset_schema,
+            self.prop_object_table: property_object_schema,
+        }
+        df_schema = string_schema_dict[query_table]
+        if query_table == self.config_table:
+            if name_match is None and label_match is None:
+                predicate = _.dataset_ids.contains(dataset_id)
+            if name_match is not None and label_match is not None:
+                predicate = (
+                    (_.dataset_ids.contains(dataset_id))
+                    & (_.names.contains(name_match))
+                    & (_.labels.contains(label_match))
+                )
+            elif name_match is not None:
+                predicate = (_.dataset_ids.contains(dataset_id)) & (
+                    _.names.contains(name_match)
+                )
+            else:
+                predicate = (_.dataset_ids.contains(dataset_id)) & (
+                    _.labels.contains(label_match)
+                )
+            spark_df = self.simple_sdk_query(query_table, predicate, df_schema)
+            return spark_df
+        elif query_table == self.prop_object_table:
+            if configuration_ids is None:
+                predicate = _.dataset_id == dataset_id
+                spark_df = self.simple_sdk_query(query_table, predicate, df_schema)
+            if configuration_ids is not None and len(configuration_ids) < 10000:
+                predicate = (_.dataset_id == dataset_id) & (
+                    _.configuration_id.isin(configuration_ids)
+                )
+                spark_df = self.simple_sdk_query(query_table, predicate, df_schema)
+            else:
+                config_id_batches = batched(configuration_ids, 10000)
+                spark_df = self.spark.createDataFrame([], schema=df_schema)
+                for batch in config_id_batches:
+                    predicate = (_.dataset_id == dataset_id) & (
+                        _.configuration_id.isin(batch)
+                    )
+                    batch_spark_df = self.simple_sdk_query(
+                        query_table, predicate, df_schema
+                    )
+                    spark_df = spark_df.union(batch_spark_df)
+            return spark_df
+
+    def get_filtered_table(
+        self,
+        df,
+        filter_conditions: list[tuple[str, str, str | int | float | list]] | None = None,
+    ):
+        if filter_conditions is None:
+            return df
+        for i, (column, operand, condition) in enumerate(filter_conditions):
+            if operand == "in":
+                df = df.filter(sf.col(column).isin(condition))
+            elif operand == "like":
+                df = df.filter(sf.col(column).like(condition))
+            elif operand == "rlike":
+                df = df.filter(sf.col(column).rlike(condition))
+            elif operand == "==":
+                df = df.filter(sf.col(column) == condition)
+            elif operand == "array_contains":
+                df = df.filter(sf.array_contains(sf.col(column), condition))
+            elif operand == ">":
+                df = df.filter(sf.col(column) > condition)
+            elif operand == "<":
+                df = df.filter(sf.col(column) < condition)
+            elif operand == ">=":
+                df = df.filter(sf.col(column) >= condition)
+            elif operand == "<=":
+                df = df.filter(sf.col(column) <= condition)
+            else:
+                raise ValueError(
+                    f"Operand {operand} not implemented in get_pos_cos_filter"
+                )
+        return df
+
+    def rehash_property_objects(spark_row: Row):
+        """
+        Rehash property object row after changing values of one or
+        more of the columns corresponding to hash_keys defined below.
+
+        """
+        hash_keys = [
+            "adsorption_energy",
+            "atomic_forces",
+            "atomization_energy",
+            "cauchy_stress",
+            "cauchy_stress_volume_normalized",
+            "chemical_formula_hill",
+            "configuration_id",
+            "dataset_id",
+            "electronic_band_gap",
+            "electronic_band_gap_type",
+            "energy",
+            "formation_energy",
+            "metadata_id",
+            "method",
+            "software",
+        ]
+        spark_dict = spark_row.asDict()
+        if spark_dict["atomic_forces_01"] is None:
+            spark_dict["atomic_forces"] = literal_eval(spark_dict["atomic_forces_00"])
+        else:
+            spark_dict["atomic_forces"] = list(
+                itertools.chain(
+                    *[
+                        literal_eval(spark_dict[f"atomic_forces_{i:02}"])
+                        for i in range(1, 19)
+                    ]
+                )
+            )
+        if spark_dict["cauchy_stress"] is not None:
+            spark_dict["cauchy_stress"] = literal_eval(spark_dict["cauchy_stress"])
+        spark_dict["last_modified"] = dateutil.parser.parse(
+            datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+        )
+        spark_dict["hash"] = _hash(spark_dict, hash_keys, include_keys_in_hash=False)
+        if spark_dict["cauchy_stress"] is not None:
+            spark_dict["cauchy_stress"] = str(spark_dict["cauchy_stress"])
+        id = f'PO_{spark_dict["hash"]}'
+        if len(id) > 28:
+            id = id[:28]
+        spark_dict["id"] = id
+        return Row(**{k: v for k, v in spark_dict.items() if k != "atomic_forces"})
+
+    @udf(returnType=StringType())
+    def config_structure_hash(spark_row: Row, hash_keys: list[str]):
+        """
+        Rehash configuration object row after changing values of one or
+        more of the columns corresponding to hash_keys defined below.
+
+        """
+        spark_dict = spark_row.asDict()
+        if spark_dict["positions_01"] is None:
+            spark_dict["positions"] = literal_eval(spark_dict["positions_00"])
+        else:
+            spark_dict["positions"] = list(
+                itertools.chain(
+                    *[
+                        literal_eval(spark_dict[f"positions_{i:02}"])
+                        for i in range(1, 19)
+                    ]
+                )
+            )
+        spark_dict["last_modified"] = dateutil.parser.parse(
+            datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+        )
+        spark_dict["hash"] = _hash(spark_dict, hash_keys, include_keys_in_hash=False)
+        return spark_dict["hash"]
+
+    def stop_spark(self):
+        self.spark.stop()
+
+
+class PGDataLoader:
+    """
+    Class to load data from files to ColabFit PostgreSQL database
+    """
+
+    def __init__(
+        self,
+        appname="colabfit",
+        url="jdbc:postgresql://localhost:5432/colabfit",
+        database_name: str = None,
+        env="./.env",
+        table_prefix: str = None,
+    ):
+        # self.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
+        JARFILE = os.environ.get("CLASSPATH")
+        self.spark = (
+            SparkSession.builder.appName(appname)
+            .config("spark.jars", JARFILE)
+            .getOrCreate()
+        )
+
+        user = os.environ.get("PGS_USER")
+        password = os.environ.get("PGS_PASS")
+        driver = os.environ.get("PGS_DRIVER")
+        self.properties = {
+            "user": user,
+            "password": password,
+            "driver": driver,
+        }
+        self.url = url
+        self.database_name = database_name
+        self.table_prefix = table_prefix
+        findspark.init()
+
+        self.format = "jdbc"  # for postgres local
+        load_dotenv(env)
+        self.config_table = _CONFIGS_COLLECTION
+        self.config_set_table = _CONFIGSETS_COLLECTION
+        self.dataset_table = _DATASETS_COLLECTION
+        self.prop_object_table = _PROPOBJECT_COLLECTION
+
+    def read_table(
+        self,
+    ):
+        pass
+
+    def get_spark(self):
+        return self.spark
+
+    def get_spark_context(self):
+        return self.spark.sparkContext
+
+    def write_table(self, spark_rows: list[dict], table_name: str, schema: StructType):
+        df = self.spark.createDataFrame(spark_rows, schema=schema)
+
+        df.write.jdbc(
+            url=self.url,
+            table=table_name,
+            mode="append",
+            properties=self.properties,
+        )
+
+    def write_metadata(self, df):
+        """Should accept a DataFrame with a metadata column,
+        write metadata to files, return DataFrame without metadata column"""
+        pass
+
+    # def update_co_rows_cs_id(self, co_ids: list[str], cs_id: str):
+    #     with psycopg.connect(
+    #         """dbname=colabfit user=%s password=%s host=localhost port=5432"""
+    #         % (
+    #             self.user,
+    #             self.password,
+    #         )
+    #     ) as conn:
+    #         cur = conn.execute(
+    #             """UPDATE configurations
+    #                     SET configuration_set_ids = concat(%s::text, \
+    #             rtrim(ltrim(replace(configuration_set_ids,%s,''), '['),']'), %s::text)
+    #             """,
+    #             (
+    #                 "[",
+    #                 f", {cs_id}",
+    #                 f", {cs_id}]",
+    #             ),
+    #             # WHERE id = ANY(%s)""",
+    #             # (cs_id, co_ids),
+    #         )
+    #         conn.commit()
+
+
+def batched(configs, n):
+    "Batch data into tuples of length n. The last batch may be shorter."
+    if not isinstance(configs, GeneratorType):
+        configs = iter(configs)
+    while True:
+        batch = list(islice(configs, n))
+        if len(batch) == 0:
+            break
+        yield batch
+
+
+class DataManager:
+    def __init__(
+        self,
+        nprocs: int = 1,
+        configs: list[AtomicConfiguration] = None,
+        prop_defs: list[dict] = None,
+        prop_map: dict = None,
+        dataset_id=None,
+        standardize_energy: bool = True,
+        read_write_batch_size=10000,
+    ):
+        self.configs = configs
+        if isinstance(prop_defs, dict):
+            prop_defs = [prop_defs]
+        self.prop_defs = prop_defs
+        self.read_write_batch_size = read_write_batch_size
+        self.prop_map = prop_map
+        self.nprocs = nprocs
+        self.dataset_id = dataset_id
+        self.standardize_energy = standardize_energy
+        if self.dataset_id is None:
+            self.dataset_id = generate_ds_id()
+        print("Dataset ID:", self.dataset_id)
+
+    @staticmethod
+    def _gather_co_po_rows(
+        prop_defs: list[dict],
+        prop_map: dict,
+        dataset_id,
+        configs: list[AtomicConfiguration],
+        standardize_energy: bool = True,
+    ):
+        """Convert COs and DOs to Spark rows."""
+        co_po_rows = []
+        for config in configs:
+            config.set_dataset_id(dataset_id)
+            property = Property.from_definition(
+                definitions=prop_defs,
+                configuration=config,
+                property_map=prop_map,
+                standardize_energy=standardize_energy,
+            )
+            co_po_rows.append(
+                (
+                    config.spark_row,
+                    property.spark_row,
+                )
+            )
+        return co_po_rows
+
+    def gather_co_po_rows_pool(
+        self, config_chunks: list[list[AtomicConfiguration]], pool
+    ):
+        """
+        Wrapper for _gather_co_po_rows.
+        Convert COs and DOs to Spark rows using multiprocessing Pool.
+        Returns a batch of tuples of (configuration_row, property_row).
+        """
+
+        part_gather = partial(
+            self._gather_co_po_rows,
+            self.prop_defs,
+            self.prop_map,
+            self.dataset_id,
+            self.standardize_energy,
+        )
+        return itertools.chain.from_iterable(pool.map(part_gather, list(config_chunks)))
+
+    def gather_co_po_in_batches(self):
+        """
+        Wrapper function for gather_co_po_rows_pool.
+        Yields batches of CO-DO rows, preventing configuration iterator from
+        being consumed all at once.
+        """
+        chunk_size = 1000
+        config_chunks = batched(self.configs, chunk_size)
+
+        with Pool(self.nprocs) as pool:
+            while True:
+                config_batches = list(islice(config_chunks, self.nprocs))
+                if not config_batches:
+                    break
+                else:
+                    yield list(self.gather_co_po_rows_pool(config_batches, pool))
+
+    def gather_co_po_in_batches_no_pool(self):
+        """
+        Wrapper function for gather_co_po_rows_pool.
+        Yields batches of CO-DO rows, preventing configuration iterator from
+        being consumed all at once.
+        """
+        chunk_size = self.read_write_batch_size
+        config_chunks = batched(self.configs, chunk_size)
+        for chunk in config_chunks:
+            yield list(
+                self._gather_co_po_rows(
+                    self.prop_defs,
+                    self.prop_map,
+                    self.dataset_id,
+                    chunk,
+                    standardize_energy=self.standardize_energy,
+                )
+            )
+
+    def load_co_po_to_vastdb(self, loader, batching_ingest=False):
+        if loader.spark.catalog.tableExists(loader.prop_object_table):
+            print("loader.prop_object_table exists")
+            if batching_ingest is False:
+                pos_with_mult = loader.read_table(loader.prop_object_table)
+                pos_with_mult = pos_with_mult.filter(
+                    sf.col("dataset_id") == self.dataset_id
+                )
+                pos_with_mult = pos_with_mult.filter(sf.col("multiplicity") > 0).limit(1)
+                if pos_with_mult.count() > 0:
+                    raise ValueError(
+                        f"POs for dataset with ID {self.dataset_id} already exist in "
+                        "database with multiplicity > 0.\nTo continue, set "
+                        "multiplicities to 0 with "
+                        f'loader.zero_multiplicity("{self.dataset_id}")'
+                    )
+        if loader.spark.catalog.tableExists(loader.dataset_table):
+            dataset_exists = loader.read_table(loader.dataset_table).filter(
+                sf.col("id") == self.dataset_id
+            )
+            if dataset_exists.count() > 0:
+                raise ValueError(f"Dataset with ID {self.dataset_id} already exists.")
+        co_po_rows = self.gather_co_po_in_batches_no_pool()
+        for co_po_batch in tqdm(
+            co_po_rows,
+            desc="Loading data to database: ",
+            unit="batch",
+        ):
+            co_rows, po_rows = list(zip(*co_po_batch))
+            if len(co_rows) == 0:
+                continue
+            else:
+                co_df = loader.spark.createDataFrame(co_rows, schema=config_md_schema)
+                po_df = loader.spark.createDataFrame(
+                    po_rows, schema=property_object_md_schema
+                )
+                first_count = co_df.count()
+                print("Dropping duplicates from CO dataframe")
+                merged_names = co_df.groupBy("id").agg(
+                    sf.array_distinct(sf.flatten(sf.collect_list("names"))).alias(
+                        "names"
+                    )
+                )
+                co_df = co_df.dropDuplicates(["id"])
+                second_count = co_df.count()
+                if second_count < first_count:
+                    co_df = (
+                        co_df.drop("names")
+                        .join(merged_names, on="id", how="inner")
+                        .select(config_md_schema.fieldNames())
+                    )
+                print(f"{first_count -second_count} duplicates found in CO dataframe")
+                count = po_df.count()
+                count_distinct = po_df.select("id").distinct().count()
+                if count_distinct < count:
+                    print(f"{count - count_distinct} duplicates found in PO dataframe")
+                    multiplicity = po_df.groupBy("id").agg(sf.count("*").alias("count"))
+                    po_df = po_df.dropDuplicates(["id"])
+                    po_df = (
+                        po_df.join(multiplicity, on="id", how="inner")
+                        .withColumn("multiplicity", sf.col("count"))
+                        .drop("count")
+                    )
+                all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
+                all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
+                if not all_unique_co:
+                    # new_co_ids, update_co_ids = loader.update_existing_co_rows(
+                    #     co_df=co_df,
+                    #     cols=["dataset_ids", "names", "labels"],
+                    #     elems=[self.dataset_id, None, None],
+                    # )
+                    new_co_ids, update_co_ids = loader.update_existing_co_po_rows(
+                        df=co_df,
+                        table_name=loader.config_table,
+                        cols=["dataset_ids", "names", "labels"],
+                        elems=[self.dataset_id, None, None],
+                        str_schema=config_schema,
+                        arr_schema=config_arr_schema,
+                    )
+                    print(f"Updated {len(update_co_ids)} rows in {loader.config_table}")
+                    if len(new_co_ids) > 0:
+                        print(f"Writing {len(new_co_ids)} new rows to table")
+                        co_df = loader.write_metadata(co_df)
+                        loader.write_table(
+                            co_df,
+                            loader.config_table,
+                            ids_filter=new_co_ids,
+                            check_length_col="positions_00",
+                            check_unique=False,
+                        )
+                else:
+                    print("All COs unique: writing to table...")
+                    co_df = loader.write_metadata(co_df)
+                    loader.write_table(
+                        co_df,
+                        loader.config_table,
+                        check_length_col="positions_00",
+                        check_unique=False,
+                    )
+
+                if not all_unique_po:
+                    # print("Sending to update_existing_po_rows")
+                    # new_po_ids, update_po_ids = loader.update_existing_po_rows(
+                    #     po_df=po_df,
+                    # )
+                    new_po_ids, update_po_ids = loader.update_existing_co_po_rows(
+                        df=po_df,
+                        table_name=loader.prop_object_table,
+                        cols=["multiplicity"],
+                        elems=[None],
+                        str_schema=property_object_schema,
+                        arr_schema=property_object_arr_schema,
+                    )
+                    print(
+                        f"Updated {len(update_po_ids)} rows in "
+                        f"{loader.prop_object_table}"
+                    )
+                    if len(new_po_ids) > 0:
+                        print("Remaining POs unique. Writing new rows to table...")
+                        po_df = loader.write_metadata(po_df)
+                        loader.write_table(
+                            po_df,
+                            loader.prop_object_table,
+                            ids_filter=new_po_ids,
+                            check_length_col="atomic_forces_00",
+                            check_unique=False,
+                        )
+                else:
+                    print("All POs unique: writing to table...")
+                    po_df = loader.write_metadata(po_df)
+                    # print("finished writing metadata")
+                    loader.write_table(
+                        po_df,
+                        loader.prop_object_table,
+                        check_length_col="atomic_forces_00",
+                        check_unique=False,
+                    )
+
+    def load_data_to_pg_in_batches(self, loader):
+        """Load data to PostgreSQL in batches."""
+        co_po_rows = self.gather_co_po_in_batches()
+
+        for co_po_batch in tqdm(
+            co_po_rows,
+            desc="Loading data to database: ",
+            unit="batch",
+        ):
+            co_rows, po_rows = list(zip(*co_po_batch))
+            if len(co_rows) == 0:
+                continue
+            else:
+                loader.write_table(
+                    co_rows,
+                    loader.config_table,
+                    config_schema,
+                )
+                loader.write_table(
+                    po_rows,
+                    loader.prop_object_table,
+                    property_object_schema,
+                )
+
+    def create_configuration_sets(
+        self,
+        loader,
+        name_label_match: list[tuple],
+    ):
+        """
+        Args for name_label_match in order:
+        1. String pattern for matching CONFIGURATION NAMES
+        2. String pattern for matching CONFIGURATION LABELS
+        3. Name for configuration set
+        4. Description for configuration set
+        """
+        dataset_id = self.dataset_id
+        config_set_rows = []
+        for i, (names_match, label_match, cs_name, cs_desc) in tqdm(
+            enumerate(name_label_match), desc="Creating Configuration Sets"
+        ):
+            print(
+                f"names match: {names_match}, label: {label_match}, "
+                f"cs_name: {cs_name}, cs_desc: {cs_desc}"
+            )
+            if names_match and not label_match:
+                config_set_query_df = loader.config_set_query(
+                    query_table=loader.config_table,
+                    dataset_id=dataset_id,
+                    name_match=names_match,
+                )
+            # Currently an AND operation on labels: labels col contains x AND y
+            if label_match and not names_match:
+                config_set_query_df = loader.config_set_query(
+                    query_table=loader.config_table,
+                    dataset_id=dataset_id,
+                    label_match=label_match,
+                )
+            if names_match and label_match:
+                config_set_query_df = loader.config_set_query(
+                    query_table=loader.config_table,
+                    dataset_id=dataset_id,
+                    name_match=names_match,
+                    label_match=label_match,
+                )
+            co_id_df = (
+                config_set_query_df.select("id")
+                .distinct()
+                .withColumnRenamed("id", "configuration_id")
+            )
+            string_cols = [
+                "elements",
+            ]
+            unstring_col_udf = sf.udf(unstring_df_val, ArrayType(StringType()))
+            for col in string_cols:
+                config_set_query_df = config_set_query_df.withColumn(
+                    col, unstring_col_udf(sf.col(col))
+                )
+            unstring_col_udf = sf.udf(unstring_df_val, ArrayType(IntegerType()))
+            int_cols = [
+                "atomic_numbers",
+                "dimension_types",
+            ]
+            for col in int_cols:
+                config_set_query_df = config_set_query_df.withColumn(
+                    col, unstring_col_udf(sf.col(col))
+                )
+            t = time()
+            prelim_cs_id = f"CS_{cs_name}_{self.dataset_id}"
+            co_cs_df = loader.get_co_cs_mapping(prelim_cs_id)
+            if co_cs_df is not None:
+                print(
+                    f"Configuration Set {cs_name} already exists.\nRemove rows matching "  # noqa E501
+                    f"'configuration_set_id == {prelim_cs_id} from table {loader.co_cs_map_table} to recreate.\n"  # noqa E501
+                )
+                continue
+            config_set = ConfigurationSet(
+                name=cs_name,
+                description=cs_desc,
+                config_df=config_set_query_df,
+                dataset_id=self.dataset_id,
+            )
+            co_cs_df = co_id_df.withColumn("configuration_set_id", sf.lit(config_set.id))
+            loader.write_table(co_cs_df, loader.co_cs_map_table, check_unique=False)
+            loader.update_existing_co_rows(
+                co_df=config_set_query_df,
+                cols=["configuration_set_ids"],
+                elems=config_set.id,
+            )
+            loader.update_existing_co_po_rows(
+                df=config_set_query_df,
+                table_name=loader.config_table,
+                cols=["configuration_set_ids"],
+                elems=[config_set.id],
+                str_schema=config_schema,
+                arr_schema=config_arr_schema,
+            )
+
+            t_end = time() - t
+            print(f"Time to create CS and update COs with CS-ID: {t_end}")
+            config_set_rows.append(config_set.spark_row)
+        config_set_df = loader.spark.createDataFrame(
+            config_set_rows, schema=configuration_set_arr_schema
+        )
+        loader.write_table(config_set_df, loader.config_set_table)
+        return config_set_rows
+
+    def create_dataset(
+        self,
+        loader,
+        name: str,
+        authors: list[str],
+        publication_link: str,
+        data_link: str,
+        description: str,
+        other_links: list[str] = None,
+        publication_year: str = None,
+        doi: str = None,
+        labels: list[str] = None,
+        data_license: str = "CC-BY-4.0",
+    ):
+
+        if loader.spark.catalog.tableExists(loader.config_set_table):
+
+            cs_ids = (
+                loader.dataset_query(
+                    dataset_id=self.dataset_id, table_name=loader.config_set_table
+                )
+                .select("id")
+                .collect()
+            )
+            if len(cs_ids) == 0:
+                cs_ids = None
+            else:
+                cs_ids = [x["id"] for x in cs_ids]
+        else:
+            cs_ids = None
+
+        config_df = loader.dataset_query(
+            dataset_id=self.dataset_id, table_name=loader.config_table
+        )
+
+        prop_df = loader.dataset_query(
+            dataset_id=self.dataset_id, table_name=loader.prop_object_table
+        )
+
+        ds = Dataset(
+            name=name,
+            authors=authors,
+            config_df=config_df,
+            prop_df=prop_df,
+            publication_link=publication_link,
+            data_link=data_link,
+            description=description,
+            other_links=other_links,
+            dataset_id=self.dataset_id,
+            labels=labels,
+            doi=doi,
+            data_license=data_license,
+            configuration_set_ids=cs_ids,
+            publication_year=publication_year,
+        )
+        ds_df = loader.spark.createDataFrame([ds.spark_row], schema=dataset_arr_schema)
+        loader.write_table(ds_df, loader.dataset_table)
+
+
+class S3BatchManager:
+    def __init__(self, bucket_name, access_id, secret_key, endpoint_url=None):
+        self.bucket_name = bucket_name
+        self.access_id = access_id
+        self.secret_key = secret_key
+        self.endpoint_url = endpoint_url
+        self.client = self.get_client()
+        self.MAX_BATCH_SIZE = 100
+
+    def get_client(self):
+        return boto3.client(
+            "s3",
+            use_ssl=False,
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.access_id,
+            aws_secret_access_key=self.secret_key,
+            region_name="fake-region",
+            config=boto3.session.Config(
+                signature_version="s3v4", s3={"addressing_style": "path"}
+            ),
+        )
+
+    def batch_write(self, file_batch):
+        results = []
+        for key, content in file_batch:
+            try:
+                self.client.put_object(Bucket=self.bucket_name, Key=key, Body=content)
+                results.append((key, None))
+            except Exception as e:
+                results.append((key, str(e)))
+        return results
+
+
+def write_md_partition(partition, config):
+    s3_mgr = S3BatchManager(
+        bucket_name=config["bucket_dir"],
+        access_id=config["access_key"],
+        secret_key=config["access_secret"],
+        endpoint_url=config["endpoint"],
+    )
+    file_batch = []
+    for row in partition:
+        md_path = Path(config["metadata_dir"]) / row["metadata_path"]
+        file_batch.append((str(md_path), row["metadata"]))
+
+        if len(file_batch) >= s3_mgr.MAX_BATCH_SIZE:
+            _ = s3_mgr.batch_write(file_batch)
+            file_batch = []
+    if file_batch:
+        _ = s3_mgr.batch_write(file_batch)
+    return iter([])
+
+
+class S3FileManager:
+    def __init__(self, bucket_name, access_id, secret_key, endpoint_url=None):
+        self.bucket_name = bucket_name
+        self.access_id = access_id
+        self.secret_key = secret_key
+        self.endpoint_url = endpoint_url
+
+    def get_client(self):
+        return boto3.client(
+            "s3",
+            use_ssl=False,
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.access_id,
+            aws_secret_access_key=self.secret_key,
+            region_name="fake-region",
+            config=boto3.session.Config(
+                signature_version="s3v4", s3={"addressing_style": "path"}
+            ),
+        )
+
+    def write_file(self, content, file_key):
+        try:
+            client = self.get_client()
+            client.put_object(Bucket=self.bucket_name, Key=file_key, Body=content)
+            # return (f"/vdev/{self.bucket_name}/{file_key}", sys.getsizeof(content))
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    def read_file(self, file_key):
+        try:
+            client = self.get_client()
+            # key = file_key.replace(str(Path("/vdev/colabfit-data")) + "/", "")
+            response = client.get_object(Bucket=self.bucket_name, Key=file_key)
+            return response["Body"].read().decode("utf-8")
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+
 def generate_ds_id():
+    # Maybe check to see whether the DS ID already exists?
     ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
+    print("Generated new DS ID:", ds_id)
     return ds_id
 
 
-class ConcatenationException(Exception):
-    pass
+@sf.udf(returnType=StringType())
+def prepend_path_udf(prefix, md_path):
+    try:
+        full_path = Path(prefix) / Path(md_path).relative_to("/")
+        return str(full_path)
+    except ValueError:
+        full_path = Path(prefix) / md_path
+        return str(full_path)
 
 
-class InvalidGroupError(Exception):
-    pass
+def read_md_partition(partition, config):
+    s3_mgr = S3FileManager(
+        bucket_name=config["bucket_dir"],
+        access_id=config["access_key"],
+        secret_key=config["access_secret"],
+        endpoint_url=config["endpoint"],
+    )
 
+    def process_row(row):
+        rowdict = row.asDict()
+        try:
+            rowdict["metadata"] = s3_mgr.read_file(row["metadata_path"])
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                rowdict["metadata"] = None
+            else:
+                print(f"Error reading {row['metadata_path']}: {str(e)}")
+                rowdict["metadata"] = None
+        return Row(**rowdict)
 
-class MissingEntryError(Exception):
-    pass
-
-
-class DuplicateDefinitionError(Exception):
-    pass
+    return map(process_row, partition)

@@ -1,22 +1,61 @@
-import os
+import datetime
+import itertools
 import json
+import os
 import tempfile
 import warnings
-import itertools
-import numpy as np
+from collections import namedtuple
 from copy import deepcopy
-from hashlib import sha512
 
+import dateutil.parser
 import kim_edn
-from kim_property.instance import check_property_instances
+import numpy as np
+from ase.units import create_units
 from kim_property import (
-    kim_property_create,
     check_instance_optional_key_marked_required_are_present,
+    kim_property_create,
+)
+from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
+
+from colabfit.tools.configuration import AtomicConfiguration
+from colabfit.tools.schema import property_object_schema
+from colabfit.tools.utilities import (
+    _empty_dict_from_schema,
+    _hash,
+    _parse_unstructured_metadata,
 )
 
-from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 from kim_property.create import KIM_PROPERTIES
-from colabfit import STRING_DTYPE_SPECIFIER, UNITS, OPENKIM_PROPERTY_UNITS, EDN_KEY_MAP
+
+EDN_KEY_MAP = {
+    "energy": "unrelaxed-potential-energy",
+    "forces": "unrelaxed-potential-forces",
+    "stress": "unrelaxed-cauchy-stress",
+    "virial": "unrelaxed-cauchy-stress",
+}
+
+UNITS = create_units("2014")
+
+UNITS["angstrom"] = UNITS["Ang"]
+UNITS["bohr"] = UNITS["Bohr"]
+UNITS["hartree"] = UNITS["Hartree"]
+UNITS["rydberg"] = UNITS["Rydberg"]
+UNITS["debye"] = UNITS["Debye"]
+UNITS["kbar"] = UNITS["bar"] * 1000
+
+prop_info = namedtuple("prop_info", ["key", "unit", "dtype"])
+energy_info = prop_info("energy", "eV", float)
+force_info = prop_info("forces", "eV/angstrom", list)
+stress_info = prop_info("stress", "eV/angstrom^3", list)
+MAIN_KEY_MAP = {
+    "energy": energy_info,
+    "atomic-forces": force_info,
+    "cauchy-stress": stress_info,
+    "atomization-energy": energy_info,
+    "adsorption-energy": energy_info,
+    "formation-energy": energy_info,
+    "band-gap": energy_info,
+}
 
 # These are fields that are related to the geometry of the atomic structure
 # or the OpenKIM Property Definition and shouldn't be used for equality checks
@@ -30,23 +69,125 @@ _ignored_fields = [
     "unrelaxed-periodic-cell-vector-2",
     "unrelaxed-periodic-cell-vector-3",
 ]
+_hash_ignored_fields = [
+    "id",
+    "hash",
+    "last_modified",
+    "multiplicity",
+    "metadata_path",
+    "metadata_size",
+]
+
+
+def energy_to_schema(prop_name, en_prop: dict):
+    if en_prop.get("energy") is None:
+        return {}
+    new_name = prop_name.replace("-", "_")
+    en_dict = {
+        f"{new_name}": en_prop["energy"]["source-value"],
+        f"{new_name}_unit": en_prop["energy"]["source-unit"],
+        f"{new_name}_per_atom": en_prop["per-atom"]["source-value"],
+    }
+    ref_en_dict = en_prop.get("reference-energy")
+    if ref_en_dict is not None:
+        ref_en = ref_en_dict["source-value"]
+        ref_unit = ref_en_dict["source-unit"]
+        en_dict[f"{new_name}_reference"] = ref_en
+        en_dict[f"{new_name}_reference_unit"] = ref_unit
+
+    return en_dict
+
+
+def atomic_forces_to_schema(af_prop: dict):
+    if af_prop.get("forces") is None:
+        return {}
+    af_dict = {
+        "atomic_forces_00": af_prop["forces"]["source-value"],
+        "atomic_forces_unit": af_prop["forces"]["source-unit"],
+    }
+    return af_dict
+
+
+def cauchy_stress_to_schema(cs_prop: dict):
+    if cs_prop.get("stress") is None:
+        return {}
+    cs_dict = {
+        "cauchy_stress": cs_prop["stress"]["source-value"],
+        "cauchy_stress_unit": cs_prop["stress"]["source-unit"],
+        "cauchy_stress_volume_normalized": cs_prop["volume-normalized"]["source-value"],
+    }
+    return cs_dict
+
+
+def band_gap_to_schema(bg_prop: dict):
+    if bg_prop.get("energy") is None:
+        return {}
+    bg_dict = {
+        "electronic_band_gap": bg_prop["energy"]["source-value"],
+        "electronic_band_gap_unit": bg_prop["energy"]["source-unit"],
+        "electronic_band_gap_type": bg_prop.get("type", {"source-value": "direct"})[
+            "source-value"
+        ],
+    }
+    return bg_dict
+
+
+prop_to_row_mapper = {
+    "energy": energy_to_schema,
+    "atomic-forces": atomic_forces_to_schema,
+    "cauchy-stress": cauchy_stress_to_schema,
+    "band-gap": band_gap_to_schema,
+}
+
+
+def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
+    """
+    Extract metadata from a property map.
+    Returns metadata dict as a JSON string, method, and software.
+    """
+    gathered_fields = {}
+    for md_field in pmap_md.keys():
+        if "value" in pmap_md[md_field]:
+            v = pmap_md[md_field]["value"]
+        elif "field" in pmap_md[md_field]:
+            field_key = pmap_md[md_field]["field"]
+            if field_key in config.info:
+                v = config.info[field_key]
+            elif field_key in config.arrays:
+                v = config.arrays[field_key]
+            else:
+                continue  # No keys are required; ignored if missing
+        else:
+            continue  # No keys are required; ignored if missing
+
+        if "units" in pmap_md[md_field]:
+            gathered_fields[md_field] = {
+                "source-value": v,
+                "source-unit": pmap_md[md_field]["units"],
+            }
+        else:
+            gathered_fields[md_field] = {"source-value": v}
+    method = gathered_fields.pop("method", None)
+    software = gathered_fields.pop("software", None)
+    if "property_keys" not in gathered_fields:
+        raise RuntimeError(
+            "'property_keys' must be provided in the property map. If defined, check that property_keys is formatted as {'property_keys': {'value': {'key1 : value1}}}"  # noqa E501
+        )
+    if method is not None:
+        method = method["source-value"]
+    if software is not None:
+        software = software["source-value"]
+    return gathered_fields, method, software
 
 
 class PropertyParsingError(Exception):
     pass
 
 
-class MissingPropertyFieldWarning(Warning):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
 class InvalidPropertyDefinition(Exception):
     pass
 
 
-# TODO:Remove Configuration and add Property Setting
 class Property(dict):
     """
     A Property is used to store the results of some kind of calculation or
@@ -70,140 +211,93 @@ class Property(dict):
             Configuration should be passed to the :meth:`from_definition`
             function.
 
-
         property_map (dict):
             key = a string that can be used as a key like :code:`self.instance[key]`
 
             value = A sub-dictionary with the following keys:
 
             * :attr:`field`:
-                A field name used to access :attr:`Configuration.info` or :attr:`Configuration.arrays`
+                A field name used to access :attr:`Configuration.info` or
+                :attr:`Configuration.arrays`
             * :attr:`units`:
-                A string matching one of the units names in `ase.units <https://wiki.fysik.dtu.dk/ase/ase/units.html>`_.
-                These units will be used to convert the given units to eV,
-                Angstrom, a.m.u., Kelvin, ... For compound units (e.g. "eV/Ang"), the string will be split on
-                '*' and '/'. The raw data will be multiplied by the first unit
-                and anything preceded by a '*'. It will be divided by anything
+                A string matching one of the units names in
+                `ase.units <https://wiki.fysik.dtu.dk/ase/ase/units.html>`_.
+                These units will be used to convert the given units to eV, Angstrom,
+                a.m.u., Kelvin, ... For compound units (e.g. "eV/Ang"), the string will
+                be split on '*' and '/'. The raw data will be multiplied by the first
+                unit and anything preceded by a '*'. It will be divided by anything
                 preceded by a '/'.
-
-
-
-
     """
 
     _observers = []
 
-    def __init__(self, definition, instance, property_map=None, convert_units=False):
+    def __init__(
+        self,
+        definitions,
+        instance,
+        property_map=None,
+        metadata=None,
+        standardize_energy=True,
+        nsites=None,
+        dataset_id=None,
+    ):
         """
         Args:
-
-            definition (dict):
-                A KIM Property Definition
-
+            definitions (list(dict)):
+                KIM Property Definitions
             instance (dict):
                 A dictionary defining an OpenKIM Property Instance
-
             property_map (dict):
                 A property map as described in the Property attributes section.
-
-            convert_units (bool):
+            standardize_energy (bool):
                 If True, converts units to those expected by ColabFit. Default
-                is False
+                is True
         """
-
-        global KIM_PROPERTIES
-
-        if isinstance(definition, dict):
-            dummy_dict = deepcopy(definition)
-
-            # Spoof if necessary
-            if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
-                # Invalid ID. Try spoofing it
-                dummy_dict["property-id"] = "tag:@,0000-00-00:property/"
-                dummy_dict["property-id"] += definition["property-id"]
-                # warnings.warn(f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}")
-
-            load_from_existing = dummy_dict["property-id"] in KIM_PROPERTIES
-            definition_name = dummy_dict["property-id"]
-
-        elif isinstance(definition, str):
-            if os.path.isfile(definition):
-                dummy_dict = kim_edn.load(definition)
-
-                # Check if you need to spoof the property ID to trick OpenKIM
-                if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
-                    # Invalid ID. Try spoofing it
-                    dummy_dict["property-id"] = (
-                        "tag:@,0000-00-00:property/" + dummy_dict["property-id"]
-                    )
-                    warnings.warn(
-                        f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}"
-                    )
-
-                load_from_existing = dummy_dict["property-id"] in KIM_PROPERTIES
-                definition_name = dummy_dict["property-id"]
-
-            else:
-                # Then this has to be an existing (or added) KIM Property Definition
-                load_from_existing = True
-
-                # It may have been added previously, but spoofed
-                if VALID_KIM_ID.match(definition) is None:
-                    # Invalid ID. Try spoofing it
-                    definition_name = "tag:@,0000-00-00:property/" + definition
-        else:
-            raise InvalidPropertyDefinition(
-                "Property definition must either be a dictionary or a path to an EDN file"
-            )
-
-        self.definition = definition
-        self.name = self.definition["property-id"]
-
-        self.instance = instance
-        self.instance["property-id"] = definition_name
-
-        # Hack to avoid the fact that "property-name" has to be a dictionary
-        # in order for OpenKIM's check_property_definition to work
-        tmp = self.definition["property-name"]
-        del self.definition["property-name"]
-
-        check_instance_optional_key_marked_required_are_present(
-            self.instance,
-            self.definition,
-            # KIM_PROPERTIES[self.instance['property-id']]
+        # self.unique_identifier_kw = [
+        #     k
+        #     for k in property_object_schema.fieldNames()
+        #     if k not in _hash_ignored_fields
+        # ]
+        self.unique_identifier_kw = [
+            "adsorption_energy",
+            "atomic_forces_00",
+            "atomization_energy",
+            "cauchy_stress",
+            "cauchy_stress_volume_normalized",
+            "chemical_formula_hill",
+            "configuration_id",
+            "dataset_id",
+            "electronic_band_gap",
+            "electronic_band_gap_type",
+            "energy",
+            "formation_energy",
+            "metadata_id",
+            "method",
+            "software",
+        ]
+        self.unique_identifier_kw.extend(
+            [f"atomic_forces_{i:02d}" for i in range(1, 20)]
         )
-
-        self.definition["property-name"] = tmp
-
-        if load_from_existing:
-            check_property_instances(self.instance, fp_path=KIM_PROPERTIES)
-        else:
-            with tempfile.NamedTemporaryFile("w") as tmp:
-                tmp.write(json.dumps(dummy_dict))
-                tmp.flush()
-
-                check_property_instances(self.instance, fp=tmp.name)
-
+        self.instance = instance
+        self.definitions = definitions
+        self.nsites = nsites
         if property_map is not None:
             self.property_map = dict(property_map)
         else:
             self.property_map = {}
-
-        # Delete any un-used properties from the property_map
-        delkeys = []
-        for key in self.property_map:
-            edn_key = EDN_KEY_MAP.get(key, key)
-
-            if edn_key not in self.instance:
-                delkeys.append(key)
-
-        for key in delkeys:
-            del self.property_map[key]
-
-        if convert_units:
-            self.convert_units()
-
-        self._hash = hash(self)
+        self.metadata = _parse_unstructured_metadata(metadata)
+        self.chemical_formula_hill = instance.pop("chemical_formula_hill")
+        if standardize_energy:
+            self.standardize_energy()
+        if dataset_id is not None:
+            self.dataset_id = dataset_id
+        self.spark_row = self.to_spark_row()
+        self._hash = _hash(self.spark_row, self.unique_identifier_kw, False)
+        self.spark_row["hash"] = str(self._hash)
+        self._id = f"PO_{self._hash}"
+        if len(self._id) > 28:
+            self._id = self._id[:28]
+        self.spark_row["id"] = self._id
 
     @property
     def instance(self):
@@ -212,15 +306,11 @@ class Property(dict):
     @instance.setter
     def instance(self, edn):
         self._instance = edn
-
         fields = []
         for key in self._instance:
             if key in _ignored_fields:
                 continue
-
-            # fields.append(EDN_KEY_MAP.get(key, key))
             fields.append(key)
-
         self._property_fields = fields
 
     @property
@@ -228,13 +318,13 @@ class Property(dict):
         return self._property_fields
 
     @classmethod
-    def from_definition(
-        cls, definition, configuration, property_map, convert_units=False
+    def get_kim_instance(
+        cls,
+        definition,
     ):
         """
         A function for constructing a Property given a property setting hash, a property
         definition, and a property map.
-
 
         Args:
 
@@ -248,15 +338,11 @@ class Property(dict):
                 A property map as described in the Property attributes section.
 
         """
-
-        global KIM_PROPERTIES
-
+        # global KIM_PROPERTIES
         load_from_existing = False
-
         if isinstance(definition, dict):
             # TODO: this is probably slowing things down a bit
             dummy_dict = deepcopy(definition)
-
             # Spoof if necessary
             if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
                 # Invalid ID. Try spoofing it
@@ -269,7 +355,6 @@ class Property(dict):
         elif isinstance(definition, str):
             if os.path.isfile(definition):
                 dummy_dict = kim_edn.load(definition)
-
                 # Check if you need to spoof the property ID to trick OpenKIM
                 if VALID_KIM_ID.match(dummy_dict["property-id"]) is None:
                     # Invalid ID. Try spoofing it
@@ -277,25 +362,23 @@ class Property(dict):
                         "tag:@,0000-00-00:property/" + dummy_dict["property-id"]
                     )
                     warnings.warn(
-                        f"Invalid KIM property-id; Temporarily renaming to {dummy_dict['property-id']}"
+                        "Invalid KIM property-id; Temporarily "
+                        f"renaming to {dummy_dict['property-id']}"
                     )
-
                 load_from_existing = dummy_dict["property-id"] in KIM_PROPERTIES
                 definition_name = dummy_dict["property-id"]
-
             else:
                 # Then this has to be an existing (or added) KIM Property Definition
                 load_from_existing = True
-
                 # It may have been added previously, but spoofed
                 if VALID_KIM_ID.match(definition) is None:
                     # Invalid ID. Try spoofing it
                     definition_name = "tag:@,0000-00-00:property/" + definition
         else:
             raise InvalidPropertyDefinition(
-                "Property definition must either be a dictionary or a path to an EDN file"
+                "Property definition must either be a dictionary "
+                "or a path to an EDN file"
             )
-
         if load_from_existing:
             instance = kim_edn.loads(
                 kim_property_create(
@@ -310,128 +393,218 @@ class Property(dict):
 
                 if "property-name" in dummy_dict:
                     del dummy_dict["property-name"]
-
                 tmp.write(json.dumps(dummy_dict))
                 tmp.flush()
-
                 instance = kim_edn.loads(
                     kim_property_create(
                         instance_id=1,
                         property_name=tmp.name,
                     )
                 )[0]
+        return instance
 
-        update_edn_with_conf(instance, configuration)
+    @classmethod
+    def from_definition(
+        cls,
+        definitions,
+        configuration,
+        property_map,
+        standardize_energy=True,
+    ):
+        """
+        A function for constructing a Property given a property setting hash, a property
+        definition, and a property map.
 
-        for key, val in property_map.items():
-            if "value" in val:
-                # Default value provided
-                data = val["value"]
-            elif val["field"] in configuration.info:
-                data = configuration.info[val["field"]]
-            elif val["field"] in configuration.arrays:
-                data = configuration.arrays[val["field"]]
+        Args:
+
+            definition (dict):
+                A valid KIM Property Definition
+
+            configuration (AtomicConfiguration):
+                An AtomicConfiguration object from which to extract the property data
+
+            property_map (dict):
+                A property map as described in the Property attributes section.
+
+        """
+        pdef_dict = {pdef["property-name"]: pdef for pdef in definitions}
+        instances = {
+            pdef_name: cls.get_kim_instance(pdef)
+            for pdef_name, pdef in pdef_dict.items()
+        }
+        props_dict = {}
+        pi_md = None
+        for pname, pmap_list in property_map.items():
+            instance = instances.get(pname, None)
+            if pname == "_metadata":
+                pi_md, method, software = md_from_map(pmap_list, configuration)
+                props_dict["method"] = method
+                props_dict["software"] = software
+            elif instance is None:
+                raise PropertyParsingError(f"Property {pname} not found in definitions")
             else:
-                # Key not found on configurations. Will be checked later
-                continue
+                p_info = MAIN_KEY_MAP.get(pname, None)
+                if p_info is None:
+                    print(f"property {pname} not found in MAIN_KEY_MAP")
+                    continue
+                instance = instance.copy()
+                for pmap_i, pmap in enumerate(pmap_list):
+                    for key, val in pmap.items():
+                        if "value" in val:
+                            # Default value provided
+                            data = val["value"]
+                        elif val["field"] in configuration.info:
+                            data = configuration.info[val["field"]]
+                        elif val["field"] in configuration.arrays:
+                            data = configuration.arrays[val["field"]]
+                        else:
+                            # Key not found on configurations. Will be checked later
+                            continue
 
-            if isinstance(data, (np.ndarray, list)):
-                data = np.atleast_1d(data).tolist()
-            elif isinstance(data, (str, bool, int, float)):
-                pass
-            elif np.issubdtype(data.dtype, np.integer):
-                data = int(data)
-            elif np.issubdtype(data.dtype, np.float):
-                data = float(data)
+                        if isinstance(data, (np.ndarray, list)):
+                            data = np.atleast_1d(data).tolist()
+                        elif isinstance(data, np.integer):
+                            data = int(data)
+                        elif isinstance(data, np.floating):
+                            data = float(data)
+                        elif isinstance(data, (str, bool, int, float)):
+                            pass
+                        instance[key] = {
+                            "source-value": data,
+                        }
 
-            instance[key] = {
-                "source-value": data,
-            }
+                        if (val["units"] != "None") and (val["units"] is not None):
+                            instance[key]["source-unit"] = val["units"]
+                if p_info.key not in instance:
+                    print(f"Property {p_info.key} not found in {pname}")
+                    pdef_dict.pop(pname)
+                    continue
+                # hack to get around OpenKIM requiring the property-name be a dict
+                prop_name_tmp = pdef_dict[pname].pop("property-name")
 
-            if (val["units"] != "None") and (val["units"] is not None):
-                instance[key]["source-unit"] = val["units"]
+                check_instance_optional_key_marked_required_are_present(
+                    instance, pdef_dict[pname]
+                )
+                pdef_dict[pname]["property-name"] = prop_name_tmp
+                props_dict[pname] = {k: v for k, v in instance.items()}
+        props_dict["chemical_formula_hill"] = configuration.get_chemical_formula()
+        props_dict["configuration_id"] = configuration.id
 
         return cls(
-            definition=definition,
+            definitions=definitions,
             property_map=property_map,
-            instance=instance,
-            convert_units=convert_units,
+            instance=props_dict,
+            metadata=pi_md,
+            dataset_id=configuration.dataset_id,
+            standardize_energy=standardize_energy,
+            nsites=configuration.spark_row["nsites"],
         )
 
-    def convert_units(self):
+    def to_spark_row(self):
+        """
+        Convert the Property to a Spark Row object
+        """
+        row_dict = _empty_dict_from_schema(property_object_schema)
+        row_dict.update(self.metadata)
+        for key, val in self.instance.items():
+            if key == "method":
+                row_dict["method"] = val
+            elif key == "software":
+                row_dict["software"] = val
+            elif key == "_metadata":
+                continue
+            elif key == "configuration_id":
+                row_dict["configuration_id"] = val
+            elif "energy" in key:
+                row_dict.update(prop_to_row_mapper["energy"](key, val))
+            else:
+                row_dict.update(prop_to_row_mapper[key](val))
+        row_dict["last_modified"] = dateutil.parser.parse(
+            datetime.datetime.now(tz=datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+        )
+        row_dict["chemical_formula_hill"] = self.chemical_formula_hill
+        row_dict["multiplicity"] = 1
+        row_dict["dataset_id"] = self.dataset_id
+        return row_dict
+
+    def standardize_energy(self):
         """
         For each key in :attr:`self.property_map`, convert :attr:`self.edn[key]`
         from its original units to the expected ColabFit-compliant units.
         """
-
-        for key, val in self.property_map.items():
-            edn_key = EDN_KEY_MAP.get(key, key)
-
-            units = val["units"]
-
-            split_units = list(
-                itertools.chain.from_iterable(
-                    [sp.split("/") for sp in units.split("*")]
-                )
-            )
-
-            if edn_key not in self.instance:
+        for prop_name, prop_dict in self.instance.items():
+            if prop_name not in MAIN_KEY_MAP.keys():
                 continue
-
-            val = np.array(self.instance[edn_key]["source-value"], dtype=np.float64)
-
-            val *= float(UNITS[split_units[0]])
-
-            for u in split_units[1:]:
-                if units[units.find(u) - 1] == "*":
-                    val *= UNITS[u]
-                elif units[units.find(u) - 1] == "/":
-                    val /= UNITS[u]
-                else:
+            p_info = MAIN_KEY_MAP[prop_name]
+            if p_info.key not in prop_dict:
+                print(f"Property {p_info.key} not found in {prop_name}")
+                continue
+            units = prop_dict[p_info.key]["source-unit"]
+            if p_info.dtype == list:
+                prop_val = np.array(
+                    prop_dict[p_info.key]["source-value"], dtype=np.float64
+                )
+            else:
+                prop_val = prop_dict[p_info.key]["source-value"]
+            if "reference-energy" in prop_dict:
+                if prop_dict["reference-energy"]["source-unit"] != units:
                     raise RuntimeError(
-                        "There may be something wrong with the units: {}".format(u)
+                        "Units of the reference energy and energy must be the same"
                     )
+                else:
+                    prop_val += prop_dict["reference-energy"]["source-value"]
 
-            self.instance[edn_key] = {
-                "source-value": val.tolist(),
-                "source-unit": OPENKIM_PROPERTY_UNITS[key],
+            if "per-atom" in prop_dict:
+                if prop_dict["per-atom"]["source-value"] is True:
+                    if self.nsites is None:
+                        raise RuntimeError("nsites must be provided to convert per-atom")
+                    prop_val *= self.nsites
+
+            if units != p_info.unit:
+                split_units = list(
+                    itertools.chain.from_iterable(
+                        [sp.split("/") for sp in units.split("*")]
+                    )
+                )
+                powers = []
+                for i, sp_un in enumerate(split_units):
+                    if "^" in sp_un:
+                        split = sp_un.split("^")
+                        powers.append(int(split[1]))
+                        split_units[i] = split[0]
+                    else:
+                        powers.append(1)
+                if powers[0] != 1:
+                    prop_val *= np.power(float(UNITS[split_units[0]]), powers[0])
+                else:
+                    prop_val *= float(UNITS[split_units[0]])
+                for u, power in zip(split_units[1:], powers[1:]):
+                    un = UNITS[u]
+                    if power != 1:
+                        un = np.power(un, power)
+                    if units[units.find(u) - 1] == "*":
+                        prop_val *= un
+                    elif units[units.find(u) - 1] == "/":
+                        prop_val /= un
+                    else:
+                        raise RuntimeError(
+                            f"There may be something wrong with the units: {u}"
+                        )
+            if p_info.dtype == list:
+                prop_val = prop_val.tolist()
+            self.instance[prop_name][p_info.key] = {
+                "source-value": prop_val,
+                "source-unit": p_info.unit,
             }
 
-            self.property_map[key]["units"] = self.instance[edn_key]["source-unit"]
-
     def __hash__(self):
-        """
-        Hashes the Property by hashing its EDN.
-        """
-        _hash = sha512()
-        for key, val in self.instance.items():
-            if key in _ignored_fields:
-                continue
-            try:
-                hashval = np.round_(
-                    np.array(val["source-value"]), decimals=12
-                ).data.tobytes()
-            except:
-                try:
-                    hashval = np.array(
-                        val["source-value"], dtype=STRING_DTYPE_SPECIFIER
-                    ).data.tobytes()
-                except:
-                    try:
-                        hashval = np.array(
-                            val, dtype=STRING_DTYPE_SPECIFIER
-                        ).data.tobytes()
-                    except:
-                        raise PropertyHashError(
-                            "Could not hash key {}: {}".format(key, val)
-                        )
 
-            _hash.update(hashval)
-            # What if values are identical but are added in different units? Should these hash to unique PIs?
-            if "source-unit" in val:
-                _hash.update(str(val["source-unit"]).encode("utf-8"))
-
-        return int(_hash.hexdigest(), 16)
+        return _hash(
+            self.spark_row,
+            sorted(self.unique_identifier_kw),
+        )
 
     def __eq__(self, other):
         """
@@ -454,7 +627,8 @@ class Property(dict):
         return self.instance.keys()
 
     def __setitem__(self, k, v):
-        """Overloaded :meth:`dict.__setitem__` for setting the values of :attr:`self.edn`"""
+        """Overloaded :meth:`dict.__setitem__` for setting the values of
+        :attr:`self.edn`"""
         edn_key = EDN_KEY_MAP.get(k, k)
 
         if k in self.instance:
@@ -465,7 +639,8 @@ class Property(dict):
             KeyError(f"Field '{k}' not found in Property.edn. Returning None")
 
     def __getitem__(self, k):
-        """Overloaded :meth:`dict.__getitem__` for getting the values of :attr:`self.edn`"""
+        """Overloaded :meth:`dict.__getitem__` for getting the values of
+        :attr:`self.edn`"""
         edn_key = EDN_KEY_MAP.get(k, k)
 
         if k in self.instance:
@@ -486,9 +661,7 @@ class Property(dict):
             data (np.array or np.nan):
                 :attr:`self[k]['source-value']` if :code:`k` is a valid key,
                 else :code:`np.nan`.
-
         """
-
         edn_key = EDN_KEY_MAP.get(k, k)
 
         if k in self.instance:
@@ -500,43 +673,15 @@ class Property(dict):
 
     def __delitem__(self, k):
         edn_key = EDN_KEY_MAP.get(k, k)
-
         del self.instance[edn_key]
 
     def __str__(self):
-        return "Property(instance_id={}, name='{}')".format(
-            self.instance["instance-id"], self.name
+        return "Property(properties={})".format(
+            [pdef["property-name"] for pdef in self.definitions],
         )
 
     def __repr__(self):
         return str(self)
-
-
-# Eric->Do we need to do this?
-def update_edn_with_conf(edn, conf):
-    edn["species"] = {"source-value": conf.get_chemical_symbols()}
-
-    lattice = np.array(conf.get_cell()).tolist()
-
-    edn["unrelaxed-periodic-cell-vector-1"] = {
-        "source-value": lattice[0],
-        "source-unit": "angstrom",
-    }
-
-    edn["unrelaxed-periodic-cell-vector-2"] = {
-        "source-value": lattice[1],
-        "source-unit": "angstrom",
-    }
-
-    edn["unrelaxed-periodic-cell-vector-3"] = {
-        "source-value": lattice[2],
-        "source-unit": "angstrom",
-    }
-
-    edn["unrelaxed-configuration-positions"] = {
-        "source-value": conf.positions.tolist(),
-        "source-unit": "angstrom",
-    }
 
 
 class PropertyHashError(Exception):
