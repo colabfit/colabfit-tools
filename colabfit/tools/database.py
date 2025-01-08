@@ -316,7 +316,7 @@ class VastDataLoader:
         if isinstance(elems, str):
             elems = [elems]
         update_cols = cols + ["last_modified"]
-        row_write_cols = update_cols + ["$row_id"]
+        # row_write_cols = update_cols + ["$row_id"]
         arr_cols = [
             col
             for col in cols
@@ -1256,6 +1256,8 @@ class DataManager:
         """
         dataset_id = self.dataset_id
         config_set_rows = []
+        co_row_update_df = None
+        co_cs_write_df = None
         for i, (names_match, label_match, cs_name, cs_desc) in tqdm(
             enumerate(name_label_match), desc="Creating Configuration Sets"
         ):
@@ -1321,24 +1323,48 @@ class DataManager:
                 dataset_id=self.dataset_id,
             )
             co_cs_df = co_id_df.withColumn("configuration_set_id", sf.lit(config_set.id))
-            loader.write_table(co_cs_df, loader.co_cs_map_table, check_unique=False)
-            loader.update_existing_co_rows(
-                co_df=config_set_query_df,
-                cols=["configuration_set_ids"],
-                elems=config_set.id,
+            if co_cs_write_df is None:
+                co_cs_write_df = co_cs_df
+            elif co_cs_write_df.count() > 10000:
+                print("Sending CO-CS map batch to write table")
+                loader.write_table(
+                    co_cs_write_df, loader.co_cs_map_table, check_unique=False
+                )
+                co_cs_write_df = co_cs_df
+            else:
+                co_cs_write_df = co_cs_write_df.union(co_cs_df)
+            # loader.write_table(co_cs_df, loader.co_cs_map_table, check_unique=False)
+            if co_row_update_df is None:
+                co_row_update_df = config_set_query_df
+            elif co_row_update_df.count() > 10000:
+                loader.update_existing_co_po_rows(
+                    df=co_row_update_df,
+                    table_name=loader.config_table,
+                    cols=["configuration_set_ids"],
+                    elems=[config_set.id],
+                    str_schema=config_schema,
+                    arr_schema=config_arr_schema,
+                )
+                co_row_update_df = config_set_query_df
+            else:
+                co_row_update_df = co_row_update_df.union(config_set_query_df)
+
+            t_end = time() - t
+            print(f"Time to create CS and update COs with CS-ID: {t_end}")
+            config_set_rows.append(config_set.spark_row)
+        if co_cs_write_df.count() > 0 and co_cs_write_df is not None:
+            loader.write_table(
+                co_cs_write_df, loader.co_cs_map_table, check_unique=False
             )
+        if co_row_update_df.count() > 0 and co_row_update_df is not None:
             loader.update_existing_co_po_rows(
-                df=config_set_query_df,
+                df=co_row_update_df,
                 table_name=loader.config_table,
                 cols=["configuration_set_ids"],
                 elems=[config_set.id],
                 str_schema=config_schema,
                 arr_schema=config_arr_schema,
             )
-
-            t_end = time() - t
-            print(f"Time to create CS and update COs with CS-ID: {t_end}")
-            config_set_rows.append(config_set.spark_row)
         config_set_df = loader.spark.createDataFrame(
             config_set_rows, schema=configuration_set_arr_schema
         )
@@ -1361,7 +1387,6 @@ class DataManager:
     ):
 
         if loader.spark.catalog.tableExists(loader.config_set_table):
-
             cs_ids = (
                 loader.dataset_query(
                     dataset_id=self.dataset_id, table_name=loader.config_set_table
@@ -1375,15 +1400,12 @@ class DataManager:
                 cs_ids = [x["id"] for x in cs_ids]
         else:
             cs_ids = None
-
         config_df = loader.dataset_query(
             dataset_id=self.dataset_id, table_name=loader.config_table
         )
-
         prop_df = loader.dataset_query(
             dataset_id=self.dataset_id, table_name=loader.prop_object_table
         )
-
         ds = Dataset(
             name=name,
             authors=authors,
