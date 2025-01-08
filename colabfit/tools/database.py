@@ -1104,20 +1104,34 @@ class DataManager:
                 )
                 first_count = co_df.count()
                 print("Dropping duplicates from CO dataframe")
-                merged_names = co_df.groupBy("id").agg(
-                    sf.array_distinct(sf.flatten(sf.collect_list("names"))).alias(
-                        "names"
-                    )
-                )
-                co_df = co_df.dropDuplicates(["id"])
-                second_count = co_df.count()
+
+                co_count_distinct = co_df.select("id").distinct().count()
+                second_count = co_count_distinct.count()
                 if second_count < first_count:
-                    co_df = (
-                        co_df.drop("names")
-                        .join(merged_names, on="id", how="inner")
-                        .select(config_md_schema.fieldNames())
+                    grouped_id = co_df.groupBy("id")
+                    merged_names = grouped_id.agg(
+                        sf.array_distinct(sf.flatten(sf.collect_list("names"))).alias(
+                            "names"
+                        )
                     )
-                print(f"{first_count -second_count} duplicates found in CO dataframe")
+                    co_df = co_df.dropDuplicates(["id"])
+                    co_df = co_df.drop("names").join(merged_names, on="id", how="inner")
+                    if (
+                        co_df.select("labels")
+                        .filter(sf.col("labels").isNotNull())
+                        .count()
+                        > 0
+                    ):
+                        merged_labels = grouped_id.agg(
+                            sf.array_distinct(
+                                sf.flatten(sf.collect_list("labels"))
+                            ).alias("labels")
+                        )
+                        co_df = co_df.drop("labels").join(
+                            merged_labels, on="id", how="inner"
+                        )
+                    co_df = co_df.select(config_md_schema.fieldNames())
+                print(f"{first_count - second_count} duplicates found in CO dataframe")
                 count = po_df.count()
                 count_distinct = po_df.select("id").distinct().count()
                 if count_distinct < count:
