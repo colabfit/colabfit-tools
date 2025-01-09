@@ -1006,8 +1006,8 @@ class DataManager:
             )
             co_po_rows.append(
                 (
-                    config.spark_row,
-                    property.spark_row,
+                    config.row_dict,
+                    property.row_dict,
                 )
             )
         return co_po_rows
@@ -1351,7 +1351,7 @@ class DataManager:
 
             t_end = time() - t
             print(f"Time to create CS and update COs with CS-ID: {t_end}")
-            config_set_rows.append(config_set.spark_row)
+            config_set_rows.append(config_set.row_dict)
         if co_cs_write_df.count() > 0 and co_cs_write_df is not None:
             loader.write_table(
                 co_cs_write_df, loader.co_cs_map_table, check_unique=False
@@ -1422,7 +1422,7 @@ class DataManager:
             configuration_set_ids=cs_ids,
             publication_year=publication_year,
         )
-        ds_df = loader.spark.createDataFrame([ds.spark_row], schema=dataset_arr_schema)
+        ds_df = loader.spark.createDataFrame([ds.row_dict], schema=dataset_arr_schema)
         loader.write_table(ds_df, loader.dataset_table)
 
 

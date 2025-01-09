@@ -51,14 +51,14 @@ class ConfigurationSet:
         self.description = description
         self.dataset_id = dataset_id
         # self.ordered = ordered
-        self.spark_row = self.to_spark_row(config_df)
+        self.row_dict = self.to_row_dict(config_df)
         self.id = f"CS_{self.name}_{self.dataset_id}"
         self._hash = hash(self)
-        self.spark_row["id"] = self.id
-        self.spark_row["extended_id"] = f"{self.name}__{self.id}"
-        self.spark_row["hash"] = str(self._hash)
+        self.row_dict["id"] = self.id
+        self.row_dict["extended_id"] = f"{self.name}__{self.id}"
+        self.row_dict["hash"] = str(self._hash)
 
-    def to_spark_row(self, config_df):
+    def to_row_dict(self, config_df):
         row_dict = _empty_dict_from_schema(configuration_set_schema)
         row_dict["name"] = self.name
         row_dict["description"] = self.description
@@ -128,7 +128,7 @@ class ConfigurationSet:
     def __str__(self):
         return "ConfigurationSet(description='{}', nconfigurations={})".format(
             self.description,
-            self.spark_row["nconfigurations"],
+            self.row_dict["nconfigurations"],
         )
 
     def __repr__(self):

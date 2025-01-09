@@ -112,8 +112,8 @@ class Dataset:
         self.configuration_set_ids = configuration_set_ids
         if self.configuration_set_ids is None:
             self.configuration_set_ids = []
-        self.spark_row = self.to_spark_row(config_df=config_df, prop_df=prop_df)
-        self.spark_row["id"] = self.dataset_id
+        self.row_dict = self.to_row_dict(config_df=config_df, prop_df=prop_df)
+        self.row_dict["id"] = self.dataset_id
         id_prefix = "__".join(
             [
                 self.name,
@@ -124,13 +124,13 @@ class Dataset:
             id_prefix = id_prefix[: MAX_STRING_LENGTH - len(dataset_id) - 2]
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
         extended_id = f"{id_prefix}__{dataset_id}"
-        self.spark_row["extended_id"] = extended_id
-        self._hash = _hash(self.spark_row, ["extended_id"])
-        self.spark_row["hash"] = str(self._hash)
-        self.spark_row["labels"] = labels
-        print(self.spark_row)
+        self.row_dict["extended_id"] = extended_id
+        self._hash = _hash(self.row_dict, ["extended_id"])
+        self.row_dict["hash"] = str(self._hash)
+        self.row_dict["labels"] = labels
+        print(self.row_dict)
 
-    def to_spark_row(self, config_df, prop_df):
+    def to_row_dict(self, config_df, prop_df):
         """"""
 
         row_dict = _empty_dict_from_schema(dataset_schema)
@@ -252,9 +252,9 @@ class Dataset:
     def __str__(self):
         return (
             f"Dataset(description='{self.description}', "
-            f"nconfiguration_sets={len(self.spark_row['configuration_sets'])}, "
-            f"nproperty_objects={self.spark_row['nproperty_objects']}, "
-            f"nconfigurations={self.spark_row['nconfigurations']}"
+            f"nconfiguration_sets={len(self.row_dict['configuration_sets'])}, "
+            f"nproperty_objects={self.row_dict['nproperty_objects']}, "
+            f"nconfigurations={self.row_dict['nconfigurations']}"
         )
 
     def __repr__(self):
