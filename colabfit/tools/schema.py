@@ -84,6 +84,8 @@ property_object_arr_schema = StructType(
         StructField("formation_energy", DoubleType(), True),
         StructField("adsorption_energy", DoubleType(), True),
         StructField("atomization_energy", DoubleType(), True),
+        StructField("max_force_norm", DoubleType(), True),
+        StructField("mean_force_norm", DoubleType(), True),
     ]
 )
 

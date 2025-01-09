@@ -527,6 +527,10 @@ class Property(dict):
         row_dict["chemical_formula_hill"] = self.chemical_formula_hill
         row_dict["multiplicity"] = 1
         row_dict["dataset_id"] = self.dataset_id
+        if row_dict["atomic_forces_00"] is not None:
+            norms = [np.linalg.norm(f) for f in row_dict["atomic_forces_00"]]
+            row_dict["max_force_norm"] = float(np.max(norms))
+            row_dict["mean_force_norm"] = float(np.mean(norms))
         return row_dict
 
     def standardize_energy(self):
