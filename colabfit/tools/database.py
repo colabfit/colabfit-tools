@@ -1102,12 +1102,11 @@ class DataManager:
                 po_df = loader.spark.createDataFrame(
                     po_rows, schema=property_object_md_schema
                 )
-                first_count = co_df.count()
+                co_count = co_df.count()
                 print("Dropping duplicates from CO dataframe")
 
                 co_count_distinct = co_df.select("id").distinct().count()
-                second_count = co_count_distinct.count()
-                if second_count < first_count:
+                if co_count_distinct < co_count:
                     grouped_id = co_df.groupBy("id")
                     merged_names = grouped_id.agg(
                         sf.array_distinct(sf.flatten(sf.collect_list("names"))).alias(
@@ -1131,11 +1130,13 @@ class DataManager:
                             merged_labels, on="id", how="inner"
                         )
                     co_df = co_df.select(config_md_schema.fieldNames())
-                print(f"{first_count - second_count} duplicates found in CO dataframe")
-                count = po_df.count()
-                count_distinct = po_df.select("id").distinct().count()
-                if count_distinct < count:
-                    print(f"{count - count_distinct} duplicates found in PO dataframe")
+                print(f"{co_count - co_count_distinct} duplicates found in CO dataframe")
+                po_count = po_df.count()
+                po_count_distinct = po_df.select("id").distinct().count()
+                if po_count_distinct < po_count:
+                    print(
+                        f"{po_count - po_count_distinct} duplicates found in PO dataframe"  # noqa
+                    )
                     multiplicity = po_df.groupBy("id").agg(sf.count("*").alias("count"))
                     po_df = po_df.dropDuplicates(["id"])
                     po_df = (
@@ -1162,11 +1163,12 @@ class DataManager:
                     print(f"Updated {len(update_co_ids)} rows in {loader.config_table}")
                     if len(new_co_ids) > 0:
                         print(f"Writing {len(new_co_ids)} new rows to table")
+                        co_df = co_df.where(sf.col("id").isin(new_co_ids))
                         co_df = loader.write_metadata(co_df)
                         loader.write_table(
                             co_df,
                             loader.config_table,
-                            ids_filter=new_co_ids,
+                            # ids_filter=new_co_ids,
                             check_length_col="positions_00",
                             check_unique=False,
                         )
@@ -1199,11 +1201,12 @@ class DataManager:
                     )
                     if len(new_po_ids) > 0:
                         print("Remaining POs unique. Writing new rows to table...")
+                        po_df = po_df.where(sf.col("id").isin(new_po_ids))
                         po_df = loader.write_metadata(po_df)
                         loader.write_table(
                             po_df,
                             loader.prop_object_table,
-                            ids_filter=new_po_ids,
+                            # ids_filter=new_po_ids,
                             check_length_col="atomic_forces_00",
                             check_unique=False,
                         )
