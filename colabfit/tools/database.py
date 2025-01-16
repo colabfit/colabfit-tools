@@ -679,9 +679,19 @@ class VastDataLoader:
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
         if table_name == self.config_table:
-            spark_df = self.spark.table(self.config_table).filter(
-                sf.col("dataset_ids").contains(dataset_id)
+            id_df = (
+                self.spark.table(self.prop_object_table)
+                .filter(sf.col("dataset_id") == dataset_id)
+                .select("configuration_id")
+                .withColumnRenamed("configuration_id", "id")
+                .distinct()
             )
+            spark_df = self.spark.table(self.config_table).join(
+                sf.broadcast(id_df), on="id", how="inner"
+            )
+            # spark_df = self.spark.table(self.config_table).filter(
+            #     sf.col("dataset_ids").contains(dataset_id)
+            # )
         elif table_name == self.prop_object_table or table_name == self.config_set_table:
             spark_df = self.spark.table(table_name).filter(
                 sf.col("dataset_id") == dataset_id
