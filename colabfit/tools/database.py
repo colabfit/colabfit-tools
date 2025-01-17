@@ -221,7 +221,6 @@ class VastDataLoader:
                 spark_df, check_length_col, _MAX_STRING_LEN
             )
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
-        # print(arrow_schema)
         for field in arrow_schema:
             field = field.with_nullable(True)
         if not self.spark.catalog.tableExists(table_name):
@@ -232,7 +231,6 @@ class VastDataLoader:
                 schema.create_table(table_n, arrow_schema)
         arrow_rec_batch = pa.table(
             [pa.array(col) for col in zip(*spark_df.collect())],
-            # names=spark_df.columns,
             schema=arrow_schema,
         ).to_batches()
         total_rows = 0
@@ -282,9 +280,6 @@ class VastDataLoader:
         elems: list[str],
         str_schema,
         arr_schema,
-        # arrow_schema,
-        # update_cols,
-        # arr_cols,
     ):
         """
         Updates existing rows in CO or PO table with data from new ingest.
@@ -316,7 +311,6 @@ class VastDataLoader:
         if isinstance(elems, str):
             elems = [elems]
         update_cols = cols + ["last_modified"]
-        # row_write_cols = update_cols + ["$row_id"]
         arr_cols = [
             col
             for col in cols
@@ -438,26 +432,6 @@ class VastDataLoader:
             new_ids.extend(new_ids_batch)
             existing_ids.extend(existing_ids_batch)
         return (new_ids, list(set(existing_ids)))
-
-    # def update_existing_co_rows(self, co_df, cols: list[str], elems: list[str]):
-    #     return self.update_existing_co_po_rows(
-    #         df=co_df,
-    #         table_name=self.config_table,
-    #         cols=cols,
-    #         elems=elems,
-    #         str_schema=config_schema,
-    #         arr_schema=config_arr_schema,
-    #     )
-
-    # def update_existing_po_rows(self, po_df):
-    #     return self.update_existing_co_po_rows(
-    #         df=po_df,
-    #         table_name=self.prop_object_table,
-    #         cols=["multiplicity"],
-    #         elems=[None],
-    #         str_schema=property_object_schema,
-    #         arr_schema=property_object_arr_schema,
-    #     )
 
     def read_table(
         self, table_name: str, unstring: bool = False, read_metadata: bool = False
@@ -689,9 +663,6 @@ class VastDataLoader:
             spark_df = self.spark.table(self.config_table).join(
                 sf.broadcast(id_df), on="id", how="inner"
             )
-            # spark_df = self.spark.table(self.config_table).filter(
-            #     sf.col("dataset_ids").contains(dataset_id)
-            # )
         elif table_name == self.prop_object_table or table_name == self.config_set_table:
             spark_df = self.spark.table(table_name).filter(
                 sf.col("dataset_id") == dataset_id
@@ -843,8 +814,7 @@ class VastDataLoader:
     def config_structure_hash(spark_row: Row, hash_keys: list[str]):
         """
         Rehash configuration object row after changing values of one or
-        more of the columns corresponding to hash_keys defined below.
-
+        more of the columns corresponding to hash_keys.
         """
         spark_dict = spark_row.asDict()
         if spark_dict["positions_01"] is None:
@@ -1030,7 +1000,6 @@ class DataManager:
         Convert COs and DOs to Spark rows using multiprocessing Pool.
         Returns a batch of tuples of (configuration_row, property_row).
         """
-
         part_gather = partial(
             self._gather_co_po_rows,
             self.prop_defs,
@@ -1157,11 +1126,6 @@ class DataManager:
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
                 all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
                 if not all_unique_co:
-                    # new_co_ids, update_co_ids = loader.update_existing_co_rows(
-                    #     co_df=co_df,
-                    #     cols=["dataset_ids", "names", "labels"],
-                    #     elems=[self.dataset_id, None, None],
-                    # )
                     new_co_ids, update_co_ids = loader.update_existing_co_po_rows(
                         df=co_df,
                         table_name=loader.config_table,
@@ -1178,7 +1142,6 @@ class DataManager:
                         loader.write_table(
                             co_df,
                             loader.config_table,
-                            # ids_filter=new_co_ids,
                             check_length_col="positions_00",
                             check_unique=False,
                         )
@@ -1193,10 +1156,6 @@ class DataManager:
                     )
 
                 if not all_unique_po:
-                    # print("Sending to update_existing_po_rows")
-                    # new_po_ids, update_po_ids = loader.update_existing_po_rows(
-                    #     po_df=po_df,
-                    # )
                     new_po_ids, update_po_ids = loader.update_existing_co_po_rows(
                         df=po_df,
                         table_name=loader.prop_object_table,
@@ -1216,14 +1175,12 @@ class DataManager:
                         loader.write_table(
                             po_df,
                             loader.prop_object_table,
-                            # ids_filter=new_po_ids,
                             check_length_col="atomic_forces_00",
                             check_unique=False,
                         )
                 else:
                     print("All POs unique: writing to table...")
                     po_df = loader.write_metadata(po_df)
-                    # print("finished writing metadata")
                     loader.write_table(
                         po_df,
                         loader.prop_object_table,
