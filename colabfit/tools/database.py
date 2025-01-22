@@ -30,9 +30,7 @@ from pyspark.sql.types import (
 from tqdm import tqdm
 from vastdb.session import Session
 
-from colabfit import (
-    ID_FORMAT_STRING,
-)  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,; _CONFIGS_COLLECTION,; _CONFIGSETS_COLLECTION,; _DATASETS_COLLECTION,; _PROPOBJECT_COLLECTION, # noqa
+from colabfit import ID_FORMAT_STRING
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.dataset import Dataset
