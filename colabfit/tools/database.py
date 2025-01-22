@@ -13,7 +13,6 @@ from types import GeneratorType
 import boto3
 import dateutil.parser
 import findspark
-import psycopg
 import pyarrow as pa
 import pyspark.sql.functions as sf
 from botocore.exceptions import ClientError
@@ -42,7 +41,7 @@ from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.dataset import Dataset
 from colabfit.tools.property import Property
 from colabfit.tools.schema import (
-    co_cs_mapping_schema,
+    co_cs_map_schema,
     config_arr_schema,
     config_md_schema,
     config_schema,
@@ -168,8 +167,6 @@ class VastDataLoader:
             print(f"Table {table_name} does not yet exist.")
             return True
         ids = [x["id"] for x in df.select("id").collect()]
-        # table_df = self.read_table(table_name)
-        # table_df = table_df.select("id")
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
         with self.session.transaction() as tx:
             table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
@@ -200,15 +197,12 @@ class VastDataLoader:
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.prop_object_table: property_object_schema,
-            self.co_cs_map_table: co_cs_mapping_schema,
+            self.co_cs_map_table: co_cs_map_schema,
         }
         table_schema = string_schema_dict[table_name]
         if ids_filter is not None:
             spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
-        if check_unique:
-            all_unique = self.check_unique_ids(table_name, spark_df)
-            if not all_unique:
-                raise ValueError("Duplicate IDs found in table. Not writing.")
+
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
@@ -237,6 +231,15 @@ class VastDataLoader:
         with self.session.transaction() as tx:
             table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
             for rec_batch in arrow_rec_batch:
+                if check_unique:
+                    id_batch = rec_batch["id"].to_pylist()
+                    id_rec_batch = table.select(
+                        predicate=table["id"].isin(id_batch), columns=["id"]
+                    )
+                    id_rec_batch = id_rec_batch.read_all()
+                    if id_rec_batch.num_rows > 0:
+                        print(f"Duplicate IDs found in table {table_name}")
+                        raise ValueError("Duplicate IDs found in table. Not writing.")
                 len_batch = rec_batch.num_rows
                 table.insert(rec_batch)
                 total_rows += len_batch
@@ -453,7 +456,7 @@ class VastDataLoader:
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.prop_object_table: property_object_schema,
-            self.co_cs_map_table: co_cs_mapping_schema,
+            self.co_cs_map_table: co_cs_map_schema,
         }
         unstring_schema_dict = {
             self.config_table: config_arr_schema,
@@ -637,7 +640,7 @@ class VastDataLoader:
             return None
         predicate = _.configuration_set_id == cs_id
         co_cs_map = self.simple_sdk_query(
-            self.co_cs_map_table, predicate, co_cs_mapping_schema
+            self.co_cs_map_table, predicate, co_cs_map_schema
         )
         if co_cs_map.count() == 0:
             print(f"No records found for given configuration set id {cs_id}")
@@ -687,23 +690,36 @@ class VastDataLoader:
         }
         df_schema = string_schema_dict[query_table]
         if query_table == self.config_table:
-            if name_match is None and label_match is None:
-                predicate = _.dataset_ids.contains(dataset_id)
-            if name_match is not None and label_match is not None:
-                predicate = (
-                    (_.dataset_ids.contains(dataset_id))
-                    & (_.names.contains(name_match))
-                    & (_.labels.contains(label_match))
-                )
-            elif name_match is not None:
-                predicate = (_.dataset_ids.contains(dataset_id)) & (
-                    _.names.contains(name_match)
-                )
-            else:
-                predicate = (_.dataset_ids.contains(dataset_id)) & (
-                    _.labels.contains(label_match)
-                )
-            spark_df = self.simple_sdk_query(query_table, predicate, df_schema)
+            spark_df = None
+            co_ids = (
+                self.spark.table(self.prop_object_table)
+                .filter(sf.col("dataset_id") == dataset_id)
+                .select("configuration_id")
+            )
+            co_id_batches = batched(
+                sorted([x["configuration_id"] for x in co_ids.collect()]), 10000
+            )
+            for co_id_batch in co_id_batches:
+                if name_match is None and label_match is None:
+                    predicate = _.id.isin(co_id_batch)
+                if name_match is not None and label_match is not None:
+                    predicate = (
+                        (_.id.isin(co_id_batch))
+                        & (_.names.contains(name_match))
+                        & (_.labels.contains(label_match))
+                    )
+                elif name_match is not None:
+                    predicate = (_.id.isin(co_id_batch)) & (_.names.contains(name_match))
+                else:
+                    predicate = (_.id.isin(co_id_batch)) & (
+                        _.labels.contains(label_match)
+                    )
+                if spark_df is None:
+                    spark_df = self.simple_sdk_query(query_table, predicate, df_schema)
+                else:
+                    spark_df = spark_df.union(
+                        self.simple_sdk_query(query_table, predicate, df_schema)
+                    )
             return spark_df
         elif query_table == self.prop_object_table:
             if configuration_ids is None:
@@ -1143,7 +1159,7 @@ class DataManager:
                             co_df,
                             loader.config_table,
                             check_length_col="positions_00",
-                            check_unique=False,
+                            check_unique=True,
                         )
                 else:
                     print("All COs unique: writing to table...")
@@ -1152,7 +1168,7 @@ class DataManager:
                         co_df,
                         loader.config_table,
                         check_length_col="positions_00",
-                        check_unique=False,
+                        check_unique=True,
                     )
 
                 if not all_unique_po:
@@ -1176,7 +1192,7 @@ class DataManager:
                             po_df,
                             loader.prop_object_table,
                             check_length_col="atomic_forces_00",
-                            check_unique=False,
+                            check_unique=True,
                         )
                 else:
                     print("All POs unique: writing to table...")
@@ -1185,7 +1201,7 @@ class DataManager:
                         po_df,
                         loader.prop_object_table,
                         check_length_col="atomic_forces_00",
-                        check_unique=False,
+                        check_unique=True,
                     )
 
     def load_data_to_pg_in_batches(self, loader):
@@ -1473,14 +1489,12 @@ class S3FileManager:
         try:
             client = self.get_client()
             client.put_object(Bucket=self.bucket_name, Key=file_key, Body=content)
-            # return (f"/vdev/{self.bucket_name}/{file_key}", sys.getsizeof(content))
         except Exception as e:
             return f"Error: {str(e)}"
 
     def read_file(self, file_key):
         try:
             client = self.get_client()
-            # key = file_key.replace(str(Path("/vdev/colabfit-data")) + "/", "")
             response = client.get_object(Bucket=self.bucket_name, Key=file_key)
             return response["Body"].read().decode("utf-8")
         except Exception as e:

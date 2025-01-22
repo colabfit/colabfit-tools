@@ -152,7 +152,7 @@ configuration_set_arr_schema = StructType(
 
 configuration_set_schema = get_stringified_schema(configuration_set_arr_schema)
 
-co_cs_mapping_schema = StructType(
+co_cs_map_schema = StructType(
     [
         StructField("configuration_id", StringType(), True),
         StructField("configuration_set_id", StringType(), True),
