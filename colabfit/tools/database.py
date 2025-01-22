@@ -1,6 +1,5 @@
 import datetime
 import itertools
-import os
 import string
 from ast import literal_eval
 from functools import partial
@@ -12,12 +11,10 @@ from types import GeneratorType
 
 import boto3
 import dateutil.parser
-import findspark
 import pyarrow as pa
 import pyspark.sql.functions as sf
 from botocore.exceptions import ClientError
 from django.utils.crypto import get_random_string
-from dotenv import load_dotenv
 from ibis import _
 from pyspark.sql import Row, SparkSession
 from pyspark.sql.functions import udf
@@ -854,97 +851,6 @@ class VastDataLoader:
 
     def stop_spark(self):
         self.spark.stop()
-
-
-class PGDataLoader:
-    """
-    Class to load data from files to ColabFit PostgreSQL database
-    """
-
-    def __init__(
-        self,
-        appname="colabfit",
-        url="jdbc:postgresql://localhost:5432/colabfit",
-        database_name: str = None,
-        env="./.env",
-        table_prefix: str = None,
-    ):
-        # self.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
-        JARFILE = os.environ.get("CLASSPATH")
-        self.spark = (
-            SparkSession.builder.appName(appname)
-            .config("spark.jars", JARFILE)
-            .getOrCreate()
-        )
-
-        user = os.environ.get("PGS_USER")
-        password = os.environ.get("PGS_PASS")
-        driver = os.environ.get("PGS_DRIVER")
-        self.properties = {
-            "user": user,
-            "password": password,
-            "driver": driver,
-        }
-        self.url = url
-        self.database_name = database_name
-        self.table_prefix = table_prefix
-        findspark.init()
-
-        self.format = "jdbc"  # for postgres local
-        load_dotenv(env)
-        self.config_table = _CONFIGS_COLLECTION
-        self.config_set_table = _CONFIGSETS_COLLECTION
-        self.dataset_table = _DATASETS_COLLECTION
-        self.prop_object_table = _PROPOBJECT_COLLECTION
-
-    def read_table(
-        self,
-    ):
-        pass
-
-    def get_spark(self):
-        return self.spark
-
-    def get_spark_context(self):
-        return self.spark.sparkContext
-
-    def write_table(self, spark_rows: list[dict], table_name: str, schema: StructType):
-        df = self.spark.createDataFrame(spark_rows, schema=schema)
-
-        df.write.jdbc(
-            url=self.url,
-            table=table_name,
-            mode="append",
-            properties=self.properties,
-        )
-
-    def write_metadata(self, df):
-        """Should accept a DataFrame with a metadata column,
-        write metadata to files, return DataFrame without metadata column"""
-        pass
-
-    # def update_co_rows_cs_id(self, co_ids: list[str], cs_id: str):
-    #     with psycopg.connect(
-    #         """dbname=colabfit user=%s password=%s host=localhost port=5432"""
-    #         % (
-    #             self.user,
-    #             self.password,
-    #         )
-    #     ) as conn:
-    #         cur = conn.execute(
-    #             """UPDATE configurations
-    #                     SET configuration_set_ids = concat(%s::text, \
-    #             rtrim(ltrim(replace(configuration_set_ids,%s,''), '['),']'), %s::text)
-    #             """,
-    #             (
-    #                 "[",
-    #                 f", {cs_id}",
-    #                 f", {cs_id}]",
-    #             ),
-    #             # WHERE id = ANY(%s)""",
-    #             # (cs_id, co_ids),
-    #         )
-    #         conn.commit()
 
 
 def batched(configs, n):
