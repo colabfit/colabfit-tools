@@ -1,6 +1,5 @@
 import datetime
 import itertools
-import os
 import string
 from ast import literal_eval
 from functools import partial
@@ -12,13 +11,10 @@ from types import GeneratorType
 
 import boto3
 import dateutil.parser
-import findspark
-import psycopg
 import pyarrow as pa
 import pyspark.sql.functions as sf
 from botocore.exceptions import ClientError
 from django.utils.crypto import get_random_string
-from dotenv import load_dotenv
 from ibis import _
 from pyspark.sql import Row, SparkSession
 from pyspark.sql.functions import udf
@@ -34,15 +30,13 @@ from pyspark.sql.types import (
 from tqdm import tqdm
 from vastdb.session import Session
 
-from colabfit import (
-    ID_FORMAT_STRING,
-)  # ATOMS_NAME_FIELD,; EXTENDED_ID_STRING_NAME,; MAX_STRING_LENGTH,; SHORT_ID_STRING_NAME,; _CONFIGS_COLLECTION,; _CONFIGSETS_COLLECTION,; _DATASETS_COLLECTION,; _PROPOBJECT_COLLECTION, # noqa
+from colabfit import ID_FORMAT_STRING
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.configuration_set import ConfigurationSet
 from colabfit.tools.dataset import Dataset
 from colabfit.tools.property import Property
 from colabfit.tools.schema import (
-    co_cs_mapping_schema,
+    co_cs_map_schema,
     config_arr_schema,
     config_md_schema,
     config_schema,
@@ -168,8 +162,6 @@ class VastDataLoader:
             print(f"Table {table_name} does not yet exist.")
             return True
         ids = [x["id"] for x in df.select("id").collect()]
-        # table_df = self.read_table(table_name)
-        # table_df = table_df.select("id")
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
         with self.session.transaction() as tx:
             table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
@@ -200,15 +192,12 @@ class VastDataLoader:
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.prop_object_table: property_object_schema,
-            self.co_cs_map_table: co_cs_mapping_schema,
+            self.co_cs_map_table: co_cs_map_schema,
         }
         table_schema = string_schema_dict[table_name]
         if ids_filter is not None:
             spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
-        if check_unique:
-            all_unique = self.check_unique_ids(table_name, spark_df)
-            if not all_unique:
-                raise ValueError("Duplicate IDs found in table. Not writing.")
+
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
@@ -221,7 +210,6 @@ class VastDataLoader:
                 spark_df, check_length_col, _MAX_STRING_LEN
             )
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
-        # print(arrow_schema)
         for field in arrow_schema:
             field = field.with_nullable(True)
         if not self.spark.catalog.tableExists(table_name):
@@ -232,13 +220,21 @@ class VastDataLoader:
                 schema.create_table(table_n, arrow_schema)
         arrow_rec_batch = pa.table(
             [pa.array(col) for col in zip(*spark_df.collect())],
-            # names=spark_df.columns,
             schema=arrow_schema,
         ).to_batches()
         total_rows = 0
         with self.session.transaction() as tx:
             table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
             for rec_batch in arrow_rec_batch:
+                if check_unique:
+                    id_batch = rec_batch["id"].to_pylist()
+                    id_rec_batch = table.select(
+                        predicate=table["id"].isin(id_batch), columns=["id"]
+                    )
+                    id_rec_batch = id_rec_batch.read_all()
+                    if id_rec_batch.num_rows > 0:
+                        print(f"Duplicate IDs found in table {table_name}")
+                        raise ValueError("Duplicate IDs found in table. Not writing.")
                 len_batch = rec_batch.num_rows
                 table.insert(rec_batch)
                 total_rows += len_batch
@@ -282,9 +278,6 @@ class VastDataLoader:
         elems: list[str],
         str_schema,
         arr_schema,
-        # arrow_schema,
-        # update_cols,
-        # arr_cols,
     ):
         """
         Updates existing rows in CO or PO table with data from new ingest.
@@ -316,7 +309,6 @@ class VastDataLoader:
         if isinstance(elems, str):
             elems = [elems]
         update_cols = cols + ["last_modified"]
-        # row_write_cols = update_cols + ["$row_id"]
         arr_cols = [
             col
             for col in cols
@@ -439,26 +431,6 @@ class VastDataLoader:
             existing_ids.extend(existing_ids_batch)
         return (new_ids, list(set(existing_ids)))
 
-    # def update_existing_co_rows(self, co_df, cols: list[str], elems: list[str]):
-    #     return self.update_existing_co_po_rows(
-    #         df=co_df,
-    #         table_name=self.config_table,
-    #         cols=cols,
-    #         elems=elems,
-    #         str_schema=config_schema,
-    #         arr_schema=config_arr_schema,
-    #     )
-
-    # def update_existing_po_rows(self, po_df):
-    #     return self.update_existing_co_po_rows(
-    #         df=po_df,
-    #         table_name=self.prop_object_table,
-    #         cols=["multiplicity"],
-    #         elems=[None],
-    #         str_schema=property_object_schema,
-    #         arr_schema=property_object_arr_schema,
-    #     )
-
     def read_table(
         self, table_name: str, unstring: bool = False, read_metadata: bool = False
     ):
@@ -479,7 +451,7 @@ class VastDataLoader:
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.prop_object_table: property_object_schema,
-            self.co_cs_map_table: co_cs_mapping_schema,
+            self.co_cs_map_table: co_cs_map_schema,
         }
         unstring_schema_dict = {
             self.config_table: config_arr_schema,
@@ -663,7 +635,7 @@ class VastDataLoader:
             return None
         predicate = _.configuration_set_id == cs_id
         co_cs_map = self.simple_sdk_query(
-            self.co_cs_map_table, predicate, co_cs_mapping_schema
+            self.co_cs_map_table, predicate, co_cs_map_schema
         )
         if co_cs_map.count() == 0:
             print(f"No records found for given configuration set id {cs_id}")
@@ -679,8 +651,15 @@ class VastDataLoader:
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
         if table_name == self.config_table:
-            spark_df = self.spark.table(self.config_table).filter(
-                sf.col("dataset_ids").contains(dataset_id)
+            id_df = (
+                self.spark.table(self.prop_object_table)
+                .filter(sf.col("dataset_id") == dataset_id)
+                .select("configuration_id")
+                .withColumnRenamed("configuration_id", "id")
+                .distinct()
+            )
+            spark_df = self.spark.table(self.config_table).join(
+                sf.broadcast(id_df), on="id", how="inner"
             )
         elif table_name == self.prop_object_table or table_name == self.config_set_table:
             spark_df = self.spark.table(table_name).filter(
@@ -706,23 +685,36 @@ class VastDataLoader:
         }
         df_schema = string_schema_dict[query_table]
         if query_table == self.config_table:
-            if name_match is None and label_match is None:
-                predicate = _.dataset_ids.contains(dataset_id)
-            if name_match is not None and label_match is not None:
-                predicate = (
-                    (_.dataset_ids.contains(dataset_id))
-                    & (_.names.contains(name_match))
-                    & (_.labels.contains(label_match))
-                )
-            elif name_match is not None:
-                predicate = (_.dataset_ids.contains(dataset_id)) & (
-                    _.names.contains(name_match)
-                )
-            else:
-                predicate = (_.dataset_ids.contains(dataset_id)) & (
-                    _.labels.contains(label_match)
-                )
-            spark_df = self.simple_sdk_query(query_table, predicate, df_schema)
+            spark_df = None
+            co_ids = (
+                self.spark.table(self.prop_object_table)
+                .filter(sf.col("dataset_id") == dataset_id)
+                .select("configuration_id")
+            )
+            co_id_batches = batched(
+                sorted([x["configuration_id"] for x in co_ids.collect()]), 10000
+            )
+            for co_id_batch in co_id_batches:
+                if name_match is None and label_match is None:
+                    predicate = _.id.isin(co_id_batch)
+                if name_match is not None and label_match is not None:
+                    predicate = (
+                        (_.id.isin(co_id_batch))
+                        & (_.names.contains(name_match))
+                        & (_.labels.contains(label_match))
+                    )
+                elif name_match is not None:
+                    predicate = (_.id.isin(co_id_batch)) & (_.names.contains(name_match))
+                else:
+                    predicate = (_.id.isin(co_id_batch)) & (
+                        _.labels.contains(label_match)
+                    )
+                if spark_df is None:
+                    spark_df = self.simple_sdk_query(query_table, predicate, df_schema)
+                else:
+                    spark_df = spark_df.union(
+                        self.simple_sdk_query(query_table, predicate, df_schema)
+                    )
             return spark_df
         elif query_table == self.prop_object_table:
             if configuration_ids is None:
@@ -833,8 +825,7 @@ class VastDataLoader:
     def config_structure_hash(spark_row: Row, hash_keys: list[str]):
         """
         Rehash configuration object row after changing values of one or
-        more of the columns corresponding to hash_keys defined below.
-
+        more of the columns corresponding to hash_keys.
         """
         spark_dict = spark_row.asDict()
         if spark_dict["positions_01"] is None:
@@ -858,97 +849,6 @@ class VastDataLoader:
 
     def stop_spark(self):
         self.spark.stop()
-
-
-class PGDataLoader:
-    """
-    Class to load data from files to ColabFit PostgreSQL database
-    """
-
-    def __init__(
-        self,
-        appname="colabfit",
-        url="jdbc:postgresql://localhost:5432/colabfit",
-        database_name: str = None,
-        env="./.env",
-        table_prefix: str = None,
-    ):
-        # self.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
-        JARFILE = os.environ.get("CLASSPATH")
-        self.spark = (
-            SparkSession.builder.appName(appname)
-            .config("spark.jars", JARFILE)
-            .getOrCreate()
-        )
-
-        user = os.environ.get("PGS_USER")
-        password = os.environ.get("PGS_PASS")
-        driver = os.environ.get("PGS_DRIVER")
-        self.properties = {
-            "user": user,
-            "password": password,
-            "driver": driver,
-        }
-        self.url = url
-        self.database_name = database_name
-        self.table_prefix = table_prefix
-        findspark.init()
-
-        self.format = "jdbc"  # for postgres local
-        load_dotenv(env)
-        self.config_table = _CONFIGS_COLLECTION
-        self.config_set_table = _CONFIGSETS_COLLECTION
-        self.dataset_table = _DATASETS_COLLECTION
-        self.prop_object_table = _PROPOBJECT_COLLECTION
-
-    def read_table(
-        self,
-    ):
-        pass
-
-    def get_spark(self):
-        return self.spark
-
-    def get_spark_context(self):
-        return self.spark.sparkContext
-
-    def write_table(self, spark_rows: list[dict], table_name: str, schema: StructType):
-        df = self.spark.createDataFrame(spark_rows, schema=schema)
-
-        df.write.jdbc(
-            url=self.url,
-            table=table_name,
-            mode="append",
-            properties=self.properties,
-        )
-
-    def write_metadata(self, df):
-        """Should accept a DataFrame with a metadata column,
-        write metadata to files, return DataFrame without metadata column"""
-        pass
-
-    # def update_co_rows_cs_id(self, co_ids: list[str], cs_id: str):
-    #     with psycopg.connect(
-    #         """dbname=colabfit user=%s password=%s host=localhost port=5432"""
-    #         % (
-    #             self.user,
-    #             self.password,
-    #         )
-    #     ) as conn:
-    #         cur = conn.execute(
-    #             """UPDATE configurations
-    #                     SET configuration_set_ids = concat(%s::text, \
-    #             rtrim(ltrim(replace(configuration_set_ids,%s,''), '['),']'), %s::text)
-    #             """,
-    #             (
-    #                 "[",
-    #                 f", {cs_id}",
-    #                 f", {cs_id}]",
-    #             ),
-    #             # WHERE id = ANY(%s)""",
-    #             # (cs_id, co_ids),
-    #         )
-    #         conn.commit()
 
 
 def batched(configs, n):
@@ -1020,7 +920,6 @@ class DataManager:
         Convert COs and DOs to Spark rows using multiprocessing Pool.
         Returns a batch of tuples of (configuration_row, property_row).
         """
-
         part_gather = partial(
             self._gather_co_po_rows,
             self.prop_defs,
@@ -1102,12 +1001,11 @@ class DataManager:
                 po_df = loader.spark.createDataFrame(
                     po_rows, schema=property_object_md_schema
                 )
-                first_count = co_df.count()
+                co_count = co_df.count()
                 print("Dropping duplicates from CO dataframe")
 
                 co_count_distinct = co_df.select("id").distinct().count()
-                second_count = co_count_distinct.count()
-                if second_count < first_count:
+                if co_count_distinct < co_count:
                     grouped_id = co_df.groupBy("id")
                     merged_names = grouped_id.agg(
                         sf.array_distinct(sf.flatten(sf.collect_list("names"))).alias(
@@ -1131,11 +1029,13 @@ class DataManager:
                             merged_labels, on="id", how="inner"
                         )
                     co_df = co_df.select(config_md_schema.fieldNames())
-                print(f"{first_count - second_count} duplicates found in CO dataframe")
-                count = po_df.count()
-                count_distinct = po_df.select("id").distinct().count()
-                if count_distinct < count:
-                    print(f"{count - count_distinct} duplicates found in PO dataframe")
+                print(f"{co_count - co_count_distinct} duplicates found in CO dataframe")
+                po_count = po_df.count()
+                po_count_distinct = po_df.select("id").distinct().count()
+                if po_count_distinct < po_count:
+                    print(
+                        f"{po_count - po_count_distinct} duplicates found in PO dataframe"  # noqa
+                    )
                     multiplicity = po_df.groupBy("id").agg(sf.count("*").alias("count"))
                     po_df = po_df.dropDuplicates(["id"])
                     po_df = (
@@ -1146,11 +1046,6 @@ class DataManager:
                 all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
                 all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
                 if not all_unique_co:
-                    # new_co_ids, update_co_ids = loader.update_existing_co_rows(
-                    #     co_df=co_df,
-                    #     cols=["dataset_ids", "names", "labels"],
-                    #     elems=[self.dataset_id, None, None],
-                    # )
                     new_co_ids, update_co_ids = loader.update_existing_co_po_rows(
                         df=co_df,
                         table_name=loader.config_table,
@@ -1162,13 +1057,13 @@ class DataManager:
                     print(f"Updated {len(update_co_ids)} rows in {loader.config_table}")
                     if len(new_co_ids) > 0:
                         print(f"Writing {len(new_co_ids)} new rows to table")
+                        co_df = co_df.where(sf.col("id").isin(new_co_ids))
                         co_df = loader.write_metadata(co_df)
                         loader.write_table(
                             co_df,
                             loader.config_table,
-                            ids_filter=new_co_ids,
                             check_length_col="positions_00",
-                            check_unique=False,
+                            check_unique=True,
                         )
                 else:
                     print("All COs unique: writing to table...")
@@ -1177,14 +1072,10 @@ class DataManager:
                         co_df,
                         loader.config_table,
                         check_length_col="positions_00",
-                        check_unique=False,
+                        check_unique=True,
                     )
 
                 if not all_unique_po:
-                    # print("Sending to update_existing_po_rows")
-                    # new_po_ids, update_po_ids = loader.update_existing_po_rows(
-                    #     po_df=po_df,
-                    # )
                     new_po_ids, update_po_ids = loader.update_existing_co_po_rows(
                         df=po_df,
                         table_name=loader.prop_object_table,
@@ -1199,23 +1090,22 @@ class DataManager:
                     )
                     if len(new_po_ids) > 0:
                         print("Remaining POs unique. Writing new rows to table...")
+                        po_df = po_df.where(sf.col("id").isin(new_po_ids))
                         po_df = loader.write_metadata(po_df)
                         loader.write_table(
                             po_df,
                             loader.prop_object_table,
-                            ids_filter=new_po_ids,
                             check_length_col="atomic_forces_00",
-                            check_unique=False,
+                            check_unique=True,
                         )
                 else:
                     print("All POs unique: writing to table...")
                     po_df = loader.write_metadata(po_df)
-                    # print("finished writing metadata")
                     loader.write_table(
                         po_df,
                         loader.prop_object_table,
                         check_length_col="atomic_forces_00",
-                        check_unique=False,
+                        check_unique=True,
                     )
 
     def load_data_to_pg_in_batches(self, loader):
@@ -1503,14 +1393,12 @@ class S3FileManager:
         try:
             client = self.get_client()
             client.put_object(Bucket=self.bucket_name, Key=file_key, Body=content)
-            # return (f"/vdev/{self.bucket_name}/{file_key}", sys.getsizeof(content))
         except Exception as e:
             return f"Error: {str(e)}"
 
     def read_file(self, file_key):
         try:
             client = self.get_client()
-            # key = file_key.replace(str(Path("/vdev/colabfit-data")) + "/", "")
             response = client.get_object(Bucket=self.bucket_name, Key=file_key)
             return response["Body"].read().decode("utf-8")
         except Exception as e:

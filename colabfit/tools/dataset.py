@@ -159,36 +159,41 @@ class Dataset:
             "formation_energy",
             "energy",
         )
-        row_dict["nconfigurations"] = config_df.count()
+
         carray_cols = ["atomic_numbers", "elements", "dimension_types"]
         carray_types = {
             col.name: col.dataType
             for col in config_arr_schema
             if col.name in carray_cols
         }
+
         for col in carray_cols:
             unstr_udf = sf.udf(unstring_df_val, carray_types[col])
             config_df = config_df.withColumn(col, unstr_udf(sf.col(col)))
+
+        config_df.cache()
+        row_dict["nconfigurations"] = config_df.count()
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
+        elements_df = config_df.select(
+            sf.explode("elements").alias("exploded_elements")
+        ).distinct()
         row_dict["elements"] = sorted(
-            config_df.select("elements")
-            .withColumn("exploded_elements", sf.explode("elements"))
-            .agg(sf.collect_set("exploded_elements").alias("exploded_elements"))
-            .select("exploded_elements")
-            .take(1)[0][0]
+            [row.exploded_elements for row in elements_df.collect()]
         )
         row_dict["nelements"] = len(row_dict["elements"])
-        atomic_ratios_df = config_df.select("atomic_numbers").withColumn(
-            "single_element", sf.explode("atomic_numbers")
-        )
-        total_elements = atomic_ratios_df.count()
 
-        print(total_elements, row_dict["nsites"])
-        assert total_elements == row_dict["nsites"]
-        atomic_ratios_df = atomic_ratios_df.groupBy("single_element").count()
-        atomic_ratios_df = atomic_ratios_df.withColumn(
-            "ratio", sf.col("count") / total_elements
+        element_counts = (
+            config_df.select(sf.explode("atomic_numbers").alias("single_element"))
+            .groupBy("single_element")
+            .agg(sf.count("*").alias("count"))
         )
+        total_atoms = element_counts.agg(sf.sum("count")).first()[0]
+        atomic_ratios_df = element_counts.withColumn(
+            "ratio", sf.col("count") / sf.lit(total_atoms)
+        )
+
+        print(total_atoms, row_dict["nsites"])
+        assert total_atoms == row_dict["nsites"]
 
         atomic_ratios_coll = (
             atomic_ratios_df.withColumn(
@@ -198,16 +203,33 @@ class Dataset:
             .select("element", "ratio")
             .collect()
         )
-
+        element_map_expr = sf.create_map(
+            [
+                sf.lit(k)
+                for pair in [(k, v) for k, v in ELEMENT_MAP.items()]
+                for k in pair
+            ]
+        )
+        atomic_ratios_coll = (
+            atomic_ratios_df.withColumn(
+                "element", element_map_expr[sf.col("single_element")]
+            )
+            .select("element", "ratio")
+            .collect()
+        )
         row_dict["total_elements_ratios"] = [
-            x[1] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
+            x["ratio"] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
         ]
+
         row_dict["nperiodic_dimensions"] = config_df.agg(
             sf.collect_set("nperiodic_dimensions")
         ).collect()[0][0]
         row_dict["dimension_types"] = config_df.agg(
             sf.collect_set("dimension_types")
         ).collect()[0][0]
+        config_df.unpersist()
+
+        prop_df.cache()
         nproperty_objects = prop_df.count()
         row_dict["nproperty_objects"] = nproperty_objects
         for prop in [
@@ -233,7 +255,7 @@ class Dataset:
         row_dict[f"{prop}_mean"] = (
             prop_df.select(prop).where(f"{prop} is not null").agg(sf.mean(prop))
         ).first()[0]
-
+        prop_df.unpersist()
         row_dict["authors"] = self.authors
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license
