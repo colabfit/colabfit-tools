@@ -53,8 +53,9 @@ from colabfit.tools.utilities import (
     get_spark_field_type,
     spark_schema_to_arrow_schema,
     split_long_string_cols,
-    stringify_df_val,
+    stringify_df_val_udf,
     unstring_df_val,
+    unstring_df_val_pd,
 )
 
 VAST_BUCKET_DIR = "colabfit-data"
@@ -65,7 +66,7 @@ _CONFIGSETS_COLLECTION = "test_config_sets"
 _DATASETS_COLLECTION = "test_datasets"
 _PROPOBJECT_COLLECTION = "test_prop_objects"
 _CO_CS_MAP_COLLECTION = "test_co_cs_map"
-_MAX_STRING_LEN = 60000
+_COL_MAX_STRING_LEN = 60000
 
 # from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
@@ -177,6 +178,96 @@ class VastDataLoader:
                         return False
         return True
 
+    def write_table_first(
+        self,
+        spark_df,
+        table_name: str,
+        check_length_col: str = None,
+    ):
+        # print(spark_df.first())
+        """Include self.table_prefix in the table name when passed to this function"""
+        string_schema_dict = {
+            self.config_table: config_schema,
+            self.config_set_table: configuration_set_schema,
+            self.dataset_table: dataset_schema,
+            self.prop_object_table: property_object_schema,
+            self.co_cs_map_table: co_cs_map_schema,
+        }
+        table_schema = string_schema_dict[table_name]
+        arrow_schema = spark_schema_to_arrow_schema(table_schema)
+        for field in arrow_schema:
+            field = field.with_nullable(True)
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        if not self.spark.catalog.tableExists(table_name):
+            print(f"Creating table {table_name}")
+            with self.session.transaction() as tx:
+                schema = tx.bucket(bucket_name).schema(schema_name)
+                schema.create_table(table_n, arrow_schema)
+        string_cols = [
+            f.name for f in spark_df.schema if f.dataType.typeName() == "array"
+        ]
+        ids = [x["id"] for x in spark_df.select("id").collect()]
+        batched_ids = batched(ids, 10000)
+        existing_df_array = []
+
+        with self.session.transaction() as tx:
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
+            for id_batch in batched_ids:
+                id_batch = list(set(id_batch))
+                rec_batch = table.select(
+                    predicate=table["id"].isin(id_batch),
+                    columns=["id"],
+                    internal_row_id=False,
+                )
+                rec_batch = rec_batch.read_all()
+                if rec_batch.num_rows > 0:
+                    rec_batch = rec_batch.to_struct_array().to_pandas()
+                    existing_ids = [x["id"] for x in rec_batch]
+                    new_ids = [id for id in id_batch if id not in existing_ids]
+                    existing_df_array.append(
+                        spark_df.filter(sf.col("id").isin(existing_ids))
+                    )
+                    if len(new_ids) == 0:
+                        print(f"No new IDs to insert into table {table_name}")
+                        continue
+                    write_rows = spark_df.filter(sf.col("id").isin(new_ids))
+                elif rec_batch.num_rows == 0:
+                    print(f"No matching IDs found in table {table_name}")
+                    new_ids = id_batch
+                    write_rows = spark_df
+                write_rows = self.write_metadata(write_rows)
+                write_rows = write_rows.select(
+                    *[
+                        (
+                            stringify_df_val_udf(sf.col(col)).alias(col)
+                            if col in string_cols
+                            else col
+                        )
+                        for col in table_schema.fieldNames()
+                    ]
+                )
+                if check_length_col is not None:
+                    write_rows = split_long_string_cols(
+                        write_rows, check_length_col, _COL_MAX_STRING_LEN
+                    )
+                arrow_rec_batch = pa.table(
+                    [pa.array(col) for col in zip(*write_rows.collect())],
+                    schema=arrow_schema,
+                ).to_batches()
+                total_rows = 0
+                for rec_batch in arrow_rec_batch:
+                    len_batch = rec_batch.num_rows
+                    table.insert(rec_batch)
+                    total_rows += len_batch
+                print(f"Inserted {total_rows} rows into table {table_name}")
+        if len(existing_df_array) > 1:
+            existing_df = existing_df_array[0].union(*existing_df_array[1:])
+        elif len(existing_df_array) == 1:
+            existing_df = existing_df_array[0]
+        else:
+            existing_df = None
+        return existing_df
+
     def write_table(
         self,
         spark_df,
@@ -202,12 +293,11 @@ class VastDataLoader:
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
         ]
-        string_col_udf = sf.udf(stringify_df_val, StringType())
         for col in string_cols:
-            spark_df = spark_df.withColumn(col, string_col_udf(sf.col(col)))
+            spark_df = spark_df.withColumn(col, stringify_df_val_udf(sf.col(col)))
         if check_length_col is not None:
             spark_df = split_long_string_cols(
-                spark_df, check_length_col, _MAX_STRING_LEN
+                spark_df, check_length_col, _COL_MAX_STRING_LEN
             )
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
         for field in arrow_schema:
@@ -285,7 +375,7 @@ class VastDataLoader:
         Parameters:
         -----------
         df : DataFrame
-            The DataFrame containing the new data to be updated.
+            The DataFrame containing only rows to be updated (i.e., identical ids exist)
         table_name : str
             The name of the table to be updated.
         cols : list[str]
@@ -330,14 +420,19 @@ class VastDataLoader:
         read_schema = StructType(
             [StructField(col, col_type, True) for col, col_type in str_col_types.items()]
         )
+        arrow_schema = spark_schema_to_arrow_schema(
+            StructType([field for field in str_schema if field.name in update_cols])
+        )
+        arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
 
         ids = [x["id"] for x in df.select("id").collect()]
         batched_ids = batched(ids, 10000)
-        new_ids = []
-        existing_ids = []
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        n_updated = 0
         for id_batch in batched_ids:
+            len_batch = len(id_batch)
             id_batch = list(set(id_batch))
+            assert len_batch == len(id_batch)
             with self.session.transaction() as tx:
                 table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
                 rec_batch = table.select(
@@ -349,9 +444,6 @@ class VastDataLoader:
                 duplicate_df = self.spark.createDataFrame(
                     rec_batch.to_struct_array().to_pandas(), schema=read_schema
                 )
-            if duplicate_df.count() == 0:
-                new_ids.extend(id_batch)
-                continue
             for col_name in arr_cols:
                 unstring_udf = sf.udf(unstring_df_val, unstr_col_types[col_name])
                 duplicate_df = duplicate_df.withColumn(
@@ -393,13 +485,7 @@ class VastDataLoader:
                             sf.array_union(sf.col(col), sf.array(sf.lit(elem)))
                         ),
                     )
-            existing_ids_batch = [x["id"] for x in duplicate_df.select("id").collect()]
-            new_ids_batch = [id for id in id_batch if id not in existing_ids_batch]
-            string_udf = sf.udf(stringify_df_val, StringType())
-            for col_name in arr_cols:
-                duplicate_df = duplicate_df.withColumn(
-                    col_name, string_udf(sf.col(col_name))
-                )
+
             update_time = dateutil.parser.parse(
                 datetime.datetime.now(tz=datetime.timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
@@ -408,28 +494,27 @@ class VastDataLoader:
             duplicate_df = duplicate_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
-            arrow_schema = spark_schema_to_arrow_schema(
-                StructType([field for field in str_schema if field.name in update_cols])
-            )
-            arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
-
-            update_table = pa.table(
-                [
-                    pa.array(col)
-                    for col in zip(
-                        *duplicate_df.select(
-                            [field.name for field in arrow_schema]
-                        ).collect()
+            duplicate_df = duplicate_df.select(
+                *[
+                    (
+                        stringify_df_val_udf(sf.col(col)).alias(col)
+                        if col in arr_cols
+                        else col
                     )
-                ],
+                    for col in arrow_schema.names
+                ]
+            )
+            update_table = pa.table(
+                [pa.array(col) for col in zip(*duplicate_df.collect())],
                 schema=arrow_schema,
             )
             with self.session.transaction() as tx:
                 table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
                 table.update(rows=update_table, columns=update_cols)
-            new_ids.extend(new_ids_batch)
-            existing_ids.extend(existing_ids_batch)
-        return (new_ids, list(set(existing_ids)))
+            n_updated += len(id_batch)
+        assert n_updated == len(ids)
+        print(f"Updated {n_updated} rows in {table_name}")
+        return
 
     def read_table(
         self, table_name: str, unstring: bool = False, read_metadata: bool = False
@@ -473,8 +558,8 @@ class VastDataLoader:
             schema_type_dict = {f.name: f.dataType for f in schema}
             string_cols = [f.name for f in schema if f.dataType.typeName() == "array"]
             for col in string_cols:
-                string_col_udf = sf.udf(unstring_df_val, schema_type_dict[col])
-                df = df.withColumn(col, string_col_udf(sf.col(col)))
+                unstring_udf = sf.udf(unstring_df_val, schema_type_dict[col])
+                df = df.withColumn(col, unstring_udf(sf.col(col)))
         if read_metadata:
             schema = md_schema_dict[table_name]
             config = {
@@ -555,50 +640,6 @@ class VastDataLoader:
                     rows=update_table,
                     columns=["multiplicity", "last_modified"],
                 )
-
-    def get_pos_cos_by_filter(
-        self,
-        po_filter_conditions: list[tuple[str, str, str | int | float | list]] = None,
-        co_filter_conditions: list[
-            tuple[str, str, str | int | float | list | None]
-        ] = None,
-    ):
-        """
-        example filter conditions:
-        po_filter_conditions = [("dataset_id", "=", "ds_id1"),
-                                ("method", "like", "DFT%")]
-        co_filter_conditions = [("nsites", ">", 15),
-                                ('labels', 'array_contains', 'label1')]
-        """
-        po_df = self.read_table(self.prop_object_table, unstring=True)
-        po_df = self.get_filtered_table(po_df, po_filter_conditions)
-        po_df = po_df.drop("chemical_formula_hill")
-
-        co_df = self.read_table(self.config_table, unstring=True)
-        overlap_cols = [col for col in po_df.columns if col in co_df.columns]
-        po_df = po_df.select(
-            [
-                (
-                    col
-                    if col not in overlap_cols
-                    else sf.col(col).alias(f"prop_object_{col}")
-                )
-                for col in po_df.columns
-            ]
-        )
-        co_df = co_df.select(
-            [
-                (
-                    col
-                    if col not in overlap_cols
-                    else sf.col(col).alias(f"configuration_{col}")
-                )
-                for col in co_df.columns
-            ]
-        )
-        co_df = self.get_filtered_table(co_df, co_filter_conditions)
-        co_po_df = co_df.join(po_df, on="configuration_id", how="inner")
-        return co_po_df
 
     def simple_sdk_query(self, query_table, predicate, schema, internal_row_id=False):
         bucket_name, schema_name, table_n = self._get_table_split(query_table)
@@ -737,38 +778,6 @@ class VastDataLoader:
                     )
                     spark_df = spark_df.union(batch_spark_df)
             return spark_df
-
-    def get_filtered_table(
-        self,
-        df,
-        filter_conditions: list[tuple[str, str, str | int | float | list]] | None = None,
-    ):
-        if filter_conditions is None:
-            return df
-        for i, (column, operand, condition) in enumerate(filter_conditions):
-            if operand == "in":
-                df = df.filter(sf.col(column).isin(condition))
-            elif operand == "like":
-                df = df.filter(sf.col(column).like(condition))
-            elif operand == "rlike":
-                df = df.filter(sf.col(column).rlike(condition))
-            elif operand == "==":
-                df = df.filter(sf.col(column) == condition)
-            elif operand == "array_contains":
-                df = df.filter(sf.array_contains(sf.col(column), condition))
-            elif operand == ">":
-                df = df.filter(sf.col(column) > condition)
-            elif operand == "<":
-                df = df.filter(sf.col(column) < condition)
-            elif operand == ">=":
-                df = df.filter(sf.col(column) >= condition)
-            elif operand == "<=":
-                df = df.filter(sf.col(column) <= condition)
-            else:
-                raise ValueError(
-                    f"Operand {operand} not implemented in get_pos_cos_filter"
-                )
-        return df
 
     def rehash_property_objects(spark_row: Row):
         """
@@ -967,7 +976,7 @@ class DataManager:
 
     def load_co_po_to_vastdb(self, loader, batching_ingest=False):
         if loader.spark.catalog.tableExists(loader.prop_object_table):
-            print("loader.prop_object_table exists")
+            print(f"table {loader.prop_object_table} exists")
             if batching_ingest is False:
                 pos_with_mult = loader.read_table(loader.prop_object_table)
                 pos_with_mult = pos_with_mult.filter(
@@ -1043,69 +1052,34 @@ class DataManager:
                         .withColumn("multiplicity", sf.col("count"))
                         .drop("count")
                     )
-                all_unique_co = loader.check_unique_ids(loader.config_table, co_df)
-                all_unique_po = loader.check_unique_ids(loader.prop_object_table, po_df)
-                if not all_unique_co:
-                    new_co_ids, update_co_ids = loader.update_existing_co_po_rows(
-                        df=co_df,
+                co_existing_row_df = loader.write_table_first(
+                    co_df,
+                    loader.config_table,
+                    check_length_col="positions_00",
+                )
+                if co_existing_row_df is not None:
+                    loader.update_existing_co_po_rows(
+                        df=co_existing_row_df,
                         table_name=loader.config_table,
                         cols=["dataset_ids", "names", "labels"],
                         elems=[self.dataset_id, None, None],
                         str_schema=config_schema,
                         arr_schema=config_arr_schema,
                     )
-                    print(f"Updated {len(update_co_ids)} rows in {loader.config_table}")
-                    if len(new_co_ids) > 0:
-                        print(f"Writing {len(new_co_ids)} new rows to table")
-                        co_df = co_df.where(sf.col("id").isin(new_co_ids))
-                        co_df = loader.write_metadata(co_df)
-                        loader.write_table(
-                            co_df,
-                            loader.config_table,
-                            check_length_col="positions_00",
-                            check_unique=True,
-                        )
-                else:
-                    print("All COs unique: writing to table...")
-                    co_df = loader.write_metadata(co_df)
-                    loader.write_table(
-                        co_df,
-                        loader.config_table,
-                        check_length_col="positions_00",
-                        check_unique=True,
-                    )
 
-                if not all_unique_po:
-                    new_po_ids, update_po_ids = loader.update_existing_co_po_rows(
-                        df=po_df,
+                po_existing_row_df = loader.write_table_first(
+                    po_df,
+                    loader.prop_object_table,
+                    check_length_col="atomic_forces_00",
+                )
+                if po_existing_row_df is not None:
+                    loader.update_existing_co_po_rows(
+                        df=po_existing_row_df,
                         table_name=loader.prop_object_table,
                         cols=["multiplicity"],
                         elems=[None],
                         str_schema=property_object_schema,
                         arr_schema=property_object_arr_schema,
-                    )
-                    print(
-                        f"Updated {len(update_po_ids)} rows in "
-                        f"{loader.prop_object_table}"
-                    )
-                    if len(new_po_ids) > 0:
-                        print("Remaining POs unique. Writing new rows to table...")
-                        po_df = po_df.where(sf.col("id").isin(new_po_ids))
-                        po_df = loader.write_metadata(po_df)
-                        loader.write_table(
-                            po_df,
-                            loader.prop_object_table,
-                            check_length_col="atomic_forces_00",
-                            check_unique=True,
-                        )
-                else:
-                    print("All POs unique: writing to table...")
-                    po_df = loader.write_metadata(po_df)
-                    loader.write_table(
-                        po_df,
-                        loader.prop_object_table,
-                        check_length_col="atomic_forces_00",
-                        check_unique=True,
                     )
 
     def load_data_to_pg_in_batches(self, loader):
@@ -1155,26 +1129,12 @@ class DataManager:
                 f"names match: {names_match}, label: {label_match}, "
                 f"cs_name: {cs_name}, cs_desc: {cs_desc}"
             )
-            if names_match and not label_match:
-                config_set_query_df = loader.config_set_query(
-                    query_table=loader.config_table,
-                    dataset_id=dataset_id,
-                    name_match=names_match,
-                )
-            # Currently an AND operation on labels: labels col contains x AND y
-            if label_match and not names_match:
-                config_set_query_df = loader.config_set_query(
-                    query_table=loader.config_table,
-                    dataset_id=dataset_id,
-                    label_match=label_match,
-                )
-            if names_match and label_match:
-                config_set_query_df = loader.config_set_query(
-                    query_table=loader.config_table,
-                    dataset_id=dataset_id,
-                    name_match=names_match,
-                    label_match=label_match,
-                )
+            config_set_query_df = loader.config_set_query(
+                query_table=loader.config_table,
+                dataset_id=dataset_id,
+                name_match=names_match,
+                label_match=label_match,
+            )
             co_id_df = (
                 config_set_query_df.select("id")
                 .distinct()
@@ -1183,12 +1143,15 @@ class DataManager:
             string_cols = [
                 "elements",
             ]
-            unstring_col_udf = sf.udf(unstring_df_val, ArrayType(StringType()))
+            unstring_col_udf = sf.pandas_udf(unstring_df_val_pd, ArrayType(StringType()))
+
             for col in string_cols:
                 config_set_query_df = config_set_query_df.withColumn(
                     col, unstring_col_udf(sf.col(col))
                 )
-            unstring_col_udf = sf.udf(unstring_df_val, ArrayType(IntegerType()))
+            unstring_col_udf = sf.pandas_udf(
+                unstring_df_val_pd, ArrayType(IntegerType())
+            )
             int_cols = [
                 "atomic_numbers",
                 "dimension_types",
