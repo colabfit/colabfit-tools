@@ -183,7 +183,6 @@ class VastDataLoader:
         table_name: str,
         check_length_col: str = None,
     ):
-        # print(spark_df.first())
         """Include self.table_prefix in the table name when passed to this function"""
         string_schema_dict = {
             self.config_table: config_schema,
@@ -275,7 +274,6 @@ class VastDataLoader:
         check_length_col: str = None,
         check_unique: bool = True,
     ):
-        # print(spark_df.first())
         """Include self.table_prefix in the table name when passed to this function"""
         string_schema_dict = {
             self.config_table: config_schema,
@@ -478,22 +476,15 @@ class VastDataLoader:
                 )
             for col, elem in zip(cols, elems):
                 if col == "labels":
-                    print("labels")
                     if df.filter(sf.col("labels").isNotNull()).count() == 0:
                         continue
                     duplicate_df = self.concat_column_vals(df, duplicate_df, col)
                 elif col == "names":
-                    print("names")
                     duplicate_df = self.concat_column_vals(df, duplicate_df, col)
-                    print(duplicate_df.select("names").first())
                 elif col == "multiplicity":
-                    print("multiplicity")
                     duplicate_df = self.increment_multiplicity(df, duplicate_df)
-                    print(duplicate_df.select("multiplicity").first())
                 else:
-                    print("else", col)
                     duplicate_df = self.concat_constant_elem(duplicate_df, col, elem)
-                    print(duplicate_df.select(col).first())
 
             update_time = dateutil.parser.parse(
                 datetime.datetime.now(tz=datetime.timezone.utc).strftime(
@@ -697,7 +688,6 @@ class VastDataLoader:
         dataset_id=None,
         table_name=None,
     ):
-        print("in dataset query")
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
         if table_name == self.config_table:
