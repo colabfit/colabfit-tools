@@ -5,6 +5,7 @@ from ast import literal_eval
 from hashlib import sha512
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from pyspark.sql import Row
 from pyspark.sql import functions as sf
@@ -180,13 +181,6 @@ def spark_schema_to_arrow_schema(spark_schema):
     return pa.schema(fields)
 
 
-def arrow_record_batch_to_rdd(schema, batch):
-    names = schema.fieldNames()
-    arrays = [batch.column(i) for i in range(batch.num_columns)]
-    for i in range(batch.num_rows):
-        yield {names[j]: array[i].as_py() for j, array in enumerate(arrays)}
-
-
 def _empty_dict_from_schema(schema):
     empty_dict = {}
     for field in schema:
@@ -240,132 +234,30 @@ def _parse_unstructured_metadata(md_json):
     }
 
 
-# if not os.path.isfile(full_path):
-#         # Write iff the ID is new and unique
-#         os.makedirs(os.path.dirname(full_path), exist_ok=True)
-#         with open(full_path, "w") as f:
-#             json.dump(md, f)
+def unstring_df_val_pd(series: pd.Series) -> pd.Series:
+    def process_val(val):
+        if isinstance(val, str) and len(val) > 0 and val[0] == "[":
+            return literal_eval(val)
+        return val
 
-
-def stringify_lists(row_dict):
-    """
-    Replace list/tuple fields with comma-separated strings.
-    Spark and Vast both support array columns, but the connector does not,
-    so keeping cell values in list format crashes the table.
-    Use with dicts
-    TODO: Remove when no longer necessary
-    """
-    for key, val in row_dict.items():
-        if isinstance(val, (list, tuple, dict)):
-            row_dict[key] = str(val)
-        # Below would convert numpy arrays to comma-separated
-        elif isinstance(val, np.ndarray):
-            row_dict[key] = str(val.tolist())
-    return row_dict
-
-
-def stringify_rows(row):
-    """
-    Convert list/tuple fields to comma-separated strings.
-    Use with spark Rows
-    Should be mapped as DataFrame.rdd.map(stringify_rows)"""
-    row_dict = row.asDict()
-    for key, val in row_dict.items():
-        if isinstance(val, (list, tuple, dict)):
-            row_dict[key] = str(val)
-    new_row = Row(**row_dict)
-    return new_row
-
-
-def stringify_rows_to_dict(row):
-    """
-    Convert list/tuple fields to comma-separated strings.
-    Use with spark Rows
-    Should be mapped as DataFrame.rdd.map(stringify_rows)"""
-    row_dict = row.asDict()
-    for key, val in row_dict.items():
-        if isinstance(val, (list, tuple, dict)):
-            row_dict[key] = str(val)
-    return row_dict
-
-
-def stringify_row_dict(row_dict):
-    for key, val in row_dict.items():
-        if isinstance(val, (list, tuple, dict)):
-            row_dict[key] = str(val)
-    return row_dict
-
-
-def unstringify(row):
-    """Should be mapped as DataFrame.rdd.map(unstringify)"""
-    row_dict = row.asDict()
-    try:
-        for key, val in row_dict.items():
-            if key == "metadata":
-                continue
-            elif isinstance(val, str) and len(val) > 0 and val[0] in ["["]:
-                dval = literal_eval(row[key])
-                row_dict[key] = dval
-            else:
-                continue
-        new_row = Row(**row_dict)
-    except Exception as e:
-        print(e)
-        print(row_dict)
-    return new_row
+    return series.apply(process_val)
 
 
 def unstring_df_val(val):
-    if isinstance(val, str) and len(val) > 0 and val[0] in ["["]:
-        dval = literal_eval(val)
-        return dval
-    else:
-        return val
+    if val is not None and len(val) > 0 and val[0] == "[":
+        return literal_eval(val)
+    return val
 
 
-def stringify_df_val(val):
-    if isinstance(val, (list, tuple, dict)):
+# @sf.pandas_udf(StringType())
+# def stringify_df_val_udf(series: pd.Series) -> pd.Series:
+#     return series.astype(str)
+
+
+@sf.udf(returnType=StringType())
+def stringify_df_val_udf(val):
+    if val is not None:
         return str(val)
-    else:
-        return val
-
-
-def unstringify_row_dict(row_dict):
-    """Should be mapped as rdd.map(unstringify_row_dict)"""
-    for key, val in row_dict.items():
-        if key == "metadata":
-            continue
-        if isinstance(val, str) and len(val) > 0 and val[0] in ["{", "["]:
-            dval = literal_eval(row_dict[key])
-            row_dict[key] = dval
-    return row_dict
-
-
-def append_ith_element_to_rdd_labels(row_elem):
-    """
-    row_elem: tuple created by joining two RDD.zipWithIndex
-    new_labels: list of labels
-    """
-    (index, (co_row, new_labels)) = row_elem
-    val = co_row.get("labels")
-    if val is None:
-        val = new_labels
-    else:
-        val.extend(new_labels)
-        val = list(set(val))
-    co_row["labels"] = val
-    return co_row
-
-
-def add_elem_to_row_dict(col, elem, row_dict):
-    val = row_dict.get(col)
-    if val is None:
-        val = [elem]
-    else:
-        val.append(elem)
-        val = list(set(val))
-    row_dict[col] = val
-    return row_dict
 
 
 def convert_stress(keys, stress):
@@ -387,8 +279,7 @@ def convert_stress(keys, stress):
 def get_max_string_length(df, column_name):
 
     max_len = (
-        df.select(column_name)
-        .select(sf.length(column_name).alias("string_length"))
+        df.select(sf.length(column_name).alias("string_length"))
         .agg(sf.max("string_length"))
         .collect()[0][0]
     )
@@ -411,14 +302,23 @@ def split_long_string_cols(df, column_name: str, max_string_length: int):
     if not all([col in df.columns for col in overflow_columns]):
         raise ValueError("Overflow columns not found in target DataFrame schema")
     if get_max_string_length(df, column_name) <= max_string_length:
-        for col in overflow_columns:
-            df = df.withColumn(col, sf.lit("[]").cast(StringType()))
+        # for col in overflow_columns:
+        #     df = df.withColumn(col, sf.lit("[]").cast(StringType()))
+        df = df.select(
+            *[
+                (
+                    sf.lit("[]").cast(StringType()).alias(col)
+                    if col in overflow_columns
+                    else sf.col(col)
+                )
+                for col in df.columns
+            ]
+        )
         return df
     print(f"Column split: {column_name}")
     all_columns = [column_name] + overflow_columns
     tmp_columns = [f"{col_name}_tmp" for col_name in all_columns]
     df = df.withColumn("total_length", sf.length(sf.col(column_name)))
-    max_string_length = 35000 // 15
     substring_exprs = [
         sf.when(
             sf.length(sf.col(column_name)) - (i * max_string_length) > 0,
@@ -435,70 +335,6 @@ def split_long_string_cols(df, column_name: str, max_string_length: int):
         df = df.drop(col).withColumnRenamed(f"{tmp_col}", col)
     df = df.drop("total_length")
     return df
-
-
-# ##########################################################
-# # Functions for writing values to files
-# ##########################################################
-
-
-# def _write_value(path_prefix, id_str, filetype, BUCKET_DIR, value):
-#     """i.e.: _write_value(
-#     value=co['positions'],
-#     'CO/positions', co['id'],
-#     'txt', '/save/here'
-#     )
-#     """
-#     # Use the final 4 digits of the id for an ~1000-way split
-#     split = id_str[-4:]
-#     filename = f"{id_str}.{filetype}"
-#     full_path = Path(BUCKET_DIR) / path_prefix / split / filename
-#     full_path.parent.mkdir(parents=True, exist_ok=True)
-#     full_path.write_text(str(value))
-#     return full_path
-
-
-# def write_value_to_file(path_prefix, extension, BUCKET_DIR, write_column, row):
-#     """i.e.: partial(_write_value(
-#     'CO/positions',
-#     'txt',
-#     '/save/here'
-#     'positions',
-#     )
-#     """
-#     id = row["id"]
-#     # Use the final 4 digits of the id for an ~1000-way split
-#     value = row[write_column]
-#     split = id[-4:]
-#     filename = f"{id}.{extension}"
-#     full_path = Path(BUCKET_DIR) / path_prefix / split / filename
-#     full_path.parent.mkdir(parents=True, exist_ok=True)
-#     full_path.write_text(str(value))
-#     row_dict = row.asDict()
-#     row_dict[write_column] = str(full_path)
-#     return Row(**row_dict)
-
-
-# def multi_value_to_file(path_prefixes, extension, BUCKET_DIR, write_columns, row):
-#     """i.e.: partial(_write_value(
-#     'CO/positions',
-#     'txt',
-#     '/save/here'
-#     'positions',
-#     )
-#     """
-#     id = row["id"]
-#     split = id[-4:]
-
-#     row_dict = row.asDict()
-#     for write_column, path_prefix in zip(write_columns, path_prefixes):
-#         value = row[write_column]
-#         filename = f"{id}.{extension}"
-#         full_path = Path(BUCKET_DIR) / path_prefix / split / filename
-#         full_path.parent.mkdir(parents=True, exist_ok=True)
-#         full_path.write_text(str(value))
-#         row_dict[write_column] = str(full_path)
-#     return Row(**row_dict)
 
 
 ELEMENT_MAP = {
