@@ -82,17 +82,8 @@ class ConfigurationSet:
         row_dict["dimension_types"] = config_df.agg(
             sf.collect_set("dimension_types")
         ).collect()[0][0]
-        atomic_ratios_df = (
-            config_df.select("atomic_numbers")
-            #     config_df.select("atomic_numbers", "multiplicity")
-            #     .withColumn(
-            #         "repeated_numbers",
-            #         sf.expr(
-            #            "transform(atomic_numbers, x -> array_repeat(x, multiplicity))"
-            #         ),
-            #     )
-            # .withColumn("single_element", sf.explode(sf.flatten("repeated_numbers")))
-            .withColumn("single_element", sf.explode("atomic_numbers"))
+        atomic_ratios_df = config_df.select("atomic_numbers").withColumn(
+            "single_element", sf.explode("atomic_numbers")
         )
         total_elements = atomic_ratios_df.count()
         print(total_elements, row_dict["nsites"])
@@ -101,12 +92,16 @@ class ConfigurationSet:
         atomic_ratios_df = atomic_ratios_df.withColumn(
             "ratio", sf.col("count") / total_elements
         )
+        element_map_expr = sf.create_map(
+            [
+                sf.lit(k)
+                for pair in [(k, v) for k, v in ELEMENT_MAP.items()]
+                for k in pair
+            ]
+        )
         atomic_ratios_coll = (
             atomic_ratios_df.withColumn(
-                "element",
-                sf.udf(lambda x: ELEMENT_MAP[int(x)], StringType())(
-                    sf.col("single_element")
-                ),
+                "element", element_map_expr[sf.col("single_element")]
             )
             .select("element", "ratio")
             .collect()
