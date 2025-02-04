@@ -55,7 +55,6 @@ from colabfit.tools.utilities import (
     split_long_string_cols,
     stringify_df_val_udf,
     unstring_df_val,
-    unstring_df_val_pd,
 )
 
 VAST_BUCKET_DIR = "colabfit-data"
@@ -360,6 +359,34 @@ class VastDataLoader:
         )
         return df
 
+    def concat_column_vals(self, df, duplicate_df, col):
+        df_add = df.select("id", col)
+        duplicate_df = duplicate_df.withColumnRenamed(col, f"{col}_dup").join(
+            df_add, on="id"
+        )
+        duplicate_df = duplicate_df.withColumn(
+            col,
+            sf.array_distinct(sf.array_union(f"{col}_dup", col)),
+        ).drop(f"{col}_dup")
+        return duplicate_df
+
+    def concat_constant_elem(self, duplicate_df, col, elem):
+        duplicate_df = duplicate_df.withColumn(col, sf.coalesce(sf.col(col), sf.array()))
+        duplicate_df = duplicate_df.withColumn(
+            col,
+            sf.array_distinct(sf.array_union(sf.col(col), sf.array(sf.lit(elem)))),
+        )
+        return duplicate_df
+
+    def increment_multiplicity(self, df, duplicate_df):
+        df_add = df.select("id", sf.col("multiplicity").alias("multiplicity_add"))
+        duplicate_df = duplicate_df.join(df_add, on="id", how="left")
+        duplicate_df = duplicate_df.withColumn(
+            "multiplicity",
+            sf.col("multiplicity") + sf.col("multiplicity_add"),
+        ).drop("multiplicity_add")
+        return duplicate_df
+
     def update_existing_co_po_rows(
         self,
         df,
@@ -450,41 +477,23 @@ class VastDataLoader:
                     col_name, unstring_udf(sf.col(col_name))
                 )
             for col, elem in zip(cols, elems):
-                if col in ["labels", "names"]:
-                    if (
-                        col == "labels"
-                        and df.filter(sf.col("labels").isNotNull()).count() == 0
-                    ):
+                if col == "labels":
+                    print("labels")
+                    if df.filter(sf.col("labels").isNotNull()).count() == 0:
                         continue
-                    df_add = df.select("id", col)
-                    duplicate_df = (
-                        duplicate_df.withColumnRenamed(col, f"{col}_dup")
-                        .join(df_add, on="id")
-                        .withColumn(
-                            col, sf.array_distinct(sf.array_union(f"{col}_dup", col))
-                        )
-                        .drop(f"{col}_dup")
-                    )
+                    duplicate_df = self.concat_column_vals(df, duplicate_df, col)
+                elif col == "names":
+                    print("names")
+                    duplicate_df = self.concat_column_vals(df, duplicate_df, col)
+                    print(duplicate_df.select("names").first())
                 elif col == "multiplicity":
-                    df_add = df.select(
-                        "id", sf.col("multiplicity").alias("multiplicity_add")
-                    )
-                    duplicate_df = duplicate_df.join(df_add, on="id", how="left")
-                    duplicate_df = duplicate_df.withColumn(
-                        "multiplicity",
-                        sf.col("multiplicity") + sf.col("multiplicity_add"),
-                    ).drop("multiplicity_add")
+                    print("multiplicity")
+                    duplicate_df = self.increment_multiplicity(df, duplicate_df)
+                    print(duplicate_df.select("multiplicity").first())
                 else:
-                    print(col, unstr_col_types[col])
-                    duplicate_df = duplicate_df.withColumn(
-                        col, sf.coalesce(sf.col(col), sf.array())
-                    )
-                    duplicate_df = duplicate_df.withColumn(
-                        col,
-                        sf.array_distinct(
-                            sf.array_union(sf.col(col), sf.array(sf.lit(elem)))
-                        ),
-                    )
+                    print("else", col)
+                    duplicate_df = self.concat_constant_elem(duplicate_df, col, elem)
+                    print(duplicate_df.select(col).first())
 
             update_time = dateutil.parser.parse(
                 datetime.datetime.now(tz=datetime.timezone.utc).strftime(
@@ -1143,15 +1152,13 @@ class DataManager:
             string_cols = [
                 "elements",
             ]
-            unstring_col_udf = sf.pandas_udf(unstring_df_val_pd, ArrayType(StringType()))
+            unstring_col_udf = sf.udf(unstring_df_val, ArrayType(StringType()))
 
             for col in string_cols:
                 config_set_query_df = config_set_query_df.withColumn(
                     col, unstring_col_udf(sf.col(col))
                 )
-            unstring_col_udf = sf.pandas_udf(
-                unstring_df_val_pd, ArrayType(IntegerType())
-            )
+            unstring_col_udf = sf.udf(unstring_df_val, ArrayType(IntegerType()))
             int_cols = [
                 "atomic_numbers",
                 "dimension_types",

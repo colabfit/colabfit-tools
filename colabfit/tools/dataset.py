@@ -2,6 +2,7 @@ import datetime
 import warnings
 
 import dateutil
+import pandas as pd
 import pyspark.sql.functions as sf
 from pyspark.sql.types import StringType
 from unidecode import unidecode
@@ -12,7 +13,7 @@ from colabfit.tools.utilities import (
     ELEMENT_MAP,
     _empty_dict_from_schema,
     _hash,
-    unstring_df_val,
+    unstring_df_val_pd,
 )
 
 
@@ -168,7 +169,7 @@ class Dataset:
         }
 
         for col in carray_cols:
-            unstr_udf = sf.udf(unstring_df_val, carray_types[col])
+            unstr_udf = sf.pandas_udf(unstring_df_val_pd, carray_types[col])
             config_df = config_df.withColumn(col, unstr_udf(sf.col(col)))
 
         config_df.cache()
