@@ -7,7 +7,7 @@ from pyspark.sql.types import StringType
 from unidecode import unidecode
 
 from colabfit import MAX_STRING_LENGTH
-from colabfit.tools.schema import dataset_schema, config_arr_schema
+from colabfit.tools.schema import config_arr_schema, dataset_schema
 from colabfit.tools.utilities import (
     ELEMENT_MAP,
     _empty_dict_from_schema,
@@ -195,14 +195,18 @@ class Dataset:
         print(total_atoms, row_dict["nsites"])
         assert total_atoms == row_dict["nsites"]
 
-        atomic_ratios_coll = (
-            atomic_ratios_df.withColumn(
-                "element",
-                sf.udf(lambda x: ELEMENT_MAP[x], StringType())(sf.col("single_element")),
-            )
-            .select("element", "ratio")
-            .collect()
-        )
+        # @sf.pandas_udf(StringType())
+        # def element_map_udf(col: pd.Series) -> pd.Series:
+        #     return col.map(ELEMENT_MAP)
+
+        # atomic_ratios_coll = (
+        #     atomic_ratios_df.withColumn(
+        #         "element",
+        #         element_map_udf(sf.col("single_element")),
+        #     )
+        #     .select("element", "ratio")
+        #     .collect()
+        # )
         element_map_expr = sf.create_map(
             [
                 sf.lit(k)
