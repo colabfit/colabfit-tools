@@ -1,8 +1,80 @@
 from ase import Atoms
+from ase.io import iread
 from colabfit.tools.configuration import AtomicConfiguration
 from colabfit.tools.utilities import convert_stress
 from pathlib import Path
 import re
+
+##############################################################
+# Helper functions
+##############################################################
+
+
+def name_config_by_filepath(fp: Path, dataset_path: Path) -> str:
+    """
+    Generates a configuration name from the filepath with dataset path removed.
+    Args:
+        fp (Path): File path from which the configuration name is to be generated.
+        dataset_path (Path): dataset_path will be removed from the beginning of the fp.
+    Returns:
+        str: The generated configuration name.
+    """
+    relative_path = fp.relative_to(dataset_path)
+    name = "__".join(relative_path.parts)
+    return name
+
+
+def read_directory(directory: Path, parser, rglobstr="*.extxyz", **kwargs):
+    """
+    Read all files in a directory with a given parser.
+    Args:
+        directory (Path): Parent directory of data files.
+        parser (function): Parser function to read data files.
+        rglobstr (str): rglob string to search for data files.
+        kwargs: Additional keyword arguments to pass to the parser.
+    Returns:
+        A generator of parsed configurations.
+    """
+    if isinstance(directory, str):
+        try:
+            directory = Path(directory)
+            if not directory.exists():
+                raise ValueError(f"{directory} does not exist")
+        except Exception as e:
+            raise ValueError(f"Could not convert {directory} to Path object") from e
+    files = directory.rglob(rglobstr)
+    for file in files:
+        if kwargs:
+            yield from parser(file, **kwargs)
+        else:
+            yield from parser(file)
+
+
+##############################################################
+# extxyz file parser
+##############################################################
+
+
+def read_extxyz(filepath: Path, dataset_path: Path):
+    with open(filepath, "rt") as f:
+        for i, config in enumerate(iread(f, format="extxyz", index=":")):
+            config.info["_name"] = (
+                name_config_by_filepath(filepath, dataset_path) + f"__index__{i}"
+            )
+            yield AtomicConfiguration.from_ase(config)
+
+
+def read_extxyz_no_ix(filepath: Path, dataset_path: Path):
+    "Returns configurations with no index in the configuration name"
+    with open(filepath, "rt") as f:
+        for i, config in enumerate(iread(f, format="extxyz", index=":")):
+            config.info["_name"] = name_config_by_filepath(filepath, dataset_path)
+            yield AtomicConfiguration.from_ase(config)
+
+
+##############################################################
+# MLIP .cfg file parser
+##############################################################
 
 
 def mlip_cfg_reader(symbol_map, filepath):
@@ -58,9 +130,7 @@ def mlip_cfg_reader(symbol_map, filepath):
                             ]
                         )
                     if "fx" in keys:
-                        forces.append(
-                            [float(f) for f in [li["fx"], li["fy"], li["fz"]]]
-                        )
+                        forces.append([float(f) for f in [li["fx"], li["fy"], li["fz"]]])
             elif line.startswith("END_CFG"):
                 if "cartes_x" in keys:
                     config = Atoms(positions=coords, symbols=symbols, cell=cell)
@@ -82,7 +152,7 @@ def mlip_cfg_reader(symbol_map, filepath):
 
 
 ##############################################################
-# VASP OUTCAR parser
+# VASP OUTCAR parser functions
 ##############################################################
 
 
@@ -131,13 +201,6 @@ def vasp_contcar_parser(fp):
         return symbol_arr
 
 
-def config_namer_by_filepath(fp, dataset_path):
-    ds_fp_str = "__".join(dataset_path.absolute().parts).replace("/", "")
-    name = "__".join(fp.absolute().parts[:-1]).replace("/", "")
-    name = name.replace(ds_fp_str + "__", "")
-    return name
-
-
 def vasp_outcar_reader(symbols, fp):
     with open(fp, "r") as f:
         incar = dict()
@@ -153,13 +216,11 @@ def vasp_outcar_reader(symbols, fp):
         for line in f:
             # Prelim handling
             if line.strip() == "":
-                pass
-
+                continue
             # handle lattice
             elif "direct lattice vectors" in line:
                 in_latt = True
                 lattice = []
-                pass
             elif in_latt is True:
                 latt = line.strip().replace("-", " -").split()
                 lattice.append([float(x) for x in [latt[0], latt[1], latt[2]]])
@@ -187,10 +248,9 @@ def vasp_outcar_reader(symbols, fp):
                     energy = None
             elif "POSITION" in line:
                 in_coords = True
-                pass
             elif in_coords is True:
                 if "--------" in line:
-                    pass
+                    continue
                 elif "total drift" in line:
                     in_coords = False
                     if energy is not None:
@@ -209,7 +269,7 @@ def vasp_outcar_reader(symbols, fp):
                         pos = []
                         energy = None
                     else:
-                        pass
+                        continue
                 else:
                     cmatch = vasp_coord_regex.search(line)
                     pos.append(
@@ -225,7 +285,7 @@ def vasp_outcar_reader(symbols, fp):
                 stress = convert_stress(stress_keys, stress)
 
             else:
-                pass
+                continue
                 # print("something went wrong")
 
 
@@ -255,7 +315,7 @@ def file_finder(fp, file_glob, count=0):
 def vasp_outcar_wrapper(data_dir: Path, dataset_path, CO_METADATA=None):
     outcars = sorted(list(data_dir.rglob("OUTCAR")))
     for filepath in outcars:
-        name = config_namer_by_filepath(filepath, dataset_path)
+        name = name_config_by_filepath(filepath, dataset_path)
         poscar = next(filepath.parent.glob(filepath.name.replace("OUTCAR", "POSCAR")))
         symbols = vasp_contcar_parser(poscar)
         kpoints_file = file_finder(filepath.parent, "KPOINTS")

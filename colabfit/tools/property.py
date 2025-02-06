@@ -468,7 +468,7 @@ class Property(dict):
                         elif isinstance(data, np.floating):
                             data = float(data)
                         elif isinstance(data, (str, bool, int, float)):
-                            pass
+                            continue
                         instance[key] = {
                             "source-value": data,
                         }
@@ -821,7 +821,7 @@ class PropertyMap:
         for prop_name in self.properties.keys():
             if self._metadata["property_keys"]["value"][prop_name] is None:
                 raise ValueError(
-                    f"Metadata must have 'original_file_key' set for each property. None set for '{prop_name}'."
+                    f"Metadata must have 'original_file_key' set for each property. None set for '{prop_name}'."  # noqa E501
                 )
 
     def validate_properties(self):
@@ -863,7 +863,7 @@ class PropertyMap:
                     raise ValueError(f"Property '{prop_name}' must have 'units' set.")
                 elif val.get("has-unit") is False and prop_view.get("units") is not None:
                     raise ValueError(
-                        f"Property '{prop_name}' must have key {key}: 'units' set to None."
+                        f"Property '{prop_name}' must have key {key}: 'units' set to None."  # noqa E501
                     )
             if self._metadata["property_keys"]["value"][prop_name] is None:
                 raise ValueError(
