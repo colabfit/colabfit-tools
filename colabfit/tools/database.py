@@ -1081,30 +1081,6 @@ class DataManager:
                         arr_schema=property_object_arr_schema,
                     )
 
-    def load_data_to_pg_in_batches(self, loader):
-        """Load data to PostgreSQL in batches."""
-        co_po_rows = self.gather_co_po_in_batches()
-
-        for co_po_batch in tqdm(
-            co_po_rows,
-            desc="Loading data to database: ",
-            unit="batch",
-        ):
-            co_rows, po_rows = list(zip(*co_po_batch))
-            if len(co_rows) == 0:
-                continue
-            else:
-                loader.write_table(
-                    co_rows,
-                    loader.config_table,
-                    config_schema,
-                )
-                loader.write_table(
-                    po_rows,
-                    loader.prop_object_table,
-                    property_object_schema,
-                )
-
     def create_configuration_sets(
         self,
         loader,
