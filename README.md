@@ -8,7 +8,13 @@ Using `pip`:
 pip install git+https://github.com/colabfit/colabfit-tools.git@master
 ```
 
-You should also follow the instructions in the documentation for [installing and running a Mongo server](https://colabfit.github.io/colabfit-tools/html/getting_started.html#installing-mongo)
+colabfit-tools is built to work with two back ends: Vast DB (as part of the NYU-HPC Data Lake) and PostGreSQL.  
+  
+The Vast DB version of colabfit-tools is built to manage the [ColabFit Exchange](www.colabfit.org)
+  
+Individual users should use the PostGreSQL version.  
+Documentation for the PostGreSQL version will be forthcoming.
+
 
 # Documentation
 The documentation can be found online at https://colabfit.github.io/colabfit-tools/.
