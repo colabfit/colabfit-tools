@@ -1,3 +1,4 @@
+from collections import namedtuple
 from datetime import datetime
 from hashlib import sha512
 
@@ -65,9 +66,6 @@ class ConfigurationSet:
         row_dict["last_modified"] = dateutil.parser.parse(
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
-        # config_df = config_df.withColumn(
-        #     "nsites_multiple", sf.col("nsites") * sf.col("multiplicity")
-        # )
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
         row_dict["elements"] = sorted(
             config_df.withColumn("exploded_elements", sf.explode("elements"))
@@ -127,3 +125,14 @@ class ConfigurationSet:
 
     def __repr__(self):
         return str(self)
+
+
+configuration_set_info = namedtuple(
+    "configuration_set_info",
+    [
+        "co_name_match",
+        "co_label_match",
+        "cs_name",
+        "cs_description",
+    ],
+)

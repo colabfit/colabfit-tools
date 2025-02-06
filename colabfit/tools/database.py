@@ -956,7 +956,7 @@ class DataManager:
 
     def gather_co_po_in_batches_no_pool(self):
         """
-        Wrapper function for gather_co_po_rows_pool.
+        Wrapper function for gather_co_po_rows.
         Yields batches of CO-DO rows, preventing configuration iterator from
         being consumed all at once.
         """

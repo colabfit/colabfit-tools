@@ -7,7 +7,6 @@ from hashlib import sha512
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pyspark.sql import Row
 from pyspark.sql import functions as sf
 from pyspark.sql.types import (
     BooleanType,
