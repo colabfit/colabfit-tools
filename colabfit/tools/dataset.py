@@ -2,17 +2,18 @@ import datetime
 import warnings
 
 import dateutil
+import pandas as pd
 import pyspark.sql.functions as sf
 from pyspark.sql.types import StringType
 from unidecode import unidecode
 
 from colabfit import MAX_STRING_LENGTH
-from colabfit.tools.schema import dataset_schema, config_arr_schema
+from colabfit.tools.schema import config_arr_schema, dataset_schema
 from colabfit.tools.utilities import (
     ELEMENT_MAP,
     _empty_dict_from_schema,
     _hash,
-    unstring_df_val,
+    unstring_df_val_pd,
 )
 
 
@@ -112,8 +113,8 @@ class Dataset:
         self.configuration_set_ids = configuration_set_ids
         if self.configuration_set_ids is None:
             self.configuration_set_ids = []
-        self.spark_row = self.to_spark_row(config_df=config_df, prop_df=prop_df)
-        self.spark_row["id"] = self.dataset_id
+        self.row_dict = self.to_row_dict(config_df=config_df, prop_df=prop_df)
+        self.row_dict["id"] = self.dataset_id
         id_prefix = "__".join(
             [
                 self.name,
@@ -124,13 +125,13 @@ class Dataset:
             id_prefix = id_prefix[: MAX_STRING_LENGTH - len(dataset_id) - 2]
             warnings.warn(f"ID prefix is too long. Clipping to {id_prefix}")
         extended_id = f"{id_prefix}__{dataset_id}"
-        self.spark_row["extended_id"] = extended_id
-        self._hash = _hash(self.spark_row, ["extended_id"])
-        self.spark_row["hash"] = str(self._hash)
-        self.spark_row["labels"] = labels
-        print(self.spark_row)
+        self.row_dict["extended_id"] = extended_id
+        self._hash = _hash(self.row_dict, ["extended_id"])
+        self.row_dict["hash"] = str(self._hash)
+        self.row_dict["labels"] = labels
+        print(self.row_dict)
 
-    def to_spark_row(self, config_df, prop_df):
+    def to_row_dict(self, config_df, prop_df):
         """"""
 
         row_dict = _empty_dict_from_schema(dataset_schema)
@@ -159,55 +160,81 @@ class Dataset:
             "formation_energy",
             "energy",
         )
-        row_dict["nconfigurations"] = config_df.count()
+
         carray_cols = ["atomic_numbers", "elements", "dimension_types"]
         carray_types = {
             col.name: col.dataType
             for col in config_arr_schema
             if col.name in carray_cols
         }
+
         for col in carray_cols:
-            unstr_udf = sf.udf(unstring_df_val, carray_types[col])
+            unstr_udf = sf.pandas_udf(unstring_df_val_pd, carray_types[col])
             config_df = config_df.withColumn(col, unstr_udf(sf.col(col)))
+
+        config_df.cache()
+        row_dict["nconfigurations"] = config_df.count()
         row_dict["nsites"] = config_df.agg({"nsites": "sum"}).first()[0]
+        elements_df = config_df.select(
+            sf.explode("elements").alias("exploded_elements")
+        ).distinct()
         row_dict["elements"] = sorted(
-            config_df.select("elements")
-            .withColumn("exploded_elements", sf.explode("elements"))
-            .agg(sf.collect_set("exploded_elements").alias("exploded_elements"))
-            .select("exploded_elements")
-            .take(1)[0][0]
+            [row.exploded_elements for row in elements_df.collect()]
         )
         row_dict["nelements"] = len(row_dict["elements"])
-        atomic_ratios_df = config_df.select("atomic_numbers").withColumn(
-            "single_element", sf.explode("atomic_numbers")
-        )
-        total_elements = atomic_ratios_df.count()
 
-        print(total_elements, row_dict["nsites"])
-        assert total_elements == row_dict["nsites"]
-        atomic_ratios_df = atomic_ratios_df.groupBy("single_element").count()
-        atomic_ratios_df = atomic_ratios_df.withColumn(
-            "ratio", sf.col("count") / total_elements
+        element_counts = (
+            config_df.select(sf.explode("atomic_numbers").alias("single_element"))
+            .groupBy("single_element")
+            .agg(sf.count("*").alias("count"))
+        )
+        total_atoms = element_counts.agg(sf.sum("count")).first()[0]
+        atomic_ratios_df = element_counts.withColumn(
+            "ratio", sf.col("count") / sf.lit(total_atoms)
         )
 
+        print(total_atoms, row_dict["nsites"])
+        assert total_atoms == row_dict["nsites"]
+
+        # @sf.pandas_udf(StringType())
+        # def element_map_udf(col: pd.Series) -> pd.Series:
+        #     return col.map(ELEMENT_MAP)
+
+        # atomic_ratios_coll = (
+        #     atomic_ratios_df.withColumn(
+        #         "element",
+        #         element_map_udf(sf.col("single_element")),
+        #     )
+        #     .select("element", "ratio")
+        #     .collect()
+        # )
+        element_map_expr = sf.create_map(
+            [
+                sf.lit(k)
+                for pair in [(k, v) for k, v in ELEMENT_MAP.items()]
+                for k in pair
+            ]
+        )
         atomic_ratios_coll = (
             atomic_ratios_df.withColumn(
-                "element",
-                sf.udf(lambda x: ELEMENT_MAP[x], StringType())(sf.col("single_element")),
+                "element", element_map_expr[sf.col("single_element")]
             )
             .select("element", "ratio")
             .collect()
         )
-
         row_dict["total_elements_ratios"] = [
-            x[1] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
+            x["ratio"] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
         ]
+
         row_dict["nperiodic_dimensions"] = config_df.agg(
             sf.collect_set("nperiodic_dimensions")
         ).collect()[0][0]
         row_dict["dimension_types"] = config_df.agg(
             sf.collect_set("dimension_types")
         ).collect()[0][0]
+        config_df.unpersist()
+
+        prop_df.cache()
         nproperty_objects = prop_df.count()
         row_dict["nproperty_objects"] = nproperty_objects
         for prop in [
@@ -233,7 +260,7 @@ class Dataset:
         row_dict[f"{prop}_mean"] = (
             prop_df.select(prop).where(f"{prop} is not null").agg(sf.mean(prop))
         ).first()[0]
-
+        prop_df.unpersist()
         row_dict["authors"] = self.authors
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license
@@ -252,9 +279,9 @@ class Dataset:
     def __str__(self):
         return (
             f"Dataset(description='{self.description}', "
-            f"nconfiguration_sets={len(self.spark_row['configuration_sets'])}, "
-            f"nproperty_objects={self.spark_row['nproperty_objects']}, "
-            f"nconfigurations={self.spark_row['nconfigurations']}"
+            f"nconfiguration_sets={len(self.row_dict['configuration_sets'])}, "
+            f"nproperty_objects={self.row_dict['nproperty_objects']}, "
+            f"nconfigurations={self.row_dict['nconfigurations']}"
         )
 
     def __repr__(self):

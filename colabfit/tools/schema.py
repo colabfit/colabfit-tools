@@ -84,6 +84,8 @@ property_object_arr_schema = StructType(
         StructField("formation_energy", DoubleType(), True),
         StructField("adsorption_energy", DoubleType(), True),
         StructField("atomization_energy", DoubleType(), True),
+        StructField("max_force_norm", DoubleType(), True),
+        StructField("mean_force_norm", DoubleType(), True),
     ]
 )
 
@@ -152,7 +154,7 @@ configuration_set_arr_schema = StructType(
 
 configuration_set_schema = get_stringified_schema(configuration_set_arr_schema)
 
-co_cs_mapping_schema = StructType(
+co_cs_map_schema = StructType(
     [
         StructField("configuration_id", StringType(), True),
         StructField("configuration_set_id", StringType(), True),
