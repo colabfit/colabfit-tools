@@ -21,6 +21,55 @@ from colabfit.tools.vast.utilities import get_stringified_schema
 
 NSITES_COL_SPLITS = 20
 
+config_prop_arr_schema = StructType(
+    [
+        StructField("id", StringType(), True),
+        StructField("hash", StringType(), True),
+        StructField("property_id", StringType(), True),
+        StructField("property_hash", StringType(), True),
+        StructField("last_modified", TimestampType(), True),
+        StructField("dataset_id", StringType(), True),
+        StructField("multiplicity", IntegerType(), True),
+        StructField("software", StringType(), True),
+        StructField("method", StringType(), True),
+        StructField("energy", DoubleType(), True),
+        StructField("atomic_forces", ArrayType(ArrayType(DoubleType())), True),
+        StructField("cauchy_stress", ArrayType(ArrayType(DoubleType())), True),
+        StructField("cauchy_stress_volume_normalized", BooleanType(), True),
+        StructField("electronic_band_gap", DoubleType(), True),
+        StructField("electronic_band_gap_type", StringType(), True),
+        StructField("formation_energy", DoubleType(), True),
+        StructField("adsorption_energy", DoubleType(), True),
+        StructField("atomization_energy", DoubleType(), True),
+        StructField("max_force_norm", DoubleType(), True),
+        StructField("mean_force_norm", DoubleType(), True),
+        StructField("energy_above_hull", DoubleType(), True),
+        StructField("configuration_id", StringType(), True),
+        StructField("configuration_hash", StringType(), True),
+        StructField("structure_hash", StringType(), True),
+        StructField("cell", ArrayType(ArrayType(DoubleType())), True),
+        StructField("positions", ArrayType(ArrayType(DoubleType())), True),
+        StructField("pbc", ArrayType(BooleanType()), True),
+        StructField("chemical_formula_hill", StringType(), True),
+        StructField("chemical_formula_reduced", StringType(), True),
+        StructField("chemical_formula_anonymous", StringType(), True),
+        StructField("elements", ArrayType(StringType()), True),
+        StructField("elements_ratios", ArrayType(DoubleType()), True),
+        StructField("atomic_numbers", ArrayType(IntegerType()), True),
+        StructField("nsites", IntegerType(), True),
+        StructField("nelements", IntegerType(), True),
+        StructField("nperiodic_dimensions", IntegerType(), True),
+        StructField("dimension_types", ArrayType(IntegerType()), True),
+        StructField("names", ArrayType(StringType()), True),
+        StructField("labels", ArrayType(StringType()), True),
+        StructField("property_metadata_path", StringType(), True),
+        StructField("configuration_metadata_path", StringType(), True),
+    ]
+)
+config_prop_schema = get_stringified_schema(config_prop_arr_schema)
+config_prop_md_schema = StructType([field for field in config_prop_arr_schema])
+config_prop_md_schema.add(StructField("metadata", StringType(), True))
+
 config_arr_schema = StructType(
     [
         StructField("id", StringType(), True),

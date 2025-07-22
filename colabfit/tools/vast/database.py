@@ -18,7 +18,6 @@ from ibis import _
 from pyspark.sql import Row, SparkSession
 from pyspark.sql.functions import udf
 from pyspark.sql.types import (
-    ArrayType,
     IntegerType,
     LongType,
     StringType,
@@ -39,6 +38,9 @@ from colabfit.tools.vast.schema import (
     config_arr_schema,
     config_md_schema,
     config_schema,
+    config_prop_arr_schema,
+    config_prop_md_schema,
+    config_prop_schema,
     configuration_set_arr_schema,
     configuration_set_schema,
     dataset_arr_schema,
@@ -50,7 +52,6 @@ from colabfit.tools.vast.schema import (
 from colabfit.tools.vast.utilities import (
     _hash,
     get_last_modified,
-    get_spark_field_type,
     spark_schema_to_arrow_schema,
     split_long_string_cols,
     stringify_df_val_udf,
@@ -67,7 +68,6 @@ NSITES_COL_SPLITS = 20
 _CONFIGS_COLLECTION = "test_configs"
 _CONFIGSETS_COLLECTION = "test_config_sets"
 _DATASETS_COLLECTION = "test_datasets"
-_PROPOBJECT_COLLECTION = "test_prop_objects"
 _CO_CS_MAP_COLLECTION = "test_co_cs_map"
 _COL_MAX_STRING_LEN = 60000
 
@@ -118,7 +118,6 @@ class VastDataLoader:
         self.config_table = f"{self.table_prefix}.{_CONFIGS_COLLECTION}"
         self.config_set_table = f"{self.table_prefix}.{_CONFIGSETS_COLLECTION}"
         self.dataset_table = f"{self.table_prefix}.{_DATASETS_COLLECTION}"
-        self.prop_object_table = f"{self.table_prefix}.{_PROPOBJECT_COLLECTION}"
         self.co_cs_map_table = f"{self.table_prefix}.{_CO_CS_MAP_COLLECTION}"
 
         self.bucket_dir = VAST_BUCKET_DIR
@@ -149,17 +148,17 @@ class VastDataLoader:
         table_name = table_split[3].replace("`", "")
         return (bucket_name, schema_name, table_name)
 
-    def add_elem_to_col(df, col_name: str, elem: str):
-        df_added_elem = df.withColumn(
-            col_name,
-            sf.when(
-                sf.col(col_name).isNull(), sf.array().cast(ArrayType(StringType()))
-            ).otherwise(sf.col(col_name)),
-        )
-        df_added_elem = df_added_elem.withColumn(
-            col_name, sf.array_union(sf.col(col_name), sf.array(sf.lit(elem)))
-        )
-        return df_added_elem
+    # def add_elem_to_col(df, col_name: str, elem: str):
+    #     df_added_elem = df.withColumn(
+    #         col_name,
+    #         sf.when(
+    #             sf.col(col_name).isNull(), sf.array().cast(ArrayType(StringType()))
+    #         ).otherwise(sf.col(col_name)),
+    #     )
+    #     df_added_elem = df_added_elem.withColumn(
+    #         col_name, sf.array_union(sf.col(col_name), sf.array(sf.lit(elem)))
+    #     )
+    #     return df_added_elem
 
     def delete_from_table(self, table_name: str, ids: list[str]):
         if isinstance(ids, str):
@@ -201,7 +200,7 @@ class VastDataLoader:
     ):
         """Include self.table_prefix in the table name when passed to this function"""
         string_schema_dict = {
-            self.config_table: config_schema,
+            self.config_table: config_prop_schema,
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.prop_object_table: property_object_schema,
@@ -358,38 +357,32 @@ class VastDataLoader:
             "metadata_dir": self.metadata_dir,
         }
         beg = time()
-        distinct_metadata = df.select("metadata", "metadata_path").distinct()
-        distinct_metadata.foreachPartition(
+        distinct_co_metadata = df.select(
+            "configuration_metadata", "configuration_metadata_path"
+        ).distinct()
+        distinct_co_metadata.foreachPartition(
+            lambda partition: write_md_partition(partition, config)
+        )
+        distinct_po_metadata = df.select(
+            "property_metadata", "property_metadata_path"
+        ).distinct()
+        distinct_po_metadata.foreachPartition(
             lambda partition: write_md_partition(partition, config)
         )
         logger.info(f"Time to write metadata: {time() - beg}")
-        df = df.drop("metadata")
-        # file_base = f"/vdev/{VAST_BUCKET_DIR}/{VAST_METADATA_DIR}/"
+        df = df.drop("configuration_metadata", "property_metadata")
         file_base = f"{self.metadata_dir}/"
-        df = df.withColumn(
-            "metadata_path",
-            prepend_path_udf(sf.lit(str(Path(file_base))), sf.col("metadata_path")),
+        df = df.withColumns(
+            {
+                "configuration_metadata_path": prepend_path_udf(
+                    sf.lit(str(Path(file_base))), sf.col("configuration_metadata_path")
+                ),
+                "property_metadata_path": prepend_path_udf(
+                    sf.lit(str(Path(file_base))), sf.col("property_metadata_path")
+                ),
+            }
         )
         return df
-
-    def concat_column_vals(self, df, duplicate_df, col):
-        df_add = df.select("id", col)
-        duplicate_df = duplicate_df.withColumnRenamed(col, f"{col}_dup").join(
-            df_add, on="id"
-        )
-        duplicate_df = duplicate_df.withColumn(
-            col,
-            sf.array_distinct(sf.array_union(f"{col}_dup", col)),
-        ).drop(f"{col}_dup")
-        return duplicate_df
-
-    def concat_constant_elem(self, duplicate_df, col, elem):
-        duplicate_df = duplicate_df.withColumn(col, sf.coalesce(sf.col(col), sf.array()))
-        duplicate_df = duplicate_df.withColumn(
-            col,
-            sf.array_distinct(sf.array_union(sf.col(col), sf.array(sf.lit(elem)))),
-        )
-        return duplicate_df
 
     def increment_multiplicity(self, df, duplicate_df):
         df_add = df.select("id", sf.col("multiplicity").alias("multiplicity_add"))
@@ -404,10 +397,7 @@ class VastDataLoader:
         self,
         df,
         table_name,
-        cols: list[str],
-        elems: list[str],
         str_schema,
-        arr_schema,
     ):
         """
         Updates existing rows in CO or PO table with data from new ingest.
@@ -418,8 +408,6 @@ class VastDataLoader:
             The DataFrame containing only rows to be updated (i.e., identical ids exist)
         table_name : str
             The name of the table to be updated.
-        cols : list[str]
-            List of columns with matching elems to update.
         elems : list[str]
             List of elements corresponding to the columns to be updated.
         str_schema : Schema
@@ -434,28 +422,13 @@ class VastDataLoader:
             - new_ids: List of IDs that were newly added.
             - existing_ids: List of IDs that were updated.
         """
-        if isinstance(cols, str):
-            cols = [cols]
-        if isinstance(elems, str):
-            elems = [elems]
-        update_cols = cols + ["last_modified"]
-        arr_cols = [
-            col
-            for col in cols
-            if get_spark_field_type(arr_schema, col).typeName() == "array"
-        ]
+        update_cols = ["multiplicity", "last_modified"]
         str_col_types = {
-            col: get_spark_field_type(str_schema, col) for col in update_cols
-        }
-        unstr_col_types = {
-            col: get_spark_field_type(arr_schema, col) for col in update_cols
-        }
-        addtl_fields = {
+            "multiplicity": IntegerType(),
+            "last_modified": TimestampType(),
             "id": StringType(),
             "$row_id": LongType(),
         }
-        str_col_types.update(addtl_fields)
-        unstr_col_types.update(addtl_fields)
         read_schema = StructType(
             [StructField(col, col_type, True) for col, col_type in str_col_types.items()]
         )
@@ -476,43 +449,18 @@ class VastDataLoader:
                 table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
                 rec_batch = table.select(
                     predicate=table["id"].isin(id_batch),
-                    columns=cols + ["id"],
+                    columns=["multiplicity", "id"],
                     internal_row_id=True,
                 )
                 rec_batch = rec_batch.read_all()
             rec_batch_pd = rec_batch.to_struct_array().to_pandas()
             duplicate_df = self.spark.createDataFrame(rec_batch_pd, schema=read_schema)
-            for col_name in arr_cols:
-                unstring_udf = sf.udf(unstring_df_val, unstr_col_types[col_name])
-                duplicate_df = duplicate_df.withColumn(
-                    col_name, unstring_udf(sf.col(col_name))
-                )
-            for col, elem in zip(cols, elems):
-                if col == "labels":
-                    if df.filter(sf.col("labels").isNotNull()).count() == 0:
-                        continue
-                    duplicate_df = self.concat_column_vals(df, duplicate_df, col)
-                elif col == "names":
-                    duplicate_df = self.concat_column_vals(df, duplicate_df, col)
-                elif col == "multiplicity":
-                    duplicate_df = self.increment_multiplicity(df, duplicate_df)
-                else:
-                    duplicate_df = self.concat_constant_elem(duplicate_df, col, elem)
-
+            duplicate_df = self.increment_multiplicity(df, duplicate_df)
             update_time = get_last_modified()
             duplicate_df = duplicate_df.withColumn(
                 "last_modified", sf.lit(update_time).cast("timestamp")
             )
-            duplicate_df = duplicate_df.select(
-                *[
-                    (
-                        stringify_df_val_udf(sf.col(col)).alias(col)
-                        if col in arr_cols
-                        else col
-                    )
-                    for col in arrow_schema.names
-                ]
-            )
+            duplicate_df = duplicate_df.select(*[col for col in arrow_schema.names])
             update_table = pa.table(
                 [pa.array(col) for col in zip(*duplicate_df.collect())],
                 schema=arrow_schema,
@@ -719,12 +667,11 @@ class VastDataLoader:
         dataset_id=None,
         name_match=None,
         label_match=None,
-        configuration_ids=None,
     ):
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
         config_df_cols = [
-            "id",
+            "configuration_id",
             "nsites",
             "elements",
             "nperiodic_dimensions",
@@ -732,46 +679,38 @@ class VastDataLoader:
             "atomic_numbers",
         ]
         read_schema = StructType(
-            [field for field in config_schema.fields if field.name in config_df_cols]
+            [
+                field
+                for field in config_prop_schema.fields
+                if field.name in config_df_cols
+            ]
         )
         spark_df = None
-        if configuration_ids is not None:
-            co_id_batches = configuration_ids
-        else:
-            co_ids = (
-                self.spark.table(self.prop_object_table)
-                .filter(sf.col("dataset_id") == dataset_id)
-                .select("configuration_id")
-                .collect()
+        if name_match is None and label_match is None:
+            predicate = _.dataset_id == dataset_id
+        if name_match is not None and label_match is not None:
+            predicate = (
+                (_.dataset_id == dataset_id)
+                & (_.names.contains(name_match))
+                & (_.labels.contains(label_match))
             )
-            co_ids = [x["configuration_id"] for x in co_ids]
-        co_id_batches = batched(sorted(co_ids), 10000)
-        for co_id_batch in co_id_batches:
-            if name_match is None and label_match is None:
-                predicate = _.id.isin(co_id_batch)
-            if name_match is not None and label_match is not None:
-                predicate = (
-                    (_.id.isin(co_id_batch))
-                    & (_.names.contains(name_match))
-                    & (_.labels.contains(label_match))
+        elif name_match is not None:
+            predicate = (_.dataset_id == dataset_id) & (_.names.contains(name_match))
+        else:
+            predicate = (_.dataset_id == dataset_id) & (_.labels.contains(label_match))
+        if spark_df is None:
+            spark_df = self.simple_sdk_query(
+                self.config_table, predicate, read_schema, columns=config_df_cols
+            )
+        else:
+            spark_df = spark_df.union(
+                self.simple_sdk_query(
+                    self.config_table,
+                    predicate,
+                    read_schema,
+                    columns=config_df_cols,
                 )
-            elif name_match is not None:
-                predicate = (_.id.isin(co_id_batch)) & (_.names.contains(name_match))
-            else:
-                predicate = (_.id.isin(co_id_batch)) & (_.labels.contains(label_match))
-            if spark_df is None:
-                spark_df = self.simple_sdk_query(
-                    self.config_table, predicate, read_schema, columns=config_df_cols
-                )
-            else:
-                spark_df = spark_df.union(
-                    self.simple_sdk_query(
-                        self.config_table,
-                        predicate,
-                        read_schema,
-                        columns=config_df_cols,
-                    )
-                )
+            )
 
         return spark_df
 
@@ -973,47 +912,47 @@ class DataManager:
                 )
             )
 
-    def deduplicate_po_df(self, po_df):
+    def deduplicate_co_po_df(self, co_po_df):
         """Aggregate multiplicity for PO dataframe with duplicate IDS."""
-        multiplicity = po_df.groupBy("id").agg(sf.count("*").alias("count"))
-        po_df = po_df.dropDuplicates(["id"])
-        po_df = (
-            po_df.join(multiplicity, on="id", how="inner")
+        multiplicity = co_po_df.groupBy("id").agg(sf.count("*").alias("count"))
+        co_po_df = co_po_df.dropDuplicates(["id"])
+        co_po_df = (
+            co_po_df.join(multiplicity, on="id", how="inner")
             .withColumn("multiplicity", sf.col("count"))
             .drop("count")
         )
-        po_df = po_df.select(property_object_md_schema.fieldNames())
-        return po_df
+        co_po_df = co_po_df.select(property_object_md_schema.fieldNames())
+        return co_po_df
 
-    def deduplicate_co_df(self, co_df):
-        """Combine values across duplicate CO rows."""
-        grouped_id = co_df.groupBy("id")
-        merged_names = grouped_id.agg(
-            sf.array_distinct(sf.flatten(sf.collect_list("names"))).alias("names")
-        )
-        co_df = co_df.dropDuplicates(["id"])
-        co_df = co_df.drop("names").join(merged_names, on="id", how="inner")
-        if co_df.select("labels").filter(sf.col("labels").isNotNull()).count() > 0:
-            merged_labels = grouped_id.agg(
-                sf.array_distinct(sf.flatten(sf.collect_list("labels"))).alias("labels")
-            )
-            co_df = co_df.drop("labels").join(merged_labels, on="id", how="inner")
-        co_df = co_df.select(config_md_schema.fieldNames())
-        return co_df
+    # def deduplicate_co_df(self, co_df):
+    #     """Combine values across duplicate CO rows."""
+    #     grouped_id = co_df.groupBy("id")
+    #     merged_names = grouped_id.agg(
+    #         sf.array_distinct(sf.flatten(sf.collect_list("names"))).alias("names")
+    #     )
+    #     co_df = co_df.dropDuplicates(["id"])
+    #     co_df = co_df.drop("names").join(merged_names, on="id", how="inner")
+    #     if co_df.select("labels").filter(sf.col("labels").isNotNull()).count() > 0:
+    #         merged_labels = grouped_id.agg(
+    #             sf.array_distinct(sf.flatten(sf.collect_list("labels"))).alias("labels")
+    #         )
+    #         co_df = co_df.drop("labels").join(merged_labels, on="id", how="inner")
+    #     co_df = co_df.select(config_md_schema.fieldNames())
+    #     return co_df
 
     def check_existing_tables(self, loader, batching_ingest=False):
         """Check tables for conficts before loading data."""
-        if loader.spark.catalog.tableExists(loader.prop_object_table):
-            logger.info(f"table {loader.prop_object_table} exists")
+        if loader.spark.catalog.tableExists(loader.config_table):
+            logger.info(f"table {loader.config_table} exists")
             if batching_ingest is False:
-                pos_with_mult = loader.read_table(loader.prop_object_table)
-                pos_with_mult = pos_with_mult.filter(
+                cos_with_mult = loader.read_table(loader.config_table)
+                cos_with_mult = cos_with_mult.filter(
                     (sf.col("dataset_id") == self.dataset_id)
                     & (sf.col("multiplicity") > 0)
                 )
-                if pos_with_mult.count() > 0:
+                if cos_with_mult.count() > 0:
                     raise ValueError(
-                        f"POs for dataset with ID {self.dataset_id} already exist in "
+                        f"COs for dataset with ID {self.dataset_id} already exist in "
                         "database with multiplicity > 0.\nTo continue, set "
                         "multiplicities to 0 with "
                         f'loader.zero_multiplicity("{self.dataset_id}")'
@@ -1025,6 +964,51 @@ class DataManager:
             if dataset_exists.count() > 0:
                 raise ValueError(f"Dataset with ID {self.dataset_id} already exists.")
 
+    def hash_combined_rows(self, co_po_rows):
+        hash_fields = [
+            fname
+            for fname in config_prop_md_schema.fieldNames()
+            if fname
+            not in [
+                "id",
+                "hash",
+                "last_modified",
+                "multiplicity",
+                "property_metadata_path",
+                "configuration_metadata_path",
+                "metadata_size",
+                "mean_force_norm",
+                "max_force_norm",
+                "property_hash",
+                "configuration_hash",
+                "property_id",
+                "configuration_id",
+            ]
+        ]
+        return _hash(co_po_rows, hash_fields, include_keys_in_hash=False)
+
+    def combine_co_po_rows(self, co_po_rows):
+        """Combine configuration and property rows into a single row."""
+        combined_rows = []
+        for co_row, po_row in co_po_rows:
+            po_row["property_id"] = po_row.pop("id")
+            co_row["configuration_id"] = co_row.pop("id")
+            po_row["property_hash"] = po_row.pop("hash")
+            co_row["configuration_hash"] = co_row.pop("hash")
+            po_row["metadata_path"] = po_row.pop("property_metadata_path")
+            co_row["metadata_path"] = co_row.pop("configuration_metadata_path")
+            po_row["metadata"] = po_row.pop("property_metadata")
+            co_row["metadata"] = co_row.pop("configuration_metadata")
+            co_po_row = {
+                k: v
+                for k, v in {**co_row, **po_row}.items()
+                if k in config_prop_md_schema.fieldNames()
+            }
+            co_po_row["hash"] = self.hash_combined_rows(co_po_row)
+            combined_rows.append(co_po_row)
+
+        return combined_rows
+
     def load_co_po_to_vastdb(self, loader, batching_ingest=False):
         self.check_existing_tables(loader, batching_ingest)
         co_po_rows = self.gather_co_po_in_batches_no_pool()
@@ -1033,57 +1017,31 @@ class DataManager:
             desc="Loading data to database: ",
             unit="batch",
         ):
-            co_rows, po_rows = list(zip(*co_po_batch))
-            if len(co_rows) == 0:
+            co_po_combined_rows = self.combine_co_po_rows(co_po_batch)
+            if len(co_po_combined_rows) == 0:
                 continue
             else:
-                co_df = loader.spark.createDataFrame(co_rows, schema=config_md_schema)
-                po_df = loader.spark.createDataFrame(
-                    po_rows, schema=property_object_md_schema
+                co_df = loader.spark.createDataFrame(
+                    co_po_combined_rows, schema=config_prop_md_schema
                 )
                 co_count = co_df.count()
                 co_count_distinct = co_df.select("id").distinct().count()
                 if co_count_distinct < co_count:
                     logger.info(
-                        f"{co_count - co_count_distinct} duplicates found in CO dataframe"  # noqa E501
+                        f"{co_count - co_count_distinct} duplicates found in CO-PO dataframe"  # noqa E501
                     )
-                    co_df = self.deduplicate_co_df(co_df)
-
-                po_count = po_df.count()
-                po_count_distinct = po_df.select("id").distinct().count()
-                if po_count_distinct < po_count:
-                    logger.info(
-                        f"{po_count - po_count_distinct} duplicates found in PO dataframe"  # noqa
-                    )
-                    po_df = self.deduplicate_po_df(po_df)
+                    co_df = self.deduplicate_co_po_df(co_df)
                 co_existing_row_df = loader.write_table_first(
                     co_df,
                     loader.config_table,
-                    # check_length_col="positions",
                 )
                 if co_existing_row_df is not None:
                     loader.update_existing_co_po_rows(
                         df=co_existing_row_df,
                         table_name=loader.config_table,
-                        cols=["dataset_ids", "names", "labels"],
-                        elems=[self.dataset_id, None, None],
-                        str_schema=config_schema,
-                        arr_schema=config_arr_schema,
-                    )
-
-                po_existing_row_df = loader.write_table_first(
-                    po_df,
-                    loader.prop_object_table,
-                    # check_length_col="atomic_forces",
-                )
-                if po_existing_row_df is not None:
-                    loader.update_existing_co_po_rows(
-                        df=po_existing_row_df,
-                        table_name=loader.prop_object_table,
                         cols=["multiplicity"],
-                        elems=[None],
-                        str_schema=property_object_schema,
-                        arr_schema=property_object_arr_schema,
+                        str_schema=config_prop_schema,
+                        arr_schema=config_prop_arr_schema,
                     )
 
     def create_configuration_sets(
@@ -1209,14 +1167,10 @@ class DataManager:
         config_df = loader.dataset_query(
             dataset_id=self.dataset_id, table_name=loader.config_table
         )
-        prop_df = loader.dataset_query(
-            dataset_id=self.dataset_id, table_name=loader.prop_object_table
-        )
         ds = Dataset(
             name=name,
             authors=authors,
             config_df=config_df,
-            prop_df=prop_df,
             publication_link=publication_link,
             data_link=data_link,
             description=description,

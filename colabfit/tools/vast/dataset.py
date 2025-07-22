@@ -39,8 +39,6 @@ class Dataset:
     description : str
     config_df : pyspark.sql.DataFrame
         DataFrame containing configuration set information.
-    prop_df : pyspark.sql.DataFrame
-        DataFrame containing property information.
     other_links : list of str, optional
         Additional external links related to the dataset (default: None).
     dataset_id : str, optional
@@ -103,8 +101,8 @@ class Dataset:
 
     Methods
     -------
-    to_row_dict(config_df, prop_df)
-        Aggregates statistics and metadata from the configuration and property DataFrames
+    to_row_dict(config_df)
+        Aggregates statistics and metadata from the configuration DataFrame
         into a dictionary representation suitable for use in a Spark DataFrame, Vast DB
         table or similar.
 
@@ -123,7 +121,6 @@ class Dataset:
         data_link: str,
         description: str,
         config_df,
-        prop_df,
         other_links: list[str] = None,
         dataset_id: str = None,
         labels: list[str] = None,
@@ -154,7 +151,7 @@ class Dataset:
         self.equilibrium = equilibrium
         if self.configuration_set_ids is None:
             self.configuration_set_ids = []
-        self.row_dict = self.to_row_dict(config_df=config_df, prop_df=prop_df)
+        self.row_dict = self.to_row_dict(config_df=config_df)
         self.row_dict["id"] = self.dataset_id
         id_prefix = "__".join(
             [
@@ -172,7 +169,7 @@ class Dataset:
         self.row_dict["labels"] = labels
         logger.info(self.row_dict)
 
-    def to_row_dict(self, config_df, prop_df):
+    def to_row_dict(self, config_df):
         """"""
         row_dict = _empty_dict_from_schema(dataset_schema)
         row_dict["last_modified"] = get_last_modified()
@@ -184,11 +181,6 @@ class Dataset:
             "nsites",
             "nperiodic_dimensions",
             "dimension_types",
-            # "labels",
-        )
-
-        prop_df = prop_df.select(
-            "id",
             "atomization_energy",
             "atomic_forces",
             "adsorption_energy",
@@ -269,7 +261,7 @@ class Dataset:
         ]
         config_df.unpersist()
 
-        count_df = prop_df.agg(
+        count_df = config_df.agg(
             sf.count_distinct("id").alias("nproperty_objects"),
             sf.count("atomization_energy").alias("atomization_energy_count"),
             sf.count("adsorption_energy").alias("adsorption_energy_count"),
