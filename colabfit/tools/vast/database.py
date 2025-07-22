@@ -46,8 +46,6 @@ from colabfit.tools.vast.schema import (
     dataset_arr_schema,
     dataset_schema,
     property_object_arr_schema,
-    property_object_md_schema,
-    property_object_schema,
 )
 from colabfit.tools.vast.utilities import (
     _hash,
@@ -203,9 +201,15 @@ class VastDataLoader:
             self.config_table: config_prop_schema,
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
-            self.prop_object_table: property_object_schema,
             self.co_cs_map_table: co_cs_map_schema,
         }
+        identifier_dict = {
+            self.config_table: "hash",
+            self.config_set_table: "id",
+            self.dataset_table: "id",
+            self.co_cs_map_table: "id",
+        }
+        ider = identifier_dict[table_name]
         table_schema = string_schema_dict[table_name]
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
         for field in arrow_schema:
@@ -219,7 +223,7 @@ class VastDataLoader:
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
         ]
-        ids = [x["id"] for x in spark_df.select("id").collect()]
+        ids = [x[ider] for x in spark_df.select(ider).collect()]
         batched_ids = batched(ids, 10000)
         existing_df_array = []
 
@@ -228,22 +232,22 @@ class VastDataLoader:
             for id_batch in batched_ids:
                 id_batch = list(set(id_batch))
                 rec_batch = table.select(
-                    predicate=table["id"].isin(id_batch),
-                    columns=["id"],
+                    predicate=table[ider].isin(id_batch),
+                    columns=[ider],
                     internal_row_id=False,
                 )
                 rec_batch = rec_batch.read_all()
                 if rec_batch.num_rows > 0:
                     rec_batch = rec_batch.to_struct_array().to_pandas()
-                    existing_ids = [x["id"] for x in rec_batch]
+                    existing_ids = [x[ider] for x in rec_batch]
                     new_ids = [id for id in id_batch if id not in existing_ids]
                     existing_df_array.append(
-                        spark_df.filter(sf.col("id").isin(existing_ids))
+                        spark_df.filter(sf.col(ider).isin(existing_ids))
                     )
                     if len(new_ids) == 0:
                         logger.info(f"No new IDs to insert into table {table_name}")
                         continue
-                    write_rows = spark_df.filter(sf.col("id").isin(new_ids))
+                    write_rows = spark_df.filter(sf.col(ider).isin(new_ids))
                 elif rec_batch.num_rows == 0:
                     logger.info(f"No matching IDs found in table {table_name}")
                     new_ids = id_batch
@@ -294,7 +298,6 @@ class VastDataLoader:
             self.config_table: config_schema,
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
-            self.prop_object_table: property_object_schema,
             self.co_cs_map_table: co_cs_map_schema,
         }
         table_schema = string_schema_dict[table_name]
@@ -385,8 +388,8 @@ class VastDataLoader:
         return df
 
     def increment_multiplicity(self, df, duplicate_df):
-        df_add = df.select("id", sf.col("multiplicity").alias("multiplicity_add"))
-        duplicate_df = duplicate_df.join(df_add, on="id", how="left")
+        df_add = df.select("hash", sf.col("multiplicity").alias("multiplicity_add"))
+        duplicate_df = duplicate_df.join(df_add, on="hash", how="left")
         duplicate_df = duplicate_df.withColumn(
             "multiplicity",
             sf.col("multiplicity") + sf.col("multiplicity_add"),
@@ -426,7 +429,7 @@ class VastDataLoader:
         str_col_types = {
             "multiplicity": IntegerType(),
             "last_modified": TimestampType(),
-            "id": StringType(),
+            "hash": StringType(),
             "$row_id": LongType(),
         }
         read_schema = StructType(
@@ -437,7 +440,7 @@ class VastDataLoader:
         )
         arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
 
-        ids = [x["id"] for x in df.select("id").collect()]
+        ids = [x["hash"] for x in df.select("hash").collect()]
         batched_ids = batched(ids, 10000)
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
         n_updated = 0
@@ -448,8 +451,8 @@ class VastDataLoader:
             with self.session.transaction() as tx:
                 table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
                 rec_batch = table.select(
-                    predicate=table["id"].isin(id_batch),
-                    columns=["multiplicity", "id"],
+                    predicate=table["hash"].isin(id_batch),
+                    columns=["multiplicity", "hash"],
                     internal_row_id=True,
                 )
                 rec_batch = rec_batch.read_all()
@@ -492,7 +495,6 @@ class VastDataLoader:
             self.config_table: config_schema,
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
-            self.prop_object_table: property_object_schema,
             self.co_cs_map_table: co_cs_map_schema,
         }
         unstring_schema_dict = {
@@ -505,7 +507,6 @@ class VastDataLoader:
             self.config_table: config_md_schema,
             self.config_set_table: configuration_set_arr_schema,
             self.dataset_table: dataset_arr_schema,
-            self.prop_object_table: property_object_md_schema,
         }
         if table_name in [self.config_set_table, self.dataset_table]:
             read_metadata = False
@@ -552,7 +553,7 @@ class VastDataLoader:
             return
         spark_schema = StructType(
             [
-                StructField("id", StringType(), False),
+                StructField("hash", StringType(), False),
                 StructField("multiplicity", IntegerType(), True),
                 StructField("last_modified", TimestampType(), False),
                 StructField("$row_id", IntegerType(), False),
@@ -565,7 +566,7 @@ class VastDataLoader:
             rec_batches = table.select(
                 predicate=(table["dataset_id"] == dataset_id)
                 & (table["multiplicity"] > 0),
-                columns=["id", "multiplicity", "last_modified"],
+                columns=["hash", "multiplicity", "last_modified"],
                 internal_row_id=True,
             )
             for rec_batch in rec_batches:
@@ -580,7 +581,7 @@ class VastDataLoader:
                 )
                 arrow_schema = pa.schema(
                     [
-                        pa.field("id", pa.string()),
+                        pa.field("hash", pa.string()),
                         pa.field("multiplicity", pa.int32()),
                         pa.field("last_modified", pa.timestamp("us")),
                         pa.field("$row_id", pa.uint64()),
@@ -914,14 +915,14 @@ class DataManager:
 
     def deduplicate_co_po_df(self, co_po_df):
         """Aggregate multiplicity for PO dataframe with duplicate IDS."""
-        multiplicity = co_po_df.groupBy("id").agg(sf.count("*").alias("count"))
-        co_po_df = co_po_df.dropDuplicates(["id"])
+        multiplicity = co_po_df.groupBy("hash").agg(sf.count("*").alias("count"))
+        co_po_df = co_po_df.dropDuplicates(["hash"])
         co_po_df = (
-            co_po_df.join(multiplicity, on="id", how="inner")
+            co_po_df.join(multiplicity, on="hash", how="inner")
             .withColumn("multiplicity", sf.col("count"))
             .drop("count")
         )
-        co_po_df = co_po_df.select(property_object_md_schema.fieldNames())
+        co_po_df = co_po_df.select(config_prop_md_schema.fieldNames())
         return co_po_df
 
     # def deduplicate_co_df(self, co_df):
@@ -967,7 +968,7 @@ class DataManager:
     def hash_combined_rows(self, co_po_rows):
         hash_fields = [
             fname
-            for fname in config_prop_md_schema.fieldNames()
+            for fname in config_prop_schema.fieldNames()
             if fname
             not in [
                 "id",
@@ -995,10 +996,10 @@ class DataManager:
             co_row["configuration_id"] = co_row.pop("id")
             po_row["property_hash"] = po_row.pop("hash")
             co_row["configuration_hash"] = co_row.pop("hash")
-            po_row["metadata_path"] = po_row.pop("property_metadata_path")
-            co_row["metadata_path"] = co_row.pop("configuration_metadata_path")
-            po_row["metadata"] = po_row.pop("property_metadata")
-            co_row["metadata"] = co_row.pop("configuration_metadata")
+            po_row["property_metadata_path"] = po_row.pop("metadata_path")
+            co_row["configuration_metadata_path"] = co_row.pop("metadata_path")
+            po_row["property_metadata"] = po_row.pop("metadata")
+            co_row["configuration_metadata"] = co_row.pop("metadata")
             co_po_row = {
                 k: v
                 for k, v in {**co_row, **po_row}.items()
@@ -1025,7 +1026,7 @@ class DataManager:
                     co_po_combined_rows, schema=config_prop_md_schema
                 )
                 co_count = co_df.count()
-                co_count_distinct = co_df.select("id").distinct().count()
+                co_count_distinct = co_df.select("hash").distinct().count()
                 if co_count_distinct < co_count:
                     logger.info(
                         f"{co_count - co_count_distinct} duplicates found in CO-PO dataframe"  # noqa E501
@@ -1072,9 +1073,8 @@ class DataManager:
                 label_match=label_match,
             )
             co_id_df = (
-                config_set_query_df.select("id")
-                .distinct()
-                .withColumnRenamed("id", "configuration_id")
+                config_set_query_df.select("hash").distinct()
+                # .withColumnRenamed("id", "configuration_id")
             )
             string_cols = [
                 "elements",
