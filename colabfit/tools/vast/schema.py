@@ -68,7 +68,9 @@ config_prop_arr_schema = StructType(
 )
 config_prop_schema = get_stringified_schema(config_prop_arr_schema)
 config_prop_md_schema = StructType([field for field in config_prop_arr_schema])
-config_prop_md_schema.add(StructField("metadata", StringType(), True))
+config_prop_md_schema.add(StructField("configuration_metadata", StringType(), True)).add(
+    StructField("property_metadata", StringType(), True)
+)
 
 config_arr_schema = StructType(
     [

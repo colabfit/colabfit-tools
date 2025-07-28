@@ -226,7 +226,6 @@ class VastDataLoader:
         ids = [x[ider] for x in spark_df.select(ider).collect()]
         batched_ids = batched(ids, 10000)
         existing_df_array = []
-
         with self.session.transaction() as tx:
             table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
             for id_batch in batched_ids:
@@ -284,6 +283,44 @@ class VastDataLoader:
         else:
             existing_df = None
         return existing_df
+
+    def write_table_no_check(
+        self,
+        spark_df,
+        table_name: str,
+    ):
+        logger.info(f"Writing table {table_name} without checking for duplicates")
+        string_schema_dict = {
+            self.config_table: config_prop_schema,
+            self.config_set_table: configuration_set_schema,
+            self.dataset_table: dataset_schema,
+            self.co_cs_map_table: co_cs_map_schema,
+        }
+        table_schema = string_schema_dict[table_name]
+        arrow_schema = spark_schema_to_arrow_schema(table_schema)
+        for field in arrow_schema:
+            field = field.with_nullable(True)
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        if not self.spark.catalog.tableExists(table_name):
+            logger.info(f"Creating table {table_name}")
+            with self.session.transaction() as tx:
+                schema = tx.bucket(bucket_name).schema(schema_name)
+                schema.create_table(table_n, arrow_schema)
+        string_cols = [
+            f.name for f in spark_df.schema if f.dataType.typeName() == "array"
+        ]
+        write_rows = self.write_metadata(spark_df)
+        write_rows = write_rows.select(
+            *[
+                (
+                    stringify_df_val_udf(sf.col(col)).alias(col)
+                    if col in string_cols
+                    else col
+                )
+                for col in table_schema.fieldNames()
+            ]
+        )
+        spark_df.write.mode("append").saveAsTable(table_name)
 
     def write_table(
         self,
@@ -349,9 +386,7 @@ class VastDataLoader:
         Returns a DataFrame without metadata column. The returned DataFrame should
         match table schema (from schema.py)
         """
-        if df.filter(sf.col("metadata").isNotNull()).count() == 0:
-            df = df.drop("metadata")
-            return df
+
         config = {
             "bucket_dir": self.bucket_dir,
             "access_key": self.access_key,
@@ -360,12 +395,15 @@ class VastDataLoader:
             "metadata_dir": self.metadata_dir,
         }
         beg = time()
-        distinct_co_metadata = df.select(
-            "configuration_metadata", "configuration_metadata_path"
-        ).distinct()
-        distinct_co_metadata.foreachPartition(
-            lambda partition: write_md_partition(partition, config)
-        )
+        if df.filter(sf.col("configuration_metadata").isNotNull()).count() == 0:
+            df = df.drop("configuration_metadata")
+        else:
+            distinct_co_metadata = df.select(
+                "configuration_metadata", "configuration_metadata_path"
+            ).distinct()
+            distinct_co_metadata.foreachPartition(
+                lambda partition: write_md_partition(partition, config)
+            )
         distinct_po_metadata = df.select(
             "property_metadata", "property_metadata_path"
         ).distinct()
@@ -501,7 +539,6 @@ class VastDataLoader:
             self.config_table: config_arr_schema,
             self.config_set_table: configuration_set_arr_schema,
             self.dataset_table: dataset_arr_schema,
-            self.prop_object_table: property_object_arr_schema,
         }
         md_schema_dict = {
             self.config_table: config_md_schema,
@@ -925,22 +962,6 @@ class DataManager:
         co_po_df = co_po_df.select(config_prop_md_schema.fieldNames())
         return co_po_df
 
-    # def deduplicate_co_df(self, co_df):
-    #     """Combine values across duplicate CO rows."""
-    #     grouped_id = co_df.groupBy("id")
-    #     merged_names = grouped_id.agg(
-    #         sf.array_distinct(sf.flatten(sf.collect_list("names"))).alias("names")
-    #     )
-    #     co_df = co_df.dropDuplicates(["id"])
-    #     co_df = co_df.drop("names").join(merged_names, on="id", how="inner")
-    #     if co_df.select("labels").filter(sf.col("labels").isNotNull()).count() > 0:
-    #         merged_labels = grouped_id.agg(
-    #             sf.array_distinct(sf.flatten(sf.collect_list("labels"))).alias("labels")
-    #         )
-    #         co_df = co_df.drop("labels").join(merged_labels, on="id", how="inner")
-    #     co_df = co_df.select(config_md_schema.fieldNames())
-    #     return co_df
-
     def check_existing_tables(self, loader, batching_ingest=False):
         """Check tables for conficts before loading data."""
         if loader.spark.catalog.tableExists(loader.config_table):
@@ -1010,7 +1031,7 @@ class DataManager:
 
         return combined_rows
 
-    def load_co_po_to_vastdb(self, loader, batching_ingest=False):
+    def load_co_po_to_vastdb(self, loader, batching_ingest=False, check_existing=True):
         self.check_existing_tables(loader, batching_ingest)
         co_po_rows = self.gather_co_po_in_batches_no_pool()
         for co_po_batch in tqdm(
@@ -1032,17 +1053,23 @@ class DataManager:
                         f"{co_count - co_count_distinct} duplicates found in CO-PO dataframe"  # noqa E501
                     )
                     co_df = self.deduplicate_co_po_df(co_df)
-                co_existing_row_df = loader.write_table_first(
-                    co_df,
-                    loader.config_table,
-                )
-                if co_existing_row_df is not None:
-                    loader.update_existing_co_po_rows(
-                        df=co_existing_row_df,
-                        table_name=loader.config_table,
-                        cols=["multiplicity"],
-                        str_schema=config_prop_schema,
-                        arr_schema=config_prop_arr_schema,
+                if check_existing:
+                    co_existing_row_df = loader.write_table_first(
+                        co_df,
+                        loader.config_table,
+                    )
+                    if co_existing_row_df is not None:
+                        loader.update_existing_co_po_rows(
+                            df=co_existing_row_df,
+                            table_name=loader.config_table,
+                            cols=["multiplicity"],
+                            str_schema=config_prop_schema,
+                            arr_schema=config_prop_arr_schema,
+                        )
+                else:
+                    loader.write_table_no_check(
+                        co_df,
+                        loader.config_table,
                     )
 
     def create_configuration_sets(
