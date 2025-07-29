@@ -68,10 +68,10 @@ class ConfigurationSet:
         row_dict["name"] = self.name
         row_dict["description"] = self.description
         row_dict["dataset_id"] = self.dataset_id
-        config_df = config_df.drop_duplicates(["id"])
+        config_df = config_df.drop_duplicates(["hash"])
         config_df.cache()
         agg_df = config_df.agg(
-            sf.count("id").alias("nconfigurations"),
+            sf.count("hash").alias("nconfigurations"),
             sf.sum("nsites").alias("nsites"),
             sf.collect_set("nperiodic_dimensions").alias("nperiodic_dimensions"),
             sf.collect_set("dimension_types").alias("dimension_types"),

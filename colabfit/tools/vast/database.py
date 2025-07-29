@@ -45,7 +45,6 @@ from colabfit.tools.vast.schema import (
     configuration_set_schema,
     dataset_arr_schema,
     dataset_schema,
-    property_object_arr_schema,
 )
 from colabfit.tools.vast.utilities import (
     _hash,
@@ -309,8 +308,8 @@ class VastDataLoader:
         string_cols = [
             f.name for f in spark_df.schema if f.dataType.typeName() == "array"
         ]
-        write_rows = self.write_metadata(spark_df)
-        write_rows = write_rows.select(
+        spark_df = self.write_metadata(spark_df)
+        spark_df = spark_df.select(
             *[
                 (
                     stringify_df_val_udf(sf.col(col)).alias(col)
@@ -395,19 +394,23 @@ class VastDataLoader:
             "metadata_dir": self.metadata_dir,
         }
         beg = time()
-        if df.filter(sf.col("configuration_metadata").isNotNull()).count() == 0:
-            df = df.drop("configuration_metadata")
-        else:
-            distinct_co_metadata = df.select(
-                "configuration_metadata", "configuration_metadata_path"
-            ).distinct()
-            distinct_co_metadata.foreachPartition(
-                lambda partition: write_md_partition(partition, config)
-            )
-        distinct_po_metadata = df.select(
-            "property_metadata", "property_metadata_path"
+
+        distinct_metadata = df.select(
+            "configuration_metadata",
+            "configuration_metadata_path",
+            "property_metadata",
+            "property_metadata_path",
         ).distinct()
-        distinct_po_metadata.foreachPartition(
+        # distinct_co_metadata.foreachPartition(
+        #     lambda partition: write_md_partition(partition, config)
+        # )
+        # distinct_po_metadata = df.select(
+        #     "property_metadata", "property_metadata_path"
+        # ).distinct()
+        # distinct_po_metadata.foreachPartition(
+        #     lambda partition: write_md_partition(partition, config)
+        # )
+        distinct_metadata.foreachPartition(
             lambda partition: write_md_partition(partition, config)
         )
         logger.info(f"Time to write metadata: {time() - beg}")
@@ -1292,9 +1295,13 @@ def write_md_partition(partition, config):
     )
     file_batch = []
     for row in partition:
-        md_path = Path(config["metadata_dir"]) / row["metadata_path"]
-        file_batch.append((str(md_path), row["metadata"]))
-
+        if row["configuration_metadata"] is not None:
+            co_md_path = (
+                Path(config["metadata_dir"]) / row["configuration_metadata_path"]
+            )
+            file_batch.append((str(co_md_path), row["configuration_metadata"]))
+        po_md_path = Path(config["metadata_dir"]) / row["property_metadata_path"]
+        file_batch.append((str(po_md_path), row["property_metadata"]))
         if len(file_batch) >= s3_mgr.MAX_BATCH_SIZE:
             _ = s3_mgr.batch_write(file_batch)
             file_batch = []
@@ -1348,6 +1355,8 @@ def generate_ds_id():
 
 @sf.udf(returnType=StringType())
 def prepend_path_udf(prefix, md_path):
+    if md_path is None:
+        return None
     try:
         full_path = Path(prefix) / Path(md_path).relative_to("/")
         return str(full_path)

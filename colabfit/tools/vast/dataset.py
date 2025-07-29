@@ -136,7 +136,6 @@ class Dataset:
                     f"Bad author name '{auth}'. Author names "
                     "can only contain [a-z][A-Z]"
                 )
-
         self.name = name
         self.authors = authors
         self.publication_link = publication_link
@@ -175,7 +174,7 @@ class Dataset:
         row_dict["last_modified"] = get_last_modified()
         row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
         config_df = config_df.select(
-            "id",
+            "hash",
             "elements",
             "atomic_numbers",
             "nsites",
@@ -214,7 +213,7 @@ class Dataset:
         )
         config_df.cache()
         agg_df = config_df.agg(
-            sf.count_distinct("id").alias("nconfigurations"),
+            sf.count_distinct("hash").alias("nconfigurations"),
             sf.sum("nsites").alias("nsites"),
             sf.collect_set("nperiodic_dimensions").alias("nperiodic_dimensions"),
             sf.collect_set("dimension_types").alias("dimension_types"),
@@ -262,7 +261,7 @@ class Dataset:
         config_df.unpersist()
 
         count_df = config_df.agg(
-            sf.count_distinct("id").alias("nproperty_objects"),
+            sf.count_distinct("hash").alias("nproperty_objects"),
             sf.count("atomization_energy").alias("atomization_energy_count"),
             sf.count("adsorption_energy").alias("adsorption_energy_count"),
             sf.count("electronic_band_gap").alias("electronic_band_gap_count"),
