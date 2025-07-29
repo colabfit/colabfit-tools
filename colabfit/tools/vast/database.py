@@ -677,21 +677,9 @@ class VastDataLoader:
     ):
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
-        if table_name == self.config_table:
-            id_df = (
-                self.spark.table(self.prop_object_table)
-                .filter(sf.col("dataset_id") == dataset_id)
-                .select("configuration_id")
-                .withColumnRenamed("configuration_id", "id")
-                .distinct()
-            )
-            spark_df = self.spark.table(self.config_table).join(
-                id_df, on="id", how="inner"
-            )
-        elif table_name == self.prop_object_table or table_name == self.config_set_table:
-            spark_df = self.spark.table(table_name).filter(
-                sf.col("dataset_id") == dataset_id
-            )
+        spark_df = self.spark.table(table_name).filter(
+            sf.col("dataset_id") == dataset_id
+        )
         return spark_df
 
     def config_set_query(
@@ -703,6 +691,7 @@ class VastDataLoader:
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
         config_df_cols = [
+            "hash",
             "configuration_id",
             "nsites",
             "elements",
