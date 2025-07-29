@@ -401,15 +401,6 @@ class VastDataLoader:
             "property_metadata",
             "property_metadata_path",
         ).distinct()
-        # distinct_co_metadata.foreachPartition(
-        #     lambda partition: write_md_partition(partition, config)
-        # )
-        # distinct_po_metadata = df.select(
-        #     "property_metadata", "property_metadata_path"
-        # ).distinct()
-        # distinct_po_metadata.foreachPartition(
-        #     lambda partition: write_md_partition(partition, config)
-        # )
         distinct_metadata.foreachPartition(
             lambda partition: write_md_partition(partition, config)
         )
