@@ -168,12 +168,12 @@ class Dataset:
         self.row_dict["labels"] = labels
         logger.info(self.row_dict)
 
-    def to_row_dict(self, config_df):
+    def to_row_dict(self, config_prop_df):
         """"""
         row_dict = _empty_dict_from_schema(dataset_schema)
         row_dict["last_modified"] = get_last_modified()
         row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
-        config_df = config_df.select(
+        config_prop_df = config_prop_df.select(
             "hash",
             "elements",
             "atomic_numbers",
@@ -192,7 +192,7 @@ class Dataset:
 
         int_array_cols = ["atomic_numbers", "dimension_types"]
         str_array_cols = ["elements"]
-        config_df = config_df.select(
+        config_df = config_prop_df.select(
             [
                 (
                     str_to_arrayof_int(sf.col(col)).alias(col)
@@ -260,7 +260,7 @@ class Dataset:
         ]
         config_df.unpersist()
 
-        count_df = config_df.agg(
+        count_df = config_prop_df.agg(
             sf.count_distinct("hash").alias("nproperty_objects"),
             sf.count("atomization_energy").alias("atomization_energy_count"),
             sf.count("adsorption_energy").alias("adsorption_energy_count"),

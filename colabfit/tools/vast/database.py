@@ -752,9 +752,7 @@ class VastDataLoader:
         self.spark.stop()
 
 
-def batched(
-    configs: GeneratorType[AtomicConfiguration] | list[AtomicConfiguration], n: int
-):
+def batched(configs: GeneratorType | list[AtomicConfiguration], n: int):
     "Batch data into tuples of length n. The last batch may be shorter."
     if not isinstance(configs, GeneratorType):
         configs = iter(configs)
