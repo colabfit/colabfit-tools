@@ -9,6 +9,8 @@ import datetime
 
 import numpy as np
 import pyarrow as pa
+from pyspark.sql import DataFrame
+from pyspark.sql.types import DataType
 from pyspark.sql import functions as sf
 from pyspark.sql.types import (
     BooleanType,
@@ -25,7 +27,7 @@ from pyspark.sql.types import (
 logger = logging.getLogger(__name__)
 
 
-def _format_for_hash(v):
+def _format_for_hash(v: np.ndarray | list | dict | str | int | float | tuple):
     if isinstance(v, np.ndarray):
         if np.issubdtype(v.dtype, np.floating):
             return np.round(v.astype(np.float64), decimals=16)
@@ -49,7 +51,9 @@ def _format_for_hash(v):
         return v
 
 
-def _hash(row, identifying_key_list, include_keys_in_hash=False):
+def _hash(
+    row: list, identifying_key_list: list, include_keys_in_hash: bool = False
+) -> int:
     identifying_key_list = sorted(identifying_key_list)
     identifiers = [row[i] for i in identifying_key_list]
     _hash = sha512()
@@ -62,7 +66,12 @@ def _hash(row, identifying_key_list, include_keys_in_hash=False):
     return int(_hash.hexdigest(), 16)
 
 
-def config_struct_hash(atomic_numbers, cell, pbc, positions):
+def config_struct_hash(
+    atomic_numbers: list[int],
+    cell: list[float],
+    pbc: list[bool],
+    positions: list[list[float]],
+):
     """Structure hashing for configuration creation"""
     _hash = sha512()
     positions = np.array(positions)
@@ -84,7 +93,12 @@ def config_struct_hash(atomic_numbers, cell, pbc, positions):
 
 
 @sf.udf(returnType=StringType())
-def config_struct_hash_udf(atomic_numbers, cell, pbc, *positions):
+def config_struct_hash_udf(
+    atomic_numbers: list[int],
+    cell: list[float],
+    pbc: list[bool],
+    *positions: list[float],
+):
     """
     Will hash in the following order: atomic_numbers, cell, pbc, positions
 
@@ -123,14 +137,14 @@ def get_last_modified():
     )
 
 
-def get_pbc_from_cell(cell):
+def get_pbc_from_cell(cell: list[list[float]] | np.ndarray) -> list[bool]:
     cell = np.array(cell, dtype=float)
     cell_lengths = np.linalg.norm(cell, axis=1)
     pbc = cell_lengths > 1e-10
     return pbc.astype(bool).tolist()
 
 
-def get_spark_field_type(schema, field_name):
+def get_spark_field_type(schema: StructType, field_name: str) -> DataType:
     for field in schema:
         if field.name == "$row_id":
             return LongType()
@@ -139,7 +153,7 @@ def get_spark_field_type(schema, field_name):
     raise ValueError(f"Field name {field_name} not found in schema")
 
 
-def get_stringified_schema(schema):
+def get_stringified_schema(schema: StructType) -> StructType:
     new_fields = []
     for field in schema:
         if field.dataType.typeName() == "array":
@@ -149,7 +163,7 @@ def get_stringified_schema(schema):
     return StructType(new_fields)
 
 
-def spark_to_arrow_type(spark_type):
+def spark_to_arrow_type(spark_type: DataType) -> pa.DataType:
     """
     Convert PySpark type to PyArrow type.
     Do not include field.nullable, as this conflicts with vastdb-sdk
@@ -191,7 +205,7 @@ def spark_to_arrow_type(spark_type):
         raise ValueError(f"Unsupported type: {spark_type}")
 
 
-def spark_schema_to_arrow_schema(spark_schema):
+def spark_schema_to_arrow_schema(spark_schema: StructType) -> pa.Schema:
     """
     Convert PySpark schema to a PyArrow Schema.
     """
@@ -201,23 +215,26 @@ def spark_schema_to_arrow_schema(spark_schema):
             fields.append(pa.field(field.name, pa.uint64()))
         else:
             fields.append(pa.field(field.name, spark_to_arrow_type(field.dataType)))
-    return pa.schema(fields)
+    arrow_schema = pa.schema(fields)
+    for field in arrow_schema:
+        field = field.with_nullable(True)
+    return arrow_schema
 
 
-def _empty_dict_from_schema(schema):
+def _empty_dict_from_schema(schema: StructType) -> dict:
     empty_dict = {}
     for field in schema:
         empty_dict[field.name] = None
     return empty_dict
 
 
-def _sort_dict(dictionary):
+def _sort_dict(dictionary: dict) -> dict:
     keys = list(dictionary.keys())
     keys.sort()
     return {k: dictionary[k] for k in keys}
 
 
-def _parse_unstructured_metadata(md_json):
+def _parse_unstructured_metadata(md_json: dict) -> dict:
     if md_json == {}:
         return {
             "metadata": None,
@@ -299,7 +316,7 @@ def stringify_df_val_udf(val):
         return str(val)
 
 
-def convert_stress(keys, stress):
+def convert_stress(keys: str, stress: list[float]) -> list[list[float]]:
     """Convert a size-6 array of stress components to a 3x3 matrix
 
     In particular for VASP output. Assumes symmetric matrix.
@@ -315,7 +332,7 @@ def convert_stress(keys, stress):
 #####################################################################
 # Functions for splitting and combining oversize array column values
 #####################################################################
-def get_max_string_length(df, column_name):
+def get_max_string_length(df: DataFrame, column_name: str) -> int:
 
     max_len = (
         df.select(sf.length(column_name).alias("string_length"))
@@ -327,7 +344,9 @@ def get_max_string_length(df, column_name):
     return max_len
 
 
-def split_long_string_cols(df, column_name: str, max_string_length: int):
+def split_long_string_cols(
+    df: DataFrame, column_name: str, max_string_length: int
+) -> DataFrame:
     """
     Splits a long string column into multiple columns based on a maximum string length.
     :param df: Input DataFrame with array cols already stringified
@@ -376,7 +395,7 @@ def split_long_string_cols(df, column_name: str, max_string_length: int):
     return df
 
 
-def combine_cols(df, col_name_base: str):
+def combine_cols(df: DataFrame, col_name_base: str) -> DataFrame:
     """
     Combines multiple columns into a single column (atomic forces, positions)
     :param df: Input DataFrame with array cols already stringified
