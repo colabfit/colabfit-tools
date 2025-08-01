@@ -8,14 +8,14 @@ from multiprocessing import Pool
 from pathlib import Path
 from time import time
 from types import GeneratorType
-
+import gc
 import boto3
 import pyarrow as pa
 import pyspark.sql.functions as sf
 from botocore.exceptions import ClientError
 from django.utils.crypto import get_random_string
 from ibis import _
-from pyspark.sql import Row, SparkSession
+from pyspark.sql import Row, SparkSession, DataFrame
 from pyspark.sql.functions import udf
 from pyspark.sql.types import (
     IntegerType,
@@ -50,7 +50,6 @@ from colabfit.tools.vast.utilities import (
     _hash,
     get_last_modified,
     spark_schema_to_arrow_schema,
-    split_long_string_cols,
     stringify_df_val_udf,
     unstring_df_val,
     str_to_arrayof_int,
@@ -93,10 +92,10 @@ class VastDataLoader:
     def __init__(
         self,
         table_prefix: str = "ndb.colabfit.dev",
-        endpoint=None,
-        access_key=None,
-        access_secret=None,
-        spark_session=None,
+        endpoint: str = None,
+        access_key: str = None,
+        access_secret: str = None,
+        spark_session: SparkSession = None,
     ):
         self.table_prefix = table_prefix
         self.spark = SparkSession.builder.appName("ColabFitDataLoader").getOrCreate()
@@ -120,7 +119,7 @@ class VastDataLoader:
         self.bucket_dir = VAST_BUCKET_DIR
         self.metadata_dir = VAST_METADATA_DIR
 
-    def set_spark_session(self, spark_session):
+    def set_spark_session(self, spark_session: SparkSession):
         self.spark = spark_session
         self.spark.sparkContext.setLogLevel("ERROR")
 
@@ -128,10 +127,10 @@ class VastDataLoader:
         if spark_conf is None:
             return SparkSession.builder.appName("VastDataLoader").getOrCreate()
 
-    def get_vastdb_session(self, endpoint, access_key: str, access_secret: str):
+    def get_vastdb_session(self, endpoint: str, access_key: str, access_secret: str):
         return Session(endpoint=endpoint, access=access_key, secret=access_secret)
 
-    def set_vastdb_session(self, endpoint, access_key: str, access_secret: str):
+    def set_vastdb_session(self, endpoint: str, access_key: str, access_secret: str):
         self.session = self.get_vastdb_session(endpoint, access_key, access_secret)
         self.access_key = access_key
         self.access_secret = access_secret
@@ -145,18 +144,6 @@ class VastDataLoader:
         table_name = table_split[3].replace("`", "")
         return (bucket_name, schema_name, table_name)
 
-    # def add_elem_to_col(df, col_name: str, elem: str):
-    #     df_added_elem = df.withColumn(
-    #         col_name,
-    #         sf.when(
-    #             sf.col(col_name).isNull(), sf.array().cast(ArrayType(StringType()))
-    #         ).otherwise(sf.col(col_name)),
-    #     )
-    #     df_added_elem = df_added_elem.withColumn(
-    #         col_name, sf.array_union(sf.col(col_name), sf.array(sf.lit(elem)))
-    #     )
-    #     return df_added_elem
-
     def delete_from_table(self, table_name: str, ids: list[str]):
         if isinstance(ids, str):
             ids = [ids]
@@ -169,7 +156,7 @@ class VastDataLoader:
             for batch in rec_batch:
                 table.delete(rows=batch)
 
-    def check_unique_ids(self, table_name: str, df):
+    def check_unique_ids(self, table_name: str, df: DataFrame):
         if not self.spark.catalog.tableExists(table_name):
             logger.info(f"Table {table_name} does not yet exist.")
             return True
@@ -189,19 +176,28 @@ class VastDataLoader:
                         return False
         return True
 
+    def stringify_df(self, spark_df: DataFrame, table_schema: StructType):
+        string_cols = [
+            f.name for f in spark_df.schema if f.dataType.typeName() == "array"
+        ]
+        spark_df = spark_df.select(
+            *[
+                (
+                    stringify_df_val_udf(sf.col(col)).alias(col)
+                    if col in string_cols
+                    else col
+                )
+                for col in table_schema.fieldNames()
+            ]
+        )
+        return spark_df
+
     def write_table_first(
         self,
-        spark_df,
+        spark_df: DataFrame,
         table_name: str,
-        check_length_col: str = None,
     ):
         """Include self.table_prefix in the table name when passed to this function"""
-        string_schema_dict = {
-            self.config_table: config_prop_schema,
-            self.config_set_table: configuration_set_schema,
-            self.dataset_table: dataset_schema,
-            self.co_cs_map_table: co_cs_map_schema,
-        }
         identifier_dict = {
             self.config_table: "hash",
             self.config_set_table: "id",
@@ -209,19 +205,11 @@ class VastDataLoader:
             self.co_cs_map_table: "id",
         }
         ider = identifier_dict[table_name]
-        table_schema = string_schema_dict[table_name]
+        table_schema = self.get_table_spark_schema(table_name)
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
-        for field in arrow_schema:
-            field = field.with_nullable(True)
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
         if not self.spark.catalog.tableExists(table_name):
-            logger.info(f"Creating table {table_name}")
-            with self.session.transaction() as tx:
-                schema = tx.bucket(bucket_name).schema(schema_name)
-                schema.create_table(table_n, arrow_schema)
-        string_cols = [
-            f.name for f in spark_df.schema if f.dataType.typeName() == "array"
-        ]
+            self.create_vastdb_table(table_name, table_schema)
         ids = [x[ider] for x in spark_df.select(ider).collect()]
         batched_ids = batched(ids, 10000)
         existing_df_array = []
@@ -251,20 +239,7 @@ class VastDataLoader:
                     new_ids = id_batch
                     write_rows = spark_df
                 write_rows = self.write_metadata(write_rows)
-                write_rows = write_rows.select(
-                    *[
-                        (
-                            stringify_df_val_udf(sf.col(col)).alias(col)
-                            if col in string_cols
-                            else col
-                        )
-                        for col in table_schema.fieldNames()
-                    ]
-                )
-                if check_length_col is not None:
-                    write_rows = split_long_string_cols(
-                        write_rows, check_length_col, _COL_MAX_STRING_LEN
-                    )
+                write_rows = self.stringify_df(write_rows, table_schema)
                 arrow_rec_batch = pa.table(
                     [pa.array(col) for col in zip(*write_rows.collect())],
                     schema=arrow_schema,
@@ -285,79 +260,63 @@ class VastDataLoader:
 
     def write_table_no_check(
         self,
-        spark_df,
+        spark_df: DataFrame,
         table_name: str,
     ):
         logger.info(f"Writing table {table_name} without checking for duplicates")
+        table_schema = self.get_table_spark_schema(table_name)
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        if not self.spark.catalog.tableExists(table_name):
+            self.create_vastdb_table(table_name, table_schema)
+        spark_df = self.write_metadata(spark_df)
+        spark_df = self.stringify_df(spark_df, table_schema)
+        arrow_schema = spark_schema_to_arrow_schema(table_schema)
+        arrow_rec_batch = pa.table(
+            [pa.array(col) for col in zip(*spark_df.collect())],
+            schema=arrow_schema,
+        ).to_batches()
+        del spark_df
+        total_rows = 0
+        with self.session.transaction() as tx:
+            table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
+            for rec_batch in arrow_rec_batch:
+                len_batch = rec_batch.num_rows
+                table.insert(rec_batch)
+                total_rows += len_batch
+        logger.info(f"Inserted {total_rows} rows into table {table_name}")
+
+    def create_vastdb_table(self, table_name: str, spark_schema: StructType):
+        logger.info(f"Creating VastDB table {table_name}")
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        arrow_schema = spark_schema_to_arrow_schema(spark_schema)
+        with self.session.transaction() as tx:
+            schema = tx.bucket(bucket_name).schema(schema_name)
+            schema.create_table(table_n, arrow_schema)
+        logger.info(f"Created VastDB table {table_name}")
+
+    def get_table_spark_schema(self, table_name: str) -> StructType:
         string_schema_dict = {
             self.config_table: config_prop_schema,
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.co_cs_map_table: co_cs_map_schema,
         }
-        table_schema = string_schema_dict[table_name]
-        arrow_schema = spark_schema_to_arrow_schema(table_schema)
-        for field in arrow_schema:
-            field = field.with_nullable(True)
-        bucket_name, schema_name, table_n = self._get_table_split(table_name)
-        if not self.spark.catalog.tableExists(table_name):
-            logger.info(f"Creating table {table_name}")
-            with self.session.transaction() as tx:
-                schema = tx.bucket(bucket_name).schema(schema_name)
-                schema.create_table(table_n, arrow_schema)
-        string_cols = [
-            f.name for f in spark_df.schema if f.dataType.typeName() == "array"
-        ]
-        spark_df = self.write_metadata(spark_df)
-        spark_df = spark_df.select(
-            *[
-                (
-                    stringify_df_val_udf(sf.col(col)).alias(col)
-                    if col in string_cols
-                    else col
-                )
-                for col in table_schema.fieldNames()
-            ]
-        )
-        spark_df.write.mode("append").saveAsTable(table_name)
+        return string_schema_dict[table_name]
 
     def write_table(
         self,
-        spark_df,
+        spark_df: DataFrame,
         table_name: str,
-        ids_filter: list[str] = None,
-        check_length_col: str = None,
         check_unique: bool = True,
     ):
         """Include self.table_prefix in the table name when passed to this function"""
-        string_schema_dict = {
-            self.config_table: config_schema,
-            self.config_set_table: configuration_set_schema,
-            self.dataset_table: dataset_schema,
-            self.co_cs_map_table: co_cs_map_schema,
-        }
-        table_schema = string_schema_dict[table_name]
-        if ids_filter is not None:
-            spark_df = spark_df.filter(sf.col("id").isin(ids_filter))
-
+        table_schema = self.get_table_spark_schema(table_name)
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
-        string_cols = [
-            f.name for f in spark_df.schema if f.dataType.typeName() == "array"
-        ]
-        for col in string_cols:
-            spark_df = spark_df.withColumn(col, stringify_df_val_udf(sf.col(col)))
-        if check_length_col is not None:
-            spark_df = split_long_string_cols(
-                spark_df, check_length_col, _COL_MAX_STRING_LEN
-            )
+        spark_df = self.stringify_df(spark_df, table_schema)
+
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
-        for field in arrow_schema:
-            field = field.with_nullable(True)
         if not self.spark.catalog.tableExists(table_name):
-            logger.info(f"Creating table {table_name}")
-            with self.session.transaction() as tx:
-                schema = tx.bucket(bucket_name).schema(schema_name)
-                schema.create_table(table_n, arrow_schema)
+            self.create_vastdb_table(table_name, table_schema)
         arrow_rec_batch = pa.table(
             [pa.array(col) for col in zip(*spark_df.collect())],
             schema=arrow_schema,
@@ -380,7 +339,7 @@ class VastDataLoader:
                 total_rows += len_batch
         logger.info(f"Inserted {total_rows} rows into table {table_name}")
 
-    def write_metadata(self, df):
+    def write_metadata(self, df: DataFrame):
         """Writes metadata to files using boto3 for VastDB
         Returns a DataFrame without metadata column. The returned DataFrame should
         match table schema (from schema.py)
@@ -394,7 +353,6 @@ class VastDataLoader:
             "metadata_dir": self.metadata_dir,
         }
         beg = time()
-
         distinct_metadata = df.select(
             "configuration_metadata",
             "configuration_metadata_path",
@@ -419,7 +377,7 @@ class VastDataLoader:
         )
         return df
 
-    def increment_multiplicity(self, df, duplicate_df):
+    def increment_multiplicity(self, df: DataFrame, duplicate_df: DataFrame):
         df_add = df.select("hash", sf.col("multiplicity").alias("multiplicity_add"))
         duplicate_df = duplicate_df.join(df_add, on="hash", how="left")
         duplicate_df = duplicate_df.withColumn(
@@ -430,9 +388,9 @@ class VastDataLoader:
 
     def update_existing_co_po_rows(
         self,
-        df,
-        table_name,
-        str_schema,
+        df: DataFrame,
+        table_name: str,
+        str_schema: str,
     ):
         """
         Updates existing rows in CO or PO table with data from new ingest.
@@ -576,7 +534,7 @@ class VastDataLoader:
                 f"Mismatched column types in DataFrame: {mismatched_cols}"
             )
 
-    def zero_multiplicity(self, dataset_id):
+    def zero_multiplicity(self, dataset_id: str):
         """Use to return multiplicity of POs for a given dataset to zero"""
         table_exists = self.spark.catalog.tableExists(self.prop_object_table)
         if not table_exists:
@@ -627,7 +585,12 @@ class VastDataLoader:
                 )
 
     def simple_sdk_query(
-        self, query_table, predicate, schema, internal_row_id=False, columns=None
+        self,
+        query_table: str,
+        predicate,
+        schema: StructType,
+        internal_row_id=False,
+        columns=None,
     ):
         bucket_name, schema_name, table_n = self._get_table_split(query_table)
         with self.session.transaction() as tx:
@@ -672,8 +635,8 @@ class VastDataLoader:
 
     def dataset_query(
         self,
-        dataset_id=None,
-        table_name=None,
+        dataset_id: str = None,
+        table_name: str = None,
     ):
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
@@ -789,7 +752,9 @@ class VastDataLoader:
         self.spark.stop()
 
 
-def batched(configs, n):
+def batched(
+    configs: GeneratorType[AtomicConfiguration] | list[AtomicConfiguration], n: int
+):
     "Batch data into tuples of length n. The last batch may be shorter."
     if not isinstance(configs, GeneratorType):
         configs = iter(configs)
@@ -807,9 +772,9 @@ class DataManager:
         configs: list[AtomicConfiguration] = None,
         prop_defs: list[dict] = None,
         prop_map: dict = None,
-        dataset_id=None,
+        dataset_id: str = None,
         standardize_energy: bool = True,
-        read_write_batch_size=10000,
+        read_write_batch_size: int = 10000,
     ):
         self.configs = configs
         if isinstance(prop_defs, dict):
@@ -828,11 +793,11 @@ class DataManager:
     def _gather_co_po_rows(
         prop_defs: list[dict],
         prop_map: dict,
-        dataset_id,
+        dataset_id: str,
         configs: list[AtomicConfiguration],
         standardize_energy: bool = True,
     ):
-        """Convert COs and DOs to Spark rows."""
+        """Convert COs and POs to Spark rows."""
         co_po_rows = []
         for config in configs:
             config.set_dataset_id(dataset_id)
@@ -900,7 +865,7 @@ class DataManager:
     def gather_co_po_in_batches(self):
         """
         Wrapper function for gather_co_po_rows_pool.
-        Yields batches of CO-DO rows, preventing configuration iterator from
+        Yields batches of CO-PO rows, preventing configuration iterator from
         being consumed all at once.
         """
         chunk_size = 1000
@@ -917,7 +882,7 @@ class DataManager:
     def gather_co_po_in_batches_no_pool(self):
         """
         Wrapper function for gather_co_po_rows.
-        Yields batches of CO-DO rows, preventing configuration iterator from
+        Yields batches of CO-PO rows, preventing configuration iterator from
         being consumed all at once.
         """
         chunk_size = self.read_write_batch_size
@@ -933,7 +898,7 @@ class DataManager:
                 )
             )
 
-    def deduplicate_co_po_df(self, co_po_df):
+    def deduplicate_co_po_df(self, co_po_df: DataFrame):
         """Aggregate multiplicity for PO dataframe with duplicate IDS."""
         multiplicity = co_po_df.groupBy("hash").agg(sf.count("*").alias("count"))
         co_po_df = co_po_df.dropDuplicates(["hash"])
@@ -945,7 +910,9 @@ class DataManager:
         co_po_df = co_po_df.select(config_prop_md_schema.fieldNames())
         return co_po_df
 
-    def check_existing_tables(self, loader, batching_ingest=False):
+    def check_existing_tables(
+        self, loader: VastDataLoader, batching_ingest: bool = False
+    ):
         """Check tables for conficts before loading data."""
         if loader.spark.catalog.tableExists(loader.config_table):
             logger.info(f"table {loader.config_table} exists")
@@ -969,7 +936,7 @@ class DataManager:
             if dataset_exists.count() > 0:
                 raise ValueError(f"Dataset with ID {self.dataset_id} already exists.")
 
-    def hash_combined_rows(self, co_po_rows):
+    def hash_combined_rows(self, co_po_rows: list[dict]):
         hash_fields = [
             fname
             for fname in config_prop_schema.fieldNames()
@@ -992,7 +959,7 @@ class DataManager:
         ]
         return _hash(co_po_rows, hash_fields, include_keys_in_hash=False)
 
-    def combine_co_po_rows(self, co_po_rows):
+    def combine_co_po_rows(self, co_po_rows: list[dict]):
         """Combine configuration and property rows into a single row."""
         combined_rows = []
         for co_row, po_row in co_po_rows:
@@ -1009,12 +976,23 @@ class DataManager:
                 for k, v in {**co_row, **po_row}.items()
                 if k in config_prop_md_schema.fieldNames()
             }
+            for key, value in co_po_row.items():
+                if value is not None and hasattr(value, "__len__"):
+                    if len(str(value)) > 50000:  # Large values might cause issues
+                        logger.warning(
+                            f"Large value in {key}: {len(str(value))} characters"
+                        )
             co_po_row["hash"] = self.hash_combined_rows(co_po_row)
             combined_rows.append(co_po_row)
 
         return combined_rows
 
-    def load_co_po_to_vastdb(self, loader, batching_ingest=False, check_existing=True):
+    def load_co_po_to_vastdb(
+        self,
+        loader: VastDataLoader,
+        batching_ingest: bool = False,
+        check_existing: bool = False,
+    ):
         self.check_existing_tables(loader, batching_ingest)
         co_po_rows = self.gather_co_po_in_batches_no_pool()
         for co_po_batch in tqdm(
@@ -1023,41 +1001,60 @@ class DataManager:
             unit="batch",
         ):
             co_po_combined_rows = self.combine_co_po_rows(co_po_batch)
+            del co_po_batch
+            co_count = len(co_po_combined_rows)
             if len(co_po_combined_rows) == 0:
                 continue
-            else:
-                co_df = loader.spark.createDataFrame(
-                    co_po_combined_rows, schema=config_prop_md_schema
-                )
-                co_count = co_df.count()
-                co_count_distinct = co_df.select("hash").distinct().count()
-                if co_count_distinct < co_count:
-                    logger.info(
-                        f"{co_count - co_count_distinct} duplicates found in CO-PO dataframe"  # noqa E501
-                    )
-                    co_df = self.deduplicate_co_po_df(co_df)
-                if check_existing:
-                    co_existing_row_df = loader.write_table_first(
-                        co_df,
-                        loader.config_table,
-                    )
-                    if co_existing_row_df is not None:
-                        loader.update_existing_co_po_rows(
-                            df=co_existing_row_df,
-                            table_name=loader.config_table,
-                            cols=["multiplicity"],
-                            str_schema=config_prop_schema,
-                            arr_schema=config_prop_arr_schema,
+            for i, row in enumerate(co_po_combined_rows[:3]):  # Check first 3 rows
+                if not isinstance(row, dict):
+                    raise ValueError(f"Row {i} is not a dict: {type(row)}")
+                for key, value in row.items():
+                    if value is None:
+                        continue
+                    # Check for problematic data types
+                    if hasattr(value, "__len__") and len(str(value)) > 100000:
+                        logger.warning(
+                            f"Very large value in {key}: {len(str(value))} chars"
                         )
-                else:
-                    loader.write_table_no_check(
-                        co_df,
-                        loader.config_table,
+
+            co_df = loader.spark.createDataFrame(
+                co_po_combined_rows, schema=config_prop_md_schema
+            )
+            del co_po_combined_rows
+            co_count_distinct = co_df.select("hash").distinct().count()
+            if co_count_distinct < co_count:
+                logger.info(
+                    f"{co_count - co_count_distinct} duplicates found in CO-PO dataframe"  # noqa E501
+                )
+                co_df = self.deduplicate_co_po_df(co_df)
+            if check_existing:
+                co_existing_row_df = loader.write_table_first(
+                    co_df,
+                    loader.config_table,
+                )
+                if co_existing_row_df is not None:
+                    loader.update_existing_co_po_rows(
+                        df=co_existing_row_df,
+                        table_name=loader.config_table,
+                        cols=["multiplicity"],
+                        str_schema=config_prop_schema,
+                        arr_schema=config_prop_arr_schema,
                     )
+                del co_existing_row_df
+            else:
+                loader.write_table_no_check(
+                    co_df,
+                    loader.config_table,
+                )
+                logger.info(f"Wrote {co_count} rows to {loader.config_table}")
+                del co_df
+        logger.info("Garbage collecting")
+        gc.collect()
+        loader.spark.sparkContext._jvm.System.gc()
 
     def create_configuration_sets(
         self,
-        loader,
+        loader: VastDataLoader,
         name_label_match: list[tuple],
     ):
         """
@@ -1146,7 +1143,7 @@ class DataManager:
 
     def create_dataset(
         self,
-        loader,
+        loader: VastDataLoader,
         name: str,
         authors: list[str],
         description: str,
@@ -1174,6 +1171,7 @@ class DataManager:
                 cs_ids = [x["id"] for x in cs_ids]
         else:
             cs_ids = None
+        logger.info(f"Configuration Set IDs: {cs_ids}")
         config_df = loader.dataset_query(
             dataset_id=self.dataset_id, table_name=loader.config_table
         )
@@ -1198,7 +1196,9 @@ class DataManager:
 
 
 class S3BatchManager:
-    def __init__(self, bucket_name, access_id, secret_key, endpoint_url=None):
+    def __init__(
+        self, bucket_name: str, access_id: str, secret_key: str, endpoint_url: str = None
+    ):
         self.bucket_name = bucket_name
         self.access_id = access_id
         self.secret_key = secret_key
@@ -1230,7 +1230,7 @@ class S3BatchManager:
         return results
 
 
-def write_md_partition(partition, config):
+def write_md_partition(partition, config: dict):
     import boto3
 
     class S3BatchManager:
@@ -1291,7 +1291,9 @@ def write_md_partition(partition, config):
 
 
 class S3FileManager:
-    def __init__(self, bucket_name, access_id, secret_key, endpoint_url=None):
+    def __init__(
+        self, bucket_name: str, access_id: str, secret_key: str, endpoint_url: str = None
+    ):
         self.bucket_name = bucket_name
         self.access_id = access_id
         self.secret_key = secret_key
@@ -1310,14 +1312,14 @@ class S3FileManager:
             ),
         )
 
-    def write_file(self, content, file_key):
+    def write_file(self, content: str, file_key: str):
         try:
             client = self.get_client()
             client.put_object(Bucket=self.bucket_name, Key=file_key, Body=content)
         except Exception as e:
             return f"Error: {str(e)}"
 
-    def read_file(self, file_key):
+    def read_file(self, file_key: str):
         try:
             client = self.get_client()
             response = client.get_object(Bucket=self.bucket_name, Key=file_key)
@@ -1334,7 +1336,7 @@ def generate_ds_id():
 
 
 @sf.udf(returnType=StringType())
-def prepend_path_udf(prefix, md_path):
+def prepend_path_udf(prefix: str, md_path: str):
     if md_path is None:
         return None
     try:
@@ -1345,7 +1347,7 @@ def prepend_path_udf(prefix, md_path):
         return str(full_path)
 
 
-def read_md_partition(partition, config):
+def read_md_partition(partition: DataFrame, config: dict):
     s3_mgr = S3FileManager(
         bucket_name=config["bucket_dir"],
         access_id=config["access_key"],
@@ -1353,7 +1355,7 @@ def read_md_partition(partition, config):
         endpoint_url=config["endpoint"],
     )
 
-    def process_row(row):
+    def process_row(row: Row):
         rowdict = row.asDict()
         try:
             if row["metadata_path"] is None:
