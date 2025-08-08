@@ -168,12 +168,12 @@ class Dataset:
         self.row_dict["labels"] = labels
         logger.info(self.row_dict)
 
-    def to_row_dict(self, config_prop_df):
+    def to_row_dict(self, config_df):
         """"""
         row_dict = _empty_dict_from_schema(dataset_schema)
         row_dict["last_modified"] = get_last_modified()
         row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
-        config_prop_df = config_prop_df.select(
+        config_df = config_df.select(
             "hash",
             "elements",
             "atomic_numbers",
@@ -192,43 +192,46 @@ class Dataset:
 
         int_array_cols = ["atomic_numbers", "dimension_types"]
         str_array_cols = ["elements"]
-        config_df = config_prop_df.select(
+        configuration_df = config_df.select(
             [
                 (
                     str_to_arrayof_int(sf.col(col)).alias(col)
                     if col in int_array_cols
-                    else col
-                )
-                for col in config_df.columns
-            ]
-        ).select(
-            [
-                (
-                    str_to_arrayof_str(sf.col(col)).alias(col)
-                    if col in str_array_cols
-                    else col
+                    else (
+                        str_to_arrayof_str(sf.col(col)).alias(col)
+                        if col in str_array_cols
+                        else col
+                    )
                 )
                 for col in config_df.columns
             ]
         )
-        config_df.cache()
-        agg_df = config_df.agg(
-            sf.count_distinct("hash").alias("nconfigurations"),
-            sf.sum("nsites").alias("nsites"),
-            sf.collect_set("nperiodic_dimensions").alias("nperiodic_dimensions"),
-            sf.collect_set("dimension_types").alias("dimension_types"),
-            sf.flatten(sf.collect_set("elements")).alias("elements"),
+        configuration_df.persist()
+        nconfigurations = configuration_df.select("hash").distinct().count()
+        row_dict["nconfigurations"] = nconfigurations
+        nsites = configuration_df.select("nsites").agg(sf.sum("nsites")).collect()[0][0]
+        row_dict["nsites"] = nsites
+        nperiodic_dims = (
+            configuration_df.select("nperiodic_dimensions").distinct().collect()
         )
-        agg_row = agg_df.collect()[0]
-        row_dict["nconfigurations"] = agg_row["nconfigurations"]
-        row_dict["nsites"] = agg_row["nsites"]
-        row_dict["nperiodic_dimensions"] = agg_row["nperiodic_dimensions"]
-        row_dict["dimension_types"] = agg_row["dimension_types"]
-        row_dict["elements"] = sorted(list(set(agg_row["elements"])))
+        row_dict["nperiodic_dimensions"] = [
+            row["nperiodic_dimensions"] for row in nperiodic_dims
+        ]
+        dim_types = configuration_df.select("dimension_types").distinct().collect()
+        row_dict["dimension_types"] = [row["dimension_types"] for row in dim_types]
+        elements_df = configuration_df.select("elements").distinct()
+        elements = []
+        for row in elements_df.collect():
+            elem_list = (
+                row["elements"]
+                if isinstance(row["elements"], list)
+                else [row["elements"]]
+            )
+            elements.extend(elem_list)
+        row_dict["elements"] = sorted(list(set(elements)))
         row_dict["nelements"] = len(row_dict["elements"])
-
         atomic_ratios_df = (
-            config_df.select("atomic_numbers")
+            configuration_df.select("atomic_numbers")
             .withColumn("single_element", sf.explode("atomic_numbers"))
             .groupBy("single_element")
             .agg(sf.count("single_element").alias("count"))
@@ -258,25 +261,41 @@ class Dataset:
         row_dict["total_elements_ratios"] = [
             x["ratio"] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
         ]
-        config_df.unpersist()
-
-        count_df = config_prop_df.agg(
-            sf.count_distinct("hash").alias("nproperty_objects"),
-            sf.count("atomization_energy").alias("atomization_energy_count"),
-            sf.count("adsorption_energy").alias("adsorption_energy_count"),
-            sf.count("electronic_band_gap").alias("electronic_band_gap_count"),
-            sf.count("cauchy_stress").alias("cauchy_stress_count"),
-            sf.count("energy_above_hull").alias("energy_above_hull_count"),
-            sf.count("formation_energy").alias("formation_energy_count"),
-            sf.count("energy").alias("energy_count"),
-            sf.variance("energy").alias("energy_variance"),
-            sf.mean("energy").alias("energy_mean"),
-            sf.count_if(
-                (sf.col("atomic_forces") != "[]") & (sf.col("atomic_forces").isNotNull())
-            ).alias("atomic_forces_count"),
+        del atomic_ratios_df, atomic_ratios_coll
+        configuration_df.unpersist()
+        del configuration_df
+        row_dict["nproperty_objects"] = config_df.select("hash").distinct().count()
+        property_counts = {}
+        property_cols = [
+            "atomization_energy",
+            "adsorption_energy",
+            "electronic_band_gap",
+            "cauchy_stress",
+            "energy_above_hull",
+            "formation_energy",
+            "energy",
+        ]
+        for prop_col in property_cols:
+            count = (
+                config_df.select(prop_col).filter(sf.col(prop_col).isNotNull()).count()
+            )
+            property_counts[f"{prop_col}_count"] = count
+        atomic_forces_count = config_df.filter(
+            (sf.col("atomic_forces") != "[]") & (sf.col("atomic_forces").isNotNull())
+        ).count()
+        property_counts["atomic_forces_count"] = atomic_forces_count
+        energy_stats = (
+            config_df.select("energy")
+            .filter(sf.col("energy").isNotNull())
+            .agg(
+                sf.variance("energy").alias("energy_variance"),
+                sf.mean("energy").alias("energy_mean"),
+            )
+            .collect()[0]
         )
-        count_row = count_df.collect()[0].asDict()
-        row_dict.update(count_row)
+        property_counts["energy_variance"] = energy_stats["energy_variance"]
+        property_counts["energy_mean"] = energy_stats["energy_mean"]
+        row_dict.update(property_counts)
         row_dict["authors"] = self.authors
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license

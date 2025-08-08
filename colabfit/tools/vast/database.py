@@ -1078,7 +1078,7 @@ class DataManager:
                 label_match=label_match,
             )
             co_id_df = (
-                config_set_query_df.select("hash").distinct()
+                config_set_query_df.select("configuration_id").distinct()
                 # .withColumnRenamed("id", "configuration_id")
             )
             string_cols = [
