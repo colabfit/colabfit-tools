@@ -23,7 +23,6 @@ NSITES_COL_SPLITS = 20
 
 config_prop_arr_schema = StructType(
     [
-        StructField("id", StringType(), True),
         StructField("hash", StringType(), True),
         StructField("property_id", StringType(), True),
         StructField("property_hash", StringType(), True),
