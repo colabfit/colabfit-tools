@@ -174,7 +174,7 @@ dataset_arr_schema = StructType(
         StructField("publication_year", StringType(), True),
         StructField("doi", StringType(), True),
         StructField("equilibrium", BooleanType(), True),
-        # StructField("labels", ArrayType(StringType()), True),
+        StructField("colabfit_publication_date", TimestampType(), True),
     ]
 )
 

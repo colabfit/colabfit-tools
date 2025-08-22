@@ -310,6 +310,7 @@ class Dataset:
         row_dict["publication_year"] = self.publication_year
         row_dict["doi"] = self.doi
         row_dict["equilibrium"] = self.equilibrium
+        row_dict["colabfit_publication_date"] = row_dict["last_modified"]
         return row_dict
 
     def __str__(self):
