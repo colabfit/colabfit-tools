@@ -9,6 +9,7 @@ from colabfit.tools.vast.utilities import (
     ELEMENT_MAP,
     _empty_dict_from_schema,
     _hash,
+    get_date,
     get_last_modified,
     str_to_arrayof_int,
     str_to_arrayof_str,
@@ -126,7 +127,8 @@ class Dataset:
         labels: list[str] = None,
         doi: str = None,
         configuration_set_ids: list[str] = [],
-        data_license: str = "CC-BY-ND-4.0",
+        data_license: str = None,
+        date_requested: str = None,
         publication_year: str = None,
         equilibrium: bool = False,
     ):
@@ -136,6 +138,9 @@ class Dataset:
                     f"Bad author name '{auth}'. Author names "
                     "can only contain [a-z][A-Z]"
                 )
+        for required in (date_requested, data_license, publication_year, dataset_id):
+            if not required:
+                raise RuntimeError(f"Missing required field {required}")
         self.name = name
         self.authors = authors
         self.publication_link = publication_link
@@ -151,6 +156,8 @@ class Dataset:
         if self.configuration_set_ids is None:
             self.configuration_set_ids = []
         self.row_dict = self.to_row_dict(config_df=config_df)
+        self.row_dict["date_added_to_colabfit"] = get_date()
+        self.row_dict["date_requested"] = date_requested
         self.row_dict["id"] = self.dataset_id
         id_prefix = "__".join(
             [
@@ -219,6 +226,13 @@ class Dataset:
         ]
         dim_types = configuration_df.select("dimension_types").distinct().collect()
         row_dict["dimension_types"] = [row["dimension_types"] for row in dim_types]
+
+        methods = configuration_df.select("methods").distinct().collect()
+        row_dict["methods"] = [row["methods"] for row in methods]
+
+        software = configuration_df.select("software").distinct().collect()
+        row_dict["software"] = [row["software"] for row in software]
+
         elements_df = configuration_df.select("elements").distinct()
         elements = []
         for row in elements_df.collect():

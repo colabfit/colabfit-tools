@@ -135,6 +135,12 @@ def get_last_modified():
     )
 
 
+def get_date():
+    return dateutil.parser.parse(
+        datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d")
+    )
+
+
 def get_pbc_from_cell(cell: list[list[float]] | np.ndarray) -> list[bool]:
     cell = np.array(cell, dtype=float)
     cell_lengths = np.linalg.norm(cell, axis=1)
