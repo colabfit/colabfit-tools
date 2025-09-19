@@ -10,6 +10,8 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
+from colabfit.tools.vast.utilities import get_stringified_schema
+
 NSITES_COL_SPLITS = 20
 
 config_prop_schema = StructType(
@@ -56,6 +58,7 @@ config_prop_schema = StructType(
         StructField("configuration_metadata_path", StringType(), True),
     ]
 )
+config_prop_str_schema = get_stringified_schema(config_prop_schema)
 config_prop_md_schema = StructType([field for field in config_prop_schema])
 config_prop_md_schema.add(
     StructField("configuration_metadata", StringType(), True)

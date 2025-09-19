@@ -17,6 +17,7 @@ from pyspark.sql.types import (
     IntegerType,
     LongType,
     StringType,
+    StructField,
     StructType,
     ArrayType,
     TimestampType,
@@ -150,6 +151,16 @@ def get_spark_field_type(schema: StructType, field_name: str) -> DataType:
     raise ValueError(f"Field name {field_name} not found in schema")
 
 
+def get_stringified_schema(schema: StructType) -> StructType:
+    new_fields = []
+    for field in schema:
+        if field.dataType.typeName() == "array":
+            new_fields.append(StructField(field.name, StringType(), field.nullable))
+        else:
+            new_fields.append(field)
+    return StructType(new_fields)
+
+
 def spark_to_arrow_type(spark_type: DataType) -> pa.DataType:
     """
     Convert PySpark type to PyArrow type.
@@ -272,6 +283,17 @@ def convert_stress(keys: str, stress: list[float]) -> list[list[float]]:
         [stresses["xy"], stresses["yy"], stresses["yz"]],
         [stresses["xz"], stresses["yz"], stresses["zz"]],
     ]
+
+
+############################################################
+# Functions for converting column values to string
+############################################################
+
+
+@sf.udf(returnType=StringType())
+def stringify_df_val_udf(val):
+    if val is not None:
+        return str(val)
 
 
 #####################################################################

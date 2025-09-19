@@ -34,8 +34,7 @@ from colabfit.tools.vast.dataset import Dataset
 from colabfit.tools.vast.property import Property
 from colabfit.tools.vast.schema import (
     co_cs_map_schema,
-    config_schema,
-    config_md_schema,
+    config_prop_str_schema,
     config_prop_schema,
     config_prop_md_schema,
     configuration_set_schema,
@@ -45,6 +44,7 @@ from colabfit.tools.vast.utilities import (
     _hash,
     get_last_modified,
     spark_schema_to_arrow_schema,
+    stringify_df_val_udf,
 )
 
 logger = logging.getLogger(__name__)
@@ -167,10 +167,27 @@ class VastDataLoader:
                         return False
         return True
 
+    def stringify_df(self, spark_df: DataFrame, table_schema: StructType):
+        string_cols = [
+            f.name for f in spark_df.schema if f.dataType.typeName() == "array"
+        ]
+        spark_df = spark_df.select(
+            *[
+                (
+                    stringify_df_val_udf(sf.col(col)).alias(col)
+                    if col in string_cols
+                    else col
+                )
+                for col in table_schema.fieldNames()
+            ]
+        )
+        return spark_df
+
     def write_table_first(
         self,
         spark_df: DataFrame,
         table_name: str,
+        stringify: bool = False,
     ):
         """Include self.table_prefix in the table name when passed to this function"""
         identifier_dict = {
@@ -214,6 +231,10 @@ class VastDataLoader:
                     new_ids = id_batch
                     write_rows = spark_df
                 write_rows = self.write_metadata(write_rows)
+                if stringify:
+                    # Only for config prop while vastdb doesn't support indexing on array column tables
+                    write_rows = self.stringify_df(write_rows, table_schema)
+                    arrow_schema = spark_schema_to_arrow_schema(config_prop_str_schema)
                 write_rows = write_rows.select(
                     *[col for col in table_schema.fieldNames()]
                 )
@@ -239,6 +260,7 @@ class VastDataLoader:
         self,
         spark_df: DataFrame,
         table_name: str,
+        stringify: bool = False,
     ):
         logger.info(f"Writing table {table_name} without checking for duplicates")
         table_schema = self.get_table_spark_schema(table_name)
@@ -246,6 +268,10 @@ class VastDataLoader:
         if not self.spark.catalog.tableExists(table_name):
             self.create_vastdb_table(table_name, table_schema)
         spark_df = self.write_metadata(spark_df)
+        if stringify:
+            # Only for config prop while vastdb doesn't support indexing on array column tables
+            spark_df = self.stringify_df(spark_df, table_schema)
+            table_schema = config_prop_str_schema
         spark_df = spark_df.select(*[col for col in table_schema.fieldNames()])
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
         arrow_rec_batch = pa.table(
@@ -944,6 +970,7 @@ class DataManager:
                 loader.write_table_no_check(
                     co_df,
                     loader.config_table,
+                    stringify=True,
                 )
                 logger.info(f"Wrote {co_count} rows to {loader.config_table}")
                 del co_df
