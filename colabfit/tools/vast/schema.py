@@ -1,10 +1,3 @@
-"""
-Each schema for VastDB has a corresponding schema for a dataframe with
-the same fields, but with non-stringified lists.
-config_schema (with stringified lists), for example, has a corresponding
-config_arr_schema (with non-stringified lists).
-"""
-
 from pyspark.sql.types import (
     ArrayType,
     BooleanType,
@@ -17,11 +10,9 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from colabfit.tools.vast.utilities import get_stringified_schema
-
 NSITES_COL_SPLITS = 20
 
-config_prop_arr_schema = StructType(
+config_prop_schema = StructType(
     [
         StructField("hash", StringType(), True),
         StructField("property_id", StringType(), True),
@@ -65,13 +56,12 @@ config_prop_arr_schema = StructType(
         StructField("configuration_metadata_path", StringType(), True),
     ]
 )
-config_prop_schema = get_stringified_schema(config_prop_arr_schema)
-config_prop_md_schema = StructType([field for field in config_prop_arr_schema])
-config_prop_md_schema.add(StructField("configuration_metadata", StringType(), True)).add(
-    StructField("property_metadata", StringType(), True)
-)
+config_prop_md_schema = StructType([field for field in config_prop_schema])
+config_prop_md_schema.add(
+    StructField("configuration_metadata", StringType(), True)
+).add(StructField("property_metadata", StringType(), True))
 
-config_arr_schema = StructType(
+config_schema = StructType(
     [
         StructField("id", StringType(), True),
         StructField("hash", StringType(), True),
@@ -98,13 +88,12 @@ config_arr_schema = StructType(
         StructField("positions", ArrayType(ArrayType(DoubleType())), True),
     ]
 )
-config_schema = get_stringified_schema(config_arr_schema)
-config_md_schema = StructType([field for field in config_arr_schema])
+config_md_schema = StructType([field for field in config_schema])
 config_md_schema.add(StructField("metadata", StringType(), True))
-config_row_id_schema = StructType([field for field in config_arr_schema])
+config_row_id_schema = StructType([field for field in config_schema])
 config_row_id_schema.add(StructField("$row_id", LongType(), True))
 
-property_object_arr_schema = StructType(
+property_object_schema = StructType(
     [
         StructField("id", StringType(), True),
         StructField("hash", StringType(), True),
@@ -133,16 +122,13 @@ property_object_arr_schema = StructType(
     ]
 )
 
-property_object_schema = get_stringified_schema(property_object_arr_schema)
-property_object_md_schema = StructType([field for field in property_object_arr_schema])
+property_object_md_schema = StructType([field for field in property_object_schema])
 property_object_md_schema.add(StructField("metadata", StringType(), True))
-property_object_row_id_schema = StructType(
-    [field for field in property_object_arr_schema]
-)
+property_object_row_id_schema = StructType([field for field in property_object_schema])
 property_object_row_id_schema.add(StructField("$row_id", LongType(), True))
 
 
-dataset_arr_schema = StructType(
+dataset_schema = StructType(
     [
         StructField("id", StringType(), True),
         StructField("hash", StringType(), True),
@@ -178,10 +164,8 @@ dataset_arr_schema = StructType(
     ]
 )
 
-dataset_schema = get_stringified_schema(dataset_arr_schema)
 
-
-configuration_set_arr_schema = StructType(
+configuration_set_schema = StructType(
     [
         StructField("id", StringType(), True),
         StructField("hash", StringType(), True),
@@ -201,7 +185,6 @@ configuration_set_arr_schema = StructType(
     ]
 )
 
-configuration_set_schema = get_stringified_schema(configuration_set_arr_schema)
 
 co_cs_map_schema = StructType(
     [

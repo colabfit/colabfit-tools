@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import sys
-from ast import literal_eval
 from hashlib import sha512
 import dateutil.parser
 import datetime
@@ -18,7 +17,6 @@ from pyspark.sql.types import (
     IntegerType,
     LongType,
     StringType,
-    StructField,
     StructType,
     ArrayType,
     TimestampType,
@@ -104,7 +102,6 @@ def config_struct_hash_udf(
 
     Position columns will be concatenated and sorted by x, y, z
     Atomic numbers will be sorted by the position sorting
-    Perform on existing rows in written tables (will unstring)
     """
     _hash = sha512()
     positions = []
@@ -112,7 +109,7 @@ def config_struct_hash_udf(
         if v is None or v == "[]":
             continue
         else:
-            positions.extend(literal_eval(v))
+            positions.extend(v)
     positions = np.array(positions)
     sort_ixs = np.lexsort(
         (
@@ -122,11 +119,11 @@ def config_struct_hash_udf(
         )
     )
     sorted_positions = positions[sort_ixs]
-    atomic_numbers = np.array(literal_eval(atomic_numbers))
+    atomic_numbers = np.array(atomic_numbers)
     sorted_atomic_numbers = atomic_numbers[sort_ixs]
     _hash.update(bytes(_format_for_hash(sorted_atomic_numbers)))
-    _hash.update(bytes(_format_for_hash(literal_eval(cell))))
-    _hash.update(bytes(_format_for_hash(literal_eval(pbc))))
+    _hash.update(bytes(_format_for_hash(cell)))
+    _hash.update(bytes(_format_for_hash(pbc)))
     _hash.update(bytes(_format_for_hash(sorted_positions)))
     return str(int(_hash.hexdigest(), 16))
 
@@ -151,16 +148,6 @@ def get_spark_field_type(schema: StructType, field_name: str) -> DataType:
         if field.name == field_name:
             return field.dataType
     raise ValueError(f"Field name {field_name} not found in schema")
-
-
-def get_stringified_schema(schema: StructType) -> StructType:
-    new_fields = []
-    for field in schema:
-        if field.dataType.typeName() == "array":
-            new_fields.append(StructField(field.name, StringType(), field.nullable))
-        else:
-            new_fields.append(field)
-    return StructType(new_fields)
 
 
 def spark_to_arrow_type(spark_type: DataType) -> pa.DataType:
@@ -274,48 +261,6 @@ def _parse_unstructured_metadata(md_json: dict) -> dict:
     }
 
 
-############################################################
-# Functions for converting column values to and from string
-############################################################
-
-
-@sf.udf(returnType=ArrayType(StringType()))
-def str_to_arrayof_str(val):
-    try:
-        if isinstance(val, str) and len(val) > 0 and val[0] == "[":
-            return literal_eval(val)
-    except ValueError:
-        raise ValueError(f"Error converting {val} to list")
-
-
-@sf.udf(returnType=ArrayType(IntegerType()))
-def str_to_arrayof_int(val):
-    if isinstance(val, str) and len(val) > 0 and val[0] == "[":
-        return literal_eval(val)
-    raise ValueError(f"Error converting {val} to list")
-
-
-@sf.udf(returnType=ArrayType(ArrayType(DoubleType())))
-def str_to_nestedarrayof_double(val):
-    if val is None:
-        return None
-    if isinstance(val, str) and len(val) > 0 and val[0] == "[":
-        return literal_eval(val)
-    raise ValueError(f"Error converting {val} to list")
-
-
-def unstring_df_val(val):
-    if val is not None and len(val) > 0 and val[0] == "[":
-        return literal_eval(val)
-    return val
-
-
-@sf.udf(returnType=StringType())
-def stringify_df_val_udf(val):
-    if val is not None:
-        return str(val)
-
-
 def convert_stress(keys: str, stress: list[float]) -> list[list[float]]:
     """Convert a size-6 array of stress components to a 3x3 matrix
 
@@ -342,85 +287,6 @@ def get_max_string_length(df: DataFrame, column_name: str) -> int:
     if max_len is None:
         return 0
     return max_len
-
-
-def split_long_string_cols(
-    df: DataFrame, column_name: str, max_string_length: int
-) -> DataFrame:
-    """
-    Splits a long string column into multiple columns based on a maximum string length.
-    :param df: Input DataFrame with array cols already stringified
-    :param column_name: Name of the column containing the long string
-    :param max_string_length: Maximum length for each split string
-    :return: DataFrame with the long string split across multiple columns
-    """
-    overflow_columns = [
-        f"{'_'.join(column_name.split('_')[:-1])}_{i + 1:02}" for i in range(19)
-    ]
-    if not all([col in df.columns for col in overflow_columns]):
-        raise ValueError("Overflow columns not found in target DataFrame schema")
-    if get_max_string_length(df, column_name) <= max_string_length:
-        # for col in overflow_columns:
-        #     df = df.withColumn(col, sf.lit("[]").cast(StringType()))
-        df = df.select(
-            *[
-                (
-                    sf.lit("[]").cast(StringType()).alias(col)
-                    if col in overflow_columns
-                    else sf.col(col)
-                )
-                for col in df.columns
-            ]
-        )
-        return df
-    logger.info(f"Column split: {column_name}")
-    all_columns = [column_name] + overflow_columns
-    tmp_columns = [f"{col_name}_tmp" for col_name in all_columns]
-    df = df.withColumn("total_length", sf.length(sf.col(column_name)))
-    substring_exprs = [
-        sf.when(
-            sf.length(sf.col(column_name)) - (i * max_string_length) > 0,
-            sf.substring(
-                sf.col(column_name), (i * max_string_length + 1), max_string_length
-            ),
-        )
-        .otherwise(sf.lit("[]"))
-        .alias(col_name)
-        for i, col_name in enumerate(tmp_columns)
-    ]
-    df = df.select("*", *substring_exprs)
-    for tmp_col, col in zip(tmp_columns, all_columns):
-        df = df.drop(col).withColumnRenamed(f"{tmp_col}", col)
-    df = df.drop("total_length")
-    return df
-
-
-def combine_cols(df: DataFrame, col_name_base: str) -> DataFrame:
-    """
-    Combines multiple columns into a single column (atomic forces, positions)
-    :param df: Input DataFrame with array cols already stringified
-    :param col_name_base: Name of the column to combine with no integer suffix
-    :return: DataFrame with the specified column combined
-    """
-    columns = [f"{col_name_base}_{i:02}" for i in range(20)]
-    if not all([col in df.columns for col in columns]):
-        raise ValueError("Overflow columns not found in target DataFrame schema")
-    logger.info(f"Column combined: {col_name_base}")
-    df = df.withColumn(
-        col_name_base,
-        sf.concat_ws("", *[sf.col(col) for col in columns]),
-    )
-    df = df.select(
-        *[
-            (
-                sf.lit("[]").cast(StringType()).alias(col)
-                if col in columns
-                else sf.col(col)
-            )
-            for col in df.columns
-        ]
-    )
-    return df
 
 
 ELEMENT_MAP = {
