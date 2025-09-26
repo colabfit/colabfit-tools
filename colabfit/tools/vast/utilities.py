@@ -6,6 +6,7 @@ from hashlib import sha512
 import dateutil.parser
 import datetime
 
+from ast import literal_eval
 import numpy as np
 import pyarrow as pa
 from pyspark.sql import DataFrame
@@ -300,6 +301,22 @@ def convert_stress(keys: str, stress: list[float]) -> list[list[float]]:
 def stringify_df_val_udf(val):
     if val is not None:
         return str(val)
+
+
+@sf.udf(returnType=ArrayType(StringType()))
+def str_to_arrayof_str(val):
+    try:
+        if isinstance(val, str) and len(val) > 0 and val[0] == "[":
+            return literal_eval(val)
+    except ValueError:
+        raise ValueError(f"Error converting {val} to list")
+
+
+@sf.udf(returnType=ArrayType(IntegerType()))
+def str_to_arrayof_int(val):
+    if isinstance(val, str) and len(val) > 0 and val[0] == "[":
+        return literal_eval(val)
+    raise ValueError(f"Error converting {val} to list")
 
 
 #####################################################################

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 import pyspark.sql.functions as sf
 from unidecode import unidecode
@@ -150,6 +151,7 @@ class Dataset:
         self.data_license = data_license
         self.dataset_id = dataset_id
         self.doi = doi
+        assert datetime.strptime(publication_year, "%Y")
         self.publication_year = publication_year
         self.configuration_set_ids = configuration_set_ids
         self.equilibrium = equilibrium
@@ -157,6 +159,7 @@ class Dataset:
             self.configuration_set_ids = []
         self.row_dict = self.to_row_dict(config_df=config_df)
         self.row_dict["date_added_to_colabfit"] = get_date()
+        assert datetime.strptime(date_requested, "%Y-%m-%d")
         self.row_dict["date_requested"] = date_requested
         self.row_dict["id"] = self.dataset_id
         id_prefix = "__".join(

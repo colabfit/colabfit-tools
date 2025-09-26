@@ -60,9 +60,9 @@ config_prop_schema = StructType(
 )
 config_prop_str_schema = get_stringified_schema(config_prop_schema)
 config_prop_md_schema = StructType([field for field in config_prop_schema])
-config_prop_md_schema.add(
-    StructField("configuration_metadata", StringType(), True)
-).add(StructField("property_metadata", StringType(), True))
+config_prop_md_schema.add(StructField("configuration_metadata", StringType(), True)).add(
+    StructField("property_metadata", StringType(), True)
+)
 
 config_schema = StructType(
     [
@@ -163,7 +163,8 @@ dataset_schema = StructType(
         StructField("publication_year", StringType(), True),
         StructField("doi", StringType(), True),
         StructField("equilibrium", BooleanType(), True),
-        StructField("colabfit_publication_date", TimestampType(), True),
+        StructField("date_added_to_colabfit", TimestampType(), True),
+        StructField("date_requested", TimestampType(), True),
     ]
 )
 

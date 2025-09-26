@@ -342,6 +342,71 @@ class VastDataLoader:
                 total_rows += len_batch
         logger.info(f"Inserted {total_rows} rows into table {table_name}")
 
+    def read_table(
+        self, table_name: str, unstring: bool = False, read_metadata: bool = False
+    ):
+        """
+        Include self.table_prefix in the table name when passed to this function.
+        Ex: loader.read_table(loader.config_table, unstring=True)
+        Arguments:
+            table_name {str} -- Name of the table to read from database
+        Keyword Arguments:
+            unstring {bool} -- Convert stringified lists to lists (default: {False})
+            read_metadata {bool} -- Read metadata from files. If True,
+            lists will be also converted from strings (default: {False})
+        Returns:
+            DataFrame -- Spark DataFrame
+        """
+        string_schema_dict = {
+            self.config_table: config_prop_str_schema,
+        }
+        unstring_schema_dict = {
+            self.config_table: config_prop_schema,
+            self.config_set_table: configuration_set_schema,
+            self.dataset_table: dataset_schema,
+        }
+        md_schema_dict = {
+            self.config_table: config_md_schema,
+            self.config_set_table: configuration_set_arr_schema,
+            self.dataset_table: dataset_arr_schema,
+        }
+        if table_name in [self.config_set_table, self.dataset_table]:
+            read_metadata = False
+        df = self.spark.read.table(table_name)
+        if unstring or read_metadata:
+            schema = unstring_schema_dict[table_name]
+            schema_type_dict = {f.name: f.dataType for f in schema}
+            string_cols = [f.name for f in schema if f.dataType.typeName() == "array"]
+            for col in string_cols:
+                unstring_udf = sf.udf(unstring_df_val, schema_type_dict[col])
+                df = df.withColumn(col, unstring_udf(sf.col(col)))
+        if read_metadata:
+            schema = md_schema_dict[table_name]
+            config = {
+                "bucket_dir": self.bucket_dir,
+                "access_key": self.access_key,
+                "access_secret": self.access_secret,
+                "endpoint": self.endpoint,
+                "metadata_dir": self.metadata_dir,
+            }
+            df = df.rdd.mapPartitions(
+                lambda partition: read_md_partition(partition, config)
+            ).toDF(schema)
+        if not read_metadata and not unstring:
+            schema = string_schema_dict[table_name]
+        mismatched_cols = [
+            x
+            for x in [(f.name, f.dataType.typeName()) for f in df.schema]
+            if x not in [(f.name, f.dataType.typeName()) for f in schema]
+        ]
+        if len(mismatched_cols) == 0:
+            return df
+        else:
+            raise ValueError(
+                f"Schema mismatch for table {table_name}. "
+                f"Mismatched column types in DataFrame: {mismatched_cols}"
+            )
+
     def write_metadata(self, df: DataFrame):
         """Writes metadata to files using boto3 for VastDB
         Returns a DataFrame without metadata column. The returned DataFrame should
@@ -421,10 +486,7 @@ class VastDataLoader:
             "$row_id": LongType(),
         }
         read_schema = StructType(
-            [
-                StructField(col, col_type, True)
-                for col, col_type in str_col_types.items()
-            ]
+            [StructField(col, col_type, True) for col, col_type in str_col_types.items()]
         )
         arrow_schema = spark_schema_to_arrow_schema(
             StructType([field for field in df.schema() if field.name in update_cols])
@@ -1021,9 +1083,7 @@ class DataManager:
                 dataset_id=self.dataset_id,
                 ordered=ordered,
             )
-            co_cs_df = co_id_df.withColumn(
-                "configuration_set_id", sf.lit(config_set.id)
-            )
+            co_cs_df = co_id_df.withColumn("configuration_set_id", sf.lit(config_set.id))
             if co_cs_write_df is None:
                 co_cs_write_df = co_cs_df
             elif co_cs_write_df.count() > 10000:
@@ -1060,6 +1120,7 @@ class DataManager:
         doi: str = None,
         labels: list[str] = None,
         equilibrium: bool = False,
+        date_requested: str = None,
         data_license: str = "CC-BY-4.0",
     ):
 
@@ -1095,6 +1156,7 @@ class DataManager:
             data_license=data_license,
             configuration_set_ids=cs_ids,
             publication_year=publication_year,
+            date_requested=date_requested,
             equilibrium=equilibrium,
         )
         ds_df = loader.spark.createDataFrame([ds.row_dict], schema=dataset_schema)

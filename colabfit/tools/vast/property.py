@@ -151,11 +151,13 @@ def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
     Returns metadata dict as a JSON string, method, and software.
     """
     gathered_fields = {}
-    for md_field in pmap_md.keys():
-        if "value" in pmap_md[md_field]:
-            v = pmap_md[md_field]["value"]
-        elif "field" in pmap_md[md_field]:
-            field_key = pmap_md[md_field]["field"]
+    for md_field, md_val in pmap_md.items():
+        if md_val is None:
+            continue
+        if "value" in md_val:
+            v = md_val["value"]
+        elif "field" in md_val:
+            field_key = md_val["field"]
             if field_key in config.info:
                 v = config.info[field_key]
             elif field_key in config.arrays:
@@ -165,19 +167,15 @@ def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
         else:
             continue  # No keys are required; ignored if missing
 
-        if "units" in pmap_md[md_field]:
+        if "units" in md_val:
             gathered_fields[md_field] = {
                 "source-value": v,
-                "source-unit": pmap_md[md_field]["units"],
+                "source-unit": md_val["units"],
             }
         else:
             gathered_fields[md_field] = {"source-value": v}
     method = gathered_fields.pop("method", None)
     software = gathered_fields.pop("software", None)
-    if "property_keys" not in gathered_fields:
-        raise RuntimeError(
-            "'property_keys' must be provided in the property map. If defined, check that property_keys is formatted as {'property_keys': {'value': {'key1 : value1}}}"  # noqa E501
-        )
     if method is not None:
         method = method["source-value"]
     if software is not None:
@@ -452,62 +450,67 @@ class Property(dict):
                 A property map as described in the Property attributes section.
 
         """
-        pdef_dict = {pdef["property-name"]: pdef for pdef in definitions}
-        instances = {
-            pdef_name: cls.get_kim_instance(pdef)
-            for pdef_name, pdef in pdef_dict.items()
-        }
         props_dict = {}
-        pi_md = None
-        for pname, pmap in property_map.items():
-            instance = instances.get(pname, None)
-            if pname == "_metadata":
-                pi_md, method, software = md_from_map(pmap, configuration)
-                props_dict["method"] = method
-                props_dict["software"] = software
-            elif instance is None:
-                raise PropertyParsingError(f"Property {pname} not found in definitions")
-            else:
-                p_info = MAIN_KEY_MAP.get(pname, None)
-                if p_info is None:
-                    logger.warning(f"property {pname} not found in MAIN_KEY_MAP")
+        metadata = property_map.get("_metadata")
+        pi_md, method, software = md_from_map(metadata, configuration)
+        props_dict["method"] = method
+        props_dict["software"] = software
+        if definitions:
+            pdef_dict = {pdef["property-name"]: pdef for pdef in definitions}
+            instances = {
+                pdef_name: cls.get_kim_instance(pdef)
+                for pdef_name, pdef in pdef_dict.items()
+            }
+            pi_md = None
+            for pname, pmap in property_map.items():
+                if pname == "_metadata":
                     continue
-                if p_info.key not in pmap:
-                    logger.warning(
-                        f"Property {p_info.key} not found in pmap for {pname}: {pmap}"  # noqa E501
+                instance = instances.get(pname, None)
+                if instance is None:
+                    raise PropertyParsingError(
+                        f"Property {pname} not found in definitions"
                     )
-                    pdef_dict.pop(pname)
-                    continue
-                instance = instance.copy()
-                pval = cls.get_property_value(pmap, configuration)
-                if pval is False:
-                    logger.warning(
-                        f"Property {p_info.key} not found in arrays or info for {pname}: {pmap}"  # noqa E501
+                else:
+                    p_info = MAIN_KEY_MAP.get(pname, None)
+                    if p_info is None:
+                        logger.warning(f"property {pname} not found in MAIN_KEY_MAP")
+                        continue
+                    if p_info.key not in pmap:
+                        logger.warning(
+                            f"Property {p_info.key} not found in pmap for {pname}: {pmap}"  # noqa E501
+                        )
+                        pdef_dict.pop(pname)
+                        continue
+                    instance = instance.copy()
+                    pval = cls.get_property_value(pmap, configuration)
+                    if pval is False:
+                        logger.warning(
+                            f"Property {p_info.key} not found in arrays or info for {pname}: {pmap}"  # noqa E501
+                        )
+                        pdef_dict.pop(pname)
+                        continue
+                    instance.update(pval)
+
+                    # for key, val in pmap.items():
+                    #     print('pmap',pmap)
+                    #     pval = cls.get_property_value(
+                    #         val, configuration.info, configuration.arrays
+                    #     )
+                    #     if pval is False:
+                    #         print(
+                    #             f"Property {p_info.key} not found in arrays or info for {pname}: {pmap}"  # noqa E501
+                    #         )
+                    #         pdef_dict.pop(pname)
+                    #         continue
+                    #     instance[p_info.key] = pval
+
+                    # hack to get around OpenKIM requiring the property-name be a dict
+                    prop_name_tmp = pdef_dict[pname].pop("property-name")
+                    check_instance_optional_key_marked_required_are_present(
+                        instance, pdef_dict[pname]
                     )
-                    pdef_dict.pop(pname)
-                    continue
-                instance.update(pval)
-
-                # for key, val in pmap.items():
-                #     print('pmap',pmap)
-                #     pval = cls.get_property_value(
-                #         val, configuration.info, configuration.arrays
-                #     )
-                #     if pval is False:
-                #         print(
-                #             f"Property {p_info.key} not found in arrays or info for {pname}: {pmap}"  # noqa E501
-                #         )
-                #         pdef_dict.pop(pname)
-                #         continue
-                #     instance[p_info.key] = pval
-
-                # hack to get around OpenKIM requiring the property-name be a dict
-                prop_name_tmp = pdef_dict[pname].pop("property-name")
-                check_instance_optional_key_marked_required_are_present(
-                    instance, pdef_dict[pname]
-                )
-                pdef_dict[pname]["property-name"] = prop_name_tmp
-                props_dict[pname] = instance
+                    pdef_dict[pname]["property-name"] = prop_name_tmp
+                    props_dict[pname] = instance
         props_dict["chemical_formula_hill"] = configuration.get_chemical_formula()
         props_dict["configuration_id"] = configuration.id
 
@@ -580,9 +583,7 @@ class Property(dict):
             if "per-atom" in prop_dict:
                 if prop_dict["per-atom"]["source-value"] is True:
                     if self.nsites is None:
-                        raise RuntimeError(
-                            "nsites must be provided to convert per-atom"
-                        )
+                        raise RuntimeError("nsites must be provided to convert per-atom")
                     prop_val *= self.nsites
 
             if units != p_info.unit:
@@ -753,24 +754,30 @@ class PropertyMap:
         Validates, returns the complete property map including metadata and properties.
     """
 
-    def __init__(self, property_definitions: list):
-        self.property_definitions = {
-            p["property-name"]: p for p in property_definitions
-        }
+    def __init__(self, property_definitions: list = None):
+        self.properties = {}
+        if not property_definitions:
+            logger.warning("No properties set in PropertyMap")
+            property_keys = None
+        else:
+            self.property_definitions = {
+                p["property-name"]: p for p in property_definitions
+            }
+            property_keys = {
+                "value": {
+                    p["property-name"]: None for p in self.property_definitions.values()
+                },
+            }
+            for name in self.property_definitions:
+                main_key = MAIN_KEY_MAP[name].key
+                self.properties[name] = {main_key: {"field": None, "units": None}}
+
         self._metadata = {
             "software": {"value": None, "required": True},
             "method": {"value": None, "required": True},
             "input": {"value": None, "required": True},
-            "property_keys": {
-                "value": {
-                    p["property-name"]: None for p in self.property_definitions.values()
-                },
-            },
+            "property_keys": property_keys,
         }
-        self.properties = {}
-        for name in self.property_definitions:
-            main_key = MAIN_KEY_MAP[name].key
-            self.properties[name] = {main_key: {"field": None, "units": None}}
 
     def set_metadata_field(self, key: str, value, dynamic=False):
         if dynamic:
@@ -783,7 +790,7 @@ class PropertyMap:
         return {
             k: v
             for k, v in self._metadata.items()
-            if (v.get("value") or v.get("field"))
+            if (v is None or v.get("value") or v.get("field"))
         }
 
     def set_property(
@@ -816,9 +823,7 @@ class PropertyMap:
                 units = prop["units"]
                 original_file_key = prop["original_file_key"]
                 additional = prop.get("additional", [])
-                self.set_property(
-                    prop_name, field, units, original_file_key, additional
-                )
+                self.set_property(prop_name, field, units, original_file_key, additional)
             elif isinstance(prop, property_info):
                 prop_name = prop.property_name
                 field = prop.field
@@ -827,9 +832,7 @@ class PropertyMap:
                 additional = prop.additional
                 if additional is None:
                     additional = []
-                self.set_property(
-                    prop_name, field, units, original_file_key, additional
-                )
+                self.set_property(prop_name, field, units, original_file_key, additional)
         self.validate_properties()
 
     def get_property(self, property_name: str):
@@ -839,7 +842,9 @@ class PropertyMap:
 
     def validate_metadata(self):
         for key, value in self._metadata.items():
-            if (
+            if key == "property_keys" and value is None:
+                logger.warning("Property keys not included in property map")
+            elif (
                 value.get("required")
                 and value.get("value") is None
                 and value.get("field") is None
@@ -888,9 +893,7 @@ class PropertyMap:
                     continue
                 elif val.get("has-unit") and prop_view.get("units") is None:
                     raise ValueError(f"Property '{prop_name}' must have 'units' set.")
-                elif (
-                    val.get("has-unit") is False and prop_view.get("units") is not None
-                ):
+                elif val.get("has-unit") is False and prop_view.get("units") is not None:
                     raise ValueError(
                         f"Property '{prop_name}' must have key {key}: 'units' set to None."  # noqa E501
                     )
@@ -900,7 +903,6 @@ class PropertyMap:
                 )
 
     def get_property_map(self):
-        self.validate_metadata()
         self.validate_properties()
         return {
             "_metadata": self.get_metadata(),
