@@ -1,7 +1,7 @@
 from ase import Atoms
 from ase.io import iread
 from colabfit.tools.vast.configuration import AtomicConfiguration
-from colabfit.tools.vast.utilities import convert_stress
+from colabfit.tools.vast.utils import convert_stress
 from pathlib import Path
 import re
 

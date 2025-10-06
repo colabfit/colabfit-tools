@@ -18,9 +18,9 @@ from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 from colabfit.tools.vast.configuration import AtomicConfiguration
 from colabfit.tools.vast.schema import property_object_schema
-from colabfit.tools.vast.utilities import (
+from colabfit.tools.vast.data_object import DataObject
+from colabfit.tools.vast.utils import (
     _empty_dict_from_schema,
-    _hash,
     _parse_unstructured_metadata,
     get_last_modified,
 )
@@ -191,7 +191,7 @@ class InvalidPropertyDefinition(Exception):
     pass
 
 
-class Property(dict):
+class Property(DataObject, dict):
     """
     A Property is used to store the results of some kind of calculation or
     experiment, and should be mapped to an `OpenKIM Property Definition
@@ -256,6 +256,9 @@ class Property(dict):
                 If True, converts units to those expected by ColabFit. Default
                 is True
         """
+        DataObject.__init__(self)
+        dict.__init__(self)
+
         self.unique_identifier_kw = [
             k
             for k in property_object_schema.fieldNames()
@@ -276,8 +279,7 @@ class Property(dict):
         if dataset_id is not None:
             self.dataset_id = dataset_id
         self.row_dict = self.to_row_dict()
-        self._hash = _hash(self.row_dict, self.unique_identifier_kw, False)
-        self.row_dict["hash"] = str(self._hash)
+        self._generate_hash_and_id()
         self._id = f"PO_{self._hash}"
         if len(self._id) > 28:
             self._id = self._id[:28]
@@ -623,12 +625,9 @@ class Property(dict):
                 "source-unit": p_info.unit,
             }
 
-    def __hash__(self):
-
-        return _hash(
-            self.row_dict,
-            sorted(self.unique_identifier_kw),
-        )
+    def get_identifier_keys(self) -> list[str]:
+        """Return the keys used for Property identification."""
+        return sorted(self.unique_identifier_kw)
 
     def __eq__(self, other):
         """
@@ -708,10 +707,50 @@ class Property(dict):
         return str(self)
 
 
-property_info = namedtuple(
-    "property_info",
-    ["property_name", "field", "units", "original_file_key", "additional"],
-)
+class PropertyInfo:
+    """
+    A class to store information about a property to be added to a PropertyMap.
+    Attributes:
+    -----------
+    property_name : str
+        Name of the property (must match a property in the PropertyMap).
+    field : str
+        Field name in the AtomicConfiguration object to get the property value from.
+    units : str
+        Units of the property value (must be a valid ASE unit).
+    original_file_key : str
+        Key name in the original file (e.g. 'energy', 'forces', etc.).
+    additional : list[tuple]
+        Any additional key/value for the property.
+    """
+
+    property_info = namedtuple(
+        "property_info",
+        ["property_name", "field", "units", "original_file_key", "additional"],
+    )
+
+    def __init__(
+        self,
+        property_name: str,
+        field: str,
+        units: str,
+        original_file_key: str,
+        additional: list[tuple] = None,
+    ):
+        self.property_name = property_name
+        self.field = field
+        self.units = units
+        self.original_file_key = original_file_key
+        self.additional = additional if additional is not None else []
+
+    def get_info(self):
+        return self.property_info(
+            property_name=self.property_name,
+            field=self.field,
+            units=self.units,
+            original_file_key=self.original_file_key,
+            additional=self.additional,
+        )
 
 
 class PropertyMap:
@@ -815,7 +854,7 @@ class PropertyMap:
             else:
                 raise KeyError(f"Key '{key}' not found in property '{property_name}'")
 
-    def set_properties(self, properties: list[dict | property_info]):
+    def set_properties(self, properties: list[dict | PropertyInfo]):
         for prop in properties:
             if isinstance(prop, dict):
                 prop_name = prop["property_name"]
@@ -824,15 +863,14 @@ class PropertyMap:
                 original_file_key = prop["original_file_key"]
                 additional = prop.get("additional", [])
                 self.set_property(prop_name, field, units, original_file_key, additional)
-            elif isinstance(prop, property_info):
-                prop_name = prop.property_name
-                field = prop.field
-                units = prop.units
-                original_file_key = prop.original_file_key
-                additional = prop.additional
-                if additional is None:
-                    additional = []
-                self.set_property(prop_name, field, units, original_file_key, additional)
+            elif isinstance(prop, PropertyInfo):
+                self.set_property(
+                    prop.property_name,
+                    prop.field,
+                    prop.units,
+                    prop.original_file_key,
+                    prop.additional,
+                )
         self.validate_properties()
 
     def get_property(self, property_name: str):

@@ -6,9 +6,9 @@ from ase import Atoms
 
 from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
 from colabfit.tools.vast.schema import config_schema
-from colabfit.tools.vast.utilities import (
+from colabfit.tools.vast.data_object import DataObject
+from colabfit.tools.vast.utils import (
     _empty_dict_from_schema,
-    _hash,
     _parse_unstructured_metadata,
     config_struct_hash,
     get_last_modified,
@@ -16,7 +16,7 @@ from colabfit.tools.vast.utilities import (
 )
 
 
-class AtomicConfiguration(Atoms):
+class AtomicConfiguration(DataObject, Atoms):
     """
     An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and an
     :class:`ase.Atoms` object that is guaranteed to have the following fields in
@@ -33,7 +33,7 @@ class AtomicConfiguration(Atoms):
         **kwargs,
     ):
         """
-        Constructs an AtomicConfiguration. Calls :meth:`BaseConfiguration.__init__()`
+        Constructs an AtomicConfiguration. Calls :meth:`DataObject.__init__()`
         and :meth:`ase.Atoms.__init__()`
 
         Args:
@@ -47,12 +47,15 @@ class AtomicConfiguration(Atoms):
         """
         if "atomic_numbers" in list(kwargs.keys()):
             kwargs["numbers"] = kwargs.pop("atomic_numbers")
+
+        DataObject.__init__(self)
         Atoms.__init__(self, **kwargs)
+
         if info is not None:
             self.info.update(info)
         if self.info == {}:
             raise ValueError(
-                "Configuration should have '.info' dict attribute. Pass dict to generator function."  # noqa E501
+                "Configuration should have '.info' dict attribute with, at minimum, '_name' defined. Pass dict to generator function."  # noqa E501
             )
         names = self.info.get(ATOMS_NAME_FIELD)
         if names is None:
@@ -100,12 +103,11 @@ class AtomicConfiguration(Atoms):
         else:
             self.labels = labels
         self.row_dict = self.to_row_dict()
-        self._hash = str(_hash(self.row_dict, self.unique_identifier_kw, False))
+        self._generate_hash_and_id()
         self.id = f"CO_{self._hash}"
         if len(self.id) > 28:
             self.id = self.id[:28]
         self.row_dict["id"] = self.id
-        self.row_dict["hash"] = self._hash
         # self.row_dict["dataset_ids"] = [self.dataset_id]
         self.row_dict = self.row_dict
         # Check for name conflicts in info/arrays; would cause bug in parsing
@@ -319,6 +321,6 @@ class AtomicConfiguration(Atoms):
             self.info[ATOMS_NAME_FIELD], ase_str[20:-1]
         )
 
-    def __hash__(self):
-        """This is not used as the hash for the spark row, as Python may truncate"""
-        return _hash(self.row_dict, sorted(self.unique_identifier_kw), False)
+    def get_identifier_keys(self) -> list[str]:
+        """Return the keys used for AtomicConfiguration identification."""
+        return sorted(self.unique_identifier_kw)

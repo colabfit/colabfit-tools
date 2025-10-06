@@ -40,11 +40,16 @@ from colabfit.tools.vast.schema import (
     configuration_set_schema,
     dataset_schema,
 )
-from colabfit.tools.vast.utilities import (
+from colabfit.tools.vast.utils import (
     _hash,
     get_last_modified,
     spark_schema_to_arrow_schema,
     stringify_df_val_udf,
+    str_to_arrayof_int,
+    str_to_arrayof_double,
+    str_to_arrayof_bool,
+    str_to_arrayofarrayof_double,
+    str_to_arrayof_str,
 )
 
 logger = logging.getLogger(__name__)
@@ -232,7 +237,8 @@ class VastDataLoader:
                     write_rows = spark_df
                 write_rows = self.write_metadata(write_rows)
                 if stringify:
-                    # Only for config prop while vastdb doesn't support indexing on array column tables
+                    # Only for config prop while vastdb doesn't support indexing on
+                    # array column tables
                     write_rows = self.stringify_df(write_rows, table_schema)
                     arrow_schema = spark_schema_to_arrow_schema(config_prop_str_schema)
                 write_rows = write_rows.select(
@@ -269,7 +275,8 @@ class VastDataLoader:
             self.create_vastdb_table(table_name, table_schema)
         spark_df = self.write_metadata(spark_df)
         if stringify:
-            # Only for config prop while vastdb doesn't support indexing on array column tables
+            # Only for config prop while vastdb doesn't support indexing on
+            # array column tables
             spark_df = self.stringify_df(spark_df, table_schema)
             table_schema = config_prop_str_schema
         spark_df = spark_df.select(*[col for col in table_schema.fieldNames()])
@@ -299,7 +306,7 @@ class VastDataLoader:
 
     def get_table_spark_schema(self, table_name: str) -> StructType:
         string_schema_dict = {
-            self.config_table: config_prop_schema,
+            self.config_table: config_prop_str_schema,
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.co_cs_map_table: co_cs_map_schema,
@@ -357,29 +364,67 @@ class VastDataLoader:
         Returns:
             DataFrame -- Spark DataFrame
         """
-        string_schema_dict = {
+        table_schema = {
             self.config_table: config_prop_str_schema,
-        }
-        unstring_schema_dict = {
-            self.config_table: config_prop_schema,
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
         }
+        unstring_schema_dict = {
+            self.config_table: config_prop_schema,
+        }
         md_schema_dict = {
-            self.config_table: config_md_schema,
-            self.config_set_table: configuration_set_arr_schema,
-            self.dataset_table: dataset_arr_schema,
+            self.config_table: config_prop_md_schema,
         }
         if table_name in [self.config_set_table, self.dataset_table]:
             read_metadata = False
+            unstring = False
         df = self.spark.read.table(table_name)
         if unstring or read_metadata:
             schema = unstring_schema_dict[table_name]
-            schema_type_dict = {f.name: f.dataType for f in schema}
-            string_cols = [f.name for f in schema if f.dataType.typeName() == "array"]
-            for col in string_cols:
-                unstring_udf = sf.udf(unstring_df_val, schema_type_dict[col])
-                df = df.withColumn(col, unstring_udf(sf.col(col)))
+            int_array_cols = [
+                f.name for f in schema if f.dataType.simpleString() == "array<int>"
+            ]
+            str_array_cols = [
+                f.name for f in schema if f.dataType.simpleString() == "array<string>"
+            ]
+            double_array_cols = [
+                f.name for f in schema if f.dataType.simpleString() == "array<double>"
+            ]
+            bool_array_cols = [
+                f.name for f in schema if f.dataType.simpleString() == "array<boolean>"
+            ]
+            arrayofarrayof_double_cols = [
+                f.name
+                for f in schema
+                if f.dataType.simpleString() == "array<array<double>>"
+            ]
+            df = df.select(
+                *[
+                    (
+                        str_to_arrayof_str(sf.col(col))
+                        if col in str_array_cols
+                        else (
+                            str_to_arrayof_double(sf.col(col))
+                            if col in double_array_cols
+                            else (
+                                str_to_arrayof_bool(sf.col(col))
+                                if col in bool_array_cols
+                                else (
+                                    str_to_arrayof_int(sf.col(col))
+                                    if col in int_array_cols
+                                    else (
+                                        str_to_arrayofarrayof_double(sf.col(col))
+                                        if col in arrayofarrayof_double_cols
+                                        else sf.col(col)
+                                    )
+                                )
+                            )
+                        )
+                    )
+                    for col in schema.fieldNames()
+                ],
+            )
+
         if read_metadata:
             schema = md_schema_dict[table_name]
             config = {
@@ -393,7 +438,7 @@ class VastDataLoader:
                 lambda partition: read_md_partition(partition, config)
             ).toDF(schema)
         if not read_metadata and not unstring:
-            schema = string_schema_dict[table_name]
+            schema = table_schema[table_name]
         mismatched_cols = [
             x
             for x in [(f.name, f.dataType.typeName()) for f in df.schema]

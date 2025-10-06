@@ -6,10 +6,10 @@ from unidecode import unidecode
 
 from colabfit import MAX_STRING_LENGTH
 from colabfit.tools.vast.schema import dataset_schema
-from colabfit.tools.vast.utilities import (
+from colabfit.tools.vast.data_object import DataObject
+from colabfit.tools.vast.utils import (
     ELEMENT_MAP,
     _empty_dict_from_schema,
-    _hash,
     get_date,
     get_last_modified,
     str_to_arrayof_int,
@@ -19,7 +19,7 @@ from colabfit.tools.vast.utilities import (
 logger = logging.getLogger(__name__)
 
 
-class Dataset:
+class Dataset(DataObject):
     """
     Represents a dataset that aggregates configuration sets and computed properties,
     along with associated metadata and aggregated statistics.
@@ -161,7 +161,6 @@ class Dataset:
         self.row_dict["date_added_to_colabfit"] = get_date()
         assert datetime.strptime(date_requested, "%Y-%m-%d")
         self.row_dict["date_requested"] = date_requested
-        self.row_dict["id"] = self.dataset_id
         id_prefix = "__".join(
             [
                 self.name,
@@ -173,10 +172,14 @@ class Dataset:
             logger.warning(f"ID prefix is too long. Clipping to {id_prefix}")
         extended_id = f"{id_prefix}__{dataset_id}"
         self.row_dict["extended_id"] = extended_id
-        self._hash = _hash(self.row_dict, ["extended_id"])
-        self.row_dict["hash"] = str(self._hash)
+        self._generate_hash_and_id()
+        self.row_dict["id"] = self.dataset_id
         self.row_dict["labels"] = labels
         logger.info(self.row_dict)
+
+    def get_identifier_keys(self) -> list[str]:
+        """Return the keys used for Dataset identification."""
+        return ["extended_id"]
 
     def to_row_dict(self, config_df):
         """"""
@@ -198,6 +201,8 @@ class Dataset:
             "cauchy_stress",
             "formation_energy",
             "energy",
+            "method",
+            "software",
         )
 
         int_array_cols = ["atomic_numbers", "dimension_types"]
@@ -230,8 +235,8 @@ class Dataset:
         dim_types = configuration_df.select("dimension_types").distinct().collect()
         row_dict["dimension_types"] = [row["dimension_types"] for row in dim_types]
 
-        methods = configuration_df.select("methods").distinct().collect()
-        row_dict["methods"] = [row["methods"] for row in methods]
+        methods = configuration_df.select("method").distinct().collect()
+        row_dict["methods"] = [row["method"] for row in methods]
 
         software = configuration_df.select("software").distinct().collect()
         row_dict["software"] = [row["software"] for row in software]
