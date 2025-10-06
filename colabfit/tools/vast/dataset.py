@@ -160,7 +160,7 @@ class Dataset(DataObject):
         self.row_dict = self.to_row_dict(config_df=config_df)
         self.row_dict["date_added_to_colabfit"] = get_date()
         assert datetime.strptime(date_requested, "%Y-%m-%d")
-        self.row_dict["date_requested"] = date_requested
+        self.row_dict["date_requested"] = datetime.strptime(date_requested, "%Y-%m-%d")
         id_prefix = "__".join(
             [
                 self.name,
@@ -332,7 +332,6 @@ class Dataset(DataObject):
         row_dict["publication_year"] = self.publication_year
         row_dict["doi"] = self.doi
         row_dict["equilibrium"] = self.equilibrium
-        row_dict["colabfit_publication_date"] = row_dict["last_modified"]
         return row_dict
 
     def __str__(self):

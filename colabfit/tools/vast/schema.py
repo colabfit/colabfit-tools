@@ -163,6 +163,8 @@ dataset_schema = StructType(
         StructField("publication_year", StringType(), True),
         StructField("doi", StringType(), True),
         StructField("equilibrium", BooleanType(), True),
+        StructField("methods", ArrayType(StringType()), True),
+        StructField("software", ArrayType(StringType()), True),
         StructField("date_added_to_colabfit", TimestampType(), True),
         StructField("date_requested", TimestampType(), True),
     ]
