@@ -40,6 +40,6 @@ setup(
     ],
     extras_require={
         "postgres": ["psycopg"],
-        "vast": ["vast", "pyspark", "pyarrow", "ibis"],
+        "vast": ["vastdb", "pyspark", "pyarrow", "ibis-framework"],
     },
 )

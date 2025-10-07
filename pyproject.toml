@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "colabfit-tools"
+version = "0.1.0"
+description = ""
+authors = [{name = "Gregory Wolfe", email = "wolfe.gregory.p@gmail.com"},
+           {name = "Eric Fuemmeler", email = "efuem@users.noreply.github.com"}]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "ase",
+    "kim_property",
+    "numpy",
+    "tqdm",
+    "markdown",
+    "plotly",
+    "django",
+    "periodictable",
+    "unidecode",
+    "notebook",
+]
+
+[project.urls]
+Homepage = "https://github.com/colabfit/colabfit-tools"
+Repository = "https://github.com/colabfit/colabfit-tools"
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+]
+vast = [
+    "vastdb",
+    "pyspark",
+    "pyarrow",
+    "ibis-framework",
+]
