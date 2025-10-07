@@ -493,19 +493,6 @@ class Property(DataObject, dict):
                         continue
                     instance.update(pval)
 
-                    # for key, val in pmap.items():
-                    #     print('pmap',pmap)
-                    #     pval = cls.get_property_value(
-                    #         val, configuration.info, configuration.arrays
-                    #     )
-                    #     if pval is False:
-                    #         print(
-                    #             f"Property {p_info.key} not found in arrays or info for {pname}: {pmap}"  # noqa E501
-                    #         )
-                    #         pdef_dict.pop(pname)
-                    #         continue
-                    #     instance[p_info.key] = pval
-
                     # hack to get around OpenKIM requiring the property-name be a dict
                     prop_name_tmp = pdef_dict[pname].pop("property-name")
                     check_instance_optional_key_marked_required_are_present(
