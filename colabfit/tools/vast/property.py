@@ -463,7 +463,6 @@ class Property(DataObject, dict):
                 pdef_name: cls.get_kim_instance(pdef)
                 for pdef_name, pdef in pdef_dict.items()
             }
-            pi_md = None
             for pname, pmap in property_map.items():
                 if pname == "_metadata":
                     continue

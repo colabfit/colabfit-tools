@@ -25,13 +25,11 @@ def _parse_unstructured_metadata(md_json: dict) -> dict:
     for key, val in md_json.items():
         if key in ["_id", "hash", "colabfit-id", "last_modified", "software", "method"]:
             continue
-        if isinstance(val, np.int64) or isinstance(val, np.int32):
-            val = int(val)
-        if isinstance(val, np.float64) or isinstance(val, np.float32):
-            val = float(val)
         if isinstance(val, dict):
             if "source-value" in val.keys():
                 val = val["source-value"]
+        if type(val).__module__ == np.__name__:
+            val = getattr(val, "tolist", lambda: val)()
         if isinstance(val, list) and len(val) == 1:
             val = val[0]
         if isinstance(val, np.ndarray):
