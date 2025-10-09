@@ -1,6 +1,5 @@
 import itertools
 import logging
-import string
 from functools import partial
 from itertools import islice
 from multiprocessing import Pool
@@ -12,7 +11,6 @@ import boto3
 import pyarrow as pa
 import pyspark.sql.functions as sf
 from botocore.exceptions import ClientError
-from django.utils.crypto import get_random_string
 from ibis import _
 from pyspark.sql import Row, SparkSession, DataFrame
 from pyspark.sql.functions import udf
@@ -27,7 +25,6 @@ from pyspark.sql.types import (
 from tqdm import tqdm
 from vastdb.session import Session
 
-from colabfit import ID_FORMAT_STRING
 from colabfit.tools.vast.configuration import AtomicConfiguration
 from colabfit.tools.vast.configuration_set import ConfigurationSet
 from colabfit.tools.vast.dataset import Dataset
@@ -66,22 +63,6 @@ _COL_MAX_STRING_LEN = 60000
 # from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
 # from kim_property.definition import check_property_definition
-
-
-def generate_string():
-    return get_random_string(12, allowed_chars=string.ascii_lowercase + "1234567890")
-
-
-def get_session():
-    from dotenv import load_dotenv
-    from vastdb.session import Session
-    import os
-
-    load_dotenv()
-    access = os.getenv("VAST_DB_ACCESS")
-    secret = os.getenv("VAST_DB_SECRET")
-    endpoint = os.getenv("VAST_DB_ENDPOINT")
-    return Session(access=access, secret=secret, endpoint=endpoint)
 
 
 class VastDataLoader:
@@ -695,6 +676,7 @@ class VastDataLoader:
             raise ValueError("dataset_id must be provided")
         config_df_cols = [
             "hash",
+            "property_id",
             "configuration_id",
             "nsites",
             "elements",
@@ -705,7 +687,7 @@ class VastDataLoader:
         read_schema = StructType(
             [
                 field
-                for field in config_prop_schema.fields
+                for field in config_prop_str_schema.fields
                 if field.name in config_df_cols
             ]
         )
@@ -811,6 +793,9 @@ class DataManager:
         read_write_batch_size: int = 10000,
     ):
         self.configs = configs
+        if not prop_defs:
+            logger.warning("No property definitions provided. Defaulting to empty list.")
+            prop_defs = []
         if isinstance(prop_defs, dict):
             prop_defs = [prop_defs]
         self.prop_defs = prop_defs
@@ -819,8 +804,6 @@ class DataManager:
         self.nprocs = nprocs
         self.dataset_id = dataset_id
         self.standardize_energy = standardize_energy
-        if self.dataset_id is None:
-            self.dataset_id = generate_ds_id()
         logger.info(f"Dataset ID: {self.dataset_id}")
 
     @staticmethod
@@ -849,8 +832,8 @@ class DataManager:
             )
         return co_po_rows
 
-    def co_po_example_rows(self):
-        """Returns a single configuration row and property object row.
+    def get_example_row(self):
+        """Returns a pair of configuration row, property object row.
         Used to test whether ingest script will return expected values.
         Note that metadata_path, metadata_size, and metadata_hash will not have been
         populated, and metadata field will not yet have been removed.
@@ -1107,16 +1090,16 @@ class DataManager:
             logger.info(
                 f"names match: {names_match}, label: {label_match}, cs_name: {cs_name}, cs_desc: {cs_desc}, ordered: {ordered}"  # noqa E501
             )
-            config_set_query_df = loader.config_set_query(
+            config_df = loader.config_set_query(
                 dataset_id=dataset_id,
                 name_match=names_match,
                 label_match=label_match,
             )
-            co_id_df = config_set_query_df.select("configuration_id").distinct()
+            co_ids = config_df.select("configuration_id").distinct()
             t = time()
             prelim_cs_id = f"CS_{cs_name}_{self.dataset_id}"
-            co_cs_df = loader.get_co_cs_mapping(prelim_cs_id)
-            if co_cs_df is not None:
+            co_cs_exists = loader.get_co_cs_mapping(prelim_cs_id)
+            if co_cs_exists:
                 logger.error(
                     f"Configuration Set {cs_name} already exists.\nRemove rows matching 'configuration_set_id == {prelim_cs_id}' from table {loader.co_cs_map_table} to recreate.\n"  # noqa E501
                 )
@@ -1124,21 +1107,21 @@ class DataManager:
             config_set = ConfigurationSet(
                 name=cs_name,
                 description=cs_desc,
-                config_df=config_set_query_df,
+                config_df=config_df,
                 dataset_id=self.dataset_id,
                 ordered=ordered,
             )
-            co_cs_df = co_id_df.withColumn("configuration_set_id", sf.lit(config_set.id))
+            co_cs_map = co_ids.withColumn("configuration_set_id", sf.lit(config_set.id))
             if co_cs_write_df is None:
-                co_cs_write_df = co_cs_df
+                co_cs_write_df = co_cs_map
             elif co_cs_write_df.count() > 10000:
                 logger.info("Sending CO-CS map batch to write table")
                 loader.write_table(
                     co_cs_write_df, loader.co_cs_map_table, check_unique=False
                 )
-                co_cs_write_df = co_cs_df
+                co_cs_write_df = co_cs_map
             else:
-                co_cs_write_df = co_cs_write_df.union(co_cs_df)
+                co_cs_write_df = co_cs_write_df.union(co_cs_map)
             config_set_rows.append(config_set.row_dict)
             t_end = time() - t
             logger.info(f"Time to create CS: {t_end}")
@@ -1347,13 +1330,6 @@ class S3FileManager:
             return response["Body"].read().decode("utf-8")
         except Exception as e:
             return f"Error: {str(e)}"
-
-
-def generate_ds_id():
-    # Maybe check to see whether the DS ID already exists?
-    ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
-    logger.info(f"Generated new DS ID: {ds_id}")
-    return ds_id
 
 
 @sf.udf(returnType=StringType())

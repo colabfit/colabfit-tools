@@ -1,20 +1,22 @@
-from collections import namedtuple
-from hashlib import sha512
 import logging
+from collections import namedtuple
 
 from pyspark.sql import functions as sf
 
 from colabfit.tools.vast.schema import configuration_set_schema
+from colabfit.tools.vast.data_object import DataObject
 from colabfit.tools.vast.utils import (
     ELEMENT_MAP,
     _empty_dict_from_schema,
     get_last_modified,
+    str_to_arrayof_int,
+    str_to_arrayof_str,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class ConfigurationSet:
+class ConfigurationSet(DataObject):
     """
     A configuration set defines a group of configurations and aggregates
     information about those configurations to improve queries.
@@ -56,33 +58,61 @@ class ConfigurationSet:
         self.description = description
         self.dataset_id = dataset_id
         self.ordered = ordered
-        self.row_dict = self.to_row_dict(config_df)
         self.id = f"CS_{self.name}_{self.dataset_id}"
-        self._hash = hash(self)
-        self.row_dict["id"] = self.id
-        self.row_dict["extended_id"] = self.id
-        self.row_dict["hash"] = str(self._hash)
+        self.row_dict = self.to_row_dict(config_df)
+        self._generate_hash_and_id()
 
     def to_row_dict(self, config_df):
         row_dict = _empty_dict_from_schema(configuration_set_schema)
         row_dict["name"] = self.name
         row_dict["description"] = self.description
         row_dict["dataset_id"] = self.dataset_id
-        config_df = config_df.drop_duplicates(["hash"])
-        config_df.cache()
-        agg_df = config_df.agg(
-            sf.count("hash").alias("nconfigurations"),
-            sf.sum("nsites").alias("nsites"),
-            sf.collect_set("nperiodic_dimensions").alias("nperiodic_dimensions"),
-            sf.collect_set("dimension_types").alias("dimension_types"),
-            sf.array_distinct(sf.flatten(sf.collect_set("elements"))).alias("elements"),
+        config_df = config_df.drop_duplicates(["property_id"])
+        config_df = config_df.select(
+            "property_id",
+            "elements",
+            "atomic_numbers",
+            "nsites",
+            "nperiodic_dimensions",
+            "dimension_types",
         )
-        agg_row = agg_df.collect()[0]
-        row_dict["nconfigurations"] = agg_row["nconfigurations"]
-        row_dict["nsites"] = agg_row["nsites"]
-        row_dict["nperiodic_dimensions"] = agg_row["nperiodic_dimensions"]
-        row_dict["dimension_types"] = agg_row["dimension_types"]
-        row_dict["elements"] = sorted(list(set(agg_row["elements"])))
+        int_array_cols = ["atomic_numbers", "dimension_types"]
+        str_array_cols = ["elements"]
+        config_df = config_df.select(
+            [
+                (
+                    str_to_arrayof_int(sf.col(col)).alias(col)
+                    if col in int_array_cols
+                    else (
+                        str_to_arrayof_str(sf.col(col)).alias(col)
+                        if col in str_array_cols
+                        else col
+                    )
+                )
+                for col in config_df.columns
+            ]
+        )
+        config_df.persist()
+        row_dict["nconfigurations"] = config_df.select("property_id").distinct().count()
+        row_dict["nsites"] = (
+            config_df.select("nsites").agg(sf.sum("nsites")).collect()[0][0]
+        )
+        nperiodic_dims = config_df.select("nperiodic_dimensions").distinct().collect()
+        row_dict["nperiodic_dimensions"] = [
+            row["nperiodic_dimensions"] for row in nperiodic_dims
+        ]
+        dim_types = config_df.select("dimension_types").distinct().collect()
+        row_dict["dimension_types"] = [row["dimension_types"] for row in dim_types]
+        elements_df = config_df.select("elements").distinct()
+        elements = []
+        for row in elements_df.collect():
+            elem_list = (
+                row["elements"]
+                if isinstance(row["elements"], list)
+                else [row["elements"]]
+            )
+            elements.extend(elem_list)
+        row_dict["elements"] = sorted(list(set(elements)))
         row_dict["nelements"] = len(row_dict["elements"])
         row_dict["last_modified"] = get_last_modified()
         atomic_ratios_df = (
@@ -116,12 +146,13 @@ class ConfigurationSet:
         ]
         config_df.unpersist()
         row_dict["ordered"] = self.ordered
+        row_dict["id"] = self.id
+        row_dict["extended_id"] = self.id
         return row_dict
 
-    def __hash__(self):
-        cs_hash = sha512()
-        cs_hash.update(self.id.encode("utf-8"))
-        return int(cs_hash.hexdigest(), 16)
+    def get_identifier_keys(self) -> list[str]:
+        """Return the keys used for Dataset identification."""
+        return ["id"]
 
     def __str__(self):
         return "ConfigurationSet(description='{}', nconfigurations={})".format(
@@ -133,13 +164,54 @@ class ConfigurationSet:
         return str(self)
 
 
-configuration_set_info = namedtuple(
-    "configuration_set_info",
-    [
-        "co_name_match",
-        "co_label_match",
-        "cs_name",
-        "cs_description",
-        "ordered",
-    ],
-)
+class ConfigurationSetInfo:
+    """
+    Simple class for holding information to generate a configuration set
+    Attributes:
+        co_name_match (str):
+            A string to match against configuration names. If None, all names match.
+        co_label_match (str):
+            A string to match against configuration labels. If None, all labels match.
+        cs_name (str):
+            The name of the configuration set to create.
+        cs_description (str):
+            A human-readable description of the configuration set.
+        ordered (bool):
+            Whether the configurations in the set have intentional order.
+    """
+
+    configuration_set_info = namedtuple(
+        "configuration_set_info",
+        [
+            "co_name_match",
+            "co_label_match",
+            "cs_name",
+            "cs_description",
+            "ordered",
+        ],
+    )
+
+    def __init__(
+        self,
+        co_name_match: str = None,
+        co_label_match: str = None,
+        cs_name: str = None,
+        cs_description: str = None,
+        ordered: bool = False,
+    ):
+        self.co_name_match = co_name_match
+        self.co_label_match = co_label_match
+        self.cs_name = cs_name
+        self.cs_description = cs_description
+        self.ordered = ordered
+        if not (self.co_name_match or self.co_label_match):
+            raise ValueError("Must provide at least one of name or label match")
+
+    def get_info(self):
+        return self.configuration_set_info(
+            co_name_match=self.co_name_match,
+            co_label_match=self.co_label_match,
+            cs_name=self.cs_name,
+            cs_description=self.cs_description,
+            ordered=self.ordered,
+        )

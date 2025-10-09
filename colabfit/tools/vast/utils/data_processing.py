@@ -1,7 +1,24 @@
 import datetime
+import logging
+import string
 
 import dateutil.parser
 import numpy as np
+from django.utils.crypto import get_random_string
+
+from colabfit import ID_FORMAT_STRING
+
+
+def generate_string():
+    return get_random_string(12, allowed_chars=string.ascii_lowercase + "1234567890")
+
+
+def generate_ds_id():
+    """Generate a new unique dataset ID"""
+    logger = logging.getLogger(__name__)
+    ds_id = ID_FORMAT_STRING.format("DS", generate_string(), 0)
+    logger.info(f"Generated new DS ID: {ds_id}")
+    return ds_id
 
 
 def convert_stress(keys: str, stress: list[float]) -> list[list[float]]:

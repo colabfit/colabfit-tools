@@ -187,7 +187,8 @@ class Dataset(DataObject):
         row_dict["last_modified"] = get_last_modified()
         row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
         config_df = config_df.select(
-            "hash",
+            "property_id",
+            "configuration_id",
             "elements",
             "atomic_numbers",
             "nsites",
@@ -207,7 +208,7 @@ class Dataset(DataObject):
 
         int_array_cols = ["atomic_numbers", "dimension_types"]
         str_array_cols = ["elements"]
-        configuration_df = config_df.select(
+        config_df = config_df.select(
             [
                 (
                     str_to_arrayof_int(sf.col(col)).alias(col)
@@ -221,27 +222,27 @@ class Dataset(DataObject):
                 for col in config_df.columns
             ]
         )
-        configuration_df.persist()
-        nconfigurations = configuration_df.select("hash").distinct().count()
-        row_dict["nconfigurations"] = nconfigurations
-        nsites = configuration_df.select("nsites").agg(sf.sum("nsites")).collect()[0][0]
-        row_dict["nsites"] = nsites
-        nperiodic_dims = (
-            configuration_df.select("nperiodic_dimensions").distinct().collect()
+        config_df.persist()
+        row_dict["nconfigurations"] = (
+            config_df.select("configuration_id").distinct().count()
         )
+        row_dict["nsites"] = (
+            config_df.select("nsites").agg(sf.sum("nsites")).collect()[0][0]
+        )
+        nperiodic_dims = config_df.select("nperiodic_dimensions").distinct().collect()
         row_dict["nperiodic_dimensions"] = [
             row["nperiodic_dimensions"] for row in nperiodic_dims
         ]
-        dim_types = configuration_df.select("dimension_types").distinct().collect()
+        dim_types = config_df.select("dimension_types").distinct().collect()
         row_dict["dimension_types"] = [row["dimension_types"] for row in dim_types]
 
-        methods = configuration_df.select("method").distinct().collect()
+        methods = config_df.select("method").distinct().collect()
         row_dict["methods"] = [row["method"] for row in methods]
 
-        software = configuration_df.select("software").distinct().collect()
+        software = config_df.select("software").distinct().collect()
         row_dict["software"] = [row["software"] for row in software]
 
-        elements_df = configuration_df.select("elements").distinct()
+        elements_df = config_df.select("elements").distinct()
         elements = []
         for row in elements_df.collect():
             elem_list = (
@@ -253,7 +254,7 @@ class Dataset(DataObject):
         row_dict["elements"] = sorted(list(set(elements)))
         row_dict["nelements"] = len(row_dict["elements"])
         atomic_ratios_df = (
-            configuration_df.select("atomic_numbers")
+            config_df.select("atomic_numbers")
             .withColumn("single_element", sf.explode("atomic_numbers"))
             .groupBy("single_element")
             .agg(sf.count("single_element").alias("count"))
@@ -284,9 +285,10 @@ class Dataset(DataObject):
             x["ratio"] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
         ]
         del atomic_ratios_df, atomic_ratios_coll
-        configuration_df.unpersist()
-        del configuration_df
-        row_dict["nproperty_objects"] = config_df.select("hash").distinct().count()
+
+        row_dict["nproperty_objects"] = (
+            config_df.select("property_id").distinct().count()
+        )
         property_counts = {}
         property_cols = [
             "atomization_energy",
@@ -332,6 +334,8 @@ class Dataset(DataObject):
         row_dict["publication_year"] = self.publication_year
         row_dict["doi"] = self.doi
         row_dict["equilibrium"] = self.equilibrium
+        config_df.unpersist()
+        del config_df
         return row_dict
 
     def __str__(self):
