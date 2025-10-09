@@ -38,6 +38,9 @@ from .schema_management import (
     spark_to_arrow_type,
 )
 
+# Vast utils
+from .vast_utils import append_wip_table_to_prod, get_session
+
 __all__ = [
     # Hashing
     "_hash",
@@ -69,4 +72,7 @@ __all__ = [
     "ELEMENT_MAP",
     # PySpark utilities
     "convert_stress",
+    # Vast utils
+    "get_session",
+    "append_wip_table_to_prod",
 ]
