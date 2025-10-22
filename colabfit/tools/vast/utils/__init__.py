@@ -10,6 +10,7 @@ from .constants import ELEMENT_MAP
 
 # Data processing functions
 from .data_processing import (
+    generate_ds_id,
     get_date,
     get_last_modified,
     get_pbc_from_cell,
@@ -38,6 +39,7 @@ from .schema_management import (
     spark_to_arrow_type,
 )
 
+
 # Vast utils
 from .vast_utils import append_wip_table_to_prod, get_session
 
@@ -51,6 +53,7 @@ __all__ = [
     "get_last_modified",
     "get_date",
     "get_pbc_from_cell",
+    "generate_ds_id",
     # Schema management
     "get_spark_field_type",
     "get_stringified_schema",

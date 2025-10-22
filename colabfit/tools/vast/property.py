@@ -719,7 +719,7 @@ class PropertyInfo:
         self,
         property_name: str,
         field: str,
-        units: str,
+        units: str | dict,
         original_file_key: str,
         additional: list[tuple] = None,
     ):
@@ -728,6 +728,7 @@ class PropertyInfo:
         self.units = units
         self.original_file_key = original_file_key
         self.additional = additional if additional is not None else []
+        self.validate()
 
     def get_info(self):
         return self.property_info(
@@ -737,6 +738,56 @@ class PropertyInfo:
             original_file_key=self.original_file_key,
             additional=self.additional,
         )
+
+    def validate(self):
+        if not self.property_name:
+            raise ValueError("Property name is required")
+        if not self.field:
+            raise ValueError("Field is required")
+        if not self.original_file_key:
+            raise ValueError("Original file key is required")
+        if "_" in self.property_name:
+            raise ValueError(
+                "Property name cannot contain underscores ('_'). Use hyphens ('-') instead."
+            )
+        if isinstance(self.units, str):
+            if not check_split_units(self.units):
+                raise ValueError(
+                    f"Invalid unit: {un}. Use a valid unit or a dict in the form of {'source-unit': {'value': 'unit_string'}}"
+                )  # noqa E501
+
+            self.units = {"source-unit": {"value": self.units}}
+        elif isinstance(self.units, dict):
+            if (
+                "value" not in self.units["source-unit"]
+                and "field" not in self.units["source-unit"]
+            ):
+                raise ValueError(
+                    "Units dict 'source-unit' must contain 'value' or 'field' (if dynamic) key."
+                )
+            if "value" in self.units["source-unit"]:
+                if not check_split_units(self.units["source-unit"]["value"]):
+                    raise ValueError(
+                        f"Invalid unit: {self.units['source-unit']['value']}. Use a valid unit string."
+                    )  # noqa E501
+
+
+def check_split_units(units: str) -> bool:
+    """
+    Check if all units in a compound unit string are valid ASE units.
+    Args:
+        units (str): Compound unit string (e.g., "eV/Angstrom^3").
+    Returns:
+        bool: True if all units are valid, False otherwise.
+    """
+    split_units = list(
+        itertools.chain.from_iterable([sp.split("/") for sp in units.split("*")])
+    )
+    for sp_un in split_units:
+        un = sp_un.split("^")[0] if "^" in sp_un else sp_un
+        if un not in UNITS:
+            return False
+    return True
 
 
 class PropertyMap:
