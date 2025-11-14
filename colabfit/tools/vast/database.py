@@ -34,8 +34,12 @@ from colabfit.tools.vast.schema import (
     config_prop_str_schema,
     config_prop_schema,
     config_prop_md_schema,
+    config_prop_arrow_schema,
     configuration_set_schema,
     dataset_schema,
+    dataset_arrow_schema,
+    configuration_set_arrow_schema,
+    co_cs_map_arrow_schema,
 )
 from colabfit.tools.vast.utils import (
     _hash,
@@ -59,6 +63,7 @@ _CONFIGSETS_COLLECTION = "test_config_sets"
 _DATASETS_COLLECTION = "test_datasets"
 _CO_CS_MAP_COLLECTION = "test_co_cs_map"
 _COL_MAX_STRING_LEN = 60000
+PQ_COMPRESSION_LEVEL = 18
 
 # from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
@@ -781,6 +786,130 @@ def batched(configs: GeneratorType | list[AtomicConfiguration], n: int):
         yield batch
 
 
+class ParquetWriter:
+    def __init__(self, dataset_id: str, parquet_size: int = 1_000_000):
+        self.dataset_id = dataset_id
+        self.dir_path = Path(f"./{dataset_id}")
+        self.ds_fp = self.dir_path / "ds.parquet"
+        self.co_dir = self.dir_path / "co"
+        self.cs_dir = self.dir_path / "cs"
+        self.co_cs_map_dir = self.dir_path / "co_cs_map"
+        self.co_rows = []
+        self.co_cs_map_rows = []
+        self.cs_rows = []
+        self.parquet_size = parquet_size
+        self.co_row_count = 0
+        self.cs_row_count = 0
+        self.co_cs_map_row_count = 0
+        self.co_file_count = 0
+        self.cs_file_count = 0
+        self.co_cs_map_file_count = 0
+
+    from pyarrow.parquet import ParquetWriter
+
+    def add_co_rows(
+        self,
+        co_rows: list[dict],
+    ):
+        self.co_rows.extend(co_rows)
+        if len(self.co_rows) >= self.parquet_size:
+            self.write_parquet("co", config_prop_arrow_schema, self.co_rows)
+            self.co_rows = []
+
+    def add_cs_rows(
+        self,
+        cs_rows: list[dict],
+    ):
+        """Add configuration set rows and write to parquet if threshold reached"""
+        if len(cs_rows) >= self.parquet_size:
+            self.write_parquet("cs", configuration_set_arrow_schema, cs_rows)
+            self.cs_rows = []
+        else:
+            self.cs_rows.extend(cs_rows)
+
+    def add_co_cs_map_rows(
+        self,
+        co_cs_map_rows: list[dict],
+    ):
+        """Add configuration-to-configuration-set mapping rows"""
+        if len(co_cs_map_rows) >= self.parquet_size:
+            self.write_parquet("co_cs_map", co_cs_map_arrow_schema, co_cs_map_rows)
+            self.co_cs_map_rows = []
+        else:
+            self.co_cs_map_rows.extend(co_cs_map_rows)
+
+    def write_parquet(self, row_type: str, schema, rows: list[dict]):
+        """
+        General method to write parquet files for co, cs, or co_cs_map data.
+
+        Args:
+            row_type (str): Type of data - 'co', 'cs', or 'co_cs_map'
+            schema: Arrow schema for the data
+            rows (list[dict]): Rows to write.
+        """
+        if not rows:
+            logger.warning(f"No rows to write for {row_type}. Skipping write.")
+            return
+
+        # Get the appropriate directory and file count based on row_type
+        dir_mapping = {
+            "co": (self.co_dir, "co_file_count"),
+            "cs": (self.cs_dir, "cs_file_count"),
+            "co_cs_map": (self.co_cs_map_dir, "co_cs_map_file_count"),
+        }
+
+        if row_type not in dir_mapping:
+            raise ValueError(
+                f"Invalid row_type: {row_type}. Must be one of: co, cs, co_cs_map"
+            )
+
+        target_dir, file_count_attr = dir_mapping[row_type]
+
+        if not self.dir_path.exists():
+            self.dir_path.mkdir(parents=True, exist_ok=True)
+        if not target_dir.exists():
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+        table = pa.Table.from_pylist(rows, schema=schema)
+        file_count = getattr(self, file_count_attr)
+        fp = target_dir / f"{row_type}_{file_count}.parquet"
+
+        with ParquetWriter(
+            fp,
+            schema,
+            compression="zstd",
+            compression_level=PQ_COMPRESSION_LEVEL,
+        ) as writer:
+            writer.write_table(table)
+            setattr(self, file_count_attr, file_count + 1)
+            logger.info(f"Wrote {len(rows)} {row_type.upper()} rows to {fp}")
+
+    def write_ds_parquet(self, ds_row: dict):
+        if not self.dir_path.exists():
+            self.dir_path.mkdir(parents=True, exist_ok=True)
+        ds_table = pa.Table.from_pylist([ds_row], schema=dataset_arrow_schema)
+        with ParquetWriter(
+            self.ds_fp,
+            dataset_arrow_schema,
+            compression="zstd",
+            compression_level=PQ_COMPRESSION_LEVEL,
+        ) as writer:
+            writer.write_table(ds_table)
+            logger.info(f"Wrote dataset row to {self.ds_fp}")
+
+    def write_final(self, row_type):
+        """Write any remaining rows to parquet files."""
+        if row_type == "co" and self.co_rows:
+            self.write_parquet("co", config_prop_arrow_schema, self.co_rows)
+            self.co_rows = []
+        elif row_type == "cs" and self.cs_rows:
+            self.write_parquet("cs", configuration_set_arrow_schema, self.cs_rows)
+            self.cs_rows = []
+        elif row_type == "co_cs_map" and self.co_cs_map_rows:
+            self.write_parquet("co_cs_map", co_cs_map_arrow_schema, self.co_cs_map_rows)
+            self.co_cs_map_rows = []
+
+
 class DataManager:
     def __init__(
         self,
@@ -1009,6 +1138,7 @@ class DataManager:
         loader: VastDataLoader,
         batching_ingest: bool = False,
         check_existing: bool = False,
+        parquet_writer: ParquetWriter = None,
     ):
         self.check_existing_tables(loader, batching_ingest)
         co_po_rows = self.gather_co_po_in_batches_no_pool()
@@ -1018,6 +1148,8 @@ class DataManager:
             unit="batch",
         ):
             co_po_combined_rows = self.combine_co_po_rows(co_po_batch)
+            if parquet_writer is not None:
+                parquet_writer.add_rows(co_po_combined_rows)
             del co_po_batch
             co_count = len(co_po_combined_rows)
             if len(co_po_combined_rows) == 0:
@@ -1055,6 +1187,7 @@ class DataManager:
                         table_name=loader.config_table,
                         cols=["multiplicity"],
                     )
+                logger.info(f"Wrote {co_count} rows to {loader.config_table}")
                 del co_existing_row_df
             else:
                 loader.write_table_no_check(
@@ -1064,6 +1197,8 @@ class DataManager:
                 )
                 logger.info(f"Wrote {co_count} rows to {loader.config_table}")
                 del co_df
+        if parquet_writer:
+            parquet_writer.write_final("co")
         logger.info("Garbage collecting")
         gc.collect()
         loader.spark.sparkContext._jvm.System.gc()
@@ -1072,6 +1207,7 @@ class DataManager:
         self,
         loader: VastDataLoader,
         name_label_match: list[tuple],
+        parquet_writer: ParquetWriter = None,
     ):
         """
         Args for name_label_match in order:
@@ -1112,6 +1248,12 @@ class DataManager:
                 ordered=ordered,
             )
             co_cs_map = co_ids.withColumn("configuration_set_id", sf.lit(config_set.id))
+            if parquet_writer:
+                parquet_writer.add_co_cs_map_rows(
+                    [x.asDict() for x in co_cs_map.collect()]
+                )
+                parquet_writer.add_cs_rows([config_set.row_dict])
+                continue
             if co_cs_write_df is None:
                 co_cs_write_df = co_cs_map
             elif co_cs_write_df.count() > 10000:
@@ -1133,6 +1275,9 @@ class DataManager:
             config_set_rows, schema=configuration_set_schema
         )
         loader.write_table(config_set_df, loader.config_set_table)
+        if parquet_writer:
+            parquet_writer.write_final("cs")
+            parquet_writer.write_final("co_cs_map")
         return config_set_rows
 
     def create_dataset(
@@ -1150,6 +1295,7 @@ class DataManager:
         equilibrium: bool = False,
         date_requested: str = None,
         data_license: str = "CC-BY-4.0",
+        parquet_writer: ParquetWriter = None,
     ):
 
         if loader.spark.catalog.tableExists(loader.config_set_table):
@@ -1187,6 +1333,9 @@ class DataManager:
             date_requested=date_requested,
             equilibrium=equilibrium,
         )
+        if parquet_writer:
+            parquet_writer.write_ds_parquet(ds.row_dict)
+            return
         ds_df = loader.spark.createDataFrame([ds.row_dict], schema=dataset_schema)
         loader.write_table(ds_df, loader.dataset_table)
 

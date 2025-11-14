@@ -338,7 +338,19 @@ class Property(DataObject, dict):
                 "source-value": data,
             }
             if val["units"] not in ["None", None]:
-                value["source-unit"] = val["units"]
+                if isinstance(val["units"], dict) and "source-unit" in val["units"]:
+                    units_spec = val["units"]["source-unit"]
+                    if "value" in units_spec:
+                        # Static units: {"source-unit": {"value": "eV"}}
+                        value["source-unit"] = units_spec["value"]
+                    elif "field" in units_spec:
+                        # Dynamic units: {"source-unit": {"field": "field_name"}}
+                        # The field lookup will be handled in standardize_energy
+                        value["source-unit"] = units_spec
+                    else:
+                        value["source-unit"] = units_spec
+                else:
+                    value["source-unit"] = val["units"]
             return_val[key] = value
         return return_val
 
@@ -554,6 +566,16 @@ class Property(DataObject, dict):
                 logger.warning(f"Property {p_info.key} not found in {prop_name}")
                 continue
             units = prop_dict[p_info.key]["source-unit"]
+            # Handle dynamic units case where units is still a dict with "field"
+            if isinstance(units, dict) and "field" in units:
+                unit_field = units["field"]
+                if unit_field in self.instance:
+                    units = self.instance[unit_field]["source-value"]
+                else:
+                    raise RuntimeError(
+                        f"Units field {unit_field} not found in Property instance"
+                    )
+            # For static units, units should now be a string from get_property_value
             if p_info.dtype == list:
                 prop_val = np.array(
                     prop_dict[p_info.key]["source-value"], dtype=np.float64
@@ -748,28 +770,29 @@ class PropertyInfo:
             raise ValueError("Original file key is required")
         if "_" in self.property_name:
             raise ValueError(
-                "Property name cannot contain underscores ('_'). Use hyphens ('-') instead."
+                "Property name cannot contain underscores ('_'). "
+                "Use hyphens ('-') instead."
             )
         if isinstance(self.units, str):
             if not check_split_units(self.units):
                 raise ValueError(
-                    f"Invalid unit: {un}. Use a valid unit or a dict in the form of {'source-unit': {'value': 'unit_string'}}"
-                )  # noqa E501
+                    f"Invalid unit: {self.units}. Use a valid unit or a dict "
+                    f"in the form of {{'source-unit':'unit_string'}}"
+                )
 
             self.units = {"source-unit": {"value": self.units}}
         elif isinstance(self.units, dict):
-            if (
-                "value" not in self.units["source-unit"]
-                and "field" not in self.units["source-unit"]
-            ):
+            if "value" not in self.units and "field" not in self.units:
                 raise ValueError(
-                    "Units dict 'source-unit' must contain 'value' or 'field' (if dynamic) key."
+                    "Units dict must contain 'value' or 'field' (if dynamic) key."
                 )
-            if "value" in self.units["source-unit"]:
-                if not check_split_units(self.units["source-unit"]["value"]):
+            if "value" in self.units:
+                if not check_split_units(self.units["value"]):
                     raise ValueError(
-                        f"Invalid unit: {self.units['source-unit']['value']}. Use a valid unit string."
-                    )  # noqa E501
+                        f"Invalid unit: {self.units['value']}. Use a valid unit string."
+                    )
+            # Convert to nested structure for consistency
+            self.units = {"source-unit": self.units}
 
 
 def check_split_units(units: str) -> bool:

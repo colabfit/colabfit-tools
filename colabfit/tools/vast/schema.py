@@ -10,7 +10,10 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from colabfit.tools.vast.utils import get_stringified_schema
+from colabfit.tools.vast.utils import (
+    get_stringified_schema,
+    spark_schema_to_arrow_schema,
+)
 
 NSITES_COL_SPLITS = 20
 
@@ -63,6 +66,7 @@ config_prop_md_schema = StructType([field for field in config_prop_schema])
 config_prop_md_schema.add(StructField("configuration_metadata", StringType(), True)).add(
     StructField("property_metadata", StringType(), True)
 )
+config_prop_arrow_schema = spark_schema_to_arrow_schema(config_prop_schema)
 
 config_schema = StructType(
     [
@@ -169,6 +173,7 @@ dataset_schema = StructType(
         StructField("date_requested", TimestampType(), True),
     ]
 )
+dataset_arrow_schema = spark_schema_to_arrow_schema(dataset_schema)
 
 
 configuration_set_schema = StructType(
@@ -190,7 +195,7 @@ configuration_set_schema = StructType(
         StructField("extended_id", StringType(), True),
     ]
 )
-
+configuration_set_arrow_schema = spark_schema_to_arrow_schema(configuration_set_schema)
 
 co_cs_map_schema = StructType(
     [
@@ -198,3 +203,4 @@ co_cs_map_schema = StructType(
         StructField("configuration_set_id", StringType(), True),
     ]
 )
+co_cs_map_arrow_schema = spark_schema_to_arrow_schema(co_cs_map_schema)
