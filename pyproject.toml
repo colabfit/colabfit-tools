@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "colabfit-tools"
-version = "0.0.3"
+version = "0.0.4"
 description = ""
 authors = [{name = "Gregory Wolfe", email = "wolfe.gregory.p@gmail.com"},
            {name = "Eric Fuemmeler", email = "efuem@users.noreply.github.com"}]
@@ -30,6 +30,7 @@ dependencies = [
     "periodictable",
     "unidecode",
     "notebook",
+    "python-dotenv",
 ]
 
 [project.urls]

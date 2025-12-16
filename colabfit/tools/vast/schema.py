@@ -11,7 +11,6 @@ from pyspark.sql.types import (
 )
 
 from colabfit.tools.vast.utils import (
-    get_stringified_schema,
     spark_schema_to_arrow_schema,
 )
 
@@ -19,7 +18,6 @@ NSITES_COL_SPLITS = 20
 
 config_prop_schema = StructType(
     [
-        StructField("hash", StringType(), True),
         StructField("property_id", StringType(), True),
         StructField("property_hash", StringType(), True),
         StructField("last_modified", TimestampType(), True),
@@ -40,8 +38,11 @@ config_prop_schema = StructType(
         StructField("mean_force_norm", DoubleType(), True),
         StructField("energy_above_hull", DoubleType(), True),
         StructField("configuration_id", StringType(), True),
+        StructField("new_configuration_id", StringType(), True),
         StructField("configuration_hash", StringType(), True),
+        StructField("new_configuration_hash", StringType(), True),
         StructField("structure_hash", StringType(), True),
+        StructField("new_structure_hash", StringType(), True),
         StructField("cell", ArrayType(ArrayType(DoubleType())), True),
         StructField("positions", ArrayType(ArrayType(DoubleType())), True),
         StructField("pbc", ArrayType(BooleanType()), True),
@@ -61,7 +62,6 @@ config_prop_schema = StructType(
         StructField("configuration_metadata_path", StringType(), True),
     ]
 )
-config_prop_str_schema = get_stringified_schema(config_prop_schema)
 config_prop_md_schema = StructType([field for field in config_prop_schema])
 config_prop_md_schema.add(StructField("configuration_metadata", StringType(), True)).add(
     StructField("property_metadata", StringType(), True)
@@ -72,6 +72,7 @@ config_schema = StructType(
     [
         StructField("id", StringType(), True),
         StructField("hash", StringType(), True),
+        StructField("new_hash", StringType(), True),
         StructField("last_modified", TimestampType(), True),
         StructField("dataset_ids", ArrayType(StringType()), True),
         StructField("chemical_formula_hill", StringType(), True),
@@ -104,6 +105,7 @@ property_object_schema = StructType(
     [
         StructField("id", StringType(), True),
         StructField("hash", StringType(), True),
+        StructField("new_hash", StringType(), True),
         StructField("last_modified", TimestampType(), True),
         StructField("configuration_id", StringType(), True),
         StructField("dataset_id", StringType(), True),

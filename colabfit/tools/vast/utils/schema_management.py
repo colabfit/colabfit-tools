@@ -7,7 +7,6 @@ from pyspark.sql.types import (
     IntegerType,
     LongType,
     StringType,
-    StructField,
     StructType,
     TimestampType,
 )
@@ -20,16 +19,6 @@ def get_spark_field_type(schema: StructType, field_name: str) -> DataType:
         if field.name == field_name:
             return field.dataType
     raise ValueError(f"Field name {field_name} not found in schema")
-
-
-def get_stringified_schema(schema: StructType) -> StructType:
-    new_fields = []
-    for field in schema:
-        if field.dataType.typeName() == "array":
-            new_fields.append(StructField(field.name, StringType(), field.nullable))
-        else:
-            new_fields.append(field)
-    return StructType(new_fields)
 
 
 def spark_to_arrow_type(spark_type: DataType) -> pa.DataType:

@@ -31,7 +31,6 @@ from colabfit.tools.vast.dataset import Dataset
 from colabfit.tools.vast.property import Property
 from colabfit.tools.vast.schema import (
     co_cs_map_schema,
-    config_prop_str_schema,
     config_prop_schema,
     config_prop_md_schema,
     config_prop_arrow_schema,
@@ -43,14 +42,9 @@ from colabfit.tools.vast.schema import (
 )
 from colabfit.tools.vast.utils import (
     _hash,
+    _new_hash,
     get_last_modified,
     spark_schema_to_arrow_schema,
-    stringify_df_val_udf,
-    str_to_arrayof_int,
-    str_to_arrayof_double,
-    str_to_arrayof_bool,
-    str_to_arrayofarrayof_double,
-    str_to_arrayof_str,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,12 +56,7 @@ _CONFIGS_COLLECTION = "test_configs"
 _CONFIGSETS_COLLECTION = "test_config_sets"
 _DATASETS_COLLECTION = "test_datasets"
 _CO_CS_MAP_COLLECTION = "test_co_cs_map"
-_COL_MAX_STRING_LEN = 60000
 PQ_COMPRESSION_LEVEL = 18
-
-# from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
-
-# from kim_property.definition import check_property_definition
 
 
 class VastDataLoader:
@@ -158,27 +147,10 @@ class VastDataLoader:
                         return False
         return True
 
-    def stringify_df(self, spark_df: DataFrame, table_schema: StructType):
-        string_cols = [
-            f.name for f in spark_df.schema if f.dataType.typeName() == "array"
-        ]
-        spark_df = spark_df.select(
-            *[
-                (
-                    stringify_df_val_udf(sf.col(col)).alias(col)
-                    if col in string_cols
-                    else col
-                )
-                for col in table_schema.fieldNames()
-            ]
-        )
-        return spark_df
-
     def write_table_first(
         self,
         spark_df: DataFrame,
         table_name: str,
-        stringify: bool = False,
     ):
         """Include self.table_prefix in the table name when passed to this function"""
         identifier_dict = {
@@ -222,11 +194,6 @@ class VastDataLoader:
                     new_ids = id_batch
                     write_rows = spark_df
                 write_rows = self.write_metadata(write_rows)
-                if stringify:
-                    # Only for config prop while vastdb doesn't support indexing on
-                    # array column tables
-                    write_rows = self.stringify_df(write_rows, table_schema)
-                    arrow_schema = spark_schema_to_arrow_schema(config_prop_str_schema)
                 write_rows = write_rows.select(
                     *[col for col in table_schema.fieldNames()]
                 )
@@ -252,7 +219,6 @@ class VastDataLoader:
         self,
         spark_df: DataFrame,
         table_name: str,
-        stringify: bool = False,
     ):
         logger.info(f"Writing table {table_name} without checking for duplicates")
         table_schema = self.get_table_spark_schema(table_name)
@@ -260,11 +226,6 @@ class VastDataLoader:
         if not self.spark.catalog.tableExists(table_name):
             self.create_vastdb_table(table_name, table_schema)
         spark_df = self.write_metadata(spark_df)
-        if stringify:
-            # Only for config prop while vastdb doesn't support indexing on
-            # array column tables
-            spark_df = self.stringify_df(spark_df, table_schema)
-            table_schema = config_prop_str_schema
         spark_df = spark_df.select(*[col for col in table_schema.fieldNames()])
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
         arrow_rec_batch = pa.table(
@@ -292,7 +253,7 @@ class VastDataLoader:
 
     def get_table_spark_schema(self, table_name: str) -> StructType:
         string_schema_dict = {
-            self.config_table: config_prop_str_schema,
+            self.config_table: config_prop_schema,
             self.config_set_table: configuration_set_schema,
             self.dataset_table: dataset_schema,
             self.co_cs_map_table: co_cs_map_schema,
@@ -334,109 +295,6 @@ class VastDataLoader:
                 table.insert(rec_batch)
                 total_rows += len_batch
         logger.info(f"Inserted {total_rows} rows into table {table_name}")
-
-    def read_table(
-        self, table_name: str, unstring: bool = False, read_metadata: bool = False
-    ):
-        """
-        Include self.table_prefix in the table name when passed to this function.
-        Ex: loader.read_table(loader.config_table, unstring=True)
-        Arguments:
-            table_name {str} -- Name of the table to read from database
-        Keyword Arguments:
-            unstring {bool} -- Convert stringified lists to lists (default: {False})
-            read_metadata {bool} -- Read metadata from files. If True,
-            lists will be also converted from strings (default: {False})
-        Returns:
-            DataFrame -- Spark DataFrame
-        """
-        table_schema = {
-            self.config_table: config_prop_str_schema,
-            self.config_set_table: configuration_set_schema,
-            self.dataset_table: dataset_schema,
-        }
-        unstring_schema_dict = {
-            self.config_table: config_prop_schema,
-        }
-        md_schema_dict = {
-            self.config_table: config_prop_md_schema,
-        }
-        if table_name in [self.config_set_table, self.dataset_table]:
-            read_metadata = False
-            unstring = False
-        df = self.spark.read.table(table_name)
-        if unstring or read_metadata:
-            schema = unstring_schema_dict[table_name]
-            int_array_cols = [
-                f.name for f in schema if f.dataType.simpleString() == "array<int>"
-            ]
-            str_array_cols = [
-                f.name for f in schema if f.dataType.simpleString() == "array<string>"
-            ]
-            double_array_cols = [
-                f.name for f in schema if f.dataType.simpleString() == "array<double>"
-            ]
-            bool_array_cols = [
-                f.name for f in schema if f.dataType.simpleString() == "array<boolean>"
-            ]
-            arrayofarrayof_double_cols = [
-                f.name
-                for f in schema
-                if f.dataType.simpleString() == "array<array<double>>"
-            ]
-            df = df.select(
-                *[
-                    (
-                        str_to_arrayof_str(sf.col(col))
-                        if col in str_array_cols
-                        else (
-                            str_to_arrayof_double(sf.col(col))
-                            if col in double_array_cols
-                            else (
-                                str_to_arrayof_bool(sf.col(col))
-                                if col in bool_array_cols
-                                else (
-                                    str_to_arrayof_int(sf.col(col))
-                                    if col in int_array_cols
-                                    else (
-                                        str_to_arrayofarrayof_double(sf.col(col))
-                                        if col in arrayofarrayof_double_cols
-                                        else sf.col(col)
-                                    )
-                                )
-                            )
-                        )
-                    )
-                    for col in schema.fieldNames()
-                ],
-            )
-
-        if read_metadata:
-            schema = md_schema_dict[table_name]
-            config = {
-                "bucket_dir": self.bucket_dir,
-                "access_key": self.access_key,
-                "access_secret": self.access_secret,
-                "endpoint": self.endpoint,
-                "metadata_dir": self.metadata_dir,
-            }
-            df = df.rdd.mapPartitions(
-                lambda partition: read_md_partition(partition, config)
-            ).toDF(schema)
-        if not read_metadata and not unstring:
-            schema = table_schema[table_name]
-        mismatched_cols = [
-            x
-            for x in [(f.name, f.dataType.typeName()) for f in df.schema]
-            if x not in [(f.name, f.dataType.typeName()) for f in schema]
-        ]
-        if len(mismatched_cols) == 0:
-            return df
-        else:
-            raise ValueError(
-                f"Schema mismatch for table {table_name}. "
-                f"Mismatched column types in DataFrame: {mismatched_cols}"
-            )
 
     def write_metadata(self, df: DataFrame):
         """Writes metadata to files using boto3 for VastDB
@@ -510,14 +368,14 @@ class VastDataLoader:
             - existing_ids: List of IDs that were updated.
         """
         update_cols = ["multiplicity", "last_modified"]
-        str_col_types = {
+        col_types = {
             "multiplicity": IntegerType(),
             "last_modified": TimestampType(),
             "hash": StringType(),
             "$row_id": LongType(),
         }
         read_schema = StructType(
-            [StructField(col, col_type, True) for col, col_type in str_col_types.items()]
+            [StructField(col, col_type, True) for col, col_type in col_types.items()]
         )
         arrow_schema = spark_schema_to_arrow_schema(
             StructType([field for field in df.schema() if field.name in update_cols])
@@ -692,7 +550,7 @@ class VastDataLoader:
         read_schema = StructType(
             [
                 field
-                for field in config_prop_str_schema.fields
+                for field in config_prop_schema.fields
                 if field.name in config_df_cols
             ]
         )
@@ -1083,7 +941,7 @@ class DataManager:
                 raise ValueError(f"Dataset with ID {self.dataset_id} already exists.")
 
     def hash_combined_rows(self, co_po_rows: list[dict]):
-        hash_fields = [
+        base_hash_fields = [
             fname
             for fname in config_prop_schema.fieldNames()
             if fname
@@ -1099,11 +957,33 @@ class DataManager:
                 "max_force_norm",
                 "property_hash",
                 "configuration_hash",
+                "new_configuration_hash",
                 "property_id",
+                "new_hash",
                 "configuration_id",
+                "new_property_hash",
+                "new_property_id",
+                "new_configuration_id",
+                "new_structure_hash",
             ]
         ]
-        return _hash(co_po_rows, hash_fields, include_keys_in_hash=False)
+        old_hash_fields = [f for f in base_hash_fields if f not in ["new_metadata_hash"]]
+        new_hash_fields = old_hash_fields + [
+            "structure_hash",
+            "chemical_formula_hill",
+            "chemical_formula_reduced",
+            "chemical_formula_anonymous",
+            "elements",
+            "elements_ratios",
+            "nsites",
+            "nelements",
+            "nperiodic_dimensions",
+            "dimension_types",
+        ]
+        return (
+            _hash(co_po_rows, old_hash_fields, include_keys_in_hash=False),
+            _new_hash(co_po_rows, new_hash_fields, include_keys_in_hash=False),
+        )
 
     def combine_co_po_rows(self, co_po_rows: list[dict]):
         """Combine configuration and property rows into a single row."""
@@ -1128,7 +1008,8 @@ class DataManager:
                         logger.warning(
                             f"Large value in {key}: {len(str(value))} characters"
                         )
-            co_po_row["hash"] = self.hash_combined_rows(co_po_row)
+            co_po_row["hash"], co_po_row["new_hash"] = self.hash_combined_rows(co_po_row)
+
             combined_rows.append(co_po_row)
 
         return combined_rows
@@ -1193,7 +1074,6 @@ class DataManager:
                 loader.write_table_no_check(
                     co_df,
                     loader.config_table,
-                    stringify=True,
                 )
                 logger.info(f"Wrote {co_count} rows to {loader.config_table}")
                 del co_df

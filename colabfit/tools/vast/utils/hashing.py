@@ -30,18 +30,36 @@ def _format_for_hash(v: np.ndarray | list | dict | str | int | float | tuple):
 
 
 def _hash(
-    row: list, identifying_key_list: list, include_keys_in_hash: bool = False
+    row: dict, identifying_key_list: list, include_keys_in_hash: bool = False
 ) -> int:
     identifying_key_list = sorted(identifying_key_list)
-    identifiers = [row[i] for i in identifying_key_list]
+    identifiers = [row[k] for k in identifying_key_list]
     _hash = sha512()
     for k, v in zip(identifying_key_list, identifiers):
+        if "new_" in k:
+            continue
         if v is None or v == "[]":
             continue
         if include_keys_in_hash:
             _hash.update(_format_for_hash(k))
         _hash.update(_format_for_hash(v))
     return int(_hash.hexdigest(), 16)
+
+
+def _new_hash(
+    row: dict, identifying_key_list: list, include_keys_in_hash: bool = False
+) -> str:
+    identifying_key_list = sorted(identifying_key_list)
+    identifiers = [row[k] for k in identifying_key_list]
+    _hash = sha512()
+    for k, v in zip(identifying_key_list, identifiers):
+        # if k in [""]
+        if v is None or v == "[]":
+            continue
+        if include_keys_in_hash:
+            _hash.update(_format_for_hash(k))
+        _hash.update(_format_for_hash(v))
+    return _hash.hexdigest()
 
 
 def config_struct_hash(

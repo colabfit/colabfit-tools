@@ -9,8 +9,6 @@ from colabfit.tools.vast.utils import (
     ELEMENT_MAP,
     _empty_dict_from_schema,
     get_last_modified,
-    str_to_arrayof_int,
-    str_to_arrayof_str,
 )
 
 logger = logging.getLogger(__name__)
@@ -75,22 +73,6 @@ class ConfigurationSet(DataObject):
             "nsites",
             "nperiodic_dimensions",
             "dimension_types",
-        )
-        int_array_cols = ["atomic_numbers", "dimension_types"]
-        str_array_cols = ["elements"]
-        config_df = config_df.select(
-            [
-                (
-                    str_to_arrayof_int(sf.col(col)).alias(col)
-                    if col in int_array_cols
-                    else (
-                        str_to_arrayof_str(sf.col(col)).alias(col)
-                        if col in str_array_cols
-                        else col
-                    )
-                )
-                for col in config_df.columns
-            ]
         )
         config_df.persist()
         row_dict["nconfigurations"] = config_df.select("property_id").distinct().count()
