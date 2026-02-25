@@ -18,7 +18,13 @@ from .data_processing import (
 )
 
 # Hashing functions - most commonly needed across modules
-from .hashing import _format_for_hash, _hash, config_struct_hash, config_struct_hash_udf
+from .hashing import (
+    _format_for_hash,
+    _hash,
+    _new_hash,
+    config_struct_hash,
+    config_struct_hash_udf,
+)
 from .metadata import _parse_unstructured_metadata, _sort_dict
 from .pyspark_utils import get_max_string_length
 
@@ -36,6 +42,7 @@ from .vast_utils import append_wip_table_to_prod, get_session
 __all__ = [
     # Hashing
     "_hash",
+    "_new_hash",
     "_format_for_hash",
     "config_struct_hash",
     "config_struct_hash_udf",

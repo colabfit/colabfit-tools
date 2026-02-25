@@ -58,13 +58,8 @@ config_prop_schema = StructType(
         StructField("dimension_types", ArrayType(IntegerType()), True),
         StructField("names", ArrayType(StringType()), True),
         StructField("labels", ArrayType(StringType()), True),
-        StructField("property_metadata_path", StringType(), True),
-        StructField("configuration_metadata_path", StringType(), True),
+        StructField("metadata", StringType(), True),
     ]
-)
-config_prop_md_schema = StructType([field for field in config_prop_schema])
-config_prop_md_schema.add(StructField("configuration_metadata", StringType(), True)).add(
-    StructField("property_metadata", StringType(), True)
 )
 config_prop_arrow_schema = spark_schema_to_arrow_schema(config_prop_schema)
 
@@ -89,15 +84,10 @@ config_schema = StructType(
         StructField("pbc", ArrayType(BooleanType()), True),
         StructField("names", ArrayType(StringType()), True),
         StructField("labels", ArrayType(StringType()), True),
-        StructField("metadata_id", StringType(), True),
-        StructField("metadata_path", StringType(), True),
-        StructField("metadata_size", IntegerType(), True),
         StructField("structure_hash", StringType(), True),
         StructField("positions", ArrayType(ArrayType(DoubleType())), True),
     ]
 )
-config_md_schema = StructType([field for field in config_schema])
-config_md_schema.add(StructField("metadata", StringType(), True))
 config_row_id_schema = StructType([field for field in config_schema])
 config_row_id_schema.add(StructField("$row_id", LongType(), True))
 
@@ -110,9 +100,6 @@ property_object_schema = StructType(
         StructField("configuration_id", StringType(), True),
         StructField("dataset_id", StringType(), True),
         StructField("multiplicity", IntegerType(), True),
-        StructField("metadata_id", StringType(), True),
-        StructField("metadata_path", StringType(), True),
-        StructField("metadata_size", IntegerType(), True),
         StructField("software", StringType(), True),
         StructField("method", StringType(), True),
         StructField("chemical_formula_hill", StringType(), True),
@@ -128,11 +115,9 @@ property_object_schema = StructType(
         StructField("atomization_energy", DoubleType(), True),
         StructField("max_force_norm", DoubleType(), True),
         StructField("mean_force_norm", DoubleType(), True),
+        StructField("metadata", StringType(), True),
     ]
 )
-
-property_object_md_schema = StructType([field for field in property_object_schema])
-property_object_md_schema.add(StructField("metadata", StringType(), True))
 property_object_row_id_schema = StructType([field for field in property_object_schema])
 property_object_row_id_schema.add(StructField("$row_id", LongType(), True))
 

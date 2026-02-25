@@ -72,13 +72,15 @@ _ignored_fields = [
     "unrelaxed-periodic-cell-vector-2",
     "unrelaxed-periodic-cell-vector-3",
 ]
+# Fields excluded from the property object hash. 'metadata' is intentionally NOT listed
+# here: metadata is part of a property object's identity. Two calculations that share
+# the same physical values but differ in metadata (e.g. different 'input' parameters)
+# are considered distinct property objects and will receive different hashes and IDs.
 _hash_ignored_fields = [
     "id",
     "hash",
     "last_modified",
     "multiplicity",
-    "metadata_path",
-    "metadata_size",
     "mean_force_norm",
     "max_force_norm",
 ]
@@ -199,6 +201,13 @@ class Property(DataObject, dict):
     practice is for the Property to also point to one or more
     PropertySettings objects that fully define the conditions under which the
     Property was obtained.
+
+    Identity and hashing:
+        A property object's identity is determined by its physical values (energies,
+        forces, stresses, etc.), its configuration, and its metadata. Two calculations
+        that share the same physical values but differ in metadata are considered
+        distinct property objects. See :attr:`_hash_ignored_fields` for the fields
+        explicitly excluded from the hash.
 
     Attributes:
 
@@ -593,7 +602,9 @@ class Property(DataObject, dict):
             if "per-atom" in prop_dict:
                 if prop_dict["per-atom"]["source-value"] is True:
                     if self.nsites is None:
-                        raise RuntimeError("nsites must be provided to convert per-atom")
+                        raise RuntimeError(
+                            "nsites must be provided to convert per-atom"
+                        )
                     prop_val *= self.nsites
 
             if units != p_info.unit:
@@ -819,9 +830,25 @@ class PropertyMap:
 
     Initialize with list of property definitions, then add properties with set_property
     or set_properties.
-    Add metadata fields with set_metadata_field: 'software', 'method', 'input' required.
+    Add metadata fields with set_metadata_field. Three fields are required:
+        - 'software': the software package used (e.g. 'VASP', 'Quantum ESPRESSO')
+        - 'method': the method used (e.g. 'DFT', 'DFT+U', 'MD')
+        - 'input': calculation parameters specific to the software and method, such as
+          DFT basis sets, k-point meshes, pseudopotentials, cutoff energies, smearing
+          parameters, convergence thresholds, or other settings that distinguish one
+          calculation setup from another.
+    'property_keys' is automatically populated via set_property/set_properties and maps
+    each property name to the corresponding key in the original source file. It is
+    required and validated before the property map is returned.
+
     Use get_property_map to validate and return a complete property map to use with
     Property objects.
+
+    Metadata (including 'input' and 'property_keys') is serialized to a JSON string and
+    stored in the property object's 'metadata' column. Metadata is part of a property
+    object's identity and is included in its hash. Maximum allowed size is
+    10,000 characters.
+
     Attributes:
     -----------
     property_definitions : list
@@ -922,7 +949,9 @@ class PropertyMap:
                 units = prop["units"]
                 original_file_key = prop["original_file_key"]
                 additional = prop.get("additional", [])
-                self.set_property(prop_name, field, units, original_file_key, additional)
+                self.set_property(
+                    prop_name, field, units, original_file_key, additional
+                )
             elif isinstance(prop, PropertyInfo):
                 self.set_property(
                     prop.property_name,
@@ -940,8 +969,19 @@ class PropertyMap:
 
     def validate_metadata(self):
         for key, value in self._metadata.items():
-            if key == "property_keys" and value is None:
-                logger.warning("Property keys not included in property map")
+            if key == "property_keys":
+                if value is None:
+                    raise ValueError(
+                        "'property_keys' must be set in PropertyMap metadata. "
+                        "Set the original source-file key for each property using "
+                        "set_property() or set_properties(), e.g.:\n"
+                        "  map.set_property('energy', field='_energy', units='eV', "
+                        "original_file_key='energy')\n"
+                        "or:\n"
+                        "  map.set_properties([{'property_name': 'energy', "
+                        "'field': '_energy', 'units': 'eV', "
+                        "'original_file_key': 'energy'}])"
+                    )
             elif (
                 value.get("required")
                 and value.get("value") is None
@@ -951,7 +991,10 @@ class PropertyMap:
         for prop_name in self.properties.keys():
             if self._metadata["property_keys"]["value"][prop_name] is None:
                 raise ValueError(
-                    f"Metadata must have 'original_file_key' set for each property. None set for '{prop_name}'."  # noqa E501
+                    f"'original_file_key' must be set for property '{prop_name}'. "
+                    f"Pass it via set_property(), e.g.:\n"
+                    f"  map.set_property('{prop_name}', field=..., units=..., "
+                    f"original_file_key=<key_in_source_file>)"
                 )
 
     def validate_properties(self):
@@ -991,7 +1034,9 @@ class PropertyMap:
                     continue
                 elif val.get("has-unit") and prop_view.get("units") is None:
                     raise ValueError(f"Property '{prop_name}' must have 'units' set.")
-                elif val.get("has-unit") is False and prop_view.get("units") is not None:
+                elif (
+                    val.get("has-unit") is False and prop_view.get("units") is not None
+                ):
                     raise ValueError(
                         f"Property '{prop_name}' must have key {key}: 'units' set to None."  # noqa E501
                     )

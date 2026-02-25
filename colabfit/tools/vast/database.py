@@ -7,10 +7,8 @@ from pathlib import Path
 from time import time
 from types import GeneratorType
 import gc
-import boto3
 import pyarrow as pa
 import pyspark.sql.functions as sf
-from botocore.exceptions import ClientError
 from ibis import _
 from pyspark.sql import Row, SparkSession, DataFrame
 from pyspark.sql.functions import udf
@@ -32,7 +30,6 @@ from colabfit.tools.vast.property import Property
 from colabfit.tools.vast.schema import (
     co_cs_map_schema,
     config_prop_schema,
-    config_prop_md_schema,
     config_prop_arrow_schema,
     configuration_set_schema,
     dataset_schema,
@@ -50,7 +47,6 @@ from colabfit.tools.vast.utils import (
 logger = logging.getLogger(__name__)
 
 VAST_BUCKET_DIR = "colabfit-data"
-VAST_METADATA_DIR = "data/MD"
 NSITES_COL_SPLITS = 20
 _CONFIGS_COLLECTION = "test_configs"
 _CONFIGSETS_COLLECTION = "test_config_sets"
@@ -88,7 +84,6 @@ class VastDataLoader:
         self.co_cs_map_table = f"{self.table_prefix}.{_CO_CS_MAP_COLLECTION}"
 
         self.bucket_dir = VAST_BUCKET_DIR
-        self.metadata_dir = VAST_METADATA_DIR
 
     def set_spark_session(self, spark_session: SparkSession):
         self.spark = spark_session
@@ -193,7 +188,6 @@ class VastDataLoader:
                     logger.info(f"No matching IDs found in table {table_name}")
                     new_ids = id_batch
                     write_rows = spark_df
-                write_rows = self.write_metadata(write_rows)
                 write_rows = write_rows.select(
                     *[col for col in table_schema.fieldNames()]
                 )
@@ -225,7 +219,6 @@ class VastDataLoader:
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
         if not self.spark.catalog.tableExists(table_name):
             self.create_vastdb_table(table_name, table_schema)
-        spark_df = self.write_metadata(spark_df)
         spark_df = spark_df.select(*[col for col in table_schema.fieldNames()])
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
         arrow_rec_batch = pa.table(
@@ -295,44 +288,6 @@ class VastDataLoader:
                 table.insert(rec_batch)
                 total_rows += len_batch
         logger.info(f"Inserted {total_rows} rows into table {table_name}")
-
-    def write_metadata(self, df: DataFrame):
-        """Writes metadata to files using boto3 for VastDB
-        Returns a DataFrame without metadata column. The returned DataFrame should
-        match table schema (from schema.py)
-        """
-
-        config = {
-            "bucket_dir": self.bucket_dir,
-            "access_key": self.access_key,
-            "access_secret": self.access_secret,
-            "endpoint": self.endpoint,
-            "metadata_dir": self.metadata_dir,
-        }
-        beg = time()
-        distinct_metadata = df.select(
-            "configuration_metadata",
-            "configuration_metadata_path",
-            "property_metadata",
-            "property_metadata_path",
-        ).distinct()
-        distinct_metadata.foreachPartition(
-            lambda partition: write_md_partition(partition, config)
-        )
-        logger.info(f"Time to write metadata: {time() - beg}")
-        df = df.drop("configuration_metadata", "property_metadata")
-        file_base = f"{self.metadata_dir}/"
-        df = df.withColumns(
-            {
-                "configuration_metadata_path": prepend_path_udf(
-                    sf.lit(str(Path(file_base))), sf.col("configuration_metadata_path")
-                ),
-                "property_metadata_path": prepend_path_udf(
-                    sf.lit(str(Path(file_base))), sf.col("property_metadata_path")
-                ),
-            }
-        )
-        return df
 
     def increment_multiplicity(self, df: DataFrame, duplicate_df: DataFrame):
         df_add = df.select("hash", sf.col("multiplicity").alias("multiplicity_add"))
@@ -781,7 +736,9 @@ class DataManager:
     ):
         self.configs = configs
         if not prop_defs:
-            logger.warning("No property definitions provided. Defaulting to empty list.")
+            logger.warning(
+                "No property definitions provided. Defaulting to empty list."
+            )
             prop_defs = []
         if isinstance(prop_defs, dict):
             prop_defs = [prop_defs]
@@ -967,7 +924,9 @@ class DataManager:
                 "new_structure_hash",
             ]
         ]
-        old_hash_fields = [f for f in base_hash_fields if f not in ["new_metadata_hash"]]
+        old_hash_fields = [
+            f for f in base_hash_fields if f not in ["new_metadata_hash"]
+        ]
         new_hash_fields = old_hash_fields + [
             "structure_hash",
             "chemical_formula_hill",
@@ -993,14 +952,10 @@ class DataManager:
             co_row["configuration_id"] = co_row.pop("id")
             po_row["property_hash"] = po_row.pop("hash")
             co_row["configuration_hash"] = co_row.pop("hash")
-            po_row["property_metadata_path"] = po_row.pop("metadata_path")
-            co_row["configuration_metadata_path"] = co_row.pop("metadata_path")
-            po_row["property_metadata"] = po_row.pop("metadata")
-            co_row["configuration_metadata"] = co_row.pop("metadata")
             co_po_row = {
                 k: v
                 for k, v in {**co_row, **po_row}.items()
-                if k in config_prop_md_schema.fieldNames()
+                if k in config_prop_schema.fieldNames()
             }
             for key, value in co_po_row.items():
                 if value is not None and hasattr(value, "__len__"):
@@ -1008,7 +963,9 @@ class DataManager:
                         logger.warning(
                             f"Large value in {key}: {len(str(value))} characters"
                         )
-            co_po_row["hash"], co_po_row["new_hash"] = self.hash_combined_rows(co_po_row)
+            co_po_row["hash"], co_po_row["new_hash"] = self.hash_combined_rows(
+                co_po_row
+            )
 
             combined_rows.append(co_po_row)
 
@@ -1048,7 +1005,7 @@ class DataManager:
                         )
 
             co_df = loader.spark.createDataFrame(
-                co_po_combined_rows, schema=config_prop_md_schema
+                co_po_combined_rows, schema=config_prop_schema
             )
             del co_po_combined_rows
             co_count_distinct = co_df.select("hash").distinct().count()
@@ -1218,182 +1175,3 @@ class DataManager:
             return
         ds_df = loader.spark.createDataFrame([ds.row_dict], schema=dataset_schema)
         loader.write_table(ds_df, loader.dataset_table)
-
-
-class S3BatchManager:
-    def __init__(
-        self,
-        bucket_name: str,
-        access_id: str,
-        secret_key: str,
-        endpoint_url: str = None,
-    ):
-        self.bucket_name = bucket_name
-        self.access_id = access_id
-        self.secret_key = secret_key
-        self.endpoint_url = endpoint_url
-        self.client = self.get_client()
-        self.MAX_BATCH_SIZE = 100
-
-    def get_client(self):
-        return boto3.client(
-            "s3",
-            use_ssl=False,
-            endpoint_url=self.endpoint_url,
-            aws_access_key_id=self.access_id,
-            aws_secret_access_key=self.secret_key,
-            region_name="fake-region",
-            config=boto3.session.Config(
-                signature_version="s3v4", s3={"addressing_style": "path"}
-            ),
-        )
-
-    def batch_write(self, file_batch):
-        results = []
-        for key, content in file_batch:
-            try:
-                self.client.put_object(Bucket=self.bucket_name, Key=key, Body=content)
-                results.append((key, None))
-            except Exception as e:
-                results.append((key, str(e)))
-        return results
-
-
-def write_md_partition(partition, config: dict):
-    import boto3
-
-    class S3BatchManager:
-        def __init__(self, bucket_name, access_id, secret_key, endpoint_url=None):
-            self.bucket_name = bucket_name
-            self.access_id = access_id
-            self.secret_key = secret_key
-            self.endpoint_url = endpoint_url
-            self.client = self.get_client()
-            self.MAX_BATCH_SIZE = 100
-
-        def get_client(self):
-            return boto3.client(
-                "s3",
-                use_ssl=False,
-                endpoint_url=self.endpoint_url,
-                aws_access_key_id=self.access_id,
-                aws_secret_access_key=self.secret_key,
-                region_name="fake-region",
-                config=boto3.session.Config(
-                    signature_version="s3v4", s3={"addressing_style": "path"}
-                ),
-            )
-
-        def batch_write(self, file_batch):
-            results = []
-            for key, content in file_batch:
-                try:
-                    self.client.put_object(
-                        Bucket=self.bucket_name, Key=key, Body=content
-                    )
-                    results.append((key, None))
-                except Exception as e:
-                    results.append((key, str(e)))
-            return results
-
-    s3_mgr = S3BatchManager(
-        bucket_name=config["bucket_dir"],
-        access_id=config["access_key"],
-        secret_key=config["access_secret"],
-        endpoint_url=config["endpoint"],
-    )
-    file_batch = []
-    for row in partition:
-        if row["configuration_metadata"] is not None:
-            co_md_path = (
-                Path(config["metadata_dir"]) / row["configuration_metadata_path"]
-            )
-            file_batch.append((str(co_md_path), row["configuration_metadata"]))
-        po_md_path = Path(config["metadata_dir"]) / row["property_metadata_path"]
-        file_batch.append((str(po_md_path), row["property_metadata"]))
-        if len(file_batch) >= s3_mgr.MAX_BATCH_SIZE:
-            _ = s3_mgr.batch_write(file_batch)
-            file_batch = []
-    if file_batch:
-        _ = s3_mgr.batch_write(file_batch)
-    return iter([])
-
-
-class S3FileManager:
-    def __init__(
-        self,
-        bucket_name: str,
-        access_id: str,
-        secret_key: str,
-        endpoint_url: str = None,
-    ):
-        self.bucket_name = bucket_name
-        self.access_id = access_id
-        self.secret_key = secret_key
-        self.endpoint_url = endpoint_url
-
-    def get_client(self):
-        return boto3.client(
-            "s3",
-            use_ssl=False,
-            endpoint_url=self.endpoint_url,
-            aws_access_key_id=self.access_id,
-            aws_secret_access_key=self.secret_key,
-            region_name="fake-region",
-            config=boto3.session.Config(
-                signature_version="s3v4", s3={"addressing_style": "path"}
-            ),
-        )
-
-    def write_file(self, content: str, file_key: str):
-        try:
-            client = self.get_client()
-            client.put_object(Bucket=self.bucket_name, Key=file_key, Body=content)
-        except Exception as e:
-            return f"Error: {str(e)}"
-
-    def read_file(self, file_key: str):
-        try:
-            client = self.get_client()
-            response = client.get_object(Bucket=self.bucket_name, Key=file_key)
-            return response["Body"].read().decode("utf-8")
-        except Exception as e:
-            return f"Error: {str(e)}"
-
-
-@sf.udf(returnType=StringType())
-def prepend_path_udf(prefix: str, md_path: str):
-    if md_path is None:
-        return None
-    try:
-        full_path = Path(prefix) / Path(md_path).relative_to("/")
-        return str(full_path)
-    except ValueError:
-        full_path = Path(prefix) / md_path
-        return str(full_path)
-
-
-def read_md_partition(partition: DataFrame, config: dict):
-    s3_mgr = S3FileManager(
-        bucket_name=config["bucket_dir"],
-        access_id=config["access_key"],
-        secret_key=config["access_secret"],
-        endpoint_url=config["endpoint"],
-    )
-
-    def process_row(row: Row):
-        rowdict = row.asDict()
-        try:
-            if row["metadata_path"] is None:
-                rowdict["metadata"] = None
-            else:
-                rowdict["metadata"] = s3_mgr.read_file(row["metadata_path"])
-        except ClientError as e:
-            if e.response["Error"]["Code"] == "404":
-                rowdict["metadata"] = None
-            else:
-                print(f"Error reading {row['metadata_path']}: {str(e)}")
-                rowdict["metadata"] = None
-        return Row(**rowdict)
-
-    return map(process_row, partition)
