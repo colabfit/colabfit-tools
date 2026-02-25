@@ -110,6 +110,15 @@ class VastDataLoader:
         table_name = table_split[3].replace("`", "")
         return (bucket_name, schema_name, table_name)
 
+    def _table_exists(self, table_name: str) -> bool:
+        """Check table existence via VastDB SDK to avoid Spark view resolution errors."""
+        bucket_name, schema_name, table_n = self._get_table_split(table_name)
+        with self.session.transaction() as tx:
+            tables = (
+                tx.bucket(bucket_name).schema(schema_name).tables(table_name=table_n)
+            )
+            return len(tables) > 0
+
     def delete_from_table(self, table_name: str, ids: list[str]):
         if isinstance(ids, str):
             ids = [ids]
@@ -123,7 +132,7 @@ class VastDataLoader:
                 table.delete(rows=batch)
 
     def check_unique_ids(self, table_name: str, df: DataFrame):
-        if not self.spark.catalog.tableExists(table_name):
+        if not self._table_exists(table_name):
             logger.info(f"Table {table_name} does not yet exist.")
             return True
         ids = [x["id"] for x in df.select("id").collect()]
@@ -158,7 +167,7 @@ class VastDataLoader:
         table_schema = self.get_table_spark_schema(table_name)
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
-        if not self.spark.catalog.tableExists(table_name):
+        if not self._table_exists(table_name):
             self.create_vastdb_table(table_name, table_schema)
         ids = [x[ider] for x in spark_df.select(ider).collect()]
         batched_ids = batched(ids, 10000)
@@ -217,7 +226,7 @@ class VastDataLoader:
         logger.info(f"Writing table {table_name} without checking for duplicates")
         table_schema = self.get_table_spark_schema(table_name)
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
-        if not self.spark.catalog.tableExists(table_name):
+        if not self._table_exists(table_name):
             self.create_vastdb_table(table_name, table_schema)
         spark_df = spark_df.select(*[col for col in table_schema.fieldNames()])
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
@@ -265,7 +274,7 @@ class VastDataLoader:
         spark_df = spark_df.select(*[col for col in table_schema.fieldNames()])
 
         arrow_schema = spark_schema_to_arrow_schema(table_schema)
-        if not self.spark.catalog.tableExists(table_name):
+        if not self._table_exists(table_name):
             self.create_vastdb_table(table_name, table_schema)
         arrow_rec_batch = pa.table(
             [pa.array(col) for col in zip(*spark_df.collect())],
@@ -375,7 +384,7 @@ class VastDataLoader:
 
     def zero_multiplicity(self, dataset_id: str):
         """Use to return multiplicity of POs for a given dataset to zero"""
-        table_exists = self.spark.catalog.tableExists(self.prop_object_table)
+        table_exists = self._table_exists(self.prop_object_table)
         if not table_exists:
             logger.info(f"Table {self.prop_object_table} does not exist")
             return
@@ -460,7 +469,7 @@ class VastDataLoader:
             - Prints message and returns None if mapping table doesn't exist.
             - Prints message and returns None if no records found for the given ID.
         """
-        if not self.spark.catalog.tableExists(self.co_cs_map_table):
+        if not self._table_exists(self.co_cs_map_table):
             logger.info(f"Table {self.co_cs_map_table} does not exist")
             return None
         predicate = _.configuration_set_id == cs_id
@@ -875,7 +884,7 @@ class DataManager:
         self, loader: VastDataLoader, batching_ingest: bool = False
     ):
         """Check tables for conficts before loading data."""
-        if loader.spark.catalog.tableExists(loader.config_table):
+        if loader._table_exists(loader.config_table):
             logger.info(f"table {loader.config_table} exists")
             if batching_ingest is False:
                 cos_with_mult = loader.read_table(loader.config_table)
@@ -890,7 +899,7 @@ class DataManager:
                         "multiplicities to 0 with "
                         f'loader.zero_multiplicity("{self.dataset_id}")'
                     )
-        if loader.spark.catalog.tableExists(loader.dataset_table):
+        if loader._table_exists(loader.dataset_table):
             dataset_exists = loader.read_table(loader.dataset_table).filter(
                 sf.col("id") == self.dataset_id
             )
@@ -1135,7 +1144,7 @@ class DataManager:
         parquet_writer: ParquetWriter = None,
     ):
 
-        if loader.spark.catalog.tableExists(loader.config_set_table):
+        if loader._table_exists(loader.config_set_table):
             cs_ids = (
                 loader.dataset_query(
                     dataset_id=self.dataset_id, table_name=loader.config_set_table
