@@ -62,14 +62,14 @@ def _new_hash(
     return _hash.hexdigest()
 
 
-def config_struct_hash(
+def _sorted_struct_hash(
     atomic_numbers: list[int],
     cell: list[float],
     pbc: list[bool],
     positions: list[list[float]],
 ):
-    """Structure hashing for configuration creation"""
-    _hash = sha512()
+    """Shared structure hashing logic; returns a sha512 digest object."""
+    h = sha512()
     positions = np.array(positions)
     sort_ixs = np.lexsort(
         (
@@ -81,11 +81,33 @@ def config_struct_hash(
     sorted_positions = positions[sort_ixs]
     atomic_numbers = np.array(atomic_numbers)
     sorted_atomic_numbers = atomic_numbers[sort_ixs]
-    _hash.update(bytes(_format_for_hash(sorted_atomic_numbers)))
-    _hash.update(bytes(_format_for_hash(cell)))
-    _hash.update(bytes(_format_for_hash(pbc)))
-    _hash.update(bytes(_format_for_hash(sorted_positions)))
-    return int(_hash.hexdigest(), 16)
+    h.update(bytes(_format_for_hash(sorted_atomic_numbers)))
+    h.update(bytes(_format_for_hash(cell)))
+    h.update(bytes(_format_for_hash(pbc)))
+    h.update(bytes(_format_for_hash(sorted_positions)))
+    return h
+
+
+def config_struct_hash(
+    atomic_numbers: list[int],
+    cell: list[float],
+    pbc: list[bool],
+    positions: list[list[float]],
+):
+    """Structure hashing for configuration creation. Returns int (legacy)."""
+    return int(
+        _sorted_struct_hash(atomic_numbers, cell, pbc, positions).hexdigest(), 16
+    )
+
+
+def new_config_struct_hash(
+    atomic_numbers: list[int],
+    cell: list[float],
+    pbc: list[bool],
+    positions: list[list[float]],
+):
+    """Structure hashing for configuration creation. Returns hex string."""
+    return _sorted_struct_hash(atomic_numbers, cell, pbc, positions).hexdigest()
 
 
 @sf.udf(returnType=StringType())

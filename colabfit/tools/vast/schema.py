@@ -19,7 +19,9 @@ NSITES_COL_SPLITS = 20
 config_prop_schema = StructType(
     [
         StructField("property_id", StringType(), True),
+        StructField("new_property_id", StringType(), True),
         StructField("property_hash", StringType(), True),
+        StructField("new_property_hash", StringType(), True),
         StructField("last_modified", TimestampType(), True),
         StructField("dataset_id", StringType(), True),
         StructField("multiplicity", IntegerType(), True),

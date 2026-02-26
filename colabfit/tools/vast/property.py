@@ -79,6 +79,7 @@ _ignored_fields = [
 _hash_ignored_fields = [
     "id",
     "hash",
+    "new_hash",
     "last_modified",
     "multiplicity",
     "mean_force_norm",
@@ -293,6 +294,10 @@ class Property(DataObject, dict):
         if len(self._id) > 28:
             self._id = self._id[:28]
         self.row_dict["id"] = self._id
+        self._new_id = f"PO_{self._new_hash}"
+        if len(self._new_id) > 28:
+            self._new_id = self._new_id[:28]
+        self.row_dict["new_id"] = self._new_id
 
     @property
     def instance(self):

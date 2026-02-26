@@ -24,6 +24,7 @@ from .hashing import (
     _new_hash,
     config_struct_hash,
     config_struct_hash_udf,
+    new_config_struct_hash,
 )
 from .metadata import _parse_unstructured_metadata, _sort_dict
 from .pyspark_utils import get_max_string_length
@@ -46,6 +47,7 @@ __all__ = [
     "_format_for_hash",
     "config_struct_hash",
     "config_struct_hash_udf",
+    "new_config_struct_hash",
     # Data processing
     "get_last_modified",
     "get_date",

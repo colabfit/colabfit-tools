@@ -158,7 +158,7 @@ class VastDataLoader:
     ):
         """Include self.table_prefix in the table name when passed to this function"""
         identifier_dict = {
-            self.config_table: "hash",
+            self.config_table: "property_hash",
             self.config_set_table: "id",
             self.dataset_table: "id",
             self.co_cs_map_table: "id",
@@ -299,8 +299,10 @@ class VastDataLoader:
         logger.info(f"Inserted {total_rows} rows into table {table_name}")
 
     def increment_multiplicity(self, df: DataFrame, duplicate_df: DataFrame):
-        df_add = df.select("hash", sf.col("multiplicity").alias("multiplicity_add"))
-        duplicate_df = duplicate_df.join(df_add, on="hash", how="left")
+        df_add = df.select(
+            "property_hash", sf.col("multiplicity").alias("multiplicity_add")
+        )
+        duplicate_df = duplicate_df.join(df_add, on="property_hash", how="left")
         duplicate_df = duplicate_df.withColumn(
             "multiplicity",
             sf.col("multiplicity") + sf.col("multiplicity_add"),
@@ -335,7 +337,7 @@ class VastDataLoader:
         col_types = {
             "multiplicity": IntegerType(),
             "last_modified": TimestampType(),
-            "hash": StringType(),
+            "property_hash": StringType(),
             "$row_id": LongType(),
         }
         read_schema = StructType(
@@ -346,7 +348,7 @@ class VastDataLoader:
         )
         arrow_schema = arrow_schema.append(pa.field("$row_id", pa.uint64()))
 
-        ids = [x["hash"] for x in df.select("hash").collect()]
+        ids = [x["property_hash"] for x in df.select("property_hash").collect()]
         batched_ids = batched(ids, 10000)
         bucket_name, schema_name, table_n = self._get_table_split(table_name)
         n_updated = 0
@@ -357,8 +359,8 @@ class VastDataLoader:
             with self.session.transaction() as tx:
                 table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
                 rec_batch = table.select(
-                    predicate=table["hash"].isin(id_batch),
-                    columns=["multiplicity", "hash"],
+                    predicate=table["property_hash"].isin(id_batch),
+                    columns=["multiplicity", "property_hash"],
                     internal_row_id=True,
                 )
                 rec_batch = rec_batch.read_all()
@@ -384,26 +386,26 @@ class VastDataLoader:
 
     def zero_multiplicity(self, dataset_id: str):
         """Use to return multiplicity of POs for a given dataset to zero"""
-        table_exists = self._table_exists(self.prop_object_table)
+        table_exists = self._table_exists(self.config_table)
         if not table_exists:
-            logger.info(f"Table {self.prop_object_table} does not exist")
+            logger.info(f"Table {self.config_table} does not exist")
             return
         spark_schema = StructType(
             [
-                StructField("hash", StringType(), False),
+                StructField("property_hash", StringType(), False),
                 StructField("multiplicity", IntegerType(), True),
                 StructField("last_modified", TimestampType(), False),
                 StructField("$row_id", IntegerType(), False),
             ]
         )
         with self.session.transaction() as tx:
-            table_name = self.prop_object_table
+            table_name = self.config_table
             bucket_name, schema_name, table_n = self._get_table_split(table_name)
             table = tx.bucket(bucket_name).schema(schema_name).table(table_n)
             rec_batches = table.select(
                 predicate=(table["dataset_id"] == dataset_id)
                 & (table["multiplicity"] > 0),
-                columns=["hash", "multiplicity", "last_modified"],
+                columns=["property_hash", "multiplicity", "last_modified"],
                 internal_row_id=True,
             )
             for rec_batch in rec_batches:
@@ -418,7 +420,7 @@ class VastDataLoader:
                 )
                 arrow_schema = pa.schema(
                     [
-                        pa.field("hash", pa.string()),
+                        pa.field("property_hash", pa.string()),
                         pa.field("multiplicity", pa.int32()),
                         pa.field("last_modified", pa.timestamp("us")),
                         pa.field("$row_id", pa.uint64()),
@@ -502,7 +504,6 @@ class VastDataLoader:
         if dataset_id is None:
             raise ValueError("dataset_id must be provided")
         config_df_cols = [
-            "hash",
             "property_id",
             "configuration_id",
             "nsites",
@@ -870,14 +871,16 @@ class DataManager:
 
     def deduplicate_co_po_df(self, co_po_df: DataFrame):
         """Aggregate multiplicity for PO dataframe with duplicate IDS."""
-        multiplicity = co_po_df.groupBy("hash").agg(sf.count("*").alias("count"))
-        co_po_df = co_po_df.dropDuplicates(["hash"])
+        multiplicity = co_po_df.groupBy("property_hash").agg(
+            sf.count("*").alias("count")
+        )
+        co_po_df = co_po_df.dropDuplicates(["property_hash"])
         co_po_df = (
-            co_po_df.join(multiplicity, on="hash", how="inner")
+            co_po_df.join(multiplicity, on="property_hash", how="inner")
             .withColumn("multiplicity", sf.col("count"))
             .drop("count")
         )
-        co_po_df = co_po_df.select(config_prop_md_schema.fieldNames())
+        co_po_df = co_po_df.select(config_prop_schema.fieldNames())
         return co_po_df
 
     def check_existing_tables(
@@ -958,9 +961,13 @@ class DataManager:
         combined_rows = []
         for co_row, po_row in co_po_rows:
             po_row["property_id"] = po_row.pop("id")
+            po_row["new_property_id"] = po_row.pop("new_id")
             co_row["configuration_id"] = co_row.pop("id")
+            co_row["new_configuration_id"] = co_row.pop("new_id")
             po_row["property_hash"] = po_row.pop("hash")
+            po_row["new_property_hash"] = po_row.pop("new_hash")
             co_row["configuration_hash"] = co_row.pop("hash")
+            co_row["new_configuration_hash"] = co_row.pop("new_hash")
             co_po_row = {
                 k: v
                 for k, v in {**co_row, **po_row}.items()
@@ -972,10 +979,6 @@ class DataManager:
                         logger.warning(
                             f"Large value in {key}: {len(str(value))} characters"
                         )
-            co_po_row["hash"], co_po_row["new_hash"] = self.hash_combined_rows(
-                co_po_row
-            )
-
             combined_rows.append(co_po_row)
 
         return combined_rows
@@ -1017,7 +1020,7 @@ class DataManager:
                 co_po_combined_rows, schema=config_prop_schema
             )
             del co_po_combined_rows
-            co_count_distinct = co_df.select("hash").distinct().count()
+            co_count_distinct = co_df.select("property_hash").distinct().count()
             if co_count_distinct < co_count:
                 logger.info(
                     f"{co_count - co_count_distinct} duplicates found in CO-PO dataframe"  # noqa E501
