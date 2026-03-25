@@ -6,44 +6,26 @@ from pyspark.sql.types import StringType
 
 
 def _format_for_hash(v: np.ndarray | list | dict | str | int | float | tuple):
+    if isinstance(v, (list, tuple)):
+        v = np.array(v)
     if isinstance(v, np.ndarray):
         if np.issubdtype(v.dtype, np.floating):
             return np.round(v.astype(np.float64), decimals=16)
         elif np.issubdtype(v.dtype, np.integer):
             return v.astype(np.int64)
-        elif np.issubdtype(v.dtype, bool):
+        elif np.issubdtype(v.dtype, np.bool_):
             return v.astype(np.int64)
         else:
             return v
-    elif isinstance(v, list):
-        return np.array(v).data.tobytes()
     elif isinstance(v, dict):
         return str(v).encode("utf-8")
     elif isinstance(v, str):
         return v.encode("utf-8")
     elif isinstance(v, (int, float)):
         return np.array(v).data.tobytes()
-    elif isinstance(v, tuple):
-        return np.array(v).data.tobytes()
     else:
         return v
 
-
-def _hash(
-    row: dict, identifying_key_list: list, include_keys_in_hash: bool = False
-) -> int:
-    identifying_key_list = sorted(identifying_key_list)
-    identifiers = [row[k] for k in identifying_key_list]
-    _hash = sha512()
-    for k, v in zip(identifying_key_list, identifiers):
-        if "new_" in k:
-            continue
-        if v is None or v == "[]":
-            continue
-        if include_keys_in_hash:
-            _hash.update(_format_for_hash(k))
-        _hash.update(_format_for_hash(v))
-    return int(_hash.hexdigest(), 16)
 
 
 def _new_hash(
@@ -87,17 +69,6 @@ def _sorted_struct_hash(
     h.update(bytes(_format_for_hash(sorted_positions)))
     return h
 
-
-def config_struct_hash(
-    atomic_numbers: list[int],
-    cell: list[float],
-    pbc: list[bool],
-    positions: list[list[float]],
-):
-    """Structure hashing for configuration creation. Returns int (legacy)."""
-    return int(
-        _sorted_struct_hash(atomic_numbers, cell, pbc, positions).hexdigest(), 16
-    )
 
 
 def new_config_struct_hash(

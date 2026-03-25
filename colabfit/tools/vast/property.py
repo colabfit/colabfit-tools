@@ -76,6 +76,8 @@ _ignored_fields = [
 # here: metadata is part of a property object's identity. Two calculations that share
 # the same physical values but differ in metadata (e.g. different 'input' parameters)
 # are considered distinct property objects and will receive different hashes and IDs.
+# 'configuration_id' is excluded because it derives from the legacy integer hash; the
+# new hash uses 'new_configuration_id' instead (which _hash() skips via its "new_" rule).
 _hash_ignored_fields = [
     "id",
     "hash",
@@ -84,6 +86,7 @@ _hash_ignored_fields = [
     "multiplicity",
     "mean_force_norm",
     "max_force_norm",
+    "configuration_id",
 ]
 
 
@@ -527,6 +530,7 @@ class Property(DataObject, dict):
                     props_dict[pname] = instance
         props_dict["chemical_formula_hill"] = configuration.get_chemical_formula()
         props_dict["configuration_id"] = configuration.id
+        props_dict["new_configuration_id"] = configuration.new_id
 
         return cls(
             definitions=definitions,
@@ -553,6 +557,8 @@ class Property(DataObject, dict):
                 continue
             elif key == "configuration_id":
                 row_dict["configuration_id"] = val
+            elif key == "new_configuration_id":
+                row_dict["new_configuration_id"] = val
             elif "energy" in key:
                 row_dict.update(prop_to_row_mapper["energy"](key, val))
             else:

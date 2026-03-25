@@ -100,6 +100,7 @@ property_object_schema = StructType(
         StructField("new_hash", StringType(), True),
         StructField("last_modified", TimestampType(), True),
         StructField("configuration_id", StringType(), True),
+        StructField("new_configuration_id", StringType(), True),
         StructField("dataset_id", StringType(), True),
         StructField("multiplicity", IntegerType(), True),
         StructField("software", StringType(), True),

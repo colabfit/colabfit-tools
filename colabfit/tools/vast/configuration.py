@@ -8,7 +8,6 @@ from colabfit.tools.vast.schema import config_schema
 from colabfit.tools.vast.data_object import DataObject
 from colabfit.tools.vast.utils import (
     _empty_dict_from_schema,
-    config_struct_hash,
     get_last_modified,
     get_pbc_from_cell,
     new_config_struct_hash,
@@ -200,13 +199,7 @@ class AtomicConfiguration(DataObject, Atoms):
         co_dict["pbc"] = get_pbc_from_cell(self.cell)
         co_dict["last_modified"] = get_last_modified()
         co_dict["atomic_numbers"] = self.numbers.astype(int).tolist()
-        co_dict["structure_hash"] = config_struct_hash(
-            co_dict["atomic_numbers"],
-            co_dict["cell"],
-            co_dict["pbc"],
-            co_dict["positions"],
-        )
-        co_dict["new_structure_hash"] = new_config_struct_hash(
+        co_dict["structure_hash"] = new_config_struct_hash(
             co_dict["atomic_numbers"],
             co_dict["cell"],
             co_dict["pbc"],
