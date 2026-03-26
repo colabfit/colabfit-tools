@@ -77,7 +77,7 @@ _ignored_fields = [
 # the same physical values but differ in metadata (e.g. different 'input' parameters)
 # are considered distinct property objects and will receive different hashes and IDs.
 # 'configuration_id' is excluded because it derives from the legacy integer hash; the
-# new hash uses 'new_configuration_id' instead (which _hash() skips via its "new_" rule).
+# new hash uses 'new_configuration_id' instead.
 _hash_ignored_fields = [
     "id",
     "hash",

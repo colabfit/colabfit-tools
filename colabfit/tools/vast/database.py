@@ -38,7 +38,6 @@ from colabfit.tools.vast.schema import (
     co_cs_map_arrow_schema,
 )
 from colabfit.tools.vast.utils import (
-    _hash,
     _new_hash,
     get_last_modified,
     spark_schema_to_arrow_schema,
@@ -574,7 +573,7 @@ class VastDataLoader:
         spark_dict = spark_row.asDict()
 
         spark_dict["last_modified"] = get_last_modified()
-        spark_dict["hash"] = _hash(spark_dict, hash_keys, include_keys_in_hash=False)
+        spark_dict["hash"] = _new_hash(spark_dict, hash_keys, include_keys_in_hash=False)
         if spark_dict["cauchy_stress"] is not None:
             spark_dict["cauchy_stress"] = str(spark_dict["cauchy_stress"])
         id = f'PO_{spark_dict["hash"]}'
@@ -591,7 +590,7 @@ class VastDataLoader:
         """
         spark_dict = spark_row.asDict()
         spark_dict["last_modified"] = get_last_modified()
-        spark_dict["hash"] = _hash(spark_dict, hash_keys, include_keys_in_hash=False)
+        spark_dict["hash"] = _new_hash(spark_dict, hash_keys, include_keys_in_hash=False)
         return spark_dict["hash"]
 
     def stop_spark(self):
@@ -936,10 +935,7 @@ class DataManager:
                 "new_structure_hash",
             ]
         ]
-        old_hash_fields = [
-            f for f in base_hash_fields if f not in ["new_metadata_hash"]
-        ]
-        new_hash_fields = old_hash_fields + [
+        hash_fields = base_hash_fields + [
             "structure_hash",
             "chemical_formula_hill",
             "chemical_formula_reduced",
@@ -951,10 +947,7 @@ class DataManager:
             "nperiodic_dimensions",
             "dimension_types",
         ]
-        return (
-            _hash(co_po_rows, old_hash_fields, include_keys_in_hash=False),
-            _new_hash(co_po_rows, new_hash_fields, include_keys_in_hash=False),
-        )
+        return _new_hash(co_po_rows, hash_fields, include_keys_in_hash=False)
 
     def combine_co_po_rows(self, co_po_rows: list[dict]):
         """Combine configuration and property rows into a single row."""
