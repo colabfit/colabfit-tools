@@ -44,7 +44,6 @@ dev = [
 ]
 vast = [
     "vastdb",
-    "pyspark",
     "pyarrow",
     "ibis-framework",
 ]

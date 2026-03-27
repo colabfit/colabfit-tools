@@ -1,7 +1,10 @@
+import itertools
 import logging
+from collections import Counter
 from datetime import datetime
 
-import pyspark.sql.functions as sf
+import pyarrow as pa
+import pyarrow.compute as pc
 from unidecode import unidecode
 
 from colabfit import MAX_STRING_LENGTH
@@ -37,8 +40,8 @@ class Dataset(DataObject):
     data_link : str
         Link to the source data for the dataset.
     description : str
-    config_df : pyspark.sql.DataFrame
-        DataFrame containing configuration set information.
+    config_df : pa.Table
+        Table containing configuration/property data.
     other_links : list of str, optional
         Additional external links related to the dataset (default: None).
     dataset_id : str, optional
@@ -53,64 +56,6 @@ class Dataset(DataObject):
         License associated with the dataset's data (default: "CC-BY-ND-4.0").
     publication_year : str, optional
         Year of publication for the dataset (default: None).
-
-    Attributes
-    ----------
-    name : str
-        The name of the dataset.
-    authors : list of str
-    publication_link : str
-        Link to the publication associated with the dataset.
-    data_link : str
-        Link to the source data for the dataset.
-    other_links : list of str or None
-        Additional external links related to the dataset.
-    description : str
-    data_license : str
-        License associated with the dataset's data.
-    dataset_id : str or None
-        Unique identifier for the dataset.
-    doi : str or None
-        Digital Object Identifier for the dataset.
-    publication_year : str or None
-        Year of publication for the dataset.
-    configuration_set_ids : list of str
-        List of configuration set IDs attached to the dataset.
-    row_dict : dict
-        Dictionary containing aggregated statistics and metadata for the dataset,
-        appropriate for use in a Spark DataFrame, Vast DB table or similar.
-        Includes:
-            - nconfigurations: Number of configurations.
-            - nsites: Total number of sites.
-            - nelements: Number of unique elements.
-            - elements: List of unique elements.
-            - nperiodic_dimensions: Distinct periodic dimensions.
-            - dimension_types: Distinct dimension types.
-            - total_elements_ratios: Ratios of each element in the dataset.
-            - nproperty_objects: Number of property objects.
-            - Various property counts and statistics.
-            - dataset authors
-            - dataset description
-            - dataset license
-            - links to publication, data, and resources associated with the dataset.
-            - dataset name
-            - dataset publication_year
-            - doi: Digital Object Identifier for the dataset.
-    labels : list of str or None
-        List of labels associated with the dataset.
-
-    Methods
-    -------
-    to_row_dict(config_df)
-        Aggregates statistics and metadata from the configuration DataFrame
-        into a dictionary representation suitable for use in a Spark DataFrame, Vast DB
-        table or similar.
-
-    __str__()
-        Returns a string summary of the dataset.
-
-    __repr__()
-        Returns a string representation of the dataset.
     """
 
     def __init__(
@@ -179,98 +124,84 @@ class Dataset(DataObject):
         """Return the keys used for Dataset identification."""
         return ["extended_id"]
 
-    def to_row_dict(self, config_df):
-        """"""
+    def to_row_dict(self, config_df: pa.Table):
         row_dict = _empty_dict_from_schema(dataset_schema)
         row_dict["last_modified"] = get_last_modified()
         row_dict["nconfiguration_sets"] = len(self.configuration_set_ids)
+
         config_df = config_df.select(
-            "property_id",
-            "configuration_id",
-            "elements",
-            "atomic_numbers",
-            "nsites",
-            "nperiodic_dimensions",
-            "dimension_types",
-            "atomization_energy",
-            "atomic_forces",
-            "adsorption_energy",
-            "electronic_band_gap",
-            "energy_above_hull",
-            "cauchy_stress",
-            "formation_energy",
-            "energy",
-            "method",
-            "software",
-        )
-        config_df.persist()
-        row_dict["nconfigurations"] = (
-            config_df.select("configuration_id").distinct().count()
-        )
-        row_dict["nsites"] = (
-            config_df.select("nsites").agg(sf.sum("nsites")).collect()[0][0]
-        )
-        nperiodic_dims = config_df.select("nperiodic_dimensions").distinct().collect()
-        row_dict["nperiodic_dimensions"] = [
-            row["nperiodic_dimensions"] for row in nperiodic_dims
-        ]
-        dim_types = config_df.select("dimension_types").distinct().collect()
-        row_dict["dimension_types"] = [row["dimension_types"] for row in dim_types]
-
-        methods = config_df.select("method").distinct().collect()
-        row_dict["methods"] = [row["method"] for row in methods]
-
-        software = config_df.select("software").distinct().collect()
-        row_dict["software"] = [row["software"] for row in software]
-
-        elements_df = config_df.select("elements").distinct()
-        elements = []
-        for row in elements_df.collect():
-            elem_list = (
-                row["elements"]
-                if isinstance(row["elements"], list)
-                else [row["elements"]]
-            )
-            elements.extend(elem_list)
-        row_dict["elements"] = sorted(list(set(elements)))
-        row_dict["nelements"] = len(row_dict["elements"])
-        atomic_ratios_df = (
-            config_df.select("atomic_numbers")
-            .withColumn("single_element", sf.explode("atomic_numbers"))
-            .groupBy("single_element")
-            .agg(sf.count("single_element").alias("count"))
-        )
-        total_elements = atomic_ratios_df.agg(sf.sum("count")).collect()[0][0]
-        atomic_ratios_df = atomic_ratios_df.withColumn(
-            "ratio", sf.col("count") / total_elements
-        )
-        logger.info(f'{total_elements} {row_dict["nsites"]}')
-        assert total_elements == row_dict["nsites"]
-
-        element_map_expr = sf.create_map(
             [
-                sf.lit(k)
-                for pair in [(k, v) for k, v in ELEMENT_MAP.items()]
-                for k in pair
+                "property_id",
+                "configuration_id",
+                "elements",
+                "atomic_numbers",
+                "nsites",
+                "nperiodic_dimensions",
+                "dimension_types",
+                "atomization_energy",
+                "atomic_forces",
+                "adsorption_energy",
+                "electronic_band_gap",
+                "energy_above_hull",
+                "cauchy_stress",
+                "formation_energy",
+                "energy",
+                "method",
+                "software",
             ]
         )
 
-        atomic_ratios_coll = (
-            atomic_ratios_df.withColumn(
-                "element", element_map_expr[sf.col("single_element")]
-            )
-            .select("element", "ratio")
-            .collect()
+        row_dict["nconfigurations"] = len(
+            pc.unique(config_df["configuration_id"].drop_null())
         )
-        row_dict["total_elements_ratios"] = [
-            x["ratio"] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
-        ]
-        del atomic_ratios_df, atomic_ratios_coll
+        row_dict["nsites"] = pc.sum(config_df["nsites"]).as_py()
 
-        row_dict["nproperty_objects"] = (
-            config_df.select("property_id").distinct().count()
+        row_dict["nperiodic_dimensions"] = (
+            pc.unique(config_df["nperiodic_dimensions"]).drop_null().to_pylist()
         )
-        property_counts = {}
+
+        seen_dim_types = set()
+        unique_dim_types = []
+        for dt in config_df["dimension_types"].to_pylist():
+            if dt is not None:
+                key = tuple(dt)
+                if key not in seen_dim_types:
+                    seen_dim_types.add(key)
+                    unique_dim_types.append(dt)
+        row_dict["dimension_types"] = unique_dim_types
+
+        row_dict["methods"] = pc.unique(config_df["method"]).drop_null().to_pylist()
+        row_dict["software"] = pc.unique(config_df["software"]).drop_null().to_pylist()
+
+        all_elements = set()
+        for elem_list in config_df["elements"].to_pylist():
+            if elem_list:
+                all_elements.update(elem_list)
+        row_dict["elements"] = sorted(list(all_elements))
+        row_dict["nelements"] = len(row_dict["elements"])
+
+        all_nums = list(
+            itertools.chain.from_iterable(
+                row for row in config_df["atomic_numbers"].to_pylist() if row
+            )
+        )
+        element_counts = Counter(all_nums)
+        total_elements = sum(element_counts.values())
+        logger.info(f'{total_elements} {row_dict["nsites"]}')
+        assert total_elements == row_dict["nsites"]
+
+        element_symbol_counts = {
+            ELEMENT_MAP[num]: count for num, count in element_counts.items()
+        }
+        sorted_symbols = sorted(element_symbol_counts.keys())
+        row_dict["total_elements_ratios"] = [
+            element_symbol_counts[sym] / total_elements for sym in sorted_symbols
+        ]
+
+        row_dict["nproperty_objects"] = len(
+            pc.unique(config_df["property_id"].drop_null())
+        )
+
         property_cols = [
             "atomization_energy",
             "adsorption_energy",
@@ -281,26 +212,23 @@ class Dataset(DataObject):
             "energy",
         ]
         for prop_col in property_cols:
-            count = (
-                config_df.select(prop_col).filter(sf.col(prop_col).isNotNull()).count()
-            )
-            property_counts[f"{prop_col}_count"] = count
-        atomic_forces_count = config_df.filter(
-            (sf.col("atomic_forces") != "[]") & (sf.col("atomic_forces").isNotNull())
-        ).count()
-        property_counts["atomic_forces_count"] = atomic_forces_count
-        energy_stats = (
-            config_df.select("energy")
-            .filter(sf.col("energy").isNotNull())
-            .agg(
-                sf.variance("energy").alias("energy_variance"),
-                sf.mean("energy").alias("energy_mean"),
-            )
-            .collect()[0]
+            count = pc.count(config_df[prop_col], count_mode="only_valid").as_py()
+            row_dict[f"{prop_col}_count"] = count
+
+        valid_forces = pc.and_(
+            pc.is_valid(config_df["atomic_forces"]),
+            pc.greater(pc.list_size(config_df["atomic_forces"]), 0),
         )
-        property_counts["energy_variance"] = energy_stats["energy_variance"]
-        property_counts["energy_mean"] = energy_stats["energy_mean"]
-        row_dict.update(property_counts)
+        row_dict["atomic_forces_count"] = pc.sum(valid_forces.cast(pa.int64())).as_py()
+
+        energy_valid = config_df.filter(pc.is_valid(config_df["energy"]))["energy"]
+        if len(energy_valid) > 0:
+            row_dict["energy_variance"] = pc.variance(energy_valid).as_py()
+            row_dict["energy_mean"] = pc.mean(energy_valid).as_py()
+        else:
+            row_dict["energy_variance"] = None
+            row_dict["energy_mean"] = None
+
         row_dict["authors"] = self.authors
         row_dict["description"] = self.description
         row_dict["license"] = self.data_license
@@ -315,8 +243,6 @@ class Dataset(DataObject):
         row_dict["publication_year"] = self.publication_year
         row_dict["doi"] = self.doi
         row_dict["equilibrium"] = self.equilibrium
-        config_df.unpersist()
-        del config_df
         return row_dict
 
     def __str__(self):

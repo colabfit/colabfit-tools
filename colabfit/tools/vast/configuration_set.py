@@ -1,7 +1,9 @@
+import itertools
 import logging
-from collections import namedtuple
+from collections import Counter, namedtuple
 
-from pyspark.sql import functions as sf
+import pyarrow as pa
+import pyarrow.compute as pc
 
 from colabfit.tools.vast.schema import configuration_set_schema
 from colabfit.tools.vast.data_object import DataObject
@@ -60,73 +62,77 @@ class ConfigurationSet(DataObject):
         self.row_dict = self.to_row_dict(config_df)
         self._generate_hash_and_id()
 
-    def to_row_dict(self, config_df):
+    def to_row_dict(self, config_df: pa.Table):
         row_dict = _empty_dict_from_schema(configuration_set_schema)
         row_dict["name"] = self.name
         row_dict["description"] = self.description
         row_dict["dataset_id"] = self.dataset_id
-        config_df = config_df.drop_duplicates(["property_id"])
+
+        # Deduplicate by property_id
+        seen = set()
+        keep = []
+        for i, v in enumerate(config_df["property_id"].to_pylist()):
+            if v not in seen:
+                seen.add(v)
+                keep.append(i)
+        config_df = config_df.take(keep)
+
         config_df = config_df.select(
-            "property_id",
-            "elements",
-            "atomic_numbers",
-            "nsites",
-            "nperiodic_dimensions",
-            "dimension_types",
-        )
-        config_df.persist()
-        row_dict["nconfigurations"] = config_df.select("property_id").distinct().count()
-        row_dict["nsites"] = (
-            config_df.select("nsites").agg(sf.sum("nsites")).collect()[0][0]
-        )
-        nperiodic_dims = config_df.select("nperiodic_dimensions").distinct().collect()
-        row_dict["nperiodic_dimensions"] = [
-            row["nperiodic_dimensions"] for row in nperiodic_dims
-        ]
-        dim_types = config_df.select("dimension_types").distinct().collect()
-        row_dict["dimension_types"] = [row["dimension_types"] for row in dim_types]
-        elements_df = config_df.select("elements").distinct()
-        elements = []
-        for row in elements_df.collect():
-            elem_list = (
-                row["elements"]
-                if isinstance(row["elements"], list)
-                else [row["elements"]]
-            )
-            elements.extend(elem_list)
-        row_dict["elements"] = sorted(list(set(elements)))
-        row_dict["nelements"] = len(row_dict["elements"])
-        row_dict["last_modified"] = get_last_modified()
-        atomic_ratios_df = (
-            config_df.select("atomic_numbers")
-            .withColumn("single_element", sf.explode("atomic_numbers"))
-            .groupBy("single_element")
-            .agg(sf.count("single_element").alias("count"))
-        )
-        total_elements = atomic_ratios_df.agg(sf.sum("count")).collect()[0][0]
-        atomic_ratios_df = atomic_ratios_df.withColumn(
-            "ratio", sf.col("count") / total_elements
-        )
-        logger.info(f"{total_elements} {row_dict['nsites']}")
-        assert total_elements == row_dict["nsites"]
-        element_map_expr = sf.create_map(
             [
-                sf.lit(k)
-                for pair in [(k, v) for k, v in ELEMENT_MAP.items()]
-                for k in pair
+                "property_id",
+                "elements",
+                "atomic_numbers",
+                "nsites",
+                "nperiodic_dimensions",
+                "dimension_types",
             ]
         )
-        atomic_ratios_coll = (
-            atomic_ratios_df.withColumn(
-                "element", element_map_expr[sf.col("single_element")]
-            )
-            .select("element", "ratio")
-            .collect()
+
+        row_dict["nconfigurations"] = len(
+            pc.unique(config_df["property_id"].drop_null())
         )
+        row_dict["nsites"] = pc.sum(config_df["nsites"]).as_py()
+
+        row_dict["nperiodic_dimensions"] = (
+            pc.unique(config_df["nperiodic_dimensions"]).drop_null().to_pylist()
+        )
+
+        seen_dim_types = set()
+        unique_dim_types = []
+        for dt in config_df["dimension_types"].to_pylist():
+            if dt is not None:
+                key = tuple(dt)
+                if key not in seen_dim_types:
+                    seen_dim_types.add(key)
+                    unique_dim_types.append(dt)
+        row_dict["dimension_types"] = unique_dim_types
+
+        all_elements = set()
+        for elem_list in config_df["elements"].to_pylist():
+            if elem_list:
+                all_elements.update(elem_list)
+        row_dict["elements"] = sorted(list(all_elements))
+        row_dict["nelements"] = len(row_dict["elements"])
+        row_dict["last_modified"] = get_last_modified()
+
+        all_nums = list(
+            itertools.chain.from_iterable(
+                row for row in config_df["atomic_numbers"].to_pylist() if row
+            )
+        )
+        element_counts = Counter(all_nums)
+        total_elements = sum(element_counts.values())
+        logger.info(f"{total_elements} {row_dict['nsites']}")
+        assert total_elements == row_dict["nsites"]
+
+        element_symbol_counts = {
+            ELEMENT_MAP[num]: count for num, count in element_counts.items()
+        }
+        sorted_symbols = sorted(element_symbol_counts.keys())
         row_dict["total_elements_ratios"] = [
-            x[1] for x in sorted(atomic_ratios_coll, key=lambda x: x["element"])
+            element_symbol_counts[sym] / total_elements for sym in sorted_symbols
         ]
-        config_df.unpersist()
+
         row_dict["ordered"] = self.ordered
         row_dict["id"] = self.id
         row_dict["extended_id"] = self.id
