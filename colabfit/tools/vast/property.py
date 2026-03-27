@@ -274,7 +274,7 @@ class Property(DataObject, dict):
 
         self.unique_identifier_kw = [
             k
-            for k in property_object_schema.fieldNames()
+            for k in property_object_schema.names
             if k not in _hash_ignored_fields
         ]
 

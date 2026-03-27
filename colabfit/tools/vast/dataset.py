@@ -212,12 +212,12 @@ class Dataset(DataObject):
             "energy",
         ]
         for prop_col in property_cols:
-            count = pc.count(config_df[prop_col], count_mode="only_valid").as_py()
+            count = pc.count(config_df[prop_col], mode="only_valid").as_py()
             row_dict[f"{prop_col}_count"] = count
 
-        valid_forces = pc.and_(
+        valid_forces = pc.and_kleene(
             pc.is_valid(config_df["atomic_forces"]),
-            pc.greater(pc.list_size(config_df["atomic_forces"]), 0),
+            pc.greater(pc.list_value_length(config_df["atomic_forces"]), 0),
         )
         row_dict["atomic_forces_count"] = pc.sum(valid_forces.cast(pa.int64())).as_py()
 

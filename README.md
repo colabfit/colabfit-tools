@@ -9,7 +9,7 @@ pip install "colabfit-tools[postgres] @ https://github.com/gpwolfe/colabfit-tool
 ```
 For Vast DB back end:
 ```
-pip install "colabfit-tools[postgres] @ https://github.com/gpwolfe/colabfit-tools/archive/master.zip"
+pip install "colabfit-tools[vast] @ https://github.com/gpwolfe/colabfit-tools/archive/master.zip"
 ```
 
 colabfit-tools is built to work with two back ends: Vast DB (as part of the NYU-HPC Data Lake) and PostGreSQL.  
