@@ -25,7 +25,7 @@ def _format_for_hash(v: np.ndarray | list | dict | str | int | float | tuple):
         return v
 
 
-def _new_hash(
+def _hash(
     row: dict, identifying_key_list: list, include_keys_in_hash: bool = False
 ) -> str:
     identifying_key_list = sorted(identifying_key_list)
@@ -67,7 +67,7 @@ def _sorted_struct_hash(
     return h
 
 
-def new_config_struct_hash(
+def config_struct_hash(
     atomic_numbers: list[int],
     cell: list[float],
     pbc: list[bool],

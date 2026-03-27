@@ -76,17 +76,13 @@ _ignored_fields = [
 # here: metadata is part of a property object's identity. Two calculations that share
 # the same physical values but differ in metadata (e.g. different 'input' parameters)
 # are considered distinct property objects and will receive different hashes and IDs.
-# 'configuration_id' is excluded because it derives from the legacy integer hash; the
-# new hash uses 'new_configuration_id' instead.
 _hash_ignored_fields = [
     "id",
     "hash",
-    "new_hash",
     "last_modified",
     "multiplicity",
     "mean_force_norm",
     "max_force_norm",
-    "configuration_id",
 ]
 
 
@@ -273,9 +269,7 @@ class Property(DataObject, dict):
         dict.__init__(self)
 
         self.unique_identifier_kw = [
-            k
-            for k in property_object_schema.names
-            if k not in _hash_ignored_fields
+            k for k in property_object_schema.names if k not in _hash_ignored_fields
         ]
 
         self.instance = instance
@@ -297,10 +291,6 @@ class Property(DataObject, dict):
         if len(self._id) > 28:
             self._id = self._id[:28]
         self.row_dict["id"] = self._id
-        self._new_id = f"PO_{self._new_hash}"
-        if len(self._new_id) > 28:
-            self._new_id = self._new_id[:28]
-        self.row_dict["new_id"] = self._new_id
 
     @property
     def instance(self):
@@ -530,7 +520,6 @@ class Property(DataObject, dict):
                     props_dict[pname] = instance
         props_dict["chemical_formula_hill"] = configuration.get_chemical_formula()
         props_dict["configuration_id"] = configuration.id
-        props_dict["new_configuration_id"] = configuration.new_id
 
         return cls(
             definitions=definitions,
@@ -557,8 +546,6 @@ class Property(DataObject, dict):
                 continue
             elif key == "configuration_id":
                 row_dict["configuration_id"] = val
-            elif key == "new_configuration_id":
-                row_dict["new_configuration_id"] = val
             elif "energy" in key:
                 row_dict.update(prop_to_row_mapper["energy"](key, val))
             else:
@@ -613,9 +600,7 @@ class Property(DataObject, dict):
             if "per-atom" in prop_dict:
                 if prop_dict["per-atom"]["source-value"] is True:
                     if self.nsites is None:
-                        raise RuntimeError(
-                            "nsites must be provided to convert per-atom"
-                        )
+                        raise RuntimeError("nsites must be provided to convert per-atom")
                     prop_val *= self.nsites
 
             if units != p_info.unit:
@@ -960,9 +945,7 @@ class PropertyMap:
                 units = prop["units"]
                 original_file_key = prop["original_file_key"]
                 additional = prop.get("additional", [])
-                self.set_property(
-                    prop_name, field, units, original_file_key, additional
-                )
+                self.set_property(prop_name, field, units, original_file_key, additional)
             elif isinstance(prop, PropertyInfo):
                 self.set_property(
                     prop.property_name,
@@ -1045,9 +1028,7 @@ class PropertyMap:
                     continue
                 elif val.get("has-unit") and prop_view.get("units") is None:
                     raise ValueError(f"Property '{prop_name}' must have 'units' set.")
-                elif (
-                    val.get("has-unit") is False and prop_view.get("units") is not None
-                ):
+                elif val.get("has-unit") is False and prop_view.get("units") is not None:
                     raise ValueError(
                         f"Property '{prop_name}' must have key {key}: 'units' set to None."  # noqa E501
                     )

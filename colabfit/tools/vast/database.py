@@ -25,7 +25,7 @@ from colabfit.tools.vast.schema import (
     dataset_schema,
 )
 from colabfit.tools.vast.utils import (
-    _new_hash,
+    _hash,
     get_last_modified,
 )
 
@@ -431,7 +431,7 @@ class VastDataLoader:
             "cauchy_stress",
             "cauchy_stress_volume_normalized",
             "chemical_formula_hill",
-            "new_configuration_id",
+            "configuration_id",
             "dataset_id",
             "electronic_band_gap",
             "electronic_band_gap_type",
@@ -443,7 +443,7 @@ class VastDataLoader:
         ]
         row = dict(row)
         row["last_modified"] = get_last_modified()
-        row["hash"] = _new_hash(row, hash_keys, include_keys_in_hash=False)
+        row["hash"] = _hash(row, hash_keys, include_keys_in_hash=False)
         if row["cauchy_stress"] is not None:
             row["cauchy_stress"] = str(row["cauchy_stress"])
         id = f'PO_{row["hash"]}'
@@ -460,7 +460,7 @@ class VastDataLoader:
         """
         row = dict(row)
         row["last_modified"] = get_last_modified()
-        row["hash"] = _new_hash(row, hash_keys, include_keys_in_hash=False)
+        row["hash"] = _hash(row, hash_keys, include_keys_in_hash=False)
         return row["hash"]
 
 
@@ -634,59 +634,14 @@ class DataManager:
             if dataset_row.num_rows > 0:
                 raise ValueError(f"Dataset with ID {self.dataset_id} already exists.")
 
-    def hash_combined_rows(self, co_po_rows: list[dict]):
-        base_hash_fields = [
-            fname
-            for fname in config_prop_schema.names
-            if fname
-            not in [
-                "id",
-                "hash",
-                "last_modified",
-                "multiplicity",
-                "property_metadata_path",
-                "configuration_metadata_path",
-                "metadata_size",
-                "mean_force_norm",
-                "max_force_norm",
-                "property_hash",
-                "configuration_hash",
-                "new_configuration_hash",
-                "property_id",
-                "new_hash",
-                "configuration_id",
-                "new_property_hash",
-                "new_property_id",
-                "new_configuration_id",
-                "new_structure_hash",
-            ]
-        ]
-        hash_fields = base_hash_fields + [
-            "structure_hash",
-            "chemical_formula_hill",
-            "chemical_formula_reduced",
-            "chemical_formula_anonymous",
-            "elements",
-            "elements_ratios",
-            "nsites",
-            "nelements",
-            "nperiodic_dimensions",
-            "dimension_types",
-        ]
-        return _new_hash(co_po_rows, hash_fields, include_keys_in_hash=False)
-
     def combine_co_po_rows(self, co_po_rows: list[dict]):
         """Combine configuration and property rows into a single row."""
         combined_rows = []
         for co_row, po_row in co_po_rows:
             po_row["property_id"] = po_row.pop("id")
-            po_row["new_property_id"] = po_row.pop("new_id")
             co_row["configuration_id"] = co_row.pop("id")
-            co_row["new_configuration_id"] = co_row.pop("new_id")
             po_row["property_hash"] = po_row.pop("hash")
-            po_row["new_property_hash"] = po_row.pop("new_hash")
             co_row["configuration_hash"] = co_row.pop("hash")
-            co_row["new_configuration_hash"] = co_row.pop("new_hash")
             co_po_row = {
                 k: v
                 for k, v in {**co_row, **po_row}.items()

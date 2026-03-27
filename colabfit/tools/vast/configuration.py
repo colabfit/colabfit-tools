@@ -10,7 +10,7 @@ from colabfit.tools.vast.utils import (
     _empty_dict_from_schema,
     get_last_modified,
     get_pbc_from_cell,
-    new_config_struct_hash,
+    config_struct_hash,
 )
 
 
@@ -83,11 +83,7 @@ class AtomicConfiguration(DataObject, Atoms):
         self.id = f"CO_{self._hash}"
         if len(self.id) > 28:
             self.id = self.id[:28]
-        self.new_id = f"CO_{self._new_hash}"
-        if len(self.new_id) > 28:
-            self.new_id = self.new_id[:28]
         self.row_dict["id"] = self.id
-        self.row_dict["new_id"] = self.new_id
         # self.row_dict["dataset_ids"] = [self.dataset_id]
         self.row_dict = self.row_dict
         # Check for name conflicts in info/arrays; would cause bug in parsing
@@ -199,7 +195,7 @@ class AtomicConfiguration(DataObject, Atoms):
         co_dict["pbc"] = get_pbc_from_cell(self.cell)
         co_dict["last_modified"] = get_last_modified()
         co_dict["atomic_numbers"] = self.numbers.astype(int).tolist()
-        co_dict["structure_hash"] = new_config_struct_hash(
+        co_dict["structure_hash"] = config_struct_hash(
             co_dict["atomic_numbers"],
             co_dict["cell"],
             co_dict["pbc"],

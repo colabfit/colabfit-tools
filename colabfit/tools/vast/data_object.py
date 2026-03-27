@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List
-from colabfit.tools.vast.utils import get_last_modified, _new_hash
+from colabfit.tools.vast.utils import get_last_modified, _hash
 
 
 class DataObject(ABC):
@@ -13,7 +13,6 @@ class DataObject(ABC):
 
     def __init__(self):
         self._hash: str = None
-        self._new_hash: str = None
         self.row_dict: Dict[str, Any] = {}
 
     @abstractmethod
@@ -37,10 +36,8 @@ class DataObject(ABC):
 
     def _generate_hash_and_id(self):
         """Generate hash and ID after row_dict is populated."""
-        self._hash = _new_hash(self.row_dict, self.get_identifier_keys(), False)
-        self._new_hash = self._hash
+        self._hash = _hash(self.row_dict, self.get_identifier_keys(), False)
         self.row_dict["hash"] = self._hash
-        self.row_dict["new_hash"] = self._new_hash
         self.row_dict["last_modified"] = get_last_modified()
 
     def __hash__(self):

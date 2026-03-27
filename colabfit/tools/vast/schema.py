@@ -5,9 +5,7 @@ NSITES_COL_SPLITS = 20
 config_prop_schema = pa.schema(
     [
         pa.field("property_id", pa.string()),
-        pa.field("new_property_id", pa.string()),
         pa.field("property_hash", pa.string()),
-        pa.field("new_property_hash", pa.string()),
         pa.field("last_modified", pa.timestamp("us")),
         pa.field("dataset_id", pa.string()),
         pa.field("multiplicity", pa.int32()),
@@ -26,11 +24,8 @@ config_prop_schema = pa.schema(
         pa.field("mean_force_norm", pa.float64()),
         pa.field("energy_above_hull", pa.float64()),
         pa.field("configuration_id", pa.string()),
-        pa.field("new_configuration_id", pa.string()),
         pa.field("configuration_hash", pa.string()),
-        pa.field("new_configuration_hash", pa.string()),
         pa.field("structure_hash", pa.string()),
-        pa.field("new_structure_hash", pa.string()),
         pa.field("cell", pa.list_(pa.list_(pa.float64()))),
         pa.field("positions", pa.list_(pa.list_(pa.float64()))),
         pa.field("pbc", pa.list_(pa.bool_())),
@@ -54,7 +49,6 @@ config_schema = pa.schema(
     [
         pa.field("id", pa.string()),
         pa.field("hash", pa.string()),
-        pa.field("new_hash", pa.string()),
         pa.field("last_modified", pa.timestamp("us")),
         pa.field("dataset_ids", pa.list_(pa.string())),
         pa.field("chemical_formula_hill", pa.string()),
@@ -81,10 +75,8 @@ property_object_schema = pa.schema(
     [
         pa.field("id", pa.string()),
         pa.field("hash", pa.string()),
-        pa.field("new_hash", pa.string()),
         pa.field("last_modified", pa.timestamp("us")),
         pa.field("configuration_id", pa.string()),
-        pa.field("new_configuration_id", pa.string()),
         pa.field("dataset_id", pa.string()),
         pa.field("multiplicity", pa.int32()),
         pa.field("software", pa.string()),
