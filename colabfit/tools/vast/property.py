@@ -554,10 +554,12 @@ class Property(DataObject, dict):
         row_dict["chemical_formula_hill"] = self.chemical_formula_hill
         row_dict["multiplicity"] = 1
         row_dict["dataset_id"] = self.dataset_id
+        row_dict["has_forces"] = row_dict["atomic_forces"] is not None
         if row_dict["atomic_forces"] is not None:
             norms = [np.linalg.norm(f) for f in row_dict["atomic_forces"]]
             row_dict["max_force_norm"] = float(np.max(norms))
             row_dict["mean_force_norm"] = float(np.mean(norms))
+        row_dict["has_stress"] = row_dict["cauchy_stress"] is not None
         return row_dict
 
     def standardize_energy(self):

@@ -42,6 +42,9 @@ config_prop_schema = pa.schema(
         pa.field("names", pa.list_(pa.string())),
         pa.field("labels", pa.list_(pa.string())),
         pa.field("metadata", pa.string()),
+        pa.field("has_forces", pa.bool_()),
+        pa.field("has_stress", pa.bool_()),
+        pa.field("element_filter", pa.string()),
     ]
 )
 

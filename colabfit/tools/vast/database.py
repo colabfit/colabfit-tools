@@ -642,6 +642,8 @@ class DataManager:
             co_row["configuration_id"] = co_row.pop("id")
             po_row["property_hash"] = po_row.pop("hash")
             co_row["configuration_hash"] = co_row.pop("hash")
+            elements = co_row.get("elements") or []
+            co_row["element_filter"] = "," + ",".join(sorted(elements)) + ","
             co_po_row = {
                 k: v
                 for k, v in {**co_row, **po_row}.items()
