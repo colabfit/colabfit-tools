@@ -4,13 +4,12 @@ import string
 
 import dateutil.parser
 import numpy as np
-from django.utils.crypto import get_random_string
 
 from colabfit import ID_FORMAT_STRING
 
 
 def generate_string():
-    return get_random_string(12, allowed_chars=string.ascii_lowercase + "1234567890")
+    return "".join(secrets.choice(string.ascii_lowercase + "1234567890") for _ in range(12))
 
 
 def generate_ds_id():

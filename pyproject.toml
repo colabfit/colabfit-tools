@@ -24,12 +24,8 @@ dependencies = [
     "kim_property",
     "numpy",
     "tqdm",
-    "markdown",
-    "plotly",
-    "django",
     "periodictable",
     "unidecode",
-    "notebook",
     "python-dotenv",
 ]
 
@@ -41,6 +37,11 @@ Repository = "https://github.com/colabfit/colabfit-tools"
 dev = [
     "black",
     "flake8",
+]
+notebooks = [
+    "markdown",
+    "plotly",
+    "notebook",
 ]
 vast = [
     "vastdb",
