@@ -1,22 +1,20 @@
-import datetime
 from string import ascii_lowercase, ascii_uppercase
 from types import NoneType
 
-import dateutil
-import numpy as np
 from ase import Atoms
 
 from colabfit import ATOMS_LABELS_FIELD, ATOMS_NAME_FIELD
-from colabfit.tools.schema import config_schema
-from colabfit.tools.utilities import (
+from colabfit.tools.vast.schema import config_schema
+from colabfit.tools.vast.data_object import DataObject
+from colabfit.tools.vast.utils import (
     _empty_dict_from_schema,
-    _hash,
-    _parse_unstructured_metadata,
+    get_last_modified,
+    get_pbc_from_cell,
     config_struct_hash,
 )
 
 
-class AtomicConfiguration(Atoms):
+class AtomicConfiguration(DataObject, Atoms):
     """
     An AtomicConfiguration is an extension of a :class:`BaseConfiguration` and an
     :class:`ase.Atoms` object that is guaranteed to have the following fields in
@@ -28,52 +26,46 @@ class AtomicConfiguration(Atoms):
 
     def __init__(
         self,
-        co_md_map=None,
         info=None,
         **kwargs,
     ):
         """
-        Constructs an AtomicConfiguration. Calls :meth:`BaseConfiguration.__init__()`
+        Constructs an AtomicConfiguration. Calls :meth:`DataObject.__init__()`
         and :meth:`ase.Atoms.__init__()`
 
         Args:
-            co_md_map (dict) optional:
-                Property map of metadata to be used to set configuration metadata for a
-                configuration. This should be called at creation of AtomicConfiguration
-                in order to include metadata in the hash.
             **kwargs:
                 Other keyword arguments that can be passed to
                 :meth:`ase.Atoms.__init__()`
         """
-        names = info[ATOMS_NAME_FIELD]
         if "atomic_numbers" in list(kwargs.keys()):
             kwargs["numbers"] = kwargs.pop("atomic_numbers")
 
+        DataObject.__init__(self)
         Atoms.__init__(self, **kwargs)
-        self._array_order = np.lexsort(
-            (
-                self.arrays["positions"][:, 2],
-                self.arrays["positions"][:, 1],
-                self.arrays["positions"][:, 0],
+
+        if info is not None:
+            self.info.update(info)
+        if self.info == {}:
+            raise ValueError(
+                "Configuration should have '.info' dict attribute with, at minimum, '_name' defined. Pass dict to generator function."  # noqa E501
             )
-        )
+        names = self.info.get(ATOMS_NAME_FIELD)
+        if names is None:
+            raise ValueError(
+                "The configuration 'info' dictionary must contain the key '_name'"
+            )
+        labels = self.info.get(ATOMS_LABELS_FIELD)
+        if labels is not None and not isinstance(labels, set):
+            if isinstance(labels, str):
+                labels = [labels]
+            self.info[ATOMS_LABELS_FIELD] = list(set(labels))
         self.unique_identifier_kw = [
             "atomic_numbers",
-            "positions_00",
-            "cell",
-            "pbc",
-            "metadata_id",
-        ]
-        self.struct_identifier_kw = [
-            "atomic_numbers",
-            "positions_00",
+            "positions",
             "cell",
             "pbc",
         ]
-        self.unique_identifier_kw.extend([f"positions_{i:02d}" for i in range(1, 20)])
-        self.struct_identifier_kw.extend([f"positions_{i:02d}" for i in range(1, 20)])
-        self.info = info
-        self.metadata = self.set_metadata(co_md_map)
         if isinstance(names, str):
             self.names = [names]
         else:
@@ -87,12 +79,11 @@ class AtomicConfiguration(Atoms):
         else:
             self.labels = labels
         self.row_dict = self.to_row_dict()
-        self._hash = str(_hash(self.row_dict, self.unique_identifier_kw, False))
+        self._generate_hash_and_id()
         self.id = f"CO_{self._hash}"
         if len(self.id) > 28:
             self.id = self.id[:28]
         self.row_dict["id"] = self.id
-        self.row_dict["hash"] = self._hash
         # self.row_dict["dataset_ids"] = [self.dataset_id]
         self.row_dict = self.row_dict
         # Check for name conflicts in info/arrays; would cause bug in parsing
@@ -101,47 +92,6 @@ class AtomicConfiguration(Atoms):
                 "The same key should not be used in both Configuration.info and "
                 "Configuration.arrays"
             )
-
-    def set_metadata(self, co_md_map):
-        """
-        Returns metadata for a configuration from a property map.
-        This should be called at creation of AtomicConfiguration in order
-        to include metadata in the hash.
-
-        Args:
-            co_md_map (dict): Property map of metadata to be used to set configuration
-            metadata for a configuration.
-
-        """
-        if co_md_map is None:
-            co_md_map = {}
-        gathered_fields = {}
-        for md_field in co_md_map.keys():
-            if "value" in co_md_map[md_field]:
-                v = co_md_map[md_field]["value"]
-            elif "field" in co_md_map[md_field]:
-                field_key = co_md_map[md_field]["field"]
-
-                if field_key in self.info:
-                    v = self.info[field_key]
-                elif field_key in self.arrays:
-                    v = self.arrays[field_key]
-                else:
-                    # No keys are required; ignored if missing
-                    continue
-            else:
-                # No keys are required; ignored if missing
-                continue
-
-            if "units" in co_md_map[md_field]:
-                gathered_fields[md_field] = {
-                    f"{md_field}": v,
-                    f"{md_field}_unit": co_md_map[md_field]["units"],
-                }
-            else:
-                gathered_fields[md_field] = v
-
-        return _parse_unstructured_metadata(gathered_fields)
 
     def configuration_summary(self):
         """Extracts useful metadata from a Configuration
@@ -239,67 +189,27 @@ class AtomicConfiguration(Atoms):
     def to_row_dict(self):
         co_dict = _empty_dict_from_schema(config_schema)
         co_dict["cell"] = self.cell.array.astype(float).tolist()
-        co_dict["positions_00"] = self.positions.astype(float).tolist()
+        co_dict["positions"] = self.positions.astype(float).tolist()
         co_dict["names"] = self.names
         co_dict["labels"] = self.labels
-        co_dict["pbc"] = self.pbc.astype(bool).tolist()
-        co_dict["last_modified"] = dateutil.parser.parse(
-            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        )
+        co_dict["pbc"] = get_pbc_from_cell(self.cell)
+        co_dict["last_modified"] = get_last_modified()
         co_dict["atomic_numbers"] = self.numbers.astype(int).tolist()
         co_dict["structure_hash"] = config_struct_hash(
             co_dict["atomic_numbers"],
             co_dict["cell"],
             co_dict["pbc"],
-            co_dict["positions_00"],
+            co_dict["positions"],
         )
-        if self.metadata is not None:
-            co_dict.update(self.metadata)
         co_dict.update(self.configuration_summary())
         return co_dict
 
     @classmethod
-    def from_ase(self, atoms, co_md_map=None):
+    def from_ase(self, atoms, **kwargs):
         """
         Generates an :class:`AtomicConfiguration` from an :code:`ase.Atoms` object.
         """
-        # Workaround for bug in todict() fromdict() with constraints.
-        # Merge request: https://gitlab.com/ase/ase/-/merge_requests/2574
-        # This means kwargs need to be same as those in ASE
-        dct = atoms.todict()
-        kw = {name: dct.pop(name) for name in ["numbers", "positions", "cell", "pbc"]}
-        constraints = dct.pop("constraints", None)
-        if constraints:
-            constraints = [c.todict() for c in atoms.constraints]
-            from ase.constraints import dict2constraint
-
-            constraints = [dict2constraint(d) for d in constraints]
-        info = dct.pop("info", None)
-        for k, v in info.items():
-            if k in [ATOMS_NAME_FIELD, ATOMS_LABELS_FIELD]:
-                if not isinstance(v, set):
-                    if not isinstance(v, list):
-                        v = [v]
-                    info[k] = list(set(v))
-                else:
-                    info[k] = list(v)
-            else:
-                info[k] = v
-        config = self(
-            constraint=constraints,
-            celldisp=dct.pop("celldisp", None),
-            info=info,
-            co_md_map=co_md_map,
-            **kw,
-        )
-        natoms = len(atoms)
-        for name, arr in dct.items():
-            assert len(arr) == natoms, name
-            assert isinstance(arr, np.ndarray)
-            config.arrays[name] = arr
-        # for k, v in atoms.arrays.items():
-        #     conf.arrays[k] = v
-
+        config = self(symbols=atoms, **kwargs)
         return config
 
     @staticmethod
@@ -344,6 +254,6 @@ class AtomicConfiguration(Atoms):
             self.info[ATOMS_NAME_FIELD], ase_str[20:-1]
         )
 
-    def __hash__(self):
-        """This is not used as the hash for the spark row, as Python may truncate"""
-        return _hash(self.row_dict, sorted(self.unique_identifier_kw), False)
+    def get_identifier_keys(self) -> list[str]:
+        """Return the keys used for AtomicConfiguration identification."""
+        return sorted(self.unique_identifier_kw)

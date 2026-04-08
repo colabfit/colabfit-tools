@@ -199,3 +199,34 @@ band_gap_pd = {
         "description": "The type of band gap calculation: [direct, indirect, unknown].",
     },
 }
+
+energy_above_hull_pd = {
+    "property-id": "tag:staff@noreply.colabfit.org,2022-11-18:property/energy-above-hull",  # noqa E501
+    "property-name": "energy-above-hull",
+    "property-title": "",
+    "property-description": "A measure of stability of a configuration, whereby the value indicates the difference between the "  # noqa E501
+    "configuration's formation energy and the lowest energy state available on the convex hull of the material. A greater positive value indicates a less stable configuration. ",  # noqa E501
+    "energy": {
+        "type": "float",
+        "has-unit": True,
+        "extent": [],
+        "required": False,
+        "description": "The adsorption energy of the system.",
+    },
+    "per-atom": {
+        "type": "bool",
+        "has-unit": False,
+        "extent": [],
+        "required": False,
+        "description": 'If True, "energy" is the energy above convex hull of the system '
+        "divided by the number of atoms in the configuration.",
+    },
+    "reference-energy": {
+        "type": "float",
+        "has-unit": True,
+        "extent": [],
+        "required": False,
+        "description": "If known, represents values which have been subtracted from "
+        "the base energy, resulting in the energy above hull.",
+    },
+}

@@ -1,13 +1,12 @@
-import datetime
 import itertools
 import json
+import logging
 import os
 import tempfile
 import warnings
 from collections import namedtuple
 from copy import deepcopy
 
-import dateutil.parser
 import kim_edn
 import numpy as np
 from ase.units import create_units
@@ -17,15 +16,18 @@ from kim_property import (
 )
 from kim_property.definition import PROPERTY_ID as VALID_KIM_ID
 
-from colabfit.tools.configuration import AtomicConfiguration
-from colabfit.tools.schema import property_object_schema
-from colabfit.tools.utilities import (
+from colabfit.tools.vast.configuration import AtomicConfiguration
+from colabfit.tools.vast.schema import property_object_schema
+from colabfit.tools.vast.data_object import DataObject
+from colabfit.tools.vast.utils import (
     _empty_dict_from_schema,
-    _hash,
     _parse_unstructured_metadata,
+    get_last_modified,
 )
 
 from kim_property.create import KIM_PROPERTIES
+
+logger = logging.getLogger(__name__)
 
 EDN_KEY_MAP = {
     "energy": "unrelaxed-potential-energy",
@@ -53,6 +55,7 @@ MAIN_KEY_MAP = {
     "cauchy-stress": stress_info,
     "atomization-energy": energy_info,
     "adsorption-energy": energy_info,
+    "energy-above-hull": energy_info,
     "formation-energy": energy_info,
     "band-gap": energy_info,
 }
@@ -69,13 +72,17 @@ _ignored_fields = [
     "unrelaxed-periodic-cell-vector-2",
     "unrelaxed-periodic-cell-vector-3",
 ]
+# Fields excluded from the property object hash. 'metadata' is intentionally NOT listed
+# here: metadata is part of a property object's identity. Two calculations that share
+# the same physical values but differ in metadata (e.g. different 'input' parameters)
+# are considered distinct property objects and will receive different hashes and IDs.
 _hash_ignored_fields = [
     "id",
     "hash",
     "last_modified",
     "multiplicity",
-    "metadata_path",
-    "metadata_size",
+    "mean_force_norm",
+    "max_force_norm",
 ]
 
 
@@ -102,7 +109,7 @@ def atomic_forces_to_schema(af_prop: dict):
     if af_prop.get("forces") is None:
         return {}
     af_dict = {
-        "atomic_forces_00": af_prop["forces"]["source-value"],
+        "atomic_forces": af_prop["forces"]["source-value"],
         "atomic_forces_unit": af_prop["forces"]["source-unit"],
     }
     return af_dict
@@ -146,11 +153,13 @@ def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
     Returns metadata dict as a JSON string, method, and software.
     """
     gathered_fields = {}
-    for md_field in pmap_md.keys():
-        if "value" in pmap_md[md_field]:
-            v = pmap_md[md_field]["value"]
-        elif "field" in pmap_md[md_field]:
-            field_key = pmap_md[md_field]["field"]
+    for md_field, md_val in pmap_md.items():
+        if md_val is None:
+            continue
+        if "value" in md_val:
+            v = md_val["value"]
+        elif "field" in md_val:
+            field_key = md_val["field"]
             if field_key in config.info:
                 v = config.info[field_key]
             elif field_key in config.arrays:
@@ -160,19 +169,15 @@ def md_from_map(pmap_md, config: AtomicConfiguration) -> tuple:
         else:
             continue  # No keys are required; ignored if missing
 
-        if "units" in pmap_md[md_field]:
+        if "units" in md_val:
             gathered_fields[md_field] = {
                 "source-value": v,
-                "source-unit": pmap_md[md_field]["units"],
+                "source-unit": md_val["units"],
             }
         else:
             gathered_fields[md_field] = {"source-value": v}
     method = gathered_fields.pop("method", None)
     software = gathered_fields.pop("software", None)
-    if "property_keys" not in gathered_fields:
-        raise RuntimeError(
-            "'property_keys' must be provided in the property map. If defined, check that property_keys is formatted as {'property_keys': {'value': {'key1 : value1}}}"  # noqa E501
-        )
     if method is not None:
         method = method["source-value"]
     if software is not None:
@@ -188,7 +193,7 @@ class InvalidPropertyDefinition(Exception):
     pass
 
 
-class Property(dict):
+class Property(DataObject, dict):
     """
     A Property is used to store the results of some kind of calculation or
     experiment, and should be mapped to an `OpenKIM Property Definition
@@ -196,6 +201,13 @@ class Property(dict):
     practice is for the Property to also point to one or more
     PropertySettings objects that fully define the conditions under which the
     Property was obtained.
+
+    Identity and hashing:
+        A property object's identity is determined by its physical values (energies,
+        forces, stresses, etc.), its configuration, and its metadata. Two calculations
+        that share the same physical values but differ in metadata are considered
+        distinct property objects. See :attr:`_hash_ignored_fields` for the fields
+        explicitly excluded from the hash.
 
     Attributes:
 
@@ -253,31 +265,13 @@ class Property(dict):
                 If True, converts units to those expected by ColabFit. Default
                 is True
         """
-        # self.unique_identifier_kw = [
-        #     k
-        #     for k in property_object_schema.fieldNames()
-        #     if k not in _hash_ignored_fields
-        # ]
+        DataObject.__init__(self)
+        dict.__init__(self)
+
         self.unique_identifier_kw = [
-            "adsorption_energy",
-            "atomic_forces_00",
-            "atomization_energy",
-            "cauchy_stress",
-            "cauchy_stress_volume_normalized",
-            "chemical_formula_hill",
-            "configuration_id",
-            "dataset_id",
-            "electronic_band_gap",
-            "electronic_band_gap_type",
-            "energy",
-            "formation_energy",
-            "metadata_id",
-            "method",
-            "software",
+            k for k in property_object_schema.names if k not in _hash_ignored_fields
         ]
-        self.unique_identifier_kw.extend(
-            [f"atomic_forces_{i:02d}" for i in range(1, 20)]
-        )
+
         self.instance = instance
         self.definitions = definitions
         self.nsites = nsites
@@ -292,8 +286,7 @@ class Property(dict):
         if dataset_id is not None:
             self.dataset_id = dataset_id
         self.row_dict = self.to_row_dict()
-        self._hash = _hash(self.row_dict, self.unique_identifier_kw, False)
-        self.row_dict["hash"] = str(self._hash)
+        self._generate_hash_and_id()
         self._id = f"PO_{self._hash}"
         if len(self._id) > 28:
             self._id = self._id[:28]
@@ -316,6 +309,57 @@ class Property(dict):
     @property
     def property_fields(self):
         return self._property_fields
+
+    @classmethod
+    def get_property_value(cls, property_dict, configuration):
+        return_val = {}
+        arrays = configuration.arrays
+        info = configuration.info
+        if configuration.calc is not None:
+            calc_results = configuration.calc.results
+        else:
+            calc_results = {}
+        for key, val in property_dict.items():
+            if "value" in val:
+                data = val["value"]
+            elif val["field"] in info:
+                data = info[val["field"]]
+            elif val["field"] in arrays:
+                data = arrays[val["field"]]
+            elif val["field"] in calc_results:
+                if val["field"] == "stress":
+                    data = configuration.get_stress(voigt=False)
+                else:
+                    data = calc_results[val["field"]]
+            else:
+                return False
+            if isinstance(data, (np.ndarray, list)):
+                data = np.atleast_1d(data).tolist()
+            elif isinstance(data, np.integer):
+                data = int(data)
+            elif isinstance(data, np.floating):
+                data = float(data)
+            elif isinstance(data, (str, bool, int, float)):
+                pass
+            value = {
+                "source-value": data,
+            }
+            if val["units"] not in ["None", None]:
+                if isinstance(val["units"], dict) and "source-unit" in val["units"]:
+                    units_spec = val["units"]["source-unit"]
+                    if "value" in units_spec:
+                        # Static units: {"source-unit": {"value": "eV"}}
+                        value["source-unit"] = units_spec["value"]
+                    elif "field" in units_spec:
+                        # Dynamic units: {"source-unit": {"field": "field_name"}}
+                        # The field lookup will be handled in standardize_energy
+                        value["source-unit"] = units_spec
+                    else:
+                        value["source-unit"] = units_spec
+                else:
+                    value["source-unit"] = val["units"]
+            return_val[key] = value
+        return return_val
 
     @classmethod
     def get_kim_instance(
@@ -427,66 +471,53 @@ class Property(dict):
                 A property map as described in the Property attributes section.
 
         """
-        pdef_dict = {pdef["property-name"]: pdef for pdef in definitions}
-        instances = {
-            pdef_name: cls.get_kim_instance(pdef)
-            for pdef_name, pdef in pdef_dict.items()
-        }
         props_dict = {}
-        pi_md = None
-        for pname, pmap_list in property_map.items():
-            instance = instances.get(pname, None)
-            if pname == "_metadata":
-                pi_md, method, software = md_from_map(pmap_list, configuration)
-                props_dict["method"] = method
-                props_dict["software"] = software
-            elif instance is None:
-                raise PropertyParsingError(f"Property {pname} not found in definitions")
-            else:
-                p_info = MAIN_KEY_MAP.get(pname, None)
-                if p_info is None:
-                    print(f"property {pname} not found in MAIN_KEY_MAP")
+        metadata = property_map.get("_metadata")
+        pi_md, method, software = md_from_map(metadata, configuration)
+        props_dict["method"] = method
+        props_dict["software"] = software
+        if definitions:
+            pdef_dict = {pdef["property-name"]: pdef for pdef in definitions}
+            instances = {
+                pdef_name: cls.get_kim_instance(pdef)
+                for pdef_name, pdef in pdef_dict.items()
+            }
+            for pname, pmap in property_map.items():
+                if pname == "_metadata":
                     continue
-                instance = instance.copy()
-                for pmap_i, pmap in enumerate(pmap_list):
-                    for key, val in pmap.items():
-                        if "value" in val:
-                            # Default value provided
-                            data = val["value"]
-                        elif val["field"] in configuration.info:
-                            data = configuration.info[val["field"]]
-                        elif val["field"] in configuration.arrays:
-                            data = configuration.arrays[val["field"]]
-                        else:
-                            # Key not found on configurations. Will be checked later
-                            continue
+                instance = instances.get(pname, None)
+                if instance is None:
+                    raise PropertyParsingError(
+                        f"Property {pname} not found in definitions"
+                    )
+                else:
+                    p_info = MAIN_KEY_MAP.get(pname, None)
+                    if p_info is None:
+                        logger.warning(f"property {pname} not found in MAIN_KEY_MAP")
+                        continue
+                    if p_info.key not in pmap:
+                        logger.warning(
+                            f"Property {p_info.key} not found in pmap for {pname}: {pmap}"  # noqa E501
+                        )
+                        pdef_dict.pop(pname)
+                        continue
+                    instance = instance.copy()
+                    pval = cls.get_property_value(pmap, configuration)
+                    if pval is False:
+                        logger.warning(
+                            f"Property {p_info.key} not found in arrays or info for {pname}: {pmap}"  # noqa E501
+                        )
+                        pdef_dict.pop(pname)
+                        continue
+                    instance.update(pval)
 
-                        if isinstance(data, (np.ndarray, list)):
-                            data = np.atleast_1d(data).tolist()
-                        elif isinstance(data, np.integer):
-                            data = int(data)
-                        elif isinstance(data, np.floating):
-                            data = float(data)
-                        elif isinstance(data, (str, bool, int, float)):
-                            continue
-                        instance[key] = {
-                            "source-value": data,
-                        }
-
-                        if (val["units"] != "None") and (val["units"] is not None):
-                            instance[key]["source-unit"] = val["units"]
-                if p_info.key not in instance:
-                    print(f"Property {p_info.key} not found in {pname}")
-                    pdef_dict.pop(pname)
-                    continue
-                # hack to get around OpenKIM requiring the property-name be a dict
-                prop_name_tmp = pdef_dict[pname].pop("property-name")
-
-                check_instance_optional_key_marked_required_are_present(
-                    instance, pdef_dict[pname]
-                )
-                pdef_dict[pname]["property-name"] = prop_name_tmp
-                props_dict[pname] = {k: v for k, v in instance.items()}
+                    # hack to get around OpenKIM requiring the property-name be a dict
+                    prop_name_tmp = pdef_dict[pname].pop("property-name")
+                    check_instance_optional_key_marked_required_are_present(
+                        instance, pdef_dict[pname]
+                    )
+                    pdef_dict[pname]["property-name"] = prop_name_tmp
+                    props_dict[pname] = instance
         props_dict["chemical_formula_hill"] = configuration.get_chemical_formula()
         props_dict["configuration_id"] = configuration.id
 
@@ -519,18 +550,16 @@ class Property(dict):
                 row_dict.update(prop_to_row_mapper["energy"](key, val))
             else:
                 row_dict.update(prop_to_row_mapper[key](val))
-        row_dict["last_modified"] = dateutil.parser.parse(
-            datetime.datetime.now(tz=datetime.timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
-        )
+        row_dict["last_modified"] = get_last_modified()
         row_dict["chemical_formula_hill"] = self.chemical_formula_hill
         row_dict["multiplicity"] = 1
         row_dict["dataset_id"] = self.dataset_id
-        if row_dict["atomic_forces_00"] is not None:
-            norms = [np.linalg.norm(f) for f in row_dict["atomic_forces_00"]]
+        row_dict["has_forces"] = row_dict["atomic_forces"] is not None
+        if row_dict["atomic_forces"] is not None:
+            norms = [np.linalg.norm(f) for f in row_dict["atomic_forces"]]
             row_dict["max_force_norm"] = float(np.max(norms))
             row_dict["mean_force_norm"] = float(np.mean(norms))
+        row_dict["has_stress"] = row_dict["cauchy_stress"] is not None
         return row_dict
 
     def standardize_energy(self):
@@ -543,9 +572,19 @@ class Property(dict):
                 continue
             p_info = MAIN_KEY_MAP[prop_name]
             if p_info.key not in prop_dict:
-                print(f"Property {p_info.key} not found in {prop_name}")
+                logger.warning(f"Property {p_info.key} not found in {prop_name}")
                 continue
             units = prop_dict[p_info.key]["source-unit"]
+            # Handle dynamic units case where units is still a dict with "field"
+            if isinstance(units, dict) and "field" in units:
+                unit_field = units["field"]
+                if unit_field in self.instance:
+                    units = self.instance[unit_field]["source-value"]
+                else:
+                    raise RuntimeError(
+                        f"Units field {unit_field} not found in Property instance"
+                    )
+            # For static units, units should now be a string from get_property_value
             if p_info.dtype == list:
                 prop_val = np.array(
                     prop_dict[p_info.key]["source-value"], dtype=np.float64
@@ -603,12 +642,9 @@ class Property(dict):
                 "source-unit": p_info.unit,
             }
 
-    def __hash__(self):
-
-        return _hash(
-            self.row_dict,
-            sorted(self.unique_identifier_kw),
-        )
+    def get_identifier_keys(self) -> list[str]:
+        """Return the keys used for Property identification."""
+        return sorted(self.unique_identifier_kw)
 
     def __eq__(self, other):
         """
@@ -688,10 +724,102 @@ class Property(dict):
         return str(self)
 
 
-property_info = namedtuple(
-    "property_info",
-    ["property_name", "field", "units", "original_file_key", "additional"],
-)
+class PropertyInfo:
+    """
+    A class to store information about a property to be added to a PropertyMap.
+    Attributes:
+    -----------
+    property_name : str
+        Name of the property (must match a property in the PropertyMap).
+    field : str
+        Field name in the AtomicConfiguration object to get the property value from.
+    units : str
+        Units of the property value (must be a valid ASE unit).
+    original_file_key : str
+        Key name in the original file (e.g. 'energy', 'forces', etc.).
+    additional : list[tuple]
+        Any additional key/value for the property.
+    """
+
+    property_info = namedtuple(
+        "property_info",
+        ["property_name", "field", "units", "original_file_key", "additional"],
+    )
+
+    def __init__(
+        self,
+        property_name: str,
+        field: str,
+        units: str | dict,
+        original_file_key: str,
+        additional: list[tuple] = None,
+    ):
+        self.property_name = property_name
+        self.field = field
+        self.units = units
+        self.original_file_key = original_file_key
+        self.additional = additional if additional is not None else []
+        self.validate()
+
+    def get_info(self):
+        return self.property_info(
+            property_name=self.property_name,
+            field=self.field,
+            units=self.units,
+            original_file_key=self.original_file_key,
+            additional=self.additional,
+        )
+
+    def validate(self):
+        if not self.property_name:
+            raise ValueError("Property name is required")
+        if not self.field:
+            raise ValueError("Field is required")
+        if not self.original_file_key:
+            raise ValueError("Original file key is required")
+        if "_" in self.property_name:
+            raise ValueError(
+                "Property name cannot contain underscores ('_'). "
+                "Use hyphens ('-') instead."
+            )
+        if isinstance(self.units, str):
+            if not check_split_units(self.units):
+                raise ValueError(
+                    f"Invalid unit: {self.units}. Use a valid unit or a dict "
+                    f"in the form of {{'source-unit':'unit_string'}}"
+                )
+
+            self.units = {"source-unit": {"value": self.units}}
+        elif isinstance(self.units, dict):
+            if "value" not in self.units and "field" not in self.units:
+                raise ValueError(
+                    "Units dict must contain 'value' or 'field' (if dynamic) key."
+                )
+            if "value" in self.units:
+                if not check_split_units(self.units["value"]):
+                    raise ValueError(
+                        f"Invalid unit: {self.units['value']}. Use a valid unit string."
+                    )
+            # Convert to nested structure for consistency
+            self.units = {"source-unit": self.units}
+
+
+def check_split_units(units: str) -> bool:
+    """
+    Check if all units in a compound unit string are valid ASE units.
+    Args:
+        units (str): Compound unit string (e.g., "eV/Angstrom^3").
+    Returns:
+        bool: True if all units are valid, False otherwise.
+    """
+    split_units = list(
+        itertools.chain.from_iterable([sp.split("/") for sp in units.split("*")])
+    )
+    for sp_un in split_units:
+        un = sp_un.split("^")[0] if "^" in sp_un else sp_un
+        if un not in UNITS:
+            return False
+    return True
 
 
 class PropertyMap:
@@ -700,9 +828,25 @@ class PropertyMap:
 
     Initialize with list of property definitions, then add properties with set_property
     or set_properties.
-    Add metadata fields with set_metadata_field: 'software', 'method', 'input' required.
+    Add metadata fields with set_metadata_field. Three fields are required:
+        - 'software': the software package used (e.g. 'VASP', 'Quantum ESPRESSO')
+        - 'method': the method used (e.g. 'DFT', 'DFT+U', 'MD')
+        - 'input': calculation parameters specific to the software and method, such as
+          DFT basis sets, k-point meshes, pseudopotentials, cutoff energies, smearing
+          parameters, convergence thresholds, or other settings that distinguish one
+          calculation setup from another.
+    'property_keys' is automatically populated via set_property/set_properties and maps
+    each property name to the corresponding key in the original source file. It is
+    required and validated before the property map is returned.
+
     Use get_property_map to validate and return a complete property map to use with
     Property objects.
+
+    Metadata (including 'input' and 'property_keys') is serialized to a JSON string and
+    stored in the property object's 'metadata' column. Metadata is part of a property
+    object's identity and is included in its hash. Maximum allowed size is
+    10,000 characters.
+
     Attributes:
     -----------
     property_definitions : list
@@ -734,22 +878,30 @@ class PropertyMap:
         Validates, returns the complete property map including metadata and properties.
     """
 
-    def __init__(self, property_definitions: list):
-        self.property_definitions = {p["property-name"]: p for p in property_definitions}
+    def __init__(self, property_definitions: list = None):
+        self.properties = {}
+        if not property_definitions:
+            logger.warning("No properties set in PropertyMap")
+            property_keys = None
+        else:
+            self.property_definitions = {
+                p["property-name"]: p for p in property_definitions
+            }
+            property_keys = {
+                "value": {
+                    p["property-name"]: None for p in self.property_definitions.values()
+                },
+            }
+            for name in self.property_definitions:
+                main_key = MAIN_KEY_MAP[name].key
+                self.properties[name] = {main_key: {"field": None, "units": None}}
+
         self._metadata = {
             "software": {"value": None, "required": True},
             "method": {"value": None, "required": True},
             "input": {"value": None, "required": True},
-            "property_keys": {
-                "value": {
-                    p["property-name"]: None for p in self.property_definitions.values()
-                },
-            },
+            "property_keys": property_keys,
         }
-        self.properties = {}
-        for name in self.property_definitions:
-            main_key = MAIN_KEY_MAP[name].key
-            self.properties[name] = {main_key: {"field": None, "units": None}}
 
     def set_metadata_field(self, key: str, value, dynamic=False):
         if dynamic:
@@ -760,7 +912,9 @@ class PropertyMap:
     def get_metadata(self):
         self.validate_metadata()
         return {
-            k: v for k, v in self._metadata.items() if (v.get("value") or v.get("field"))
+            k: v
+            for k, v in self._metadata.items()
+            if (v is None or v.get("value") or v.get("field"))
         }
 
     def set_property(
@@ -785,7 +939,7 @@ class PropertyMap:
             else:
                 raise KeyError(f"Key '{key}' not found in property '{property_name}'")
 
-    def set_properties(self, properties: list[dict | property_info]):
+    def set_properties(self, properties: list[dict | PropertyInfo]):
         for prop in properties:
             if isinstance(prop, dict):
                 prop_name = prop["property_name"]
@@ -794,15 +948,14 @@ class PropertyMap:
                 original_file_key = prop["original_file_key"]
                 additional = prop.get("additional", [])
                 self.set_property(prop_name, field, units, original_file_key, additional)
-            elif isinstance(prop, property_info):
-                prop_name = prop.property_name
-                field = prop.field
-                units = prop.units
-                original_file_key = prop.original_file_key
-                additional = prop.additional
-                if additional is None:
-                    additional = []
-                self.set_property(prop_name, field, units, original_file_key, additional)
+            elif isinstance(prop, PropertyInfo):
+                self.set_property(
+                    prop.property_name,
+                    prop.field,
+                    prop.units,
+                    prop.original_file_key,
+                    prop.additional,
+                )
         self.validate_properties()
 
     def get_property(self, property_name: str):
@@ -812,7 +965,20 @@ class PropertyMap:
 
     def validate_metadata(self):
         for key, value in self._metadata.items():
-            if (
+            if key == "property_keys":
+                if value is None:
+                    raise ValueError(
+                        "'property_keys' must be set in PropertyMap metadata. "
+                        "Set the original source-file key for each property using "
+                        "set_property() or set_properties(), e.g.:\n"
+                        "  map.set_property('energy', field='_energy', units='eV', "
+                        "original_file_key='energy')\n"
+                        "or:\n"
+                        "  map.set_properties([{'property_name': 'energy', "
+                        "'field': '_energy', 'units': 'eV', "
+                        "'original_file_key': 'energy'}])"
+                    )
+            elif (
                 value.get("required")
                 and value.get("value") is None
                 and value.get("field") is None
@@ -821,7 +987,10 @@ class PropertyMap:
         for prop_name in self.properties.keys():
             if self._metadata["property_keys"]["value"][prop_name] is None:
                 raise ValueError(
-                    f"Metadata must have 'original_file_key' set for each property. None set for '{prop_name}'."  # noqa E501
+                    f"'original_file_key' must be set for property '{prop_name}'. "
+                    f"Pass it via set_property(), e.g.:\n"
+                    f"  map.set_property('{prop_name}', field=..., units=..., "
+                    f"original_file_key=<key_in_source_file>)"
                 )
 
     def validate_properties(self):
@@ -871,11 +1040,10 @@ class PropertyMap:
                 )
 
     def get_property_map(self):
-        self.validate_metadata()
         self.validate_properties()
         return {
             "_metadata": self.get_metadata(),
-            **{k: [v] for k, v in self.properties.items()},
+            **{k: v for k, v in self.properties.items()},
         }
 
 
