@@ -24,12 +24,8 @@ dependencies = [
     "kim_property",
     "numpy",
     "tqdm",
-    "markdown",
-    "plotly",
-    "django",
     "periodictable",
     "unidecode",
-    "notebook",
 ]
 
 [project.urls]
@@ -41,9 +37,13 @@ dev = [
     "black",
     "flake8",
 ]
+notebooks = [
+    "markdown",
+    "plotly",
+    "notebook",
+]
 vast = [
     "vastdb",
-    "pyspark",
     "pyarrow",
     "ibis-framework",
 ]

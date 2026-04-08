@@ -13,7 +13,6 @@ import boto3
 import psycopg
 from ase import Atoms
 from botocore.exceptions import ClientError
-from django.utils.crypto import get_random_string
 from psycopg import sql
 from psycopg.rows import dict_row
 from tqdm import tqdm
@@ -40,7 +39,7 @@ NSITES_COL_SPLITS = 20
 
 
 def generate_string():
-    return get_random_string(12, allowed_chars=string.ascii_lowercase + "1234567890")
+    return "".join(secrets.choice(string.ascii_lowercase + "1234567890") for _ in range(12))
 
 
 def batched(configs, n):
