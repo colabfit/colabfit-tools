@@ -1,5 +1,6 @@
 import datetime
 import logging
+import secrets
 import string
 
 import dateutil.parser
@@ -9,7 +10,9 @@ from colabfit import ID_FORMAT_STRING
 
 
 def generate_string():
-    return "".join(secrets.choice(string.ascii_lowercase + "1234567890") for _ in range(12))
+    return "".join(
+        secrets.choice(string.ascii_lowercase + "1234567890") for _ in range(12)
+    )
 
 
 def generate_ds_id():

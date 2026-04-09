@@ -1,6 +1,7 @@
 import hashlib
 import itertools
 import json
+import secrets
 import string
 from functools import partial
 from itertools import islice
@@ -39,7 +40,9 @@ NSITES_COL_SPLITS = 20
 
 
 def generate_string():
-    return "".join(secrets.choice(string.ascii_lowercase + "1234567890") for _ in range(12))
+    return "".join(
+        secrets.choice(string.ascii_lowercase + "1234567890") for _ in range(12)
+    )
 
 
 def batched(configs, n):
@@ -750,7 +753,9 @@ class DataManager:
                 config_df=config_set_query_df,
                 dataset_id=self.dataset_id,
             )
-            co_cs_df = co_id_df.withColumn("configuration_set_id", sf.lit(config_set.id))
+            co_cs_df = co_id_df.withColumn(
+                "configuration_set_id", sf.lit(config_set.id)
+            )
             loader.write_table(co_cs_df, loader.co_cs_map_table, check_unique=False)
             loader.update_existing_co_rows(
                 co_df=config_set_query_df,
